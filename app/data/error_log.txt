@@ -3624,3 +3624,66 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 2026-03-08 20:35:41,539 [WARNING] in _vnd_get: VNDirect /financialStatements: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialStatements?code=FCN&type=cashFlow&period=quarter&size=8 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x209f47b42d0>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
 2026-03-08 20:35:53,702 [WARNING] in _vnd_get: VNDirect /financialRatios: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialRatios?code=FCN&period=quarter&size=8 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x209f4cd4b90>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
 2026-03-08 20:36:06,769 [WARNING] in _vnd_get: VNDirect /stocks: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/stocks?code=FCN&fields=code%2CcompanyName%2CshortName%2Cexchange%2CindustryName%2Csector%2CmarketCap%2ClistedShare%2CestablishedYear%2CnumberOfEmployee%2CcompanyProfile%2Cwebsite (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x209f467f9d0>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
+2026-03-08 20:36:19,838 [WARNING] in _vnd_get: VNDirect /financialRatios: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialRatios?code=FCN&period=quarter&size=1 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x209f49cda90>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
+2026-03-08 20:48:44,990 [WARNING] in fetch_stooq: Stooq GC.F failed: Stooq no data for GC.F — trying yFinance fallback
+2026-03-08 20:48:46,213 [INFO] in fetch_stooq: yFinance fallback GC.F→GC=F: 125 rows
+2026-03-08 20:48:51,193 [WARNING] in fetch_stooq: Stooq CL.F failed: Stooq no data for CL.F — trying yFinance fallback
+2026-03-08 20:48:51,645 [INFO] in fetch_stooq: yFinance fallback CL.F→CL=F: 125 rows
+2026-03-08 20:48:54,400 [WARNING] in fetch_stooq: Stooq NG.F failed: Stooq no data for NG.F — trying yFinance fallback
+2026-03-08 20:48:55,936 [INFO] in fetch_stooq: yFinance fallback NG.F→NG=F: 125 rows
+2026-03-08 20:48:59,178 [WARNING] in fetch_stooq: Stooq DXY failed: Stooq no data for DXY — trying yFinance fallback
+2026-03-08 20:48:59,612 [INFO] in fetch_stooq: yFinance fallback DXY→DX-Y.NYB: 125 rows
+2026-03-08 20:50:20,481 [INFO] in fetch_stooq: Stooq ^SPX: 39649 rows
+2026-03-08 20:50:24,524 [WARNING] in fetch_stooq: Stooq ^VNI failed: Stooq no data for ^VNI — trying yFinance fallback
+2026-03-08 20:51:37,878 [INFO] in _fetch_ssi: SSI ✅ FPT: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:37,879 [INFO] in download_data: ✅ SSI FPT: 122 rows
+2026-03-08 20:51:38,637 [INFO] in _fetch_ssi: SSI ✅ OIL: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:38,638 [INFO] in download_data: ✅ SSI OIL: 122 rows
+2026-03-08 20:51:39,504 [INFO] in _fetch_ssi: SSI ✅ FPT: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:40,247 [INFO] in _fetch_ssi: SSI ✅ VCB: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:45,479 [WARNING] in _fetch_cafef: CafeF ❌ OIL: all strategies failed
+2026-03-08 20:51:48,737 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused OIL: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/OIL?type=5&count=180 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-08 20:51:49,655 [INFO] in _fetch_ssi: SSI ✅ IDC: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:49,657 [INFO] in download_data: ✅ SSI IDC: 122 rows
+2026-03-08 20:51:50,415 [INFO] in _fetch_ssi: SSI ✅ OIL: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:50,416 [INFO] in download_data: ✅ SSI OIL: 122 rows
+2026-03-08 20:51:51,318 [INFO] in _fetch_ssi: SSI ✅ PVS: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:51,319 [INFO] in download_data: ✅ SSI PVS: 122 rows
+2026-03-08 20:51:52,090 [INFO] in _fetch_ssi: SSI ✅ LTG: 24 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:51:57,184 [WARNING] in _fetch_cafef: CafeF ❌ LTG: all strategies failed
+2026-03-08 20:51:57,751 [WARNING] in _fetch_tcbs: TCBS HTTP error LTG: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=LTG&type=stock&resolution=D&from=1757425917&to=1772977917
+2026-03-08 20:52:00,731 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused LTG: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/LTG?type=5&count=180 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-08 20:52:16,084 [ERROR] in download_data: Cannot load LTG. Exchange:UPCOM. Sources tried: DNSE:0 rows | SSI:24 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-03-08 20:52:17,907 [INFO] in _fetch_ssi: SSI ✅ HBC: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:52:17,909 [INFO] in download_data: ✅ SSI HBC: 122 rows
+2026-03-08 20:52:20,260 [WARNING] in _fetch_ssi: SSI HTTP error PME [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&resolution=D&from=1757425937&to=1772977937
+2026-03-08 20:52:25,214 [WARNING] in _fetch_cafef: CafeF ❌ PME: all strategies failed
+2026-03-08 20:52:25,699 [WARNING] in _fetch_tcbs: TCBS HTTP error PME: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=PME&type=stock&resolution=D&from=1757425945&to=1772977945
+2026-03-08 20:52:27,917 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused PME: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/PME?type=5&count=180 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-08 20:52:43,502 [ERROR] in download_data: Cannot load PME. Exchange:UPCOM. Sources tried: DNSE:0 rows | SSI:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-03-08 20:52:44,376 [INFO] in _fetch_ssi: SSI ✅ SCG: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:52:44,377 [INFO] in download_data: ✅ SSI SCG: 122 rows
+2026-03-08 20:52:45,072 [INFO] in _fetch_ssi: SSI ✅ TNG: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:52:45,073 [INFO] in download_data: ✅ SSI TNG: 122 rows
+2026-03-08 20:52:45,817 [INFO] in _fetch_ssi: SSI ✅ TVN: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:52:45,818 [INFO] in download_data: ✅ SSI TVN: 122 rows
+2026-03-08 20:52:47,741 [INFO] in _fetch_ssi: SSI ✅ VKC: 24 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:52:53,011 [WARNING] in _fetch_cafef: CafeF ❌ VKC: all strategies failed
+2026-03-08 20:52:53,657 [WARNING] in _fetch_tcbs: TCBS HTTP error VKC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VKC&type=stock&resolution=D&from=1757425973&to=1772977973
+2026-03-08 20:52:55,863 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VKC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VKC?type=5&count=180 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-08 20:53:11,143 [ERROR] in download_data: Cannot load VKC. Exchange:UPCOM. Sources tried: DNSE:0 rows | SSI:24 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-03-08 20:53:12,110 [INFO] in _fetch_ssi: SSI ✅ VNA: 108 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:53:12,111 [INFO] in download_data: ✅ SSI VNA: 108 rows
+2026-03-08 20:53:12,985 [INFO] in _fetch_ssi: SSI ✅ ACV: 122 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 20:53:12,987 [INFO] in download_data: ✅ SSI ACV: 122 rows
+2026-03-08 20:53:14,467 [WARNING] in fetch_stooq: Stooq GC.F failed: Stooq no data for GC.F — trying yFinance fallback
+2026-03-08 20:53:14,896 [INFO] in fetch_stooq: yFinance fallback GC.F→GC=F: 61 rows
+2026-03-08 20:53:16,039 [WARNING] in fetch_stooq: Stooq CL.F failed: Stooq no data for CL.F — trying yFinance fallback
+2026-03-08 20:53:16,474 [INFO] in fetch_stooq: yFinance fallback CL.F→CL=F: 61 rows
+2026-03-08 20:53:17,614 [WARNING] in fetch_stooq: Stooq NG.F failed: Stooq no data for NG.F — trying yFinance fallback
+2026-03-08 20:53:18,035 [INFO] in fetch_stooq: yFinance fallback NG.F→NG=F: 61 rows
+2026-03-08 20:53:20,214 [WARNING] in fetch_stooq: Stooq DXY failed: Stooq no data for DXY — trying yFinance fallback
+2026-03-08 20:53:20,639 [INFO] in fetch_stooq: yFinance fallback DXY→DX-Y.NYB: 61 rows
+2026-03-08 20:53:41,679 [INFO] in fetch_stooq: Stooq ^SPX: 39649 rows
+2026-03-08 20:53:53,788 [WARNING] in _vnd_get: VNDirect /stocks: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/stocks?code=HPG&fields=code%2CcompanyName%2CshortName%2Cexchange%2CindustryName%2Csector%2CmarketCap%2ClistedShare%2CestablishedYear%2CnumberOfEmployee%2CcompanyProfile%2Cwebsite (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x26301ac1810>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
+2026-03-08 20:54:05,826 [WARNING] in _vnd_get: VNDirect /financialRatios: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialRatios?code=HPG&period=quarter&size=1 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x26301ac1950>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
