@@ -3826,3 +3826,86 @@ For `use_container_width=True`, use `width='stretch'`. For `use_container_width=
 2026-03-08 21:29:23,460 [WARNING] in _vnd_get: VNDirect /financialRatios: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialRatios?code=MWG&period=quarter&size=1 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x29fd578d590>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
 2026-03-08 21:29:25,676 [INFO] in _fetch_ssi: SSI ✅ MWG: 496 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
 2026-03-08 21:29:25,678 [INFO] in download_data: ✅ SSI MWG: 496 rows
+2026-03-08 21:50:37,085 [WARNING] in fetch_stooq: Stooq GC.F failed: Stooq no data for GC.F — trying yFinance fallback
+2026-03-08 21:50:39,350 [INFO] in fetch_stooq: yFinance fallback GC.F→GC=F: 125 rows
+2026-03-08 21:50:40,353 [WARNING] in fetch_stooq: Stooq CL.F failed: Stooq no data for CL.F — trying yFinance fallback
+2026-03-08 21:50:40,882 [INFO] in fetch_stooq: yFinance fallback CL.F→CL=F: 125 rows
+2026-03-08 21:50:41,937 [WARNING] in fetch_stooq: Stooq NG.F failed: Stooq no data for NG.F — trying yFinance fallback
+2026-03-08 21:50:42,407 [INFO] in fetch_stooq: yFinance fallback NG.F→NG=F: 125 rows
+2026-03-08 21:50:43,444 [WARNING] in fetch_stooq: Stooq DXY failed: Stooq no data for DXY — trying yFinance fallback
+2026-03-08 21:50:43,881 [INFO] in fetch_stooq: yFinance fallback DXY→DX-Y.NYB: 125 rows
+2026-03-08 21:50:47,783 [INFO] in fetch_stooq: Stooq ^SPX: 39649 rows
+2026-03-08 21:50:49,800 [WARNING] in fetch_stooq: Stooq ^VNI failed: Stooq no data for ^VNI — trying yFinance fallback
+2026-03-08 21:51:25,953 [INFO] in _fetch_ssi: SSI ✅ APH: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:25,954 [INFO] in download_data: ✅ SSI APH: 247 rows
+2026-03-08 21:51:27,704 [INFO] in _fetch_ssi: SSI ✅ BCM: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:27,705 [INFO] in download_data: ✅ SSI BCM: 247 rows
+2026-03-08 21:51:28,581 [INFO] in _fetch_ssi: SSI ✅ BSR: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:28,582 [INFO] in download_data: ✅ SSI BSR: 247 rows
+2026-03-08 21:51:29,315 [INFO] in _fetch_ssi: SSI ✅ CMG: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:29,316 [INFO] in download_data: ✅ SSI CMG: 247 rows
+2026-03-08 21:51:30,076 [INFO] in _fetch_ssi: SSI ✅ DCM: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:30,078 [INFO] in download_data: ✅ SSI DCM: 247 rows
+2026-03-08 21:51:30,865 [INFO] in _fetch_ssi: SSI ✅ DPM: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:30,867 [INFO] in download_data: ✅ SSI DPM: 247 rows
+2026-03-08 21:51:31,680 [INFO] in _fetch_ssi: SSI ✅ FPT: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:31,681 [INFO] in download_data: ✅ SSI FPT: 247 rows
+2026-03-08 21:51:37,530 [INFO] in _fetch_ssi: SSI ✅ GAS: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:37,531 [INFO] in download_data: ✅ SSI GAS: 247 rows
+2026-03-08 21:51:38,301 [INFO] in _fetch_ssi: SSI ✅ GEX: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:38,303 [INFO] in download_data: ✅ SSI GEX: 247 rows
+2026-03-08 21:51:39,001 [INFO] in _fetch_ssi: SSI ✅ HPG: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:39,002 [INFO] in download_data: ✅ SSI HPG: 247 rows
+2026-03-08 21:51:39,939 [INFO] in _fetch_ssi: SSI ✅ HVN: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:39,940 [INFO] in download_data: ✅ SSI HVN: 247 rows
+2026-03-08 21:51:40,690 [INFO] in _fetch_ssi: SSI ✅ IDC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:51:40,691 [INFO] in download_data: ✅ SSI IDC: 247 rows
+2026-03-08 21:51:43,621 [WARNING] in _fetch_ssi: SSI HTTP error ITA [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ITA&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ITA&resolution=D&from=1741445500&to=1772981500
+2026-03-08 21:51:49,231 [WARNING] in _fetch_cafef: CafeF ❌ ITA: all strategies failed
+2026-03-08 21:51:49,816 [WARNING] in _fetch_tcbs: TCBS HTTP error ITA: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=ITA&type=stock&resolution=D&from=1741445509&to=1772981509
+2026-03-08 21:51:52,092 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused ITA: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/ITA?type=5&count=365 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-03-08 21:52:07,622 [INFO] in _fetch_yfinance: yFinance ITA: 365 rows
+2026-03-08 21:52:07,622 [INFO] in download_data: ✅ yFinance ITA: 365 rows
+2026-03-08 21:52:09,447 [INFO] in _fetch_ssi: SSI ✅ KBC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:09,449 [INFO] in download_data: ✅ SSI KBC: 247 rows
+2026-03-08 21:52:10,195 [INFO] in _fetch_ssi: SSI ✅ MBB: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:10,197 [INFO] in download_data: ✅ SSI MBB: 247 rows
+2026-03-08 21:52:10,962 [INFO] in _fetch_ssi: SSI ✅ MWG: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:10,964 [INFO] in download_data: ✅ SSI MWG: 247 rows
+2026-03-08 21:52:11,812 [INFO] in _fetch_ssi: SSI ✅ OIL: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:11,813 [INFO] in download_data: ✅ SSI OIL: 247 rows
+2026-03-08 21:52:12,558 [INFO] in _fetch_ssi: SSI ✅ PC1: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:12,559 [INFO] in download_data: ✅ SSI PC1: 247 rows
+2026-03-08 21:52:13,383 [INFO] in _fetch_ssi: SSI ✅ PET: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:13,384 [INFO] in download_data: ✅ SSI PET: 247 rows
+2026-03-08 21:52:14,179 [INFO] in _fetch_ssi: SSI ✅ PHR: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:14,180 [INFO] in download_data: ✅ SSI PHR: 247 rows
+2026-03-08 21:52:14,986 [INFO] in _fetch_ssi: SSI ✅ POW: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:14,987 [INFO] in download_data: ✅ SSI POW: 247 rows
+2026-03-08 21:52:15,842 [INFO] in _fetch_ssi: SSI ✅ PVD: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:15,844 [INFO] in download_data: ✅ SSI PVD: 247 rows
+2026-03-08 21:52:16,588 [INFO] in _fetch_ssi: SSI ✅ PVS: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:16,590 [INFO] in download_data: ✅ SSI PVS: 247 rows
+2026-03-08 21:52:17,437 [INFO] in _fetch_ssi: SSI ✅ REE: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:17,438 [INFO] in download_data: ✅ SSI REE: 247 rows
+2026-03-08 21:52:18,158 [INFO] in _fetch_ssi: SSI ✅ SZC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:18,160 [INFO] in download_data: ✅ SSI SZC: 247 rows
+2026-03-08 21:52:18,911 [INFO] in _fetch_ssi: SSI ✅ TCB: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:18,912 [INFO] in download_data: ✅ SSI TCB: 247 rows
+2026-03-08 21:52:19,681 [INFO] in _fetch_ssi: SSI ✅ VCB: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:19,682 [INFO] in download_data: ✅ SSI VCB: 247 rows
+2026-03-08 21:52:20,477 [INFO] in _fetch_ssi: SSI ✅ VGC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:20,478 [INFO] in download_data: ✅ SSI VGC: 247 rows
+2026-03-08 21:52:21,169 [INFO] in _fetch_ssi: SSI ✅ VIC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:21,171 [INFO] in download_data: ✅ SSI VIC: 247 rows
+2026-03-08 21:52:21,965 [INFO] in _fetch_ssi: SSI ✅ VJC: 247 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:21,967 [INFO] in download_data: ✅ SSI VJC: 247 rows
+2026-03-08 21:52:23,899 [INFO] in _fetch_ssi: SSI ✅ VPL: 205 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-03-08 21:52:23,901 [INFO] in download_data: ✅ SSI VPL: 205 rows
+2026-03-08 21:52:45,910 [WARNING] in _tcbs_get: TCBS tcanalysis finance/TCB/incomestatement: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/tcanalysis/v1/finance/TCB/incomestatement?yearly=0&isAll=0
+2026-03-08 21:52:46,443 [WARNING] in _tcbs_get: TCBS tcanalysis finance/TCB/balancesheet: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/tcanalysis/v1/finance/TCB/balancesheet?yearly=0&isAll=0
+2026-03-08 21:52:46,981 [WARNING] in _tcbs_get: TCBS tcanalysis finance/TCB/cashflow: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/tcanalysis/v1/finance/TCB/cashflow?yearly=0&isAll=0
+2026-03-08 21:52:47,500 [WARNING] in _tcbs_get: TCBS tcanalysis finance/TCB/financialratio: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/tcanalysis/v1/finance/TCB/financialratio?yearly=0&isAll=0
+2026-03-08 21:52:59,653 [WARNING] in _vnd_get: VNDirect /financialStatements: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialStatements?code=TCB&type=incomeStatement&period=quarter&size=8 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x21b1a2cfb10>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
+2026-03-08 21:53:12,703 [WARNING] in _vnd_get: VNDirect /financialStatements: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialStatements?code=TCB&type=balanceSheet&period=quarter&size=8 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x21b1a2cf250>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))
+2026-03-08 21:53:24,841 [WARNING] in _vnd_get: VNDirect /financialStatements: HTTPSConnectionPool(host='finfo-api.vndirect.com.vn', port=443): Max retries exceeded with url: /v4/financialStatements?code=TCB&type=cashFlow&period=quarter&size=8 (Caused by ConnectTimeoutError(<HTTPSConnection(host='finfo-api.vndirect.com.vn', port=443) at 0x21b1ae70a50>, 'Connection to finfo-api.vndirect.com.vn timed out. (connect timeout=12)'))

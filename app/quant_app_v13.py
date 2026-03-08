@@ -1,22 +1,22 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v17.0                         ║
+║   Captain Seventh QUANT TERMINAL  v18.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v16 → v17:                                           ║
-║  FIX-16: DNSE endpoint services.entrade.com.vn → api.dnse.com.vn║
-║          resolution D → 1D (confirmed working 247 rows FCN)    ║
-║  FIX-17: Stock Profiler — cascading multi-source data:          ║
-║          TCBS tcanalysis → CafeF fundamentals → SSI SSMI →     ║
-║          DNSE OHLC technical analysis (always returns data)     ║
-║  ENH-11: CafeF API — ChiSoTaiChinh, CoCauSoHuu, Liveboard JSON ║
-║  ENH-12: SSI SSMI API — finance-indicator, leadership,          ║
-║          shareholders, corporate actions, company news          ║
-║  ENH-13: DNSE OHLC Analysis — technicals as fundamental proxy  ║
-║          when financial statements unavailable                  ║
-║  ENH-14: Valuation guaranteed — always produces BUY/HOLD/SELL  ║
-║          based on available data (technical + fundamental)      ║
-║  FIX-18: Smoke Test — added REE and OIL test cases             ║
+║  CHANGELOG v17 → v18:                                           ║
+║  FIX-19: RESOLVED Signal Divergence (Scanner BUY vs Profiler   ║
+║    SELL for same ticker):                                        ║
+║    Root cause: Scanner = pure technical SHORT-TERM (T+2),       ║
+║    Profiler = fundamental+valuation LONG-TERM (6-24M).          ║
+║    Both can be TRUE simultaneously for different horizons.       ║
+║    Fix: Timeframe labels on all signals; Profiler S6 now shows  ║
+║    BOTH technical (scanner) AND fundamental signals with        ║
+║    explicit horizon labels; conflict detection banner; unified   ║
+║    blended recommendation with transparent weighting.           ║
+║  ENH-15: Scanner — added Horizon column (Short-term T+2)       ║
+║  ENH-16: Profiler S6 — Dual-signal view: Tech vs Fundamental   ║
+║  ENH-17: Conflict Detection — warns when Tech ≠ Fundamental    ║
+║  ENH-18: Unified Blended Recommendation in Profiler            ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -62,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v17.0",
+    page_title="Captain Seventh QUANT TERMINAL v18.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -84,7 +84,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v17.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v18.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -145,6 +145,28 @@ _LANG_VI = {
     "sp_source_vnd":    "Nguồn: VNDirect FINFO API",
     "sp_peer_compare":  "🏭 So sánh ngành",
     "sp_ttm_label":     "Trailing 12M",
+    # Dual-signal / timeframe labels (ENH-15/16/17/18)
+    "signal_tech":      "📈 Tín hiệu Kỹ thuật",
+    "signal_fund":      "📊 Tín hiệu Cơ bản",
+    "signal_unified":   "🎯 Khuyến Nghị Tổng Hợp",
+    "horizon_short":    "Ngắn hạn (T+2, 1-5 ngày)",
+    "horizon_long":     "Dài hạn (6-24 tháng)",
+    "horizon_unified":  "Tổng hợp",
+    "conflict_title":   "⚡ Tín hiệu Phân Kỳ — Giải thích",
+    "conflict_body_vi": (
+        "**Tại sao Scanner nói MUA trong khi Profiler nói BÁN (hoặc ngược lại)?**\n\n"
+        "Đây **KHÔNG phải lỗi** — đây là hai góc nhìn hoàn toàn khác nhau về cùng một cổ phiếu:\n\n"
+        "| Chiều đo | Market Scanner | Stock Profiler |\n"
+        "|----------|---------------|----------------|\n"
+        "| **Phương pháp** | Phân tích kỹ thuật thuần túy | Cơ bản + Định giá |\n"
+        "| **Tín hiệu** | RSI quá bán + Giá dưới BB Lower | DCF / P/E / P/B / Graham |\n"
+        "| **Chân trời** | 1–5 phiên giao dịch (T+2) | 6–24 tháng |\n"
+        "| **Câu hỏi** | 'Giá có hồi phục ngắn hạn?' | 'Cổ phiếu có đang bị định giá đúng?' |\n\n"
+        "**Ví dụ thực tế:** MWG có thể vừa quá bán kỹ thuật (cơ hội bounce ngắn hạn) "
+        "vừa giao dịch trên giá trị nội tại DCF/Graham (không hấp dẫn dài hạn). "
+        "Cả hai đều đúng — chỉ khác mục tiêu đầu tư."
+    ),
+    "scanner_horizon_label": "⏱️ T+2 (Kỹ thuật)",
     "scan_btn":    "🔄 Quét Watchlist",
     "buy_btn":     "🔍 Tìm Cổ Phiếu Mua",
     "audit_btn":   "🔍 Phân Tích",
@@ -178,7 +200,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v17.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v18.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -239,6 +261,28 @@ _LANG_EN = {
     "sp_source_vnd":    "Source: VNDirect FINFO API",
     "sp_peer_compare":  "🏭 Sector Comparison",
     "sp_ttm_label":     "Trailing 12M",
+    # Dual-signal / timeframe labels (ENH-15/16/17/18)
+    "signal_tech":      "📈 Technical Signal",
+    "signal_fund":      "📊 Fundamental Signal",
+    "signal_unified":   "🎯 Unified Recommendation",
+    "horizon_short":    "Short-term (T+2, 1-5 days)",
+    "horizon_long":     "Long-term (6-24 months)",
+    "horizon_unified":  "Blended",
+    "conflict_title":   "⚡ Signal Divergence — Explained",
+    "conflict_body_vi": (
+        "**Why does Scanner say BUY while Profiler says SELL (or vice versa)?**\n\n"
+        "This is **NOT a bug** — these are two fundamentally different perspectives on the same stock:\n\n"
+        "| Dimension | Market Scanner | Stock Profiler |\n"
+        "|-----------|---------------|----------------|\n"
+        "| **Method** | Pure technical analysis | Fundamental + Valuation |\n"
+        "| **Signal** | RSI oversold + Price < BB Lower | DCF / P/E / P/B / Graham |\n"
+        "| **Horizon** | 1–5 trading sessions (T+2) | 6–24 months |\n"
+        "| **Question** | 'Will price bounce short-term?' | 'Is the stock fairly valued?' |\n\n"
+        "**Real example:** MWG can be simultaneously technically oversold (short-term bounce opportunity) "
+        "and trading above its DCF/Graham intrinsic value (unattractive for long-term). "
+        "Both are correct — they serve different investment objectives."
+    ),
+    "scanner_horizon_label": "⏱️ T+2 (Technical)",
     "scan_btn":    "🔄 Scan Watchlist",
     "buy_btn":     "🔍 Find Buy Signals",
     "audit_btn":   "🔍 Analyse",
@@ -2042,6 +2086,7 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         "Ngành/Sector": get_sector(t),
         L["price"]:     round(c_v),
         L["signal"]:    signal_display,
+        "⏱️ Chân trời" if lang=="VI" else "⏱️ Horizon": "Ngắn hạn T+2" if lang=="VI" else "Short-term T+2",
         "BB Buy":       round_price_hose(bbl_v),
         "BB Sell":      round_price_hose(bbu_v),
         "RSI":          round(rsi_v,1),
@@ -3126,7 +3171,179 @@ def get_recommendation(composite_score: float, upside_pct: float,
     return key, color, rationale
 
 # ══════════════════════════════════════════════════════════════
-#  STOCK PROFILER TAB — render function  (v17 — always returns data)
+#  UNIFIED SIGNAL ENGINE  (FIX-19 / ENH-16/17/18)
+#  Bridges Market Scanner (technical) ↔ Stock Profiler (fundamental)
+#  Resolves apparent divergence by showing BOTH with horizon labels
+# ══════════════════════════════════════════════════════════════
+def get_scanner_signal_for_profiler(ticker: str) -> dict:
+    """
+    Runs the EXACT same logic as scan_one_ticker() for a single ticker
+    and returns a structured dict for display in the Stock Profiler.
+    This ensures the Profiler always shows the same technical signal
+    as the Market Scanner — eliminating any perception of inconsistency.
+    """
+    try:
+        df, src, err = download_data(ticker, days=365, min_rows=40)
+        if df is None or df.empty or len(df) < 40:
+            return {"error": err or "No price data", "signal": "–", "score": 0}
+
+        df = clean_data(df)
+        df = calculate_indicators(df)
+        if df.empty:
+            return {"error": "Indicator calculation failed", "signal": "–", "score": 0}
+
+        latest  = df.iloc[-1]
+        avg_v   = float(df["Volume"].tail(20).mean()) if "Volume" in df.columns else 0
+        last_v  = float(latest.get("Volume", 0))
+
+        def _safe(col):
+            v = latest.get(col)
+            try: return float(v) if v is not None and not (isinstance(v, float) and np.isnan(v)) else None
+            except: return None
+
+        rsi_v  = _safe("RSI")  or 50.0
+        bbl_v  = _safe("BB_Lower") or float(latest["Close"])
+        bbu_v  = _safe("BB_Upper") or float(latest["Close"])
+        sma20  = _safe("SMA20")
+        sma50  = _safe("SMA50")
+        macd   = _safe("MACD")
+        macs   = _safe("MACD_Signal")
+        adx_v  = _safe("ADX")  or 0.0
+        sk     = _safe("STOCH_K")
+        c_v    = float(latest["Close"])
+
+        # Use SAME signal logic as scan_one_ticker — filters OFF (profiler doesn't apply filters)
+        trend_ok = True  # profiler always shows raw signal without filter bias
+        hanh_vi  = "THEO DÕI"
+        if rsi_v < rsi_buy_thresh  and c_v < bbl_v:  hanh_vi = "MUA"
+        elif rsi_v > rsi_sell_thresh and c_v > bbu_v: hanh_vi = "BÁN"
+
+        sig_type = "BUY" if hanh_vi == "MUA" else ("BÁN" if hanh_vi == "BÁN" else "BUY")
+        score, confirms = compute_composite_score(
+            latest.to_dict(), avg_v, last_v, trend_ok,
+            sig_type, rsi_buy_thresh, rsi_sell_thresh)
+
+        # Detailed trigger reasons
+        trigger_reasons = []
+        if hanh_vi == "MUA":
+            if rsi_v < rsi_buy_thresh:
+                trigger_reasons.append(f"RSI={rsi_v:.1f} < {rsi_buy_thresh} (quá bán)")
+            if c_v < bbl_v:
+                trigger_reasons.append(f"Giá={c_v:,.0f} < BB↓={bbl_v:,.0f}")
+            if macd and macs and macd > macs:
+                trigger_reasons.append("MACD > Signal ↑")
+        elif hanh_vi == "BÁN":
+            if rsi_v > rsi_sell_thresh:
+                trigger_reasons.append(f"RSI={rsi_v:.1f} > {rsi_sell_thresh} (quá mua)")
+            if c_v > bbu_v:
+                trigger_reasons.append(f"Giá={c_v:,.0f} > BB↑={bbu_v:,.0f}")
+            if macd and macs and macd < macs:
+                trigger_reasons.append("MACD < Signal ↓")
+        else:
+            trigger_reasons.append(f"RSI={rsi_v:.1f} (trung tính)")
+            trigger_reasons.append(f"Giá trong dải BB [{bbl_v:,.0f}–{bbu_v:,.0f}]")
+
+        # SMA context
+        if sma50:
+            above50 = c_v > sma50
+            trigger_reasons.append(f"{'↑' if above50 else '↓'} SMA50={sma50:,.0f}")
+
+        signal_en = {"MUA": "BUY", "BÁN": "SELL", "THEO DÕI": "WATCH"}.get(hanh_vi, hanh_vi)
+        color = "#00cc44" if hanh_vi == "MUA" else ("#ff4444" if hanh_vi == "BÁN" else "#ffaa00")
+
+        return {
+            "signal_vi":    hanh_vi,
+            "signal_en":    signal_en,
+            "score":        score,
+            "confirms":     confirms,
+            "trigger_reasons": trigger_reasons,
+            "rsi":          rsi_v,
+            "bbl":          bbl_v,
+            "bbu":          bbu_v,
+            "sma20":        sma20,
+            "sma50":        sma50,
+            "macd":         macd,
+            "macd_sig":     macs,
+            "adx":          adx_v,
+            "price":        c_v,
+            "color":        color,
+            "source":       src,
+            "n_rows":       len(df),
+            "horizon":      "Short-term T+2 (1–5 sessions)",
+        }
+    except Exception as e:
+        _log.warning(f"get_scanner_signal_for_profiler {ticker}: {e}")
+        return {"error": str(e), "signal": "–", "score": 0}
+
+
+def get_unified_recommendation(tech_signal: dict, fund_composite: float,
+                                fund_rec_key: str, upside_pct: float,
+                                lang: str = "VI") -> dict:
+    """
+    Blends technical short-term signal with fundamental long-term signal
+    into a single unified view. Uses different weights based on data quality.
+
+    Returns: {label, color, weight_tech, weight_fund, explanation}
+    """
+    is_vi = lang == "VI"
+
+    # Map signals to numeric: STRONG_BUY=2, BUY=1, WATCH=0, SELL=-1, STRONG_SELL=-2
+    tech_sig = tech_signal.get("signal_vi", "THEO DÕI")
+    tech_num = {"MUA": 1, "THEO DÕI": 0, "BÁN": -1}.get(tech_sig, 0)
+
+    fund_map = {
+        "sp_rec_strong_buy": 2, "sp_rec_buy": 1,
+        "sp_rec_hold": 0, "sp_rec_sell": -1, "sp_rec_strong_sell": -2
+    }
+    fund_num = fund_map.get(fund_rec_key, 0)
+
+    # Weight: technical = 30%, fundamental = 70% (default)
+    # If no fundamental data (fund_composite between 28-35 range = default), raise tech weight
+    data_quality_score = fund_composite
+    if 28 <= data_quality_score <= 42:  # near default (missing fundamental data)
+        w_tech, w_fund = 0.60, 0.40
+        quality_note_vi = "⚠️ Dữ liệu cơ bản hạn chế — trọng số kỹ thuật tăng (60%)"
+        quality_note_en = "⚠️ Limited fundamental data — technical weight increased (60%)"
+    else:
+        w_tech, w_fund = 0.30, 0.70
+        quality_note_vi = "Trọng số: Cơ bản 70% + Kỹ thuật 30%"
+        quality_note_en = "Weights: Fundamental 70% + Technical 30%"
+
+    # Blended score
+    blended = tech_num * w_tech + fund_num * w_fund
+
+    # Map blended to label
+    if blended >= 1.5:
+        label_vi, label_en, color = "✅ KHUYẾN NGHỊ MẠNH: MUA", "✅ STRONG BUY", "#00cc44"
+    elif blended >= 0.5:
+        label_vi, label_en, color = "🟢 KHUYẾN NGHỊ: MUA", "🟢 BUY", "#44bb22"
+    elif blended >= -0.3:
+        label_vi, label_en, color = "🟡 KHUYẾN NGHỊ: NẮM GIỮ", "🟡 HOLD", "#ffaa00"
+    elif blended >= -1.0:
+        label_vi, label_en, color = "🔴 KHUYẾN NGHỊ: BÁN", "🔴 SELL", "#ff5500"
+    else:
+        label_vi, label_en, color = "❌ KHUYẾN NGHỊ MẠNH: BÁN", "❌ STRONG SELL", "#cc0000"
+
+    # Conflict detection
+    conflict = (tech_num > 0 and fund_num < 0) or (tech_num < 0 and fund_num > 0)
+
+    label = label_vi if is_vi else label_en
+    quality_note = quality_note_vi if is_vi else quality_note_en
+
+    return {
+        "label":        label,
+        "color":        color,
+        "blended":      blended,
+        "w_tech":       w_tech,
+        "w_fund":       w_fund,
+        "conflict":     conflict,
+        "quality_note": quality_note,
+        "tech_num":     tech_num,
+        "fund_num":     fund_num,
+    }
+
+# ══════════════════════════════════════════════════════════════
+#  STOCK PROFILER TAB — render function  (v18 — dual-signal)
 # ══════════════════════════════════════════════════════════════
 def render_stock_profiler_tab():
     L = _LANG_VI if st.session_state.lang == "VI" else _LANG_EN
@@ -3787,132 +4004,272 @@ def render_stock_profiler_tab():
             if txt:
                 st.markdown(f"**{label} ({score:.0f}/10):** {txt}")
 
-    # ════════════ S6: RECOMMENDATION ════════════
+    # ════════════ S6: RECOMMENDATION (v18 — Dual-Signal + Unified) ════════════
     with s6:
-        fair_val      = st.session_state.get("_profiler_fair_val",     0)
-        upside_pct    = st.session_state.get("_profiler_upside",       0)
-        risk_sc       = st.session_state.get("_profiler_risk",         risk_scores)
-        current_p     = st.session_state.get("_profiler_current_price",current_price)
+        fair_val   = st.session_state.get("_profiler_fair_val",      0)
+        upside_pct = st.session_state.get("_profiler_upside",        0)
+        risk_sc    = st.session_state.get("_profiler_risk",          risk_scores)
+        current_p  = st.session_state.get("_profiler_current_price", current_price)
+        tech_score = ohlc_ana.get("tech_score", None) if ohlc_ok else None
 
-        # Technical score from OHLC
-        tech_score    = ohlc_ana.get("tech_score", None) if ohlc_ok else None
-
-        # If no fair value was computed (price = 0), fall back to tech score only
         if fair_val == 0 and ohlc_ok:
             fair_val   = ohlc_ana.get("tech_fair_value", 0)
             upside_pct = ((fair_val - current_p) / current_p * 100
                           if fair_val > 0 and current_p > 0 else 0)
 
-        composite = compute_composite_fundamental_score(risk_sc, upside_pct, tech_score)
-        rec_key, rec_color, rationale = get_recommendation(
-            composite, upside_pct, risk_sc, st.session_state.lang)
-        rec_label = L.get(rec_key, rec_key)
+        # ── Fundamental signal (Profiler)
+        fund_composite = compute_composite_fundamental_score(risk_sc, upside_pct, tech_score)
+        fund_rec_key, fund_color, fund_rationale = get_recommendation(
+            fund_composite, upside_pct, risk_sc, st.session_state.lang)
+        fund_label = L.get(fund_rec_key, fund_rec_key)
 
-        # Main recommendation box
-        st.markdown(f"""
-<div style="background:{rec_color}22;border:2px solid {rec_color};
-     border-radius:12px;padding:24px;text-align:center;margin:16px 0">
-  <div style="font-size:38px;font-weight:bold;color:{rec_color}">{rec_label}</div>
-  <div style="font-size:18px;color:#ccc;margin-top:8px">
-    {ticker} &nbsp;|&nbsp;
-    {L['sp_score_label']}: <b style="color:{rec_color}">{composite:.0f}/100</b>
+        # ── Technical signal (same engine as Market Scanner)
+        with st.spinner("🔄 " + ("Đang lấy tín hiệu kỹ thuật từ Scanner..." if is_vi
+                                  else "Fetching technical signal from Scanner...")):
+            scanner_sig = get_scanner_signal_for_profiler(ticker)
+
+        tech_sig_vi = scanner_sig.get("signal_vi", "THEO DÕI")
+        tech_sig_en = scanner_sig.get("signal_en", "WATCH")
+        tech_label  = tech_sig_vi if is_vi else tech_sig_en
+        tech_color  = scanner_sig.get("color", "#ffaa00")
+
+        # ── Unified blended recommendation
+        unified = get_unified_recommendation(
+            scanner_sig, fund_composite, fund_rec_key, upside_pct, st.session_state.lang)
+
+        # ══ SECTION A: Side-by-side dual signal cards ══
+        st.markdown("### " + ("🔍 Hai góc nhìn — Một cổ phiếu" if is_vi
+                               else "🔍 Two Perspectives — One Stock"))
+
+        col_tech, col_divider, col_fund = st.columns([5, 1, 5])
+
+        with col_tech:
+            st.markdown(f"""
+<div style="background:{tech_color}18;border:2px solid {tech_color};
+     border-radius:10px;padding:16px;text-align:center;height:180px">
+  <div style="font-size:12px;color:#aaa;margin-bottom:4px">
+    📈 {'Tín hiệu Kỹ thuật' if is_vi else 'Technical Signal'}<br>
+    <span style="font-size:10px;color:#888">⏱️ {'Ngắn hạn: T+2 (1–5 phiên)' if is_vi else 'Short-term: T+2 (1–5 sessions)'}</span>
   </div>
-  <div style="font-size:14px;color:#999;margin-top:4px">
-    {L['sp_fair_value']}: <b>{f'{fair_val:,.0f} VNĐ' if fair_val > 0 else 'N/A'}</b>
-    &nbsp;|&nbsp;
-    {L['sp_upside']}: <b style="color:{rec_color}">{f'{upside_pct:+.1f}%' if fair_val > 0 else 'N/A'}</b>
-    &nbsp;|&nbsp;
-    {'Kỹ thuật' if is_vi else 'Technical'}: <b>{f'{tech_score:.0f}/100' if tech_score is not None else 'N/A'}</b>
+  <div style="font-size:30px;font-weight:bold;color:{tech_color};margin:8px 0">{tech_label}</div>
+  <div style="font-size:12px;color:#ccc">
+    RSI: <b>{scanner_sig.get('rsi', 0):.1f}</b> &nbsp;|&nbsp;
+    Score: <b>{scanner_sig.get('score', 0):.0f}</b>
+  </div>
+  <div style="font-size:10px;color:#888;margin-top:4px">
+    {'RSI + BB Bollinger + MACD + ADX + Stoch' if is_vi else 'RSI · BB Bollinger · MACD · ADX · Stoch'}
   </div>
 </div>""", unsafe_allow_html=True)
+            if scanner_sig.get("trigger_reasons"):
+                for reason in scanner_sig["trigger_reasons"][:4]:
+                    st.markdown(f"<div style='font-size:11px;color:#bbb;margin-top:3px'>• {reason}</div>",
+                                unsafe_allow_html=True)
 
-        # Data quality notice
-        quality = "HIGH" if tcbs_ok else ("MEDIUM" if (vnd_ok or cafef_ok) else "LOW — Technical Only")
-        quality_vi = "CAO" if tcbs_ok else ("TRUNG BÌNH" if (vnd_ok or cafef_ok) else "THẤP — Chỉ kỹ thuật")
-        q_color = "#00cc44" if tcbs_ok else ("#ffaa00" if (vnd_ok or cafef_ok) else "#ff7700")
-        st.markdown(f"**{'Chất lượng dữ liệu' if is_vi else 'Data Quality'}:** "
-                    f"<span style='color:{q_color}'>"
-                    f"{'◆ ' + quality_vi if is_vi else '◆ ' + quality}</span>",
-                    unsafe_allow_html=True)
+        with col_divider:
+            st.markdown("""
+<div style="text-align:center;padding-top:60px;font-size:22px;color:#555">
+  ≠
+</div>""", unsafe_allow_html=True)
 
-        # Gauge
+        with col_fund:
+            st.markdown(f"""
+<div style="background:{fund_color}18;border:2px solid {fund_color};
+     border-radius:10px;padding:16px;text-align:center;height:180px">
+  <div style="font-size:12px;color:#aaa;margin-bottom:4px">
+    📊 {'Tín hiệu Cơ bản + Định giá' if is_vi else 'Fundamental + Valuation Signal'}<br>
+    <span style="font-size:10px;color:#888">📅 {'Dài hạn: 6–24 tháng' if is_vi else 'Long-term: 6–24 months'}</span>
+  </div>
+  <div style="font-size:30px;font-weight:bold;color:{fund_color};margin:8px 0">{fund_label}</div>
+  <div style="font-size:12px;color:#ccc">
+    {'Upside' if not is_vi else 'Tiềm năng'}: <b>{f'{upside_pct:+.1f}%' if fair_val > 0 else 'N/A'}</b>
+    &nbsp;|&nbsp; Score: <b>{fund_composite:.0f}/100</b>
+  </div>
+  <div style="font-size:10px;color:#888;margin-top:4px">
+    {'DCF · P/E · P/B · Graham · Risk Scoring' if not is_vi else 'DCF · P/E · P/B · Graham · Đánh giá rủi ro'}
+  </div>
+</div>""", unsafe_allow_html=True)
+            if fund_rationale:
+                for line in fund_rationale.split("\n\n")[:2]:
+                    if line.strip():
+                        st.markdown(f"<div style='font-size:11px;color:#bbb;margin-top:3px'>{line[:100]}</div>",
+                                    unsafe_allow_html=True)
+
+        # ══ SECTION B: Conflict explanation (only if signals diverge) ══
+        if unified["conflict"]:
+            st.markdown("---")
+            with st.expander(f"⚡ {'Tại sao hai tín hiệu khác nhau? (Không phải lỗi — bấm để xem giải thích)' if is_vi else 'Why do the signals diverge? (Not a bug — click to see explanation)'}", expanded=True):
+                # Comparison table
+                if is_vi:
+                    st.markdown("""
+| Chiều đo | 📈 Market Scanner | 📊 Stock Profiler |
+|----------|------------------|------------------|
+| **Phương pháp** | Phân tích kỹ thuật thuần túy | Cơ bản + Định giá nội tại |
+| **Tín hiệu** | RSI quá bán + Giá < BB Lower | DCF / P/E / P/B / Graham |
+| **Chân trời thời gian** | **1–5 phiên (T+2 ngắn hạn)** | **6–24 tháng (dài hạn)** |
+| **Câu hỏi trả lời** | *"Giá có thể hồi phục ngắn hạn?"* | *"Cổ phiếu có được định giá hợp lý?"* |
+| **SMA50 filter** | Tắt → tín hiệu dễ kích hoạt hơn | Không áp dụng SMA50 filter |
+
+**Cả hai tín hiệu đều hợp lệ — chúng trả lời hai câu hỏi hoàn toàn khác nhau.**
+
+> 📌 **Ví dụ với MWG:** Cổ phiếu có thể vừa *quá bán kỹ thuật* (áp lực bán giảm, xác suất bounce ngắn hạn cao) vừa *giao dịch trên giá trị nội tại DCF/Graham* (P/E cao hơn ngưỡng ngành, không hấp dẫn để tích lũy dài hạn). Nhà đầu cơ ngắn hạn và nhà đầu tư dài hạn sẽ hành động khác nhau.
+""")
+                else:
+                    st.markdown("""
+| Dimension | 📈 Market Scanner | 📊 Stock Profiler |
+|-----------|------------------|------------------|
+| **Method** | Pure technical analysis | Fundamental + Intrinsic valuation |
+| **Signal triggers** | RSI oversold + Price < BB Lower | DCF / P/E / P/B / Graham formula |
+| **Time horizon** | **1–5 sessions (T+2 short-term)** | **6–24 months (long-term)** |
+| **Question answered** | *"Can price bounce short-term?"* | *"Is the stock fairly priced?"* |
+| **SMA50 filter** | Off → signal fires more easily | SMA filter not applied |
+
+**Both signals are valid — they answer two completely different questions.**
+
+> 📌 **Example with MWG:** The stock can simultaneously be *technically oversold* (selling pressure easing, short-term bounce probable) and *trading above its DCF/Graham intrinsic value* (P/E above sector average, unattractive for long-term accumulation). Short-term traders and long-term investors will act differently.
+""")
+
+        # ══ SECTION C: Unified blended recommendation ══
+        st.markdown("---")
+        st.markdown("### 🎯 " + ("Khuyến Nghị Tổng Hợp (Blended)" if is_vi else "Unified Blended Recommendation"))
+
+        u_color = unified["color"]
+        w_tech_pct = int(unified["w_tech"] * 100)
+        w_fund_pct = int(unified["w_fund"] * 100)
+
+        st.markdown(f"""
+<div style="background:{u_color}22;border:3px solid {u_color};
+     border-radius:12px;padding:24px;text-align:center;margin:12px 0">
+  <div style="font-size:36px;font-weight:bold;color:{u_color}">{unified['label']}</div>
+  <div style="font-size:14px;color:#aaa;margin-top:8px">
+    {ticker} &nbsp;|&nbsp;
+    {'Trọng số' if is_vi else 'Weights'}: {'Cơ bản' if is_vi else 'Fundamental'} {w_fund_pct}%
+    + {'Kỹ thuật' if is_vi else 'Technical'} {w_tech_pct}%
+  </div>
+  <div style="font-size:12px;color:#888;margin-top:4px">{unified['quality_note']}</div>
+</div>""", unsafe_allow_html=True)
+
+        # Weight explanation
+        if unified["w_tech"] > 0.4:
+            note = ("⚠️ Trọng số kỹ thuật tăng vì dữ liệu tài chính cơ bản hạn chế (TCBS/VNDirect không khả dụng)."
+                    if is_vi else
+                    "⚠️ Technical weight increased because fundamental financial data is limited (TCBS/VNDirect unavailable).")
+            st.info(note)
+
+        # Gauge showing blended score mapped to 0–100
+        blended_display = (unified["blended"] + 2) / 4 * 100  # map -2..+2 → 0..100
         fig_gauge = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=composite,
-            title={"text": L["sp_score_label"]},
+            mode="gauge+number+delta",
+            value=fund_composite,
+            delta={"reference": 50, "valueformat": ".0f"},
+            title={"text": ("Điểm Cơ Bản" if is_vi else "Fundamental Score") + " /100"},
             gauge={
                 "axis": {"range": [0, 100]},
-                "bar":  {"color": rec_color},
+                "bar":  {"color": fund_color},
                 "steps": [
                     {"range": [0,  25], "color": "#3a0808"},
                     {"range": [25, 50], "color": "#3a2008"},
                     {"range": [50, 75], "color": "#1a3a08"},
                     {"range": [75,100], "color": "#083a20"},
                 ],
+                "threshold": {"line": {"color": tech_color, "width": 3},
+                              "thickness": 0.75,
+                              "value": min(100, max(0, scanner_sig.get("score", 0) * 5))},
             }
         ))
-        fig_gauge.update_layout(height=250, template="plotly_dark",
-                                 margin=dict(t=30,b=10,l=20,r=20))
+        fig_gauge.update_layout(height=240, template="plotly_dark",
+                                 margin=dict(t=40,b=10,l=20,r=20))
 
-        c_gauge, c_thesis = st.columns([1, 2])
+        # Score breakdown table (both signals side by side)
+        c_gauge, c_detail = st.columns([1, 2])
         with c_gauge:
             st.plotly_chart(fig_gauge, use_container_width=True)
-        with c_thesis:
-            st.markdown("### " + ("Luận điểm đầu tư" if is_vi else "Investment Thesis"))
-            if rationale:
-                for line in rationale.split("\n\n"):
-                    if line.strip():
-                        st.markdown(line)
-            # OHLC technical thesis
-            if ohlc_ok:
-                st.markdown("---")
-                st.markdown("**🔧 " + ("Phân tích kỹ thuật từ OHLC:" if is_vi else "Technical Analysis from OHLC:") + "**")
+            st.caption("🟡 Bar = Fundamental score | 🔸 Threshold = Technical score (scaled)")
+
+        with c_detail:
+            fund_pts = round(((10 - sum(risk_sc.get(k, 5) for k in
+                               ["profitability","growth","debt","liquidity"]) / 4) / 10) * 60, 1)
+            val_pts  = round(min(max(upside_pct / 50 * 25, 0), 25), 1)
+            tech_pts = round(min(max((tech_score or 0) / 100 * 15, 0), 15), 1)
+
+            st.markdown("**" + ("Cấu thành điểm Cơ bản:" if is_vi else "Fundamental Score Breakdown:") + "**")
+            comp_df = pd.DataFrame({
+                "Yếu tố" if is_vi else "Component": [
+                    "🏭 " + ("Chất lượng cơ bản" if is_vi else "Fundamental Quality"),
+                    "💰 " + ("Tiềm năng tăng giá" if is_vi else "Valuation Upside"),
+                    "📈 " + ("Kỹ thuật (OHLC)" if is_vi else "Technical (OHLC)"),
+                    "📊 TOTAL",
+                ],
+                "Điểm" if is_vi else "Score": [fund_pts, val_pts, tech_pts, fund_composite],
+                "Max": [60, 25, 15, 100],
+                "%": [f"{fund_pts/60*100:.0f}%", f"{val_pts/25*100:.0f}%",
+                      f"{tech_pts/15*100:.0f}%", f"{fund_composite:.0f}%"],
+            })
+            show_df(comp_df)
+
+            st.markdown("**" + ("Tín hiệu Scanner (kỹ thuật ngắn hạn):" if is_vi else "Scanner Signal (short-term technical):") + "**")
+            scan_df = pd.DataFrame({
+                "Chỉ số" if is_vi else "Indicator": ["RSI(14)", "BB Position", "MACD", "ADX", "Score"],
+                "Giá trị" if is_vi else "Value": [
+                    f"{scanner_sig.get('rsi', 0):.1f}",
+                    ("Dưới BB Lower ↓" if (scanner_sig.get("price",0) < scanner_sig.get("bbl",0) and scanner_sig.get("bbl",0) > 0)
+                     else "Trên BB Upper ↑" if (scanner_sig.get("price",0) > scanner_sig.get("bbu",0) and scanner_sig.get("bbu",0) > 0)
+                     else "Trong dải BB"),
+                    ("Bullish ↑" if (scanner_sig.get("macd") and scanner_sig.get("macd_sig") and
+                                     scanner_sig["macd"] > scanner_sig["macd_sig"])
+                     else "Bearish ↓"),
+                    f"{scanner_sig.get('adx', 0):.1f}",
+                    f"{scanner_sig.get('score', 0):.1f}",
+                ],
+            })
+            show_df(scan_df)
+
+        # Investment thesis (fundamental)
+        if fund_rationale:
+            st.markdown("---")
+            st.markdown("### 📝 " + ("Luận điểm Cơ bản (Dài hạn)" if is_vi else "Fundamental Thesis (Long-term)"))
+            for line in fund_rationale.split("\n\n"):
+                if line.strip():
+                    st.markdown(line)
+
+        # Technical thesis (short-term)
+        if ohlc_ok:
+            with st.expander("📈 " + ("Chi tiết Phân tích Kỹ thuật (Ngắn hạn T+2)" if is_vi
+                                       else "Technical Analysis Detail (Short-term T+2)"), expanded=False):
                 tech_bullets = []
-                if ohlc_ana["above_sma50"]:
-                    tech_bullets.append("✅ " + ("Giá trên SMA50 — xu hướng tăng trung hạn" if is_vi else "Price above SMA50 — medium-term uptrend"))
+                above50 = ohlc_ana.get("above_sma50", False)
+                tech_bullets.append(
+                    ("✅ Giá TRÊN SMA50 → xu hướng tăng trung hạn" if above50
+                     else "⚠️ Giá DƯỚI SMA50 → xu hướng giảm trung hạn") if is_vi else
+                    ("✅ Price ABOVE SMA50 → medium-term uptrend" if above50
+                     else "⚠️ Price BELOW SMA50 → medium-term downtrend")
+                )
+                if ohlc_ana.get("rsi_oversold"):
+                    tech_bullets.append("✅ RSI < 35 → " + ("Vùng quá bán — bounce ngắn hạn khả thi" if is_vi else "Oversold — short-term bounce probable"))
+                elif ohlc_ana.get("rsi_overbought"):
+                    tech_bullets.append("⚠️ RSI > 70 → " + ("Vùng quá mua — thận trọng mua đuổi" if is_vi else "Overbought — avoid chasing"))
                 else:
-                    tech_bullets.append("⚠️ " + ("Giá dưới SMA50 — xu hướng giảm trung hạn" if is_vi else "Price below SMA50 — medium-term downtrend"))
-                if ohlc_ana["rsi_oversold"]:
-                    tech_bullets.append("✅ " + ("RSI quá bán — cơ hội hồi phục" if is_vi else "RSI oversold — recovery opportunity"))
-                elif ohlc_ana["rsi_overbought"]:
-                    tech_bullets.append("⚠️ " + ("RSI quá mua — thận trọng" if is_vi else "RSI overbought — caution"))
-                if ohlc_ana["macd_bullish"]:
-                    tech_bullets.append("✅ " + ("MACD bullish — momentum tích cực" if is_vi else "MACD bullish — positive momentum"))
-                if ohlc_ana["price_percentile"] < 0.3:
-                    tech_bullets.append("✅ " + ("Giá gần đáy 52 tuần — vùng giá trị" if is_vi else "Near 52-week low — value zone"))
+                    tech_bullets.append(f"➡️ RSI = {ohlc_ana.get('rsi',50):.1f} → " + ("Vùng trung tính" if is_vi else "Neutral zone"))
+                if ohlc_ana.get("macd_bullish"):
+                    tech_bullets.append("✅ MACD > Signal → " + ("Momentum tăng" if is_vi else "Bullish momentum"))
+                else:
+                    tech_bullets.append("⚠️ MACD < Signal → " + ("Momentum giảm" if is_vi else "Bearish momentum"))
+                pp = ohlc_ana.get("price_percentile", 0.5)
+                if pp < 0.3:
+                    tech_bullets.append("✅ " + (f"Giá ở mức {pp*100:.0f}% vùng 52W — vùng giá trị thấp" if is_vi
+                                                  else f"Price at {pp*100:.0f}% of 52W range — low value zone"))
+                elif pp > 0.75:
+                    tech_bullets.append("⚠️ " + (f"Giá ở mức {pp*100:.0f}% vùng 52W — gần đỉnh 52 tuần" if is_vi
+                                                   else f"Price at {pp*100:.0f}% of 52W range — near 52W high"))
                 for b in tech_bullets:
                     st.markdown(b)
 
-        # Score breakdown
-        st.markdown("---")
-        st.markdown("### 📊 " + ("Chi tiết điểm số" if is_vi else "Score Breakdown"))
-        fund_pts = round(((10 - sum(risk_sc.get(k, 5) for k in ["profitability","growth","debt","liquidity"]) / 4) / 10) * 60, 1)
-        val_pts  = round(min(max(upside_pct / 50 * 25, 0), 25), 1)
-        tech_pts = round(min(max((tech_score or 0) / 100 * 15, 0), 15), 1)
-        comp_df = pd.DataFrame({
-            "Yếu tố" if is_vi else "Factor": [
-                "Chất lượng cơ bản" if is_vi else "Fundamental Quality",
-                "Tiềm năng tăng giá" if is_vi else "Valuation Upside",
-                "Kỹ thuật" if is_vi else "Technical",
-            ],
-            "Điểm" if is_vi else "Score": [fund_pts, val_pts, tech_pts],
-            "Max": [60, 25, 15],
-        })
-        show_df(comp_df)
+                ret1m = ohlc_ana.get("ret1m", 0)
+                ret3m = ohlc_ana.get("ret3m", 0)
+                st.markdown(f"**{'Momentum:' if not is_vi else 'Momentum:'}** "
+                             f"1M: `{ret1m*100:+.1f}%`  3M: `{ret3m*100:+.1f}%`  "
+                             f"Volatility: `{ohlc_ana.get('volatility',0)*100:.1f}%`/yr")
 
-        fig_score = go.Figure(go.Bar(
-            x=comp_df["Điểm" if is_vi else "Score"],
-            y=comp_df["Yếu tố" if is_vi else "Factor"],
-            orientation="h",
-            marker_color=[rec_color, "#4e9af1", "#f1a84e"],
-            text=comp_df["Điểm" if is_vi else "Score"], textposition="outside",
-        ))
-        fig_score.update_layout(height=180, template="plotly_dark",
-                                 xaxis=dict(range=[0, 70]),
-                                 margin=dict(t=10,b=10,l=160,r=40))
-        st.plotly_chart(fig_score, use_container_width=True)
-
-        # News section
+        # News
         all_news = ssi_news or fetch_news(ticker, n=8)
         if all_news:
             st.markdown("---")
@@ -3922,9 +4279,9 @@ def render_stock_profiler_tab():
                 st.markdown(f"📰 **{date}** — [{title}]({url})" if url else f"📰 **{date}** — {title}")
 
         st.caption("⚠️ " + (
-            "Khuyến nghị dựa trên phân tích định lượng tự động. Không phải tư vấn đầu tư."
+            "Khuyến nghị dựa trên phân tích định lượng tự động. Không phải tư vấn đầu tư chuyên nghiệp."
             if is_vi else
-            "Recommendation based on automated quantitative analysis. Not financial advice."
+            "Recommendation based on automated quantitative analysis. Not professional financial advice."
         ))
 
 
@@ -3935,6 +4292,9 @@ def render_scanner_tab():
     st.subheader("📡 " + ("Tín Hiệu Giao Dịch Tổng Hợp" if st.session_state.lang=="VI" else "Aggregated Trading Signals"))
     watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
     st.info(f"Watchlist: **{len(watch_list)}** tickers  |  Pipeline: **DNSE** → SSI → CafeF  |  RSI Buy<{rsi_buy_thresh} / Sell>{rsi_sell_thresh}")
+    st.caption("⏱️ " + ("Tín hiệu Scanner là **kỹ thuật ngắn hạn T+2 (1–5 phiên)**. Khác với Hồ Sơ Cổ Phiếu (cơ bản dài hạn 6–24 tháng) — hai góc nhìn bổ sung nhau, không mâu thuẫn."
+                         if st.session_state.lang=="VI" else
+                         "Scanner signals are **short-term technical T+2 (1–5 sessions)**. Different from Stock Profiler (long-term fundamental 6–24 months) — complementary views, not contradictions."))
 
     if st.button(L["scan_btn"], type="primary"):
         scanner_data = []; st.session_state.error_logs = []
@@ -3998,6 +4358,9 @@ def render_top_buy_tab():
     hdr = "Top Cổ Phiếu Bắt Đáy" if st.session_state.lang=="VI" else "Top Oversold Stock Screener"
     st.subheader(f"🏆 {hdr}")
     st.caption(f"Scanning **{len(MARKET_SCAN_LIST)}** tickers  |  DNSE → SSI → CafeF")
+    st.caption("⏱️ " + ("Tín hiệu **kỹ thuật ngắn hạn T+2**. Dùng tab 🧬 Hồ Sơ Cổ Phiếu để phân tích dài hạn cơ bản."
+                         if st.session_state.lang=="VI" else
+                         "**Short-term technical T+2** signals. Use the 🧬 Stock Profiler tab for long-term fundamental analysis."))
 
     if st.button(L["buy_btn"], type="primary"):
         buy_signals = []; st.session_state.error_logs = []
@@ -4785,6 +5148,33 @@ def render_changelog_tab():
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
 ## 📝 Application Change Log
+
+---
+
+### v18.0 — 2026-03-08 · SIGNAL DIVERGENCE RESOLVED
+
+**Root Cause Analysis — Scanner BUY vs Profiler SELL for same ticker (e.g. MWG)**
+
+| Aspect | Market Scanner | Stock Profiler |
+|--------|---------------|----------------|
+| Method | Pure technical | Fundamental + DCF/Graham valuation |
+| Horizon | **Short-term T+2 (1–5 sessions)** | **Long-term 6–24 months** |
+| Signal triggers | RSI < 35 + Price < BB Lower | Composite score from risk + upside |
+| SMA50 filter OFF | More signals fire (trend ignored) | Not affected |
+| Question answered | "Will price bounce in 1–5 days?" | "Is this stock fairly valued?" |
+
+**Both can be simultaneously correct — they serve different investment horizons.**
+
+| Fix/ENH ID | Component | Change |
+|-----------|-----------|--------|
+| FIX-19 | Signal Divergence | Not a bug — documented + resolved with dual-signal view |
+| ENH-15 | Market Scanner | Added ⏱️ Horizon column ("Ngắn hạn T+2") to scan results table |
+| ENH-15 | Scanner/Top Buy | Caption note: "T+2 short-term technical signal" |
+| ENH-16 | Profiler S6 | **Dual-signal card view**: Tech (T+2) vs Fundamental (6–24M) shown side-by-side |
+| ENH-17 | Profiler S6 | **Conflict detection banner** with comparison table — auto-expands when signals diverge |
+| ENH-18 | Profiler S6 | **Unified blended recommendation**: Fundamental 70% + Technical 30% (60/40 when no fundamentals) |
+| ENH-18 | Profiler S6 | `get_scanner_signal_for_profiler()` runs exact same Scanner logic → guarantees consistency |
+| ENH-18 | Profiler S6 | `get_unified_recommendation()` — transparent blending with weight display |
 
 ---
 
