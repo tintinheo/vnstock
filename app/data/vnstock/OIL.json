@@ -14,6 +14,23 @@
     "Confirms": 3,
     "⚠️ DL": 1,
     "Nguồn": "SSI",
+    "scan_time": "2026-03-08 15:14:43"
+  },
+  {
+    "Mã": "OIL",
+    "Ngành/Sector": "Dầu khí",
+    "Giá": 17200,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 13700,
+    "BB Sell": 17450,
+    "RSI": 68.3,
+    "Stoch%K": 78.8,
+    "ADX": 36.0,
+    "Vol/MA20": "0.7×",
+    "Điểm": 8.0,
+    "Confirms": 3,
+    "⚠️ DL": 1,
+    "Nguồn": "SSI",
     "scan_time": "2026-03-08 14:53:59"
   },
   {
