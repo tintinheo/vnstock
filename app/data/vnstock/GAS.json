@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "GAS",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 72400,
+    "Signal": "WATCH",
+    "BB Buy": 57800,
+    "BB Sell": 74300,
+    "RSI": 67.5,
+    "Stoch%K": 77.0,
+    "ADX": 31.9,
+    "Vol/MA20": "1.3×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 1,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "GAS",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 72400,
+    "Signal": "WATCH",
+    "BB Buy": 57800,
+    "BB Sell": 74300,
+    "RSI": 67.5,
+    "Stoch%K": 77.0,
+    "ADX": 31.9,
+    "Vol/MA20": "1.3×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 1,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "GAS",
+    "Ngành/Sector": "Dầu khí",
+    "Giá": 72400,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 57800,
+    "BB Sell": 74300,
+    "RSI": 67.5,
+    "Stoch%K": 77.0,
+    "ADX": 31.9,
+    "Vol/MA20": "1.3×",
+    "Điểm": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 1,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

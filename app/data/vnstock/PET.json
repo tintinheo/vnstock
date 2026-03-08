@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "PET",
+    "Ngành/Sector": "Khác",
+    "Price": 38500,
+    "Signal": "WATCH",
+    "BB Buy": 30400,
+    "BB Sell": 42700,
+    "RSI": 56.9,
+    "Stoch%K": 53.9,
+    "ADX": 24.0,
+    "Vol/MA20": "0.6×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "PET",
+    "Ngành/Sector": "Khác",
+    "Price": 38500,
+    "Signal": "WATCH",
+    "BB Buy": 30400,
+    "BB Sell": 42700,
+    "RSI": 56.9,
+    "Stoch%K": 53.9,
+    "ADX": 24.0,
+    "Vol/MA20": "0.6×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "PET",
+    "Ngành/Sector": "Khác",
+    "Giá": 38500,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 30400,
+    "BB Sell": 42700,
+    "RSI": 56.9,
+    "Stoch%K": 53.9,
+    "ADX": 24.0,
+    "Vol/MA20": "0.6×",
+    "Điểm": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

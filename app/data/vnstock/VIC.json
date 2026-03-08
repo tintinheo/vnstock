@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "VIC",
+    "Ngành/Sector": "Bất động sản",
+    "Price": 156500,
+    "Signal": "WATCH",
+    "BB Buy": 119100,
+    "BB Sell": 182100,
+    "RSI": 51.0,
+    "Stoch%K": 52.4,
+    "ADX": 19.6,
+    "Vol/MA20": "1.4×",
+    "Score": 11.0,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "VIC",
+    "Ngành/Sector": "Bất động sản",
+    "Price": 156500,
+    "Signal": "WATCH",
+    "BB Buy": 119100,
+    "BB Sell": 182100,
+    "RSI": 51.0,
+    "Stoch%K": 52.4,
+    "ADX": 19.6,
+    "Vol/MA20": "1.4×",
+    "Score": 7.0,
+    "Confirms": 2,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "VIC",
+    "Ngành/Sector": "Bất động sản",
+    "Giá": 156500,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 119100,
+    "BB Sell": 182100,
+    "RSI": 51.0,
+    "Stoch%K": 52.4,
+    "ADX": 19.6,
+    "Vol/MA20": "1.4×",
+    "Điểm": 7.0,
+    "Confirms": 2,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

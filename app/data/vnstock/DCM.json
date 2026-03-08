@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "DCM",
+    "Ngành/Sector": "Khác",
+    "Price": 42950,
+    "Signal": "SELL",
+    "BB Buy": 34550,
+    "BB Sell": 42900,
+    "RSI": 70.0,
+    "Stoch%K": 96.0,
+    "ADX": 30.6,
+    "Vol/MA20": "2.2×",
+    "Score": 21.0,
+    "Confirms": 5,
+    "⚠️ DL": 1,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "DCM",
+    "Ngành/Sector": "Khác",
+    "Price": 42950,
+    "Signal": "SELL",
+    "BB Buy": 34550,
+    "BB Sell": 42900,
+    "RSI": 70.0,
+    "Stoch%K": 96.0,
+    "ADX": 30.6,
+    "Vol/MA20": "2.2×",
+    "Score": 21.0,
+    "Confirms": 5,
+    "⚠️ DL": 1,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "DCM",
+    "Ngành/Sector": "Khác",
+    "Giá": 42950,
+    "Hành vi": "BÁN",
+    "BB Buy": 34550,
+    "BB Sell": 42900,
+    "RSI": 70.0,
+    "Stoch%K": 96.0,
+    "ADX": 30.6,
+    "Vol/MA20": "2.2×",
+    "Điểm": 21.0,
+    "Confirms": 5,
+    "⚠️ DL": 1,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

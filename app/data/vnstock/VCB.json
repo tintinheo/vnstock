@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "VCB",
+    "Ngành/Sector": "Ngân hàng",
+    "Price": 61600,
+    "Signal": "WATCH",
+    "BB Buy": 59300,
+    "BB Sell": 71400,
+    "RSI": 38.3,
+    "Stoch%K": 3.8,
+    "ADX": 21.2,
+    "Vol/MA20": "0.8×",
+    "Score": 13.1,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "VCB",
+    "Ngành/Sector": "Ngân hàng",
+    "Price": 61600,
+    "Signal": "WATCH",
+    "BB Buy": 59300,
+    "BB Sell": 71400,
+    "RSI": 38.3,
+    "Stoch%K": 3.8,
+    "ADX": 21.2,
+    "Vol/MA20": "0.8×",
+    "Score": 9.1,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "VCB",
+    "Ngành/Sector": "Ngân hàng",
+    "Giá": 61600,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 59300,
+    "BB Sell": 71400,
+    "RSI": 38.3,
+    "Stoch%K": 3.8,
+    "ADX": 21.2,
+    "Vol/MA20": "0.8×",
+    "Điểm": 9.1,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

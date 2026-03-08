@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "BSR",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 31200,
+    "Signal": "SELL",
+    "BB Buy": 18900,
+    "BB Sell": 30450,
+    "RSI": 85.1,
+    "Stoch%K": 91.7,
+    "ADX": 41.0,
+    "Vol/MA20": "0.8×",
+    "Score": 27.9,
+    "Confirms": 5,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "BSR",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 31200,
+    "Signal": "SELL",
+    "BB Buy": 18900,
+    "BB Sell": 30450,
+    "RSI": 85.1,
+    "Stoch%K": 91.7,
+    "ADX": 41.0,
+    "Vol/MA20": "0.8×",
+    "Score": 27.9,
+    "Confirms": 5,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "BSR",
+    "Ngành/Sector": "Dầu khí",
+    "Giá": 31200,
+    "Hành vi": "BÁN",
+    "BB Buy": 18900,
+    "BB Sell": 30450,
+    "RSI": 85.1,
+    "Stoch%K": 91.7,
+    "ADX": 41.0,
+    "Vol/MA20": "0.8×",
+    "Điểm": 27.9,
+    "Confirms": 5,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

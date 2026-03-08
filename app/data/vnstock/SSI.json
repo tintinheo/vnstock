@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "SSI",
+    "Ngành/Sector": "Chứng khoán",
+    "Price": 31500,
+    "Signal": "WATCH",
+    "BB Buy": 29400,
+    "BB Sell": 33750,
+    "RSI": 47.9,
+    "Stoch%K": 36.4,
+    "ADX": 13.7,
+    "Vol/MA20": "1.8×",
+    "Score": 14.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "SSI",
+    "Ngành/Sector": "Chứng khoán",
+    "Price": 31500,
+    "Signal": "WATCH",
+    "BB Buy": 29400,
+    "BB Sell": 33750,
+    "RSI": 47.9,
+    "Stoch%K": 36.4,
+    "ADX": 13.7,
+    "Vol/MA20": "1.8×",
+    "Score": 14.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "SSI",
+    "Ngành/Sector": "Chứng khoán",
+    "Giá": 31500,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 29400,
+    "BB Sell": 33750,
+    "RSI": 47.9,
+    "Stoch%K": 36.4,
+    "ADX": 13.7,
+    "Vol/MA20": "1.8×",
+    "Điểm": 14.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "VPL",
+    "Ngành/Sector": "Khác",
+    "Price": 76700,
+    "Signal": "WATCH",
+    "BB Buy": 74500,
+    "BB Sell": 90400,
+    "RSI": 34.2,
+    "Stoch%K": 22.0,
+    "ADX": 28.2,
+    "Vol/MA20": "0.8×",
+    "Score": 8.5,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "VPL",
+    "Ngành/Sector": "Khác",
+    "Price": 76700,
+    "Signal": "WATCH",
+    "BB Buy": 74500,
+    "BB Sell": 90400,
+    "RSI": 34.2,
+    "Stoch%K": 22.0,
+    "ADX": 28.2,
+    "Vol/MA20": "0.8×",
+    "Score": 4.5,
+    "Confirms": 2,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "VPL",
+    "Ngành/Sector": "Khác",
+    "Giá": 76700,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 74500,
+    "BB Sell": 90400,
+    "RSI": 34.2,
+    "Stoch%K": 22.0,
+    "ADX": 28.2,
+    "Vol/MA20": "0.8×",
+    "Điểm": 4.5,
+    "Confirms": 2,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

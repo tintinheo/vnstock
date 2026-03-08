@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "PHR",
+    "Ngành/Sector": "Khác",
+    "Price": 61200,
+    "Signal": "WATCH",
+    "BB Buy": 55900,
+    "BB Sell": 69600,
+    "RSI": 46.5,
+    "Stoch%K": 31.5,
+    "ADX": 17.9,
+    "Vol/MA20": "0.8×",
+    "Score": 9.0,
+    "Confirms": 2,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "PHR",
+    "Ngành/Sector": "Khác",
+    "Price": 61200,
+    "Signal": "WATCH",
+    "BB Buy": 55900,
+    "BB Sell": 69600,
+    "RSI": 46.5,
+    "Stoch%K": 31.5,
+    "ADX": 17.9,
+    "Vol/MA20": "0.8×",
+    "Score": 5.0,
+    "Confirms": 1,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "PHR",
+    "Ngành/Sector": "Khác",
+    "Giá": 61200,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 55900,
+    "BB Sell": 69600,
+    "RSI": 46.5,
+    "Stoch%K": 31.5,
+    "ADX": 17.9,
+    "Vol/MA20": "0.8×",
+    "Điểm": 5.0,
+    "Confirms": 1,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

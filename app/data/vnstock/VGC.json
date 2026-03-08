@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "VGC",
+    "Ngành/Sector": "Khác",
+    "Price": 46000,
+    "Signal": "WATCH",
+    "BB Buy": 44600,
+    "BB Sell": 57500,
+    "RSI": 40.8,
+    "Stoch%K": "–",
+    "ADX": 21.2,
+    "Vol/MA20": "0.5×",
+    "Score": 18.4,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "VGC",
+    "Ngành/Sector": "Khác",
+    "Price": 46000,
+    "Signal": "WATCH",
+    "BB Buy": 44600,
+    "BB Sell": 57500,
+    "RSI": 40.8,
+    "Stoch%K": "–",
+    "ADX": 21.2,
+    "Vol/MA20": "0.5×",
+    "Score": 14.4,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "VGC",
+    "Ngành/Sector": "Khác",
+    "Giá": 46000,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 44600,
+    "BB Sell": 57500,
+    "RSI": 40.8,
+    "Stoch%K": "–",
+    "ADX": 21.2,
+    "Vol/MA20": "0.5×",
+    "Điểm": 14.4,
+    "Confirms": 3,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

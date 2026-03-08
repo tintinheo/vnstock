@@ -1,0 +1,19 @@
+[
+  {
+    "Ticker": "ITA",
+    "Ngành/Sector": "Khác",
+    "Price": 242,
+    "Signal": "WATCH",
+    "BB Buy": 230,
+    "BB Sell": 250,
+    "RSI": 54.2,
+    "Stoch%K": 49.2,
+    "ADX": 17.7,
+    "Vol/MA20": "1.9×",
+    "Score": 9.0,
+    "Confirms": 3,
+    "⚠️ DL": 1,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  }
+]

@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "PVD",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 37400,
+    "Signal": "WATCH",
+    "BB Buy": 27050,
+    "BB Sell": 38550,
+    "RSI": 72.0,
+    "Stoch%K": 92.7,
+    "ADX": 31.2,
+    "Vol/MA20": "1.0×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "PVD",
+    "Ngành/Sector": "Dầu khí",
+    "Price": 37400,
+    "Signal": "WATCH",
+    "BB Buy": 27050,
+    "BB Sell": 38550,
+    "RSI": 72.0,
+    "Stoch%K": 92.7,
+    "ADX": 31.2,
+    "Vol/MA20": "1.0×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "PVD",
+    "Ngành/Sector": "Dầu khí",
+    "Giá": 37400,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 27050,
+    "BB Sell": 38550,
+    "RSI": 72.0,
+    "Stoch%K": 92.7,
+    "ADX": 31.2,
+    "Vol/MA20": "1.0×",
+    "Điểm": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]

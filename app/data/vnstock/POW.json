@@ -1,0 +1,53 @@
+[
+  {
+    "Ticker": "POW",
+    "Ngành/Sector": "Điện",
+    "Price": 14550,
+    "Signal": "WATCH",
+    "BB Buy": 12450,
+    "BB Sell": 16050,
+    "RSI": 52.3,
+    "Stoch%K": 43.2,
+    "ADX": 24.6,
+    "Vol/MA20": "1.2×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:16:07"
+  },
+  {
+    "Ticker": "POW",
+    "Ngành/Sector": "Điện",
+    "Price": 14550,
+    "Signal": "WATCH",
+    "BB Buy": 12450,
+    "BB Sell": 16050,
+    "RSI": 52.3,
+    "Stoch%K": 43.2,
+    "ADX": 24.6,
+    "Vol/MA20": "1.2×",
+    "Score": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Source": "yFinance",
+    "scan_time": "2026-03-08 11:13:02"
+  },
+  {
+    "Mã": "POW",
+    "Ngành/Sector": "Điện",
+    "Giá": 14550,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 12450,
+    "BB Sell": 16050,
+    "RSI": 52.3,
+    "Stoch%K": 43.2,
+    "ADX": 24.6,
+    "Vol/MA20": "1.2×",
+    "Điểm": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 0,
+    "Nguồn": "yFinance",
+    "scan_time": "2026-03-08 11:09:28"
+  }
+]
