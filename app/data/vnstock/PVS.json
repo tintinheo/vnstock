@@ -14,6 +14,23 @@
     "Confirms": 4,
     "⚠️ DL": 1,
     "Nguồn": "SSI",
+    "scan_time": "2026-03-08 12:48:22"
+  },
+  {
+    "Mã": "PVS",
+    "Ngành/Sector": "Dầu khí",
+    "Giá": 42200,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 33600,
+    "BB Sell": 42900,
+    "RSI": 66.1,
+    "Stoch%K": 62.1,
+    "ADX": 33.5,
+    "Vol/MA20": "1.4×",
+    "Điểm": 13.0,
+    "Confirms": 4,
+    "⚠️ DL": 1,
+    "Nguồn": "SSI",
     "scan_time": "2026-03-08 12:12:29"
   }
 ]
