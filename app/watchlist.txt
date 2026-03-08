@@ -5,7 +5,6 @@
   PET
   TCB
   MWG
-  SSI
   DPM
   REE
   VCB
@@ -34,4 +33,3 @@
   BSR
   OIL
   PVD
-  PVS

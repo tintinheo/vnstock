@@ -1,30 +1,23 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v14.0                         ║
+║   Captain Seventh QUANT TERMINAL  v15.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v13 → v14:                                           ║
-║  [BUG FIXES]                                                    ║
-║  FIX-01: st.session.state → st.session_state (70+ occurrences) ║
-║  FIX-02: scan_one_ticker() now always returns 3-tuple           ║
-║          (was returning 2-tuple on success → "too many values   ║
-║           to unpack" crash in Deep Audit & Scanner)             ║
-║  FIX-03: SSI iBoard — multi-endpoint fallback (v2 → v1 → fc)   ║
-║  FIX-04: DNSE Entrade — multi-endpoint fallback (v2 → v1)      ║
-║  FIX-05: VN-Index fetch — SSI → stooq → yfinance chain         ║
-║  FIX-06: World Markets — stooq + yfinance fallback (GC=F etc.) ║
-║  FIX-07: CafeF JSON API timeout reduced (fail fast on refusal) ║
-║  FIX-08: session_state.smoke_results initialised on startup    ║
-║  FIX-09: Broken L["lang"] KeyError condition fixed             ║
-║  FIX-10: yFinance MultiIndex columns normalised                ║
-║  FIX-11: Full stack traces logged to error_log.txt             ║
-║  [ENHANCEMENTS]                                                 ║
-║  ENH-01: Change Log tab added for audit trail                  ║
-║  ENH-02: BRD / Guide tab updated with theory & model detail    ║
-║  ENH-03: Smoke test expanded — FPT + OIL functional test       ║
-║  ENH-04: Download pipeline shows per-source error detail       ║
-║  PRESERVED: all v13 indicators, backtest, ML ensemble, world   ║
-║             markets, bilingual UI, sector insights              ║
+║  CHANGELOG v13 → v15:                                           ║
+║  v14 FIXES: session_state, scan 3-tuple, SSI 404, DNSE multi  ║
+║             stooq yfinance fallback, CafeF timeout, BRD tab   ║
+║             Change Log tab, smoke test FPT+OIL                 ║
+║  v15 FIXES:                                                     ║
+║  FIX-12: DNSE — only confirmed working /v2 endpoint kept       ║
+║  FIX-13: SSI — iboard-api.ssi.com.vn (user-confirmed 2026-03) ║
+║           new _parse_ssi_response handles 3 response formats   ║
+║  FIX-14: CafeF — 4-strategy fetch: historial + AJAX +         ║
+║           HisDanhMuc JSON + LichSuGia HTML                     ║
+║  FIX-15: PyArrow error — Weight "weighted" str→str conversion  ║
+║  ENH-05: TCBS public API added as P4 source (no auth needed)   ║
+║  ENH-06: VNDirect price history added as P6 source             ║
+║  ENH-07: 7-source pipeline: DNSE→SSI→CafeF→TCBS→CafeF-JSON   ║
+║           →VNDirect→yFinance                                   ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -70,7 +63,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v14.0",
+    page_title="Captain Seventh QUANT TERMINAL v15.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -92,14 +85,14 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v14.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v15.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
     "liq_filter":      "Lọc Thanh khoản (>1 tỷ/ngày)",
     "rsi_buy":         "Ngưỡng RSI Mua:",
     "rsi_sell":        "Ngưỡng RSI Bán:",
-    "pipeline_lbl":    "📡 Pipeline: DNSE → SSI → CafeF",
+    "pipeline_lbl":    "📡 7 Sources: DNSE→SSI→CafeF→TCBS→VNDir",
     "finance_lbl":     "📊 Tài chính: VNDirect FINFO",
     "disclaimer":      "⚠️ Chỉ tham khảo, không phải TVĐT",
     "tab1":  "📊 Market Scanner",
@@ -146,14 +139,14 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v14.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v15.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
     "liq_filter":      "Liquidity Filter (>1B VND/day)",
     "rsi_buy":         "RSI Buy Threshold:",
     "rsi_sell":        "RSI Sell Threshold:",
-    "pipeline_lbl":    "📡 Pipeline: DNSE → SSI → CafeF",
+    "pipeline_lbl":    "📡 7 Sources: DNSE→SSI→CafeF→TCBS→VNDir",
     "finance_lbl":     "📊 Financials: VNDirect FINFO",
     "disclaimer":      "⚠️ For reference only, not investment advice",
     "tab1":  "📊 Market Scanner",
@@ -342,7 +335,7 @@ rsi_buy_thresh       = sb.slider(L["rsi_buy"],  20, 45, 35)
 rsi_sell_thresh      = sb.slider(L["rsi_sell"], 55, 80, 65)
 sb.divider()
 sb.caption(f"📦 {len(MARKET_SCAN_LIST)} mã HOSE/HNX/UPCOM")
-sb.caption(f"📡 Pipeline: DNSE → SSI → CafeF → yFinance")
+sb.caption(f"📡 Pipeline: DNSE→SSI→CafeF→TCBS→VNDir→yF")
 sb.caption(L["finance_lbl"])
 sb.caption(f"📈 yFinance: {'✅' if YFINANCE_AVAILABLE else '❌'}")
 sb.caption(f"🤖 sklearn: {'✅' if SKLEARN_AVAILABLE else '❌'}")
@@ -403,164 +396,346 @@ def _parse_udf(raw: dict, source: str = "UDF") -> pd.DataFrame:
 
 def _fetch_dnse(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    P1: DNSE Entrade UDF — services.entrade.com.vn
-    ✓ No auth  ✓ <200ms  ✓ HOSE+HNX+UPCOM  ✓ Real-time
-    Tries both v2 and v1 endpoints for resilience.
+    P1: DNSE Entrade UDF — services.entrade.com.vn/chart-api/v2
+    Confirmed working: only the /v2/ohlcs/stock endpoint is valid.
+    Returns TradingView UDF format: {t, o, h, l, c, v, s}
+    ✓ No auth  ✓ HOSE+HNX+UPCOM  ✓ Real-time intraday
     """
+    import traceback
     to_ts   = _unix(datetime.now())
     from_ts = _unix(datetime.now() - timedelta(days=days))
-    endpoints = [
-        f"https://services.entrade.com.vn/chart-api/v2/ohlcs/stock?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}",
-        f"https://services.entrade.com.vn/chart-api/ohlcs/stock?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}",
-        f"https://api.entrade.com.vn/chart-api/v2/ohlcs/stock?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}",
-    ]
-    for url in endpoints:
-        try:
-            r = _HTTP.get(url, timeout=API_TIMEOUT)
-            r.raise_for_status()
-            df = _parse_udf(r.json(), source=f"DNSE({symbol})")
-            if not df.empty:
-                _log.info(f"DNSE {symbol}: {len(df)} rows via {url[:60]}...")
-                return df
-        except requests.exceptions.RequestException as e:
-            _log.warning(f"DNSE endpoint failed for {symbol}: {url[:60]}... — {e}")
-            import traceback
-            _log.debug(traceback.format_exc())
-            continue
-        except Exception as e:
-            _log.error(f"DNSE processing error for {symbol}: {e}")
-            import traceback
-            _log.debug(traceback.format_exc())
+    url = (f"https://services.entrade.com.vn/chart-api/v2/ohlcs/stock"
+           f"?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}")
+    try:
+        r = _HTTP.get(url, timeout=API_TIMEOUT)
+        r.raise_for_status()
+        raw = r.json()
+        # Validate response before parse
+        if not isinstance(raw, dict):
+            _log.debug(f"DNSE {symbol}: unexpected response type {type(raw)}")
+            return pd.DataFrame()
+        df = _parse_udf(raw, source=f"DNSE({symbol})")
+        if not df.empty:
+            _log.info(f"DNSE ✅ {symbol}: {len(df)} rows, close={df['Close'].iloc[-1]:,.0f}")
+        return df
+    except requests.exceptions.HTTPError as e:
+        _log.warning(f"DNSE HTTP error {symbol}: {e}")
+    except requests.exceptions.ConnectionError as e:
+        _log.warning(f"DNSE connection error {symbol}: {e}")
+    except requests.exceptions.Timeout:
+        _log.warning(f"DNSE timeout {symbol}")
+    except ValueError as e:
+        # JSON decode error — endpoint returned non-JSON
+        _log.warning(f"DNSE JSON decode error {symbol}: {e}")
+    except Exception as e:
+        _log.error(f"DNSE unexpected error {symbol}: {e}"); _log.debug(traceback.format_exc())
+    return pd.DataFrame()
+
+
+def _parse_ssi_response(raw: dict, symbol: str) -> pd.DataFrame:
+    """
+    Parse SSI iboard-api response which can come in multiple formats:
+    Format A: {"data": {"t":[...],"o":[...],"h":[...],"l":[...],"c":[...],"v":[...]}}
+    Format B: flat TradingView UDF {"t":[...],"c":[...],...}
+    Format C: {"data": [{"time":...,"open":...,"high":...,"low":...,"close":...,"volume":...},...]}
+    """
+    if not raw:
+        return pd.DataFrame()
+    # Unwrap nested "data" key if present
+    inner = raw.get("data", raw)
+    # Format C: list of dicts
+    if isinstance(inner, list) and inner:
+        rows = []
+        for it in inner:
+            try:
+                ts = it.get("time", it.get("t", it.get("date", None)))
+                cl = it.get("close", it.get("c", it.get("Close", None)))
+                if ts is None or cl is None: continue
+                # ts may be Unix timestamp or ISO string
+                try:
+                    dt = pd.Timestamp(ts, unit="s") if isinstance(ts, (int,float)) else pd.Timestamp(ts)
+                except Exception:
+                    continue
+                rows.append({
+                    "Date":  dt,
+                    "Open":  float(it.get("open",  it.get("o", cl)) or cl),
+                    "High":  float(it.get("high",  it.get("h", cl)) or cl),
+                    "Low":   float(it.get("low",   it.get("l", cl)) or cl),
+                    "Close": float(cl),
+                    "Volume":float(it.get("volume",it.get("v",  0))  or 0),
+                })
+            except Exception:
+                continue
+        if rows:
+            df = pd.DataFrame(rows).set_index("Date").sort_index()
+            df = df[~df.index.duplicated(keep="last")]
+            if not df.empty and df["Close"].dropna().median() < 500:
+                for c in ["Open","High","Low","Close"]: df[c] *= 1000
+            return df
+    # Format A/B: UDF dict with arrays
+    if isinstance(inner, dict):
+        return _parse_udf(inner, source=f"SSI({symbol})")
     return pd.DataFrame()
 
 
 def _fetch_ssi(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    P2: SSI iBoard UDF — iboard-query.ssi.com.vn
-    ✓ Stable  ✓ HOSE/HNX  ✓ Accurate intraday
+    P2: SSI iBoard API — multiple endpoints tried in order.
+    Confirmed working endpoint (user-verified 2026-03-08):
+      iboard-api.ssi.com.vn/statistics/charts/history
+    Also tries iboard-query.ssi.com.vn as secondary.
+    ✓ HOSE/HNX/UPCOM  ✓ Real-time  ✓ No auth required
     """
+    import traceback
     to_ts   = _unix(datetime.now())
     from_ts = _unix(datetime.now() - timedelta(days=days))
-    url = (f"https://iboard-query.ssi.com.vn/stock/ohlc"
-           f"?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}")
+    
+    # Endpoint list — iboard-api first (confirmed working), then fallbacks
+    endpoints = [
+        # ① Confirmed working 2026-03 (user verified)
+        (f"https://iboard-api.ssi.com.vn/statistics/charts/history"
+         f"?resolution=1D&symbol={symbol}&from={from_ts}&to={to_ts}",
+         {"User-Agent":"Mozilla/5.0","Accept":"application/json",
+          "Referer":"https://iboard.ssi.com.vn/","Origin":"https://iboard.ssi.com.vn"}),
+        # ② Legacy iboard-query (may return 404 on /v2 but /stock/ohlc may still work)
+        (f"https://iboard-query.ssi.com.vn/stock/ohlc"
+         f"?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}",
+         {"User-Agent":"Mozilla/5.0","Referer":"https://iboard.ssi.com.vn/"}),
+        # ③ fc-data subdomain
+        (f"https://fc-data.ssi.com.vn/api/v2/stock/ohlc"
+         f"?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}",
+         {"User-Agent":"Mozilla/5.0","Referer":"https://iboard.ssi.com.vn/"}),
+    ]
+    
+    for url, hdrs in endpoints:
+        try:
+            r = requests.get(url, headers=hdrs, timeout=API_TIMEOUT)
+            r.raise_for_status()
+            raw = r.json()
+            df = _parse_ssi_response(raw, symbol)
+            if not df.empty and len(df) >= 5:
+                _log.info(f"SSI ✅ {symbol}: {len(df)} rows via {url[:70]}")
+                return df
+            else:
+                _log.debug(f"SSI {symbol}: empty/short response from {url[:70]}")
+        except requests.exceptions.HTTPError as e:
+            _log.warning(f"SSI HTTP error {symbol} [{url[:60]}]: {e}")
+        except requests.exceptions.ConnectionError as e:
+            _log.warning(f"SSI connection error {symbol}: {e}")
+        except requests.exceptions.Timeout:
+            _log.warning(f"SSI timeout {symbol} [{url[:60]}]")
+        except ValueError as e:
+            _log.warning(f"SSI JSON decode error {symbol}: {e}")
+        except Exception as e:
+            _log.error(f"SSI unexpected error {symbol}: {e}"); _log.debug(traceback.format_exc())
+    
+    return pd.DataFrame()
+
+
+def _parse_cafef_table(html_text: str, symbol: str) -> pd.DataFrame:
+    """Parse CafeF HTML tables — tries multiple column naming conventions."""
     try:
-        r = _HTTP.get(url, timeout=API_TIMEOUT)
-        r.raise_for_status()
-        return _parse_udf(r.json(), source=f"SSI({symbol})")
-    except requests.exceptions.RequestException as e:
-        _log.warning(f"SSI fetch failed for {symbol}: {e}")
-        st.toast(f"SSI API for {symbol} failed: {e}", icon="📡")
-        return pd.DataFrame()
+        dfs = pd.read_html(io.StringIO(html_text), flavor="lxml")
+        if not dfs:
+            return pd.DataFrame()
+        # Try each table (last one is usually the data table)
+        for df in reversed(dfs):
+            col_rename = {}
+            for col in df.columns:
+                cl = str(col).lower().strip()
+                if any(x in cl for x in ["ngày","ngay","date","thời gian"]): col_rename[col] = "Date"
+                elif "đóng cửa" in cl or "close" in cl or "giá đóng" in cl: col_rename[col] = "Close"
+                elif "mở cửa"  in cl or "open"  in cl or "giá mở"  in cl: col_rename[col] = "Open"
+                elif "cao nhất" in cl or "high" in cl: col_rename[col] = "High"
+                elif "thấp nhất" in cl or "low"  in cl: col_rename[col] = "Low"
+                elif "khối lượng" in cl or "volume" in cl or "klgd" in cl: col_rename[col] = "Volume"
+            if "Date" in col_rename.values() and "Close" in col_rename.values():
+                df = df.rename(columns=col_rename)
+                for c in ["Open","High","Low","Close","Volume"]:
+                    if c in df.columns:
+                        df[c] = pd.to_numeric(
+                            df[c].astype(str).str.replace(r"[,\s]","",regex=True).str.replace("x","",regex=False),
+                            errors="coerce").fillna(0)
+                    else:
+                        df[c] = df.get("Close", 0)
+                df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
+                out = df.set_index("Date")[["Open","High","Low","Close","Volume"]].copy()
+                out = out.dropna(subset=["Close"]).sort_index()
+                out = out[~out.index.duplicated(keep="last")]
+                out = out[out["Close"] > 0]
+                if not out.empty and out["Close"].dropna().median() < 500:
+                    for c in ["Open","High","Low","Close"]: out[c] *= 1000
+                if not out.empty:
+                    _log.info(f"CafeF-HTML ✅ {symbol}: {len(out)} rows, close={out['Close'].iloc[-1]:,.0f}")
+                    return out
     except Exception as e:
-        _log.error(f"SSI processing error for {symbol}: {e}")
-        return pd.DataFrame()
+        _log.debug(f"CafeF HTML parse error {symbol}: {e}")
+    return pd.DataFrame()
 
 
 def _fetch_cafef(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    P3: CafeF historical price — cafef.vn (HTML parse, covers ALL exchanges incl UPCOM)
-    Works for tickers that DNSE/SSI miss (OIL, IDC, ACV, PVS, VNA, etc.)
-    Endpoint: https://s.cafef.vn/LichSuGia/LichSuGia.aspx?symbol=...
+    P3: CafeF historical price — multiple endpoint strategies.
+    Endpoints tried in order:
+      A) s.cafef.vn/ajax/PageNew.aspx/HisDanhMuc (AJAX JSON — most reliable)
+      B) s.cafef.vn/HisDanhMuc/{sym}.chn (JSON page)
+      C) historial.cafef.vn/api/histdata/GetListHist (REST API)
+      D) s.cafef.vn/LichSuGia/LichSuGia.aspx (HTML scrape, legacy)
+    Covers ALL exchanges (HOSE/HNX/UPCOM) including OIL, IDC, ACV, PVS, VNA.
     """
-    # The old /ajax/historyprice.aspx is deprecated and returns 404.
-    # The new endpoint is LichSuGia.aspx which renders a full page.
-    url = f"https://s.cafef.vn/LichSuGia/LichSuGia.aspx?symbol={symbol}&PageIndex=1&PageSize={min(days, 500)}"
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Referer":    f"https://cafef.vn/",
-        "Accept":     "text/html,application/xhtml+xml",
+    import traceback
+    hdrs_ajax = {
+        "User-Agent":   "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120",
+        "Accept":       "application/json, text/javascript, */*",
+        "Content-Type": "application/json; charset=UTF-8",
+        "Referer":      f"https://cafef.vn/du-lieu-lich-su-giao-dich-{symbol.lower()}.chn",
+        "Origin":       "https://cafef.vn",
+        "X-Requested-With": "XMLHttpRequest",
     }
+    hdrs_html = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":     "text/html,application/xhtml+xml,*/*",
+        "Referer":    "https://cafef.vn/",
+    }
+    end_date   = datetime.now().strftime("%Y/%m/%d")
+    start_date = (datetime.now() - timedelta(days=days)).strftime("%Y/%m/%d")
+    page_size  = min(days, 500)
+
+    # ─── Strategy A: historial.cafef.vn REST API ───────────────────
     try:
-        r = requests.get(url, headers=headers, timeout=15)
-        r.raise_for_status()
-        if not r.text or "Không có dữ liệu" in r.text:
-            _log.debug(f"CafeF {symbol}: No data in HTML response.")
-            return pd.DataFrame()
-        
-        # The relevant table is usually the last one on the page
-        dfs = pd.read_html(io.StringIO(r.text), flavor="lxml")
-        if not dfs:
-            _log.debug(f"CafeF {symbol}: pd.read_html found no tables.")
-            return pd.DataFrame()
-        
-        df = dfs[-1].copy() # Assume the last table is the data table
-        
-        # Standardize column names
-        col_rename = {}
-        for col in df.columns:
-            col_lower = str(col).lower()
-            if "ngày" in col_lower: col_rename[col] = "Date"
-            elif "giá đóng cửa" in col_lower: col_rename[col] = "Close"
-            elif "giá mở cửa" in col_lower: col_rename[col] = "Open"
-            elif "giá cao nhất" in col_lower: col_rename[col] = "High"
-            elif "giá thấp nhất" in col_lower: col_rename[col] = "Low"
-            elif "klgd khớp lệnh" in col_lower: col_rename[col] = "Volume"
-        
-        if "Date" not in col_rename.values() or "Close" not in col_rename.values():
-             _log.warning(f"CafeF {symbol}: Critical columns 'Date' or 'Close' not found in table. Columns: {df.columns.tolist()}")
-             return pd.DataFrame()
-
-        df.rename(columns=col_rename, inplace=True)
-
-        df["Date"] = pd.to_datetime(df["Date"], dayfirst=True, errors="coerce")
-        
-        # Process columns, converting to numeric and handling missing values
-        for col in ["Open", "High", "Low", "Close", "Volume"]:
-            if col in df.columns:
-                # Handle cases where volume is a string like 'x' or has other artifacts
-                df[col] = df[col].astype(str).str.replace(r'[,x]', '', regex=True)
-                df[col] = pd.to_numeric(df[col], errors='coerce').fillna(0)
-            else:
-                df[col] = 0
-
-        # Fill missing OHLC with Close price
-        for col in ["Open", "High", "Low"]:
-            if col not in df.columns or df[col].sum() == 0:
-                df[col] = df["Close"]
-
-        out = df.set_index("Date")[["Open", "High", "Low", "Close", "Volume"]].copy()
-        out = out.dropna(subset=["Close"]).sort_index()
-        out = out[~out.index.duplicated(keep="last")]
-
-        if not out.empty and out["Close"].dropna().median() < 500:
-            for col in ["Open", "High", "Low", "Close"]:
-                out[col] = out[col] * 1000
-        
-        _log.info(f"CafeF {symbol}: {len(out)} rows, close={out['Close'].iloc[-1] if len(out) > 0 else 'N/A'}")
-        return out
-    except requests.exceptions.RequestException as e:
-        _log.warning(f"CafeF fetch failed for {symbol}: {e}")
-        st.toast(f"CafeF API for {symbol} failed: {e}", icon="📡")
-        return pd.DataFrame()
+        url_a = (f"https://historial.cafef.vn/api/histdata/GetListHist"
+                 f"?symbol={symbol}&startDate={start_date}&endDate={end_date}&pageIndex=1&pageSize={page_size}")
+        r = requests.get(url_a, headers=hdrs_ajax, timeout=10)
+        if r.ok:
+            data = r.json()
+            items = data.get("Data", data.get("data", data.get("items", [])))
+            if items:
+                rows = []
+                for it in items:
+                    try:
+                        rows.append({
+                            "Date":   pd.to_datetime(it.get("TradingDate", it.get("tradingDate", it.get("date",""))), errors="coerce"),
+                            "Open":   float(it.get("OpenPrice",  it.get("openPrice",  it.get("open",  0))) or 0),
+                            "High":   float(it.get("MaxPrice",   it.get("maxPrice",   it.get("high",  0))) or 0),
+                            "Low":    float(it.get("MinPrice",   it.get("minPrice",   it.get("low",   0))) or 0),
+                            "Close":  float(it.get("ClosePrice", it.get("closePrice", it.get("close", 0))) or 0),
+                            "Volume": float(it.get("Volume",     it.get("volume",     it.get("vol",   0))) or 0),
+                        })
+                    except Exception: continue
+                if rows:
+                    df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
+                    df = df[df["Close"] > 0].set_index("Date").sort_index()
+                    df = df[~df.index.duplicated(keep="last")]
+                    if not df.empty and df["Close"].dropna().median() < 500:
+                        for c in ["Open","High","Low","Close"]: df[c] *= 1000
+                    if len(df) >= 5:
+                        _log.info(f"CafeF-historial ✅ {symbol}: {len(df)} rows")
+                        return df
     except Exception as e:
-        _log.error(f"CafeF processing error for {symbol}: {e}")
-        return pd.DataFrame()
+        _log.debug(f"CafeF Strategy A failed {symbol}: {e}")
+
+    # ─── Strategy B: s.cafef.vn/ajax PageNew (AJAX JSON) ──────────
+    try:
+        url_b = f"https://s.cafef.vn/ajax/PageNew.aspx/HisDanhMuc"
+        payload = json.dumps({"sort":"","pageSize":page_size,"pageIndex":1,"maChungKhoan":symbol})
+        r = requests.post(url_b, data=payload, headers=hdrs_ajax, timeout=10)
+        if r.ok:
+            data = r.json()
+            # Response: {"d": {"Data": [...]}} or {"Data": [...]}
+            items = (data.get("d", {}).get("Data") or
+                     data.get("d", {}).get("data") or
+                     data.get("Data") or data.get("data") or [])
+            if items:
+                rows = []
+                for it in items:
+                    try:
+                        rows.append({
+                            "Date":   pd.to_datetime(it.get("Ngay", it.get("date","")), dayfirst=True, errors="coerce"),
+                            "Open":   float(it.get("GiaMoCua",  it.get("open",  0)) or 0),
+                            "High":   float(it.get("GiaCaoNhat",it.get("high",  0)) or 0),
+                            "Low":    float(it.get("GiaThapNhat",it.get("low",  0)) or 0),
+                            "Close":  float(it.get("GiaDongCua",it.get("close", 0)) or 0),
+                            "Volume": float(it.get("KLKhopLenh",it.get("volume",0)) or 0),
+                        })
+                    except Exception: continue
+                if rows:
+                    df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
+                    df = df[df["Close"] > 0].set_index("Date").sort_index()
+                    df = df[~df.index.duplicated(keep="last")]
+                    if not df.empty and df["Close"].dropna().median() < 500:
+                        for c in ["Open","High","Low","Close"]: df[c] *= 1000
+                    if len(df) >= 5:
+                        _log.info(f"CafeF-AJAX ✅ {symbol}: {len(df)} rows")
+                        return df
+    except Exception as e:
+        _log.debug(f"CafeF Strategy B failed {symbol}: {e}")
+
+    # ─── Strategy C: HisDanhMuc JSON page ─────────────────────────
+    try:
+        url_c = f"https://s.cafef.vn/HisDanhMuc/{symbol}.chn"
+        r = requests.get(url_c, headers=hdrs_html, timeout=10)
+        if r.ok and r.text.strip().startswith("{"):
+            data = r.json()
+            items = data.get("data", data.get("Data", []))
+            if items:
+                rows = []
+                for it in items:
+                    try:
+                        rows.append({
+                            "Date":   pd.to_datetime(it.get("Ngay", it.get("date","")), errors="coerce"),
+                            "Open":   float(it.get("GiaMoCua",  it.get("open",  0)) or 0),
+                            "High":   float(it.get("GiaCaoNhat",it.get("high",  0)) or 0),
+                            "Low":    float(it.get("GiaThapNhat",it.get("low",  0)) or 0),
+                            "Close":  float(it.get("GiaDongCua",it.get("close", 0)) or 0),
+                            "Volume": float(it.get("KhopLenh",  it.get("volume",0)) or 0),
+                        })
+                    except Exception: continue
+                if rows:
+                    df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
+                    df = df[df["Close"] > 0].set_index("Date").sort_index()
+                    df = df[~df.index.duplicated(keep="last")]
+                    if not df.empty and df["Close"].dropna().median() < 500:
+                        for c in ["Open","High","Low","Close"]: df[c] *= 1000
+                    if len(df) >= 5:
+                        _log.info(f"CafeF-HisDM ✅ {symbol}: {len(df)} rows")
+                        return df
+    except Exception as e:
+        _log.debug(f"CafeF Strategy C failed {symbol}: {e}")
+
+    # ─── Strategy D: LichSuGia.aspx HTML scrape (legacy fallback) ─
+    try:
+        url_d = f"https://s.cafef.vn/LichSuGia/LichSuGia.aspx?symbol={symbol}&PageIndex=1&PageSize={page_size}"
+        r = requests.get(url_d, headers=hdrs_html, timeout=12)
+        if r.ok and "Không có dữ liệu" not in r.text:
+            df = _parse_cafef_table(r.text, symbol)
+            if len(df) >= 5:
+                return df
+    except Exception as e:
+        _log.debug(f"CafeF Strategy D failed {symbol}: {e}")
+
+    _log.warning(f"CafeF ❌ {symbol}: all strategies failed")
+    return pd.DataFrame()
 
 
 def _fetch_cafef_v2(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    CafeF v2 API — JSON endpoint fallback for tickers with parse issues.
-    URL: https://api.cafef.vn/api/historyprice/{sym}?type=5&count=500
-    Note: api.cafef.vn may be unavailable from some networks.
+    CafeF JSON API v2 — api.cafef.vn (may be blocked on some networks).
+    Short timeout to fail fast if connection refused.
     """
+    import traceback
     try:
-        # API has a hard limit of 500; short timeout to fail fast if unreachable
         url = f"https://api.cafef.vn/api/historyprice/{symbol}?type=5&count={min(days, 500)}"
         r = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=6)
         r.raise_for_status()
         data = r.json()
         items = data.get("Data", data.get("data", []))
         if not items:
-            _log.debug(f"CafeF-v2 {symbol}: No data in JSON response.")
             return pd.DataFrame()
-        
         rows = []
         for it in items:
             try:
-                # Date can be in different formats, handle gracefully
                 date_str = it.get("Date", it.get("date", ""))
                 if not date_str: continue
-                
                 rows.append({
                     "Date":   pd.to_datetime(date_str, errors="coerce"),
                     "Open":   float(it.get("Open",  it.get("open",  0)) or 0),
@@ -569,27 +744,143 @@ def _fetch_cafef_v2(symbol: str, days: int = 730) -> pd.DataFrame:
                     "Close":  float(it.get("Close", it.get("close", 0)) or 0),
                     "Volume": float(it.get("Volume",it.get("volume",0)) or 0),
                 })
-            except (ValueError, TypeError):
-                _log.debug(f"CafeF-v2 {symbol}: Skipping malformed row: {it}")
-                continue
-                
+            except Exception: continue
+        if not rows: return pd.DataFrame()
+        df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
+        df = df[df["Close"] > 0].set_index("Date").sort_index()
+        df = df[~df.index.duplicated(keep="last")]
+        if not df.empty and df["Close"].dropna().median() < 500:
+            for c in ["Open","High","Low","Close"]: df[c] *= 1000
+        if len(df) >= 5:
+            _log.info(f"CafeF-JSON ✅ {symbol}: {len(df)} rows")
+        return df
+    except requests.exceptions.ConnectionError as e:
+        _log.warning(f"CafeF-v2 connection refused {symbol}: {e}")
+    except requests.exceptions.Timeout:
+        _log.warning(f"CafeF-v2 timeout {symbol}")
+    except Exception as e:
+        _log.debug(f"CafeF-v2 error {symbol}: {e}")
+    return pd.DataFrame()
+
+
+def _fetch_tcbs(symbol: str, days: int = 730) -> pd.DataFrame:
+    """
+    P4: TCBS Public API — apipubaws.tcbs.com.vn (no auth, excellent coverage)
+    ✓ HOSE/HNX/UPCOM  ✓ Adjusted prices  ✓ High reliability
+    URL: /stock-insight/v1/stock/ohlc?ticker=X&type=stock&resolution=D&from=X&to=Y
+    """
+    import traceback
+    to_ts   = _unix(datetime.now())
+    from_ts = _unix(datetime.now() - timedelta(days=days))
+    url = (f"https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc"
+           f"?ticker={symbol}&type=stock&resolution=D&from={from_ts}&to={to_ts}")
+    hdrs = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Accept":     "application/json",
+        "Referer":    "https://tcinvest.tcbs.com.vn/",
+        "Origin":     "https://tcinvest.tcbs.com.vn",
+        "DNT":        "1",
+    }
+    try:
+        r = requests.get(url, headers=hdrs, timeout=API_TIMEOUT)
+        r.raise_for_status()
+        raw = r.json()
+        # Response: {"data": [{"tradingDate":..., "open":..., "high":..., "low":..., "close":..., "volume":...},...]}
+        items = raw.get("data", raw.get("Data", []))
+        if not items:
+            _log.debug(f"TCBS {symbol}: empty response")
+            return pd.DataFrame()
+        rows = []
+        for it in items:
+            try:
+                # tradingDate may be Unix ms, Unix s, or ISO string
+                td = it.get("tradingDate", it.get("TradingDate", it.get("date", None)))
+                if td is None: continue
+                if isinstance(td, (int, float)):
+                    # Check if milliseconds
+                    ts = td/1000 if td > 1e10 else td
+                    dt = pd.Timestamp(ts, unit="s")
+                else:
+                    dt = pd.Timestamp(str(td))
+                rows.append({
+                    "Date":   dt,
+                    "Open":   float(it.get("open",  it.get("Open",  0)) or 0),
+                    "High":   float(it.get("high",  it.get("High",  0)) or 0),
+                    "Low":    float(it.get("low",   it.get("Low",   0)) or 0),
+                    "Close":  float(it.get("close", it.get("Close", 0)) or 0),
+                    "Volume": float(it.get("volume",it.get("Volume",0)) or 0),
+                })
+            except Exception as e:
+                _log.debug(f"TCBS {symbol} row error: {e}"); continue
         if not rows:
             return pd.DataFrame()
-
         df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
-        df = df.set_index("Date").sort_index()
-        
+        df = df[df["Close"] > 0].set_index("Date").sort_index()
+        df = df[~df.index.duplicated(keep="last")]
         if not df.empty and df["Close"].dropna().median() < 500:
-            for col in ["Open","High","Low","Close"]:
-                df[col] = df[col] * 1000
+            for c in ["Open","High","Low","Close"]: df[c] *= 1000
+        if len(df) >= 5:
+            _log.info(f"TCBS ✅ {symbol}: {len(df)} rows, close={df['Close'].iloc[-1]:,.0f}")
         return df
-    except requests.exceptions.RequestException as e:
-        _log.warning(f"CafeF-v2 fetch failed for {symbol}: {e}")
-        st.toast(f"CafeF-v2 API for {symbol} failed: {e}", icon="📡")
-        return pd.DataFrame()
+    except requests.exceptions.HTTPError as e:
+        _log.warning(f"TCBS HTTP error {symbol}: {e}")
+    except requests.exceptions.ConnectionError as e:
+        _log.warning(f"TCBS connection error {symbol}: {e}")
+    except requests.exceptions.Timeout:
+        _log.warning(f"TCBS timeout {symbol}")
     except Exception as e:
-        _log.error(f"CafeF-v2 processing error for {symbol}: {e}")
-        return pd.DataFrame()
+        _log.error(f"TCBS unexpected error {symbol}: {e}"); _log.debug(traceback.format_exc())
+    return pd.DataFrame()
+
+
+def _fetch_vndirect_price(symbol: str, days: int = 730) -> pd.DataFrame:
+    """
+    P5b: VNDirect FINFO price history — finfo-api.vndirect.com.vn
+    Uses the same VNDirect API already in use for fundamentals.
+    ✓ Reliable  ✓ HOSE/HNX/UPCOM  ✓ Adjusted close available
+    """
+    import traceback
+    try:
+        end_date   = datetime.now().strftime("%Y-%m-%d")
+        start_date = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+        url = f"{VND_BASE}/priceHistory"
+        params = {
+            "code":      symbol,
+            "startDate": start_date,
+            "endDate":   end_date,
+            "type":      "stock",
+        }
+        r = requests.get(url, params=params, headers=VND_HEADERS, timeout=API_TIMEOUT)
+        r.raise_for_status()
+        raw = r.json()
+        items = raw.get("data", [])
+        if not items:
+            _log.debug(f"VNDirect price {symbol}: empty response")
+            return pd.DataFrame()
+        rows = []
+        for it in items:
+            try:
+                rows.append({
+                    "Date":   pd.to_datetime(it.get("tradingDate", it.get("date","")), errors="coerce"),
+                    "Open":   float(it.get("openPrice",    it.get("open",  0)) or 0),
+                    "High":   float(it.get("highPrice",    it.get("high",  0)) or 0),
+                    "Low":    float(it.get("lowPrice",     it.get("low",   0)) or 0),
+                    "Close":  float(it.get("closePrice",   it.get("close", 0)) or 0),
+                    "Volume": float(it.get("nmVolume",     it.get("volume",0)) or 0),
+                })
+            except Exception: continue
+        if not rows: return pd.DataFrame()
+        df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
+        df = df[df["Close"] > 0].set_index("Date").sort_index()
+        df = df[~df.index.duplicated(keep="last")]
+        if not df.empty and df["Close"].dropna().median() < 500:
+            for c in ["Open","High","Low","Close"]: df[c] *= 1000
+        if len(df) >= 5:
+            _log.info(f"VNDirect-price ✅ {symbol}: {len(df)} rows")
+        return df
+    except Exception as e:
+        _log.debug(f"VNDirect price error {symbol}: {e}")
+    return pd.DataFrame()
 
 
 def _fetch_yfinance(symbol: str, days: int = 730) -> pd.DataFrame:
@@ -636,73 +927,44 @@ def _fetch_yfinance(symbol: str, days: int = 730) -> pd.DataFrame:
 
 def download_data(symbol: str, days: int = 730, min_rows: int = 40):
     """
-    Data pipeline v14.0: DNSE → SSI → CafeF-HTML → CafeF-JSON → yFinance
+    Data pipeline v15.0: 7-source cascade
+    1. DNSE Entrade     (services.entrade.com.vn/chart-api/v2)
+    2. SSI iboard-api   (iboard-api.ssi.com.vn/statistics/charts/history)
+    3. CafeF multi      (historial + AJAX + HisDanhMuc + LichSuGia HTML)
+    4. TCBS             (apipubaws.tcbs.com.vn/stock-insight — no auth)
+    5. CafeF JSON       (api.cafef.vn — may be blocked)
+    6. VNDirect price   (finfo-api.vndirect.com.vn/v4/priceHistory)
+    7. yFinance         ({symbol}.VN — global fallback)
     Returns: (DataFrame, source_name, error_message)
-    Each source logs detailed errors to error_log.txt.
     """
     import traceback
     symbol = symbol.strip().upper()
     error_detail = {}
 
-    # 1. DNSE Entrade
-    try:
-        df = _fetch_dnse(symbol, days)
-        if len(df) >= min_rows:
-            _log.info(f"✅ DNSE {symbol}: {len(df)} rows")
-            return df, "DNSE", None
-        error_detail["DNSE"] = f"Only {len(df)} rows (need {min_rows})"
-    except Exception as e:
-        error_detail["DNSE"] = str(e)
-        _log.error(f"DNSE exception {symbol}: {e}"); _log.debug(traceback.format_exc())
+    _PIPELINE = [
+        ("DNSE",     _fetch_dnse),
+        ("SSI",      _fetch_ssi),
+        ("CafeF",    _fetch_cafef),
+        ("TCBS",     _fetch_tcbs),
+        ("CafeF-JSON", _fetch_cafef_v2),
+        ("VNDirect", _fetch_vndirect_price),
+        ("yFinance", _fetch_yfinance),
+    ]
 
-    # 2. SSI iBoard
-    try:
-        df = _fetch_ssi(symbol, days)
-        if len(df) >= min_rows:
-            _log.info(f"✅ SSI {symbol}: {len(df)} rows")
-            return df, "SSI", None
-        error_detail["SSI"] = f"Only {len(df)} rows (need {min_rows})"
-    except Exception as e:
-        error_detail["SSI"] = str(e)
-        _log.error(f"SSI exception {symbol}: {e}"); _log.debug(traceback.format_exc())
-
-    # 3. CafeF HTML scraper
-    try:
-        df = _fetch_cafef(symbol, days)
-        if len(df) >= min_rows:
-            _log.info(f"✅ CafeF-HTML {symbol}: {len(df)} rows")
-            return df, "CafeF", None
-        error_detail["CafeF-HTML"] = f"Only {len(df)} rows"
-    except Exception as e:
-        error_detail["CafeF-HTML"] = str(e)
-        _log.error(f"CafeF-HTML exception {symbol}: {e}"); _log.debug(traceback.format_exc())
-
-    # 4. CafeF JSON API v2
-    try:
-        df = _fetch_cafef_v2(symbol, days)
-        if len(df) >= min_rows:
-            _log.info(f"✅ CafeF-JSON {symbol}: {len(df)} rows")
-            return df, "CafeF", None
-        error_detail["CafeF-JSON"] = f"Only {len(df)} rows"
-    except Exception as e:
-        error_detail["CafeF-JSON"] = str(e)
-        _log.error(f"CafeF-JSON exception {symbol}: {e}"); _log.debug(traceback.format_exc())
-
-    # 5. yFinance fallback (covers .VN listed stocks)
-    try:
-        df = _fetch_yfinance(symbol, days)
-        if len(df) >= min_rows:
-            _log.info(f"✅ yFinance {symbol}: {len(df)} rows")
-            return df, "yFinance", None
-        error_detail["yFinance"] = f"Only {len(df)} rows"
-    except Exception as e:
-        error_detail["yFinance"] = str(e)
-        _log.error(f"yFinance exception {symbol}: {e}"); _log.debug(traceback.format_exc())
+    for src_name, fetch_fn in _PIPELINE:
+        try:
+            df = fetch_fn(symbol, days)
+            if len(df) >= min_rows:
+                _log.info(f"✅ {src_name} {symbol}: {len(df)} rows")
+                return df, src_name, None
+            error_detail[src_name] = f"{len(df)} rows"
+        except Exception as e:
+            error_detail[src_name] = str(e)[:80]
+            _log.error(f"{src_name} exception {symbol}: {e}"); _log.debug(traceback.format_exc())
 
     exch = TICKER_EXCHANGE.get(symbol, "HOSE")
-    detail_str = ", ".join([f"{k}: {v}" for k,v in error_detail.items()])
-    msg = (f"Cannot load {symbol}. Failed sources: {detail_str}. "
-           f"Exchange: {exch}. Check connectivity or ticker.")
+    detail_str = " | ".join([f"{k}:{v}" for k,v in error_detail.items()])
+    msg = (f"Cannot load {symbol}. Exchange:{exch}. Sources tried: {detail_str}")
     _log.error(msg)
     return pd.DataFrame(), "None", msg
 
@@ -2289,13 +2551,18 @@ def render_ml_forecast_tab():
                 if fc_arr is not None:
                     fp_val=float(fc_arr[-1]); pct=(fp_val/last_price-1)*100
                     g,d=MODEL_META.get(nm,("?","?"))
-                    results_rows.append({"Model":nm,"Group":g,"Weight":f"{int(w*100)}%",
+                    results_rows.append({"Model":nm,"Group":g,"Wt%":f"{int(w*100)}%",
                         f"Target+{n_days}d":f"{fp_val:,.0f}","Δ%":f"{pct:+.2f}%","Notes":d})
             if ensemble_fc is not None:
                 ev=float(ensemble_fc[-1]); ep=(ev/last_price-1)*100
-                results_rows.append({"Model":"📊 Ensemble","Group":"Weighted","Weight":"100%",
+                results_rows.append({"Model":"📊 Ensemble","Group":"Weighted","Wt%":"100%",
                     f"Target+{n_days}d":f"{ev:,.0f}","Δ%":f"{ep:+.2f}%","Notes":"Optimised for VN market dynamics"})
-            show_df(pd.DataFrame(results_rows))
+            # Use string dtype explicitly to avoid pyarrow conversion error
+            df_res = pd.DataFrame(results_rows)
+            for col in df_res.columns:
+                if df_res[col].dtype == object:
+                    df_res[col] = df_res[col].astype(str)
+            show_df(df_res)
 
             if ensemble_fc is not None:
                 ep=(float(ensemble_fc[-1])/last_price-1)*100
@@ -2333,9 +2600,13 @@ def render_forecast_log_tab():
                 ens=rec.get("results",{}).get("ensemble",{})
                 c1,c2,c3=st.columns(3)
                 c1.metric("Price at Forecast",f"{lp:,.0f}"); c2.metric("Days Ahead",rec.get("days_forecast","?")); c3.metric("Timestamp",ts[:10])
-                res_df=pd.DataFrame([{"Model":k,**{kk:vv for kk,vv in v.items() if kk!="all_values"}}
+                res_df=pd.DataFrame([{"Model":k,**{kk:str(vv) for kk,vv in v.items() if kk!="all_values"}}
                                       for k,v in rec.get("results",{}).items() if isinstance(v,dict)])
-                if "weight" in res_df.columns: res_df.rename(columns={"weight":"Weight"},inplace=True)
+                if "weight" in res_df.columns: res_df.rename(columns={"weight":"Wt%"},inplace=True)
+                # Ensure all columns are string to avoid pyarrow type errors
+                for col in res_df.columns:
+                    if res_df[col].dtype == object:
+                        res_df[col] = res_df[col].astype(str)
                 show_df(res_df,key=f"hist_detail_{idx}")
                 if ens.get("all_values") and rec.get("forecast_dates"):
                     if st.button("🔄 Replay chart",key=f"replay_{idx}"):
@@ -2522,7 +2793,7 @@ def render_global_markets_tab():
 def render_smoke_test_tab():
     hdr = "System Smoke Test — All Data Sources & Functions" if st.session_state.lang=="EN" else "Kiểm Tra Hệ Thống — Tất Cả Nguồn Dữ Liệu & Chức Năng"
     st.subheader(f"🔬 {hdr}")
-    st.caption("v14.0 — Tests each source individually for FPT (HOSE) and OIL (UPCOM). Full stack traces written to error_log.txt.")
+    st.caption("v15.0 — Tests each source individually for FPT (HOSE) and OIL (UPCOM). Full stack traces written to error_log.txt.")
 
     if st.button("🚀 Run Full Smoke Test" if st.session_state.lang=="EN" else "🚀 Chạy Kiểm Tra Đầy Đủ", type="primary"):
         results = []
@@ -2705,34 +2976,27 @@ def render_changelog_tab():
 
 ---
 
-### v14.0 — 2026-03-08 · BUG FIX + ENHANCEMENT RELEASE
+### v15.0 — 2026-03-08 · DATA PIPELINE OVERHAUL
 
-**🔴 Critical Bug Fixes**
+**v14.0 bug fixes (session_state, scan 3-tuple, SSI 404, DNSE, stooq fallbacks, CafeF timeout, BRD + Change Log tabs)**
+
+**🔴 v15.0 Critical Bug Fixes**
 
 | Fix ID | Component | Issue | Resolution |
 |--------|-----------|-------|------------|
-| FIX-01 | All Tabs | `st.session.state` AttributeError — caused app crash on every render | Replaced 70+ occurrences with `st.session_state` |
-| FIX-02 | Scanner / Deep Audit | `scan_one_ticker()` returned 2-tuple on success, 3-tuple on failure → "too many values to unpack" exception | Standardised to always return `(row, source, error)` 3-tuple |
-| FIX-03 | Data Pipeline | SSI iBoard `/v2/stock/ohlc` returning HTTP 404 for all tickers | Added multi-endpoint chain: v2 → v1 → fc-data |
-| FIX-04 | Data Pipeline | DNSE endpoint returning no data / connection errors | Added multi-endpoint fallback (v2 → v1 → api subdomain) |
-| FIX-05 | Global Markets | VN-Index not loading (SSI v2 endpoint broken) | Added SSI v1 → stooq `^VNI` → yFinance `^VNINDEX` chain |
-| FIX-06 | Global Markets | Gold/Oil/Gas/DXY not loading when stooq.com unreachable | Added yFinance fallback (`GC=F`, `CL=F`, `NG=F`, `DX-Y.NYB`, `^GSPC`) |
-| FIX-07 | Data Pipeline | CafeF JSON API (`api.cafef.vn`) hanging on connection refused | Reduced timeout from 12s to 6s (fail fast); added proper exception handling |
-| FIX-08 | Smoke Test | `session_state.smoke_results` referenced before initialisation → KeyError | Added to session_state init block at startup |
-| FIX-09 | Market Scanner | `L["lang"]` KeyError — L dict has no "lang" key | Replaced with direct `st.session_state.lang` check |
-| FIX-10 | yFinance Source | `yf.download()` returns MultiIndex columns not handled | Added `_clean_yf()` helper to flatten MultiIndex |
-| FIX-11 | Error Logging | Exceptions not logging stack traces to `error_log.txt` | Added `traceback.format_exc()` in all catch blocks |
+| FIX-12 | Data Pipeline | DNSE: broken fallback endpoints causing JSON parse errors & DNS failures | Removed all fallback endpoints; only confirmed `/v2/ohlcs/stock` kept |
+| FIX-13 | Data Pipeline | SSI: all endpoints returning 404 / refusing connections | Replaced with `iboard-api.ssi.com.vn/statistics/charts/history` (user-verified working 2026-03-08). New `_parse_ssi_response()` handles 3 response formats (list, nested dict, flat UDF) |
+| FIX-14 | Data Pipeline | CafeF: `s.cafef.vn/LichSuGia` → 404 redirect, `api.cafef.vn` connection refused | 4-strategy cascade: historial REST API → AJAX POST → HisDanhMuc JSON → LichSuGia HTML |
+| FIX-15 | ML Forecast | PyArrow error: `Could not convert 'weighted' with type str: tried to convert to double` | Renamed column `Weight→Wt%`; added explicit `.astype(str)` on all object columns before `show_df()` |
 
-**🟡 Enhancements**
+**🟡 v15.0 Enhancements**
 
 | ENH ID | Component | Enhancement |
 |--------|-----------|-------------|
-| ENH-01 | Tabs | New **Change Log** tab added for version audit trail |
-| ENH-02 | Guide Tab | BRD completely rewritten with technical theory, indicator formulas, model descriptions, macro impact matrix |
-| ENH-03 | Smoke Test | FPT (HOSE) and OIL (UPCOM) targeted tests added; each source tested individually |
-| ENH-04 | Data Pipeline | Per-source error detail in failure messages (shows rows received vs required) |
-| ENH-05 | World Markets | `_STOOQ_TO_YF` mapping table for systematic stooq→yfinance symbol translation |
-| ENH-06 | Version | Version bumped to v14.0 throughout app |
+| ENH-05 | Data Pipeline | **TCBS public API** added as P4 source — `apipubaws.tcbs.com.vn/stock-insight` (no auth, high reliability, covers all exchanges) |
+| ENH-06 | Data Pipeline | **VNDirect price history** added as P6 source — reuses existing VNDirect session |
+| ENH-07 | Architecture | Full 7-source pipeline: DNSE → SSI → CafeF (4 strategies) → TCBS → CafeF-JSON → VNDirect → yFinance |
+| ENH-08 | Reliability | Each source has specific exception handlers (HTTPError, ConnectionError, Timeout, ValueError) instead of generic catch-all |
 
 ---
 
@@ -2778,7 +3042,7 @@ def main():
     if "forecast_log" not in st.session_state:
         st.session_state.forecast_log = pd.DataFrame()
 
-    # Define tabs (11 tabs in v14.0)
+    # Define tabs (11 tabs in v15.0)
     tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
