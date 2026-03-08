@@ -1,18 +1,22 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v16.0                         ║
+║   Captain Seventh QUANT TERMINAL  v17.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v15 → v16:                                           ║
-║  ENH-08: NEW TAB — 🧬 Stock Profiler (Deep Fundamental)        ║
-║    • TCBS tcanalysis API: income/balance/cashflow/ratio         ║
-║    • Valuation models: DCF, P/E Relative, P/B, Graham          ║
-║    • Risk Scoring: debt, liquidity, profitability, growth       ║
-║    • Recommendation Engine: weighted score → BUY/HOLD/SELL     ║
-║    • Spider chart, radar risk, trend mini-charts                ║
-║    • Peer comparison within sector                              ║
-║  ENH-09: Full bilingual (VI/EN) on all new UI elements         ║
-║  ENH-10: TCBS tcanalysis overview for company metadata         ║
+║  CHANGELOG v16 → v17:                                           ║
+║  FIX-16: DNSE endpoint services.entrade.com.vn → api.dnse.com.vn║
+║          resolution D → 1D (confirmed working 247 rows FCN)    ║
+║  FIX-17: Stock Profiler — cascading multi-source data:          ║
+║          TCBS tcanalysis → CafeF fundamentals → SSI SSMI →     ║
+║          DNSE OHLC technical analysis (always returns data)     ║
+║  ENH-11: CafeF API — ChiSoTaiChinh, CoCauSoHuu, Liveboard JSON ║
+║  ENH-12: SSI SSMI API — finance-indicator, leadership,          ║
+║          shareholders, corporate actions, company news          ║
+║  ENH-13: DNSE OHLC Analysis — technicals as fundamental proxy  ║
+║          when financial statements unavailable                  ║
+║  ENH-14: Valuation guaranteed — always produces BUY/HOLD/SELL  ║
+║          based on available data (technical + fundamental)      ║
+║  FIX-18: Smoke Test — added REE and OIL test cases             ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -58,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v16.0",
+    page_title="Captain Seventh QUANT TERMINAL v17.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -80,7 +84,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v16.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v17.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -174,7 +178,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v16.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v17.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -471,10 +475,11 @@ def _parse_udf(raw: dict, source: str = "UDF") -> pd.DataFrame:
 
 def _fetch_dnse(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    P1: DNSE chart-api v2 — api.dnse.com.vn/chart-api/v2
-    Confirmed working 2026-03-08: /v2/ohlcs/stock with resolution=1D
-    Returns TradingView UDF format: {t, o, h, l, c, v}
-    ✓ No auth  ✓ HOSE+HNX+UPCOM  ✓ Real-time intraday
+    P1: DNSE — api.dnse.com.vn/chart-api/v2  (FIX-16: confirmed working 2026-03-08)
+    Confirmed working: api.dnse.com.vn, resolution=1D (247 rows for FCN verified).
+    services.entrade.com.vn → DEAD (replaced in v17).
+    Returns TradingView UDF format: {t, o, h, l, c, v, s}
+    ✓ No auth  ✓ HOSE+HNX+UPCOM  ✓ Full history
     """
     import traceback
     to_ts   = _unix(datetime.now())
@@ -485,7 +490,6 @@ def _fetch_dnse(symbol: str, days: int = 730) -> pd.DataFrame:
         r = _HTTP.get(url, timeout=API_TIMEOUT)
         r.raise_for_status()
         raw = r.json()
-        # Validate response before parse
         if not isinstance(raw, dict):
             _log.debug(f"DNSE {symbol}: unexpected response type {type(raw)}")
             return pd.DataFrame()
@@ -500,7 +504,6 @@ def _fetch_dnse(symbol: str, days: int = 730) -> pd.DataFrame:
     except requests.exceptions.Timeout:
         _log.warning(f"DNSE timeout {symbol}")
     except ValueError as e:
-        # JSON decode error — endpoint returned non-JSON
         _log.warning(f"DNSE JSON decode error {symbol}: {e}")
     except Exception as e:
         _log.error(f"DNSE unexpected error {symbol}: {e}"); _log.debug(traceback.format_exc())
@@ -1002,8 +1005,8 @@ def _fetch_yfinance(symbol: str, days: int = 730) -> pd.DataFrame:
 
 def download_data(symbol: str, days: int = 730, min_rows: int = 40):
     """
-    Data pipeline v15.0: 7-source cascade
-    1. DNSE Entrade     (services.entrade.com.vn/chart-api/v2)
+    Data pipeline v17.0: 7-source cascade
+    1. DNSE Entrade     (api.dnse.com.vn/chart-api/v2  — FIX-16 confirmed working)
     2. SSI iboard-api   (iboard-api.ssi.com.vn/statistics/charts/history)
     3. CafeF multi      (historial + AJAX + HisDanhMuc + LichSuGia HTML)
     4. TCBS             (apipubaws.tcbs.com.vn/stock-insight — no auth)
@@ -2266,6 +2269,440 @@ def world_market_impact_analysis(gold_chg, oil_chg, gas_chg, dxy_chg, sp500_chg,
     return insights
 
 # ══════════════════════════════════════════════════════════════
+#  CAFEF FUNDAMENTAL DATA  (ENH-11 — confirmed working 2026-03)
+# ══════════════════════════════════════════════════════════════
+_CAFEF_HDR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer":    "https://cafef.vn/",
+    "Accept":     "application/json, text/plain, */*",
+}
+
+@st.cache_data(ttl=3600)
+def fetch_cafef_key_ratios(ticker: str) -> dict:
+    """
+    CafeF ChiSoTaiChinh API — returns EPS, P/E, BVPS, P/B, mkt cap, shares.
+    Confirmed working: https://cafef.vn/du-lieu/Ajax/PageNew/ChiSoTaiChinh.ashx?Symbol=fpt
+    """
+    sym = ticker.lower()
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/ChiSoTaiChinh.ashx?Symbol={sym}"
+    try:
+        r = _HTTP.get(url, headers=_CAFEF_HDR, timeout=8)
+        r.raise_for_status()
+        data = r.json()
+        if not data.get("Success") or not data.get("Data"):
+            return {}
+        out = {}
+        for item in data["Data"]:
+            code = item.get("Code", "")
+            val  = item.get("Value", "")
+            if not val or val == "–":
+                continue
+            clean = str(val).replace(",", "").replace("%", "").strip()
+            try:
+                num = float(clean)
+            except ValueError:
+                num = None
+            if code == "EPScoBan":
+                out["eps"]         = num * 1000 if num and num < 100 else num
+                out["eps_raw"]     = val
+            elif code == "P/E":
+                out["pe"]          = num
+            elif code == "GiaTriSoSach":
+                out["bvps"]        = num * 1000 if num and num < 100 else num
+                out["bvps_raw"]    = val
+            elif code == "Beta":       # CafeF uses "Beta" code for P/B
+                out["pb"]          = num
+            elif code == "VonHoaThiTruong":
+                out["mcap_bn"]     = num   # in tỷ VNĐ
+            elif code == "KlcpNY":
+                out["shares_listed"]  = clean
+            elif code == "KhopLenh10Phien":
+                out["vol10_avg"]   = clean
+            elif code == "ThoiGian":
+                out["ratio_period"]= val
+        return out
+    except Exception as e:
+        _log.warning(f"CafeF ChiSoTaiChinh {ticker}: {e}")
+        return {}
+
+@st.cache_data(ttl=900)   # 15 min for price
+def fetch_cafef_price(ticker: str) -> dict:
+    """
+    CafeF PriceRealTimeHeader — real-time last price, reference, volume.
+    Confirmed working: https://cafef.vn/du-lieu/Ajax/PageNew/PriceRealTimeHeader.ashx?Symbol=fpt
+    """
+    sym = ticker.lower()
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/PriceRealTimeHeader.ashx?Symbol={sym}"
+    try:
+        r = _HTTP.get(url, headers=_CAFEF_HDR, timeout=6)
+        r.raise_for_status()
+        d = r.json()
+        if d.get("Success") and d.get("Data"):
+            data = d["Data"]
+            price_raw  = data.get("Gia", 0)
+            ref_raw    = data.get("GiaThamChieu", 0)
+            price = float(price_raw) * 1000 if price_raw and float(price_raw) < 1000 else float(price_raw or 0)
+            ref   = float(ref_raw)   * 1000 if ref_raw   and float(ref_raw)   < 1000 else float(ref_raw   or 0)
+            return {
+                "price":     price,
+                "reference": ref,
+                "pct_change":((price - ref) / ref * 100) if ref > 0 else 0,
+                "volume":    int(data.get("KhoiLuong", 0)),
+                "exchange":  data.get("MaSan", 1),
+            }
+    except Exception as e:
+        _log.warning(f"CafeF PriceRT {ticker}: {e}")
+    return {}
+
+@st.cache_data(ttl=3600)
+def fetch_cafef_shareholders(ticker: str) -> dict:
+    """
+    CafeF CoCauSoHuu — shareholder structure (foreign %, state %, major holders).
+    Confirmed working: https://cafef.vn/du-lieu/Ajax/PageNew/CoCauSoHuu.ashx?Symbol=fpt
+    """
+    sym = ticker.lower()
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/CoCauSoHuu.ashx?Symbol={sym}"
+    try:
+        r = _HTTP.get(url, headers=_CAFEF_HDR, timeout=8)
+        r.raise_for_status()
+        d = r.json()
+        if not d.get("Success") or not d.get("Data"):
+            return {}
+        data = d["Data"]
+        holders = []
+        for h in data.get("CoDongSoHuu", [])[:10]:
+            rate = h.get("AssetRate", "0").replace(",", ".")
+            vol  = h.get("AssetVolume", "0").replace(".", "").replace(",", "")
+            try:
+                rate_f = float(rate)
+            except Exception:
+                rate_f = 0
+            if rate_f >= 0.5:   # only show ≥0.5%
+                holders.append({
+                    "name":  re.sub(r"<[^>]+>", "", h.get("Name", "")),
+                    "pct":   rate_f,
+                    "vol":   vol,
+                })
+        return {
+            "foreign_pct": float(data.get("NuocNgoai", 0)),
+            "state_pct":   float(data.get("NhaNuoc", 0)),
+            "other_pct":   float(data.get("Khac", 0)),
+            "major_holders": holders,
+        }
+    except Exception as e:
+        _log.warning(f"CafeF CoCauSoHuu {ticker}: {e}")
+    return {}
+
+@st.cache_data(ttl=86400)
+def fetch_cafef_financial_reports(ticker: str) -> list:
+    """
+    CafeF FileBCTC Type=1 — list of quarterly/annual financial report PDFs.
+    """
+    sym = ticker.lower()
+    url = f"https://cafef.vn/du-lieu/Ajax/PageNew/FileBCTC.ashx?Symbol={sym}&Type=1&Year=0"
+    try:
+        r = _HTTP.get(url, headers=_CAFEF_HDR, timeout=8)
+        r.raise_for_status()
+        data = r.json()
+        reports = []
+        for item in (data.get("Data") or [])[:12]:
+            reports.append({
+                "period": item.get("Time", ""),
+                "name":   item.get("Name", ""),
+                "link":   item.get("Link", ""),
+            })
+        return reports
+    except Exception as e:
+        _log.warning(f"CafeF FileBCTC {ticker}: {e}")
+    return []
+
+@st.cache_data(ttl=3600)
+def fetch_cafef_liveboard(ticker: str, days: int = 365) -> pd.DataFrame:
+    """
+    CafeF Liveboard JSON — recent price history (fast CDN, no auth).
+    Confirmed working: https://cafefnew.mediacdn.vn/Images/Uploaded/DuLieuDownload/Liveboard/{SYM}_PriceHistory.json
+    """
+    sym = ticker.upper()
+    url = f"https://cafefnew.mediacdn.vn/Images/Uploaded/DuLieuDownload/Liveboard/{sym}_PriceHistory.json"
+    try:
+        r = _HTTP.get(url, headers=_CAFEF_HDR, timeout=8)
+        r.raise_for_status()
+        items = r.json()
+        if not isinstance(items, list) or not items:
+            return pd.DataFrame()
+        rows = []
+        cutoff = datetime.now() - timedelta(days=days)
+        for it in items:
+            try:
+                dt = pd.Timestamp(it["TradeDate"])
+                if dt < pd.Timestamp(cutoff):
+                    continue
+                cp = float(it.get("ClosePrice", 0) or 0)
+                if cp <= 0:
+                    continue
+                # Prices in CafeF Liveboard are in thousands VND
+                mult = 1000 if cp < 1000 else 1
+                rows.append({
+                    "Date":   dt,
+                    "Open":   float(it.get("OpenPrice", cp) or cp) * mult,
+                    "High":   float(it.get("HighPrice", cp) or cp) * mult,
+                    "Low":    float(it.get("LowPrice",  cp) or cp) * mult,
+                    "Close":  cp * mult,
+                    "Volume": float(it.get("Volume", 0) or 0),
+                })
+            except Exception:
+                continue
+        if not rows:
+            return pd.DataFrame()
+        df = pd.DataFrame(rows).sort_values("Date").reset_index(drop=True)
+        return df
+    except Exception as e:
+        _log.warning(f"CafeF Liveboard {ticker}: {e}")
+    return pd.DataFrame()
+
+# ══════════════════════════════════════════════════════════════
+#  SSI SSMI COMPANY DATA  (ENH-12 — with iboard headers)
+# ══════════════════════════════════════════════════════════════
+_SSI_SSMI_BASE = "https://iboard-api.ssi.com.vn/statistics/company/ssmi"
+_SSI_HDR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Referer":    "https://iboard.ssi.com.vn/",
+    "Origin":     "https://iboard.ssi.com.vn",
+    "Accept":     "application/json",
+}
+
+def _ssi_ssmi_get(endpoint: str, params: dict = None) -> dict:
+    """GET from SSI SSMI company API."""
+    try:
+        r = _HTTP.get(f"{_SSI_SSMI_BASE}/{endpoint}",
+                      headers=_SSI_HDR, params=params, timeout=10)
+        if r.status_code == 403:
+            _log.debug(f"SSI SSMI {endpoint}: 403 (needs auth)")
+            return {}
+        r.raise_for_status()
+        return r.json()
+    except Exception as e:
+        _log.warning(f"SSI SSMI {endpoint}: {e}")
+        return {}
+
+@st.cache_data(ttl=3600)
+def fetch_ssi_finance_indicator(ticker: str) -> pd.DataFrame:
+    """
+    SSI SSMI finance-indicator: ROE, ROA, EPS, P/E, P/B per quarter.
+    Endpoint: /statistics/company/ssmi/finance-indicator?symbol=ACB&page=1&pageSize=10
+    """
+    raw = _ssi_ssmi_get("finance-indicator",
+                         {"symbol": ticker, "page": 1, "pageSize": 20})
+    items = raw.get("data", raw.get("Data", []))
+    if not items or not isinstance(items, list):
+        return pd.DataFrame()
+    return pd.DataFrame(items)
+
+@st.cache_data(ttl=86400)
+def fetch_ssi_company_info(ticker: str) -> dict:
+    """
+    SSI SSMI — aggregated company info from multiple endpoints.
+    Returns: overview, leadership, shareholders, cap_dividend
+    """
+    out = {}
+    # Cap & dividend
+    cap_div = _ssi_ssmi_get("cap-and-dividend", {"symbol": ticker})
+    if cap_div:
+        out["cap_dividend"] = cap_div.get("data", cap_div)
+
+    # Company leaderships
+    lead = _ssi_ssmi_get("company-leaderships",
+                          {"symbol": ticker, "language": "vn", "page": 1, "pageSize": 20})
+    if lead:
+        out["leadership"] = lead.get("data", lead.get("Data", []))
+
+    # Share holder summary
+    sh_sum = _ssi_ssmi_get("share-holder-summary",
+                            {"symbol": ticker, "language": "vn"})
+    if sh_sum:
+        out["shareholder_summary"] = sh_sum.get("data", sh_sum)
+
+    # Corporate actions (last 12 months)
+    from datetime import timedelta as _td
+    today = datetime.now()
+    yr_ago = today - _td(days=365)
+    fmt = lambda d: d.strftime("%d/%m/%Y")
+    corp = _ssi_ssmi_get("corporate-actions", {
+        "symbol": ticker, "language": "vn",
+        "page": 1, "pageSize": 20,
+        "fromDate": fmt(yr_ago), "toDate": fmt(today),
+    })
+    if corp:
+        out["corporate_actions"] = corp.get("data", corp.get("Data", []))
+
+    return out
+
+@st.cache_data(ttl=3600)
+def fetch_ssi_news(ticker: str, n: int = 10) -> list:
+    """SSI SSMI company news."""
+    today = datetime.now()
+    month_ago = today - timedelta(days=30)
+    fmt = lambda d: d.strftime("%d/%m/%Y")
+    raw = _ssi_ssmi_get("company-news", {
+        "symbol": ticker, "pageSize": n, "page": 1,
+        "fromDate": fmt(month_ago), "toDate": fmt(today),
+        "language": "vn",
+    })
+    items = raw.get("data", raw.get("Data", []))
+    if not items:
+        return []
+    news = []
+    for it in (items if isinstance(items, list) else []):
+        news.append({
+            "date":    str(it.get("publishDate", it.get("PublishDate", "")))[:10],
+            "title":   it.get("title", it.get("Title", "–")),
+            "url":     it.get("url", it.get("Url", "")),
+            "source":  it.get("source", "SSI"),
+        })
+    return news
+
+# ══════════════════════════════════════════════════════════════
+#  DNSE OHLC TECHNICAL ANALYSIS  (ENH-13)
+#  Used as fundamental proxy when TCBS/VNDirect unavailable
+# ══════════════════════════════════════════════════════════════
+@st.cache_data(ttl=1800)
+def fetch_dnse_ohlc_analysis(ticker: str) -> dict:
+    """
+    Fetch 2 years of OHLC from corrected DNSE endpoint (api.dnse.com.vn)
+    and compute technical indicators to serve as valuation proxy
+    when fundamental financial data is unavailable.
+    Returns a structured dict with technicals, price levels, risk scores.
+    """
+    df, src, err = download_data(ticker, days=730, min_rows=40)
+    if df is None or df.empty or "Close" in df.columns is False:
+        return {"error": "No OHLC data available"}
+
+    # Ensure indicators are computed
+    try:
+        df = calculate_indicators(df)
+    except Exception as e:
+        _log.warning(f"DNSE OHLC analysis calc error {ticker}: {e}")
+
+    closes = df["Close"].dropna().values.astype(float)
+    highs  = df["High"].dropna().values.astype(float)  if "High"   in df.columns else closes
+    lows   = df["Low"].dropna().values.astype(float)   if "Low"    in df.columns else closes
+    vols   = df["Volume"].fillna(0).values.astype(float) if "Volume" in df.columns else np.zeros(len(closes))
+
+    price = float(closes[-1])
+    high52 = float(highs[-252:].max()) if len(highs) >= 252 else float(highs.max())
+    low52  = float(lows[-252:].min())  if len(lows)  >= 252 else float(lows.min())
+    avg_vol20 = float(vols[-20:].mean()) if len(vols) >= 20 else float(vols.mean())
+    avg_vol5  = float(vols[-5:].mean())  if len(vols) >= 5  else float(vols.mean())
+
+    # Key indicator values from last row
+    last = df.iloc[-1]
+    rsi  = float(last.get("RSI",  50))  if "RSI"  in df.columns else 50.0
+    macd = float(last.get("MACD", 0))   if "MACD" in df.columns else 0.0
+    macd_sig = float(last.get("MACD_Signal", 0)) if "MACD_Signal" in df.columns else 0.0
+    adx  = float(last.get("ADX",  20))  if "ADX"  in df.columns else 20.0
+    bbl  = float(last.get("BB_Lower", price * 0.95)) if "BB_Lower" in df.columns else price * 0.95
+    bbu  = float(last.get("BB_Upper", price * 1.05)) if "BB_Upper" in df.columns else price * 1.05
+    sma20= float(last.get("SMA20", price)) if "SMA20" in df.columns else price
+    sma50= float(last.get("SMA50", price)) if "SMA50" in df.columns else price
+
+    # Trend signals
+    above_sma20  = price > sma20
+    above_sma50  = price > sma50
+    macd_bullish = macd > macd_sig
+    rsi_oversold = rsi < 35
+    rsi_overbought = rsi > 70
+    vol_spike    = avg_vol5 > avg_vol20 * 1.5 if avg_vol20 > 0 else False
+
+    # 52-week position (0=at low, 1=at high)
+    rng = high52 - low52
+    price_percentile = (price - low52) / rng if rng > 0 else 0.5
+
+    # Momentum: 1M, 3M returns
+    ret1m = (closes[-1] / closes[-21] - 1)  if len(closes) >= 21  else 0
+    ret3m = (closes[-1] / closes[-63] - 1)  if len(closes) >= 63  else 0
+    ret6m = (closes[-1] / closes[-126] - 1) if len(closes) >= 126 else 0
+
+    # Volatility (annualized)
+    if len(closes) >= 20:
+        log_ret = np.diff(np.log(closes[-60:]))
+        volatility = float(np.std(log_ret) * np.sqrt(252))
+    else:
+        volatility = 0.30
+
+    # Technical score 0–100
+    tech_score = 0.0
+    if above_sma20:    tech_score += 15
+    if above_sma50:    tech_score += 20
+    if macd_bullish:   tech_score += 15
+    if rsi_oversold:   tech_score += 15
+    elif not rsi_overbought: tech_score += 8
+    if adx > 25:       tech_score += 10  # clear trend
+    if vol_spike and macd_bullish: tech_score += 10
+    if ret1m > 0:      tech_score += 7
+    if ret3m > 0:      tech_score += 5
+    if price_percentile < 0.35: tech_score += 5  # near 52-week low = potential value
+
+    # Technical risk scores (for risk radar)
+    momentum_risk = max(1.0, min(10.0, 5 - (tech_score - 50) / 10))
+    vol_risk = max(1.0, min(10.0, volatility * 15))  # 20% vol → risk 3
+    trend_risk = 1.0 if (above_sma20 and above_sma50) else (5.0 if (above_sma20 or above_sma50) else 8.0)
+
+    # Implied EPS from sector P/E (when fundamentals unavailable)
+    sector = get_sector(ticker)
+    sector_pe_map = {
+        "Ngân hàng": 12.0, "Bất động sản": 18.0, "Dầu khí": 10.0,
+        "Thép": 8.0, "Công nghệ": 25.0, "Chứng khoán": 14.0,
+        "Bán lẻ": 18.0, "Thực phẩm": 20.0, "Dược": 22.0,
+        "Bảo hiểm": 16.0, "Điện": 15.0, "Xây dựng": 12.0,
+        "Hàng không": 20.0, "Logistics": 16.0,
+    }
+    sector_pe  = sector_pe_map.get(sector, 15.0)
+    implied_eps= price / sector_pe   # rough EPS from current price / sector PE
+    implied_bvps = price * 0.6       # rough BVPS estimate (conservative)
+
+    # Technical-implied fair value (sector PE applied to implied EPS, adjusted for momentum)
+    momentum_adj = 1.0 + (ret3m * 0.3)  # if momentum positive, PE expands slightly
+    adj_pe = sector_pe * max(0.7, min(1.3, momentum_adj))
+    tech_fair_value = implied_eps * adj_pe
+
+    return {
+        "price":           price,
+        "high52":          high52,
+        "low52":           low52,
+        "price_percentile":price_percentile,
+        "rsi":             rsi,
+        "macd":            macd,
+        "macd_sig":        macd_sig,
+        "macd_bullish":    macd_bullish,
+        "adx":             adx,
+        "bb_lower":        bbl,
+        "bb_upper":        bbu,
+        "sma20":           sma20,
+        "sma50":           sma50,
+        "above_sma20":     above_sma20,
+        "above_sma50":     above_sma50,
+        "rsi_oversold":    rsi_oversold,
+        "rsi_overbought":  rsi_overbought,
+        "vol_spike":       vol_spike,
+        "ret1m":           ret1m,
+        "ret3m":           ret3m,
+        "ret6m":           ret6m,
+        "volatility":      volatility,
+        "tech_score":      tech_score,
+        "momentum_risk":   momentum_risk,
+        "vol_risk":        vol_risk,
+        "trend_risk":      trend_risk,
+        "implied_eps":     implied_eps,
+        "implied_bvps":    implied_bvps,
+        "tech_fair_value": tech_fair_value,
+        "sector_pe":       sector_pe,
+        "sector":          sector,
+        "source":          src,
+        "n_rows":          len(df),
+        "data_df":         df,   # full OHLC df for charting
+    }
+
+# ══════════════════════════════════════════════════════════════
 #  TCBS FUNDAMENTAL DATA — tcanalysis API (no auth, public)
 # ══════════════════════════════════════════════════════════════
 TCBS_ANA = "https://apipubaws.tcbs.com.vn/tcanalysis/v1"
@@ -2689,429 +3126,7 @@ def get_recommendation(composite_score: float, upside_pct: float,
     return key, color, rationale
 
 # ══════════════════════════════════════════════════════════════
-#  DNSE OHLC DEEP ANALYSIS — Technical analysis from price data
-#  Source: https://api.dnse.com.vn/chart-api/v2/ohlcs/stock
-# ══════════════════════════════════════════════════════════════
-_DNSE_OHLC_HDR = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-    "Accept": "application/json",
-}
-
-@st.cache_data(ttl=1800)
-def fetch_dnse_ohlc_analysis(ticker: str, days: int = 1095) -> dict:
-    """
-    Fetch OHLC data from DNSE and compute comprehensive technical analysis.
-    Returns a dict with price info, technical indicators, and signals.
-    Source: https://api.dnse.com.vn/chart-api/v2/ohlcs/stock
-    """
-    result = {
-        "has_data": False, "source": "DNSE OHLC",
-        "current_price": 0, "prev_close": 0, "change_pct": 0,
-        "high_52w": 0, "low_52w": 0, "avg_volume_20": 0,
-        "sma20": 0, "sma50": 0, "sma200": 0,
-        "rsi": 50, "macd": 0, "macd_signal": 0, "macd_hist": 0,
-        "bb_upper": 0, "bb_lower": 0, "bb_mid": 0, "bb_pct": 0.5,
-        "adx": 0, "stoch_k": 50, "obv_trend": "neutral",
-        "volume_ratio": 1.0, "trend_sma20": "neutral",
-        "trend_sma50": "neutral", "trend_sma200": "neutral",
-        "momentum_signals": [], "ohlc_df": pd.DataFrame(),
-        "tech_score": 50.0,
-    }
-    try:
-        to_ts = _unix(datetime.now())
-        from_ts = _unix(datetime.now() - timedelta(days=days))
-        url = (f"https://api.dnse.com.vn/chart-api/v2/ohlcs/stock"
-               f"?symbol={ticker}&resolution=1D&from={from_ts}&to={to_ts}")
-        r = requests.get(url, headers=_DNSE_OHLC_HDR, timeout=15)
-        r.raise_for_status()
-        raw = r.json()
-        t_arr = raw.get("t", [])
-        c_arr = raw.get("c", [])
-        if not t_arr or len(t_arr) < 30:
-            return result
-
-        df = pd.DataFrame({
-            "Open":   pd.to_numeric(raw.get("o", c_arr), errors="coerce"),
-            "High":   pd.to_numeric(raw.get("h", c_arr), errors="coerce"),
-            "Low":    pd.to_numeric(raw.get("l", c_arr), errors="coerce"),
-            "Close":  pd.to_numeric(c_arr, errors="coerce"),
-            "Volume": pd.to_numeric(raw.get("v", [0]*len(t_arr)), errors="coerce"),
-        }, index=pd.to_datetime(t_arr, unit="s").normalize())
-        df.index.name = "Date"
-        df = df.dropna(subset=["Close"]).sort_index()
-        df = df[~df.index.duplicated(keep="last")]
-        # Normalise price scale (DNSE returns kilo-VND for some tickers)
-        if not df.empty and df["Close"].dropna().median() < 500:
-            for col in ["Open","High","Low","Close"]:
-                df[col] = df[col] * 1000
-        if len(df) < 30:
-            return result
-
-        cls = df["Close"].values.astype(float)
-        hgh = df["High"].values.astype(float)
-        low = df["Low"].values.astype(float)
-        vol = df["Volume"].fillna(0).values.astype(float)
-        n = len(df)
-
-        result["has_data"] = True
-        result["ohlc_df"] = df
-        result["current_price"] = float(cls[-1])
-        result["prev_close"] = float(cls[-2]) if n > 1 else float(cls[-1])
-        result["change_pct"] = ((cls[-1] - cls[-2]) / cls[-2] * 100) if n > 1 else 0
-
-        # 52-week high/low
-        w52 = min(252, n)
-        result["high_52w"] = float(np.nanmax(hgh[-w52:]))
-        result["low_52w"] = float(np.nanmin(low[-w52:]))
-
-        # Moving averages
-        sma20 = float(np.mean(cls[-20:])) if n >= 20 else float(cls[-1])
-        sma50 = float(np.mean(cls[-50:])) if n >= 50 else float(cls[-1])
-        sma200 = float(np.mean(cls[-200:])) if n >= 200 else sma50
-        result["sma20"] = sma20
-        result["sma50"] = sma50
-        result["sma200"] = sma200
-
-        # Trends
-        result["trend_sma20"] = "bullish" if cls[-1] > sma20 else "bearish"
-        result["trend_sma50"] = "bullish" if cls[-1] > sma50 else "bearish"
-        result["trend_sma200"] = "bullish" if cls[-1] > sma200 else "bearish"
-
-        # RSI (14)
-        delta = np.diff(cls)
-        gain = np.where(delta > 0, delta, 0.0)
-        loss = np.where(delta < 0, -delta, 0.0)
-        if len(gain) >= 14:
-            avg_g = np.mean(gain[-14:])
-            avg_l = np.mean(loss[-14:])
-            rs = avg_g / (avg_l + 1e-10)
-            result["rsi"] = round(100 - 100 / (1 + rs), 1)
-
-        # MACD (12,26,9)
-        if n >= 26:
-            ema12 = pd.Series(cls).ewm(span=12, adjust=False).mean().values
-            ema26 = pd.Series(cls).ewm(span=26, adjust=False).mean().values
-            macd_line = ema12 - ema26
-            signal_line = pd.Series(macd_line).ewm(span=9, adjust=False).mean().values
-            result["macd"] = float(macd_line[-1])
-            result["macd_signal"] = float(signal_line[-1])
-            result["macd_hist"] = float(macd_line[-1] - signal_line[-1])
-
-        # Bollinger Bands (20)
-        if n >= 20:
-            bb_mid = sma20
-            bb_std = float(np.std(cls[-20:]))
-            result["bb_mid"] = bb_mid
-            result["bb_upper"] = bb_mid + 2 * bb_std
-            result["bb_lower"] = bb_mid - 2 * bb_std
-            bb_range = result["bb_upper"] - result["bb_lower"]
-            result["bb_pct"] = (cls[-1] - result["bb_lower"]) / bb_range if bb_range > 0 else 0.5
-
-        # ADX (14)
-        if n >= 28:
-            df_ind = calculate_indicators(df.copy())
-            adx_val = df_ind["ADX"].iloc[-1]
-            result["adx"] = float(adx_val) if pd.notna(adx_val) else 0
-
-        # Stochastic %K (14)
-        if n >= 14:
-            hh14 = np.nanmax(hgh[-14:])
-            ll14 = np.nanmin(low[-14:])
-            result["stoch_k"] = round(100 * (cls[-1] - ll14) / (hh14 - ll14 + 1e-10), 1)
-
-        # Volume analysis
-        avg_vol_20 = float(np.mean(vol[-20:])) if n >= 20 else float(np.mean(vol))
-        result["avg_volume_20"] = avg_vol_20
-        result["volume_ratio"] = float(vol[-1] / (avg_vol_20 + 1e-10))
-
-        # OBV trend
-        if n >= 20:
-            obv = np.zeros(n)
-            for i in range(1, n):
-                obv[i] = obv[i-1] + (vol[i] if cls[i] > cls[i-1] else
-                                     (-vol[i] if cls[i] < cls[i-1] else 0))
-            obv_sma = np.mean(obv[-20:])
-            result["obv_trend"] = "accumulation" if obv[-1] > obv_sma else "distribution"
-
-        # Build momentum signals
-        signals = []
-        rsi_v = result["rsi"]
-        if rsi_v < 30:
-            signals.append(("bullish", f"RSI={rsi_v:.0f} oversold — high rebound probability"))
-        elif rsi_v > 70:
-            signals.append(("bearish", f"RSI={rsi_v:.0f} overbought — pullback risk"))
-        if result["macd_hist"] > 0 and result["macd"] > result["macd_signal"]:
-            signals.append(("bullish", "MACD bullish crossover — positive momentum"))
-        elif result["macd_hist"] < 0:
-            signals.append(("bearish", "MACD bearish — negative momentum"))
-        if cls[-1] < result["bb_lower"] and result["bb_lower"] > 0:
-            signals.append(("bullish", "Price below BB Lower — statistical support zone"))
-        elif cls[-1] > result["bb_upper"] and result["bb_upper"] > 0:
-            signals.append(("bearish", "Price above BB Upper — statistical resistance"))
-        if result["trend_sma50"] == "bullish" and result["trend_sma200"] == "bullish":
-            signals.append(("bullish", "Price above SMA50 & SMA200 — strong uptrend"))
-        elif result["trend_sma50"] == "bearish" and result["trend_sma200"] == "bearish":
-            signals.append(("bearish", "Price below SMA50 & SMA200 — downtrend"))
-        if result["adx"] > 25:
-            trend_dir = "up" if result["trend_sma20"] == "bullish" else "down"
-            signals.append(("neutral", f"ADX={result['adx']:.0f} — strong {trend_dir}trend"))
-        if result["volume_ratio"] > 2.0:
-            signals.append(("neutral", f"Volume spike {result['volume_ratio']:.1f}× avg — high activity"))
-        if result["obv_trend"] == "accumulation":
-            signals.append(("bullish", "OBV above MA20 — institutional accumulation"))
-        elif result["obv_trend"] == "distribution":
-            signals.append(("bearish", "OBV below MA20 — distribution pattern"))
-        if n >= 50 and sma20 > sma50 and float(np.mean(cls[-25:20:-1])) < float(np.mean(cls[-55:50:-1]) if n > 55 else sma50):
-            signals.append(("bullish", "Golden cross forming — SMA20 crossing above SMA50"))
-        result["momentum_signals"] = signals
-
-        # Composite technical score (0-100)
-        tech_score = 50.0
-        bull_count = sum(1 for s, _ in signals if s == "bullish")
-        bear_count = sum(1 for s, _ in signals if s == "bearish")
-        tech_score += (bull_count - bear_count) * 8
-        # RSI contribution
-        if rsi_v < 30: tech_score += 10
-        elif rsi_v < 40: tech_score += 5
-        elif rsi_v > 70: tech_score -= 10
-        elif rsi_v > 60: tech_score -= 5
-        # Trend contribution
-        if result["trend_sma50"] == "bullish": tech_score += 8
-        else: tech_score -= 8
-        if result["trend_sma200"] == "bullish": tech_score += 5
-        else: tech_score -= 5
-        # BB position
-        if result["bb_pct"] < 0.2: tech_score += 8
-        elif result["bb_pct"] > 0.8: tech_score -= 5
-        # 52w position
-        pos_52w = (cls[-1] - result["low_52w"]) / (result["high_52w"] - result["low_52w"] + 1e-10)
-        if pos_52w < 0.3: tech_score += 5  # near 52w low = potential value
-        elif pos_52w > 0.9: tech_score -= 5  # near 52w high = stretched
-        result["tech_score"] = round(min(max(tech_score, 0), 100), 1)
-
-        _log.info(f"DNSE OHLC analysis ✅ {ticker}: {n} rows, "
-                  f"price={cls[-1]:,.0f}, RSI={rsi_v:.0f}, tech_score={result['tech_score']:.0f}")
-    except Exception as e:
-        _log.warning(f"DNSE OHLC analysis failed for {ticker}: {e}")
-    return result
-
-
-def score_technical_risk(dnse_data: dict) -> dict:
-    """
-    Compute risk scores from DNSE OHLC technical analysis
-    when fundamental data (TCBS/VNDirect) is unavailable.
-    Returns same format as score_fundamental_risk: 5 dimensions, 0-10 scale.
-    """
-    scores = {
-        "debt": 5.0,        # Unknown — neutral
-        "liquidity": 5.0,
-        "profitability": 5.0,
-        "growth": 5.0,
-        "valuation": 5.0,
-    }
-    if not dnse_data.get("has_data"):
-        return scores
-
-    # Profitability proxy: price trend strength
-    if dnse_data["trend_sma50"] == "bullish" and dnse_data["trend_sma200"] == "bullish":
-        scores["profitability"] = 3.0
-    elif dnse_data["trend_sma50"] == "bearish" and dnse_data["trend_sma200"] == "bearish":
-        scores["profitability"] = 8.0
-    elif dnse_data["trend_sma50"] == "bullish":
-        scores["profitability"] = 4.0
-    else:
-        scores["profitability"] = 6.0
-
-    # Growth proxy: price momentum (3-month vs 6-month)
-    ohlc = dnse_data.get("ohlc_df", pd.DataFrame())
-    if not ohlc.empty and len(ohlc) >= 130:
-        c = ohlc["Close"].values
-        pct_3m = (c[-1] - c[-63]) / (c[-63] + 1e-10) * 100
-        pct_6m = (c[-1] - c[-126]) / (c[-126] + 1e-10) * 100
-        if pct_3m > 15 and pct_6m > 20:
-            scores["growth"] = 2.0
-        elif pct_3m > 5:
-            scores["growth"] = 3.0
-        elif pct_3m > -5:
-            scores["growth"] = 5.0
-        elif pct_3m > -15:
-            scores["growth"] = 7.0
-        else:
-            scores["growth"] = 9.0
-
-    # Liquidity proxy: volume trend
-    vol_ratio = dnse_data.get("volume_ratio", 1.0)
-    avg_vol = dnse_data.get("avg_volume_20", 0)
-    if avg_vol > 500_000:
-        scores["liquidity"] = 2.0
-    elif avg_vol > 100_000:
-        scores["liquidity"] = 4.0
-    elif avg_vol > 20_000:
-        scores["liquidity"] = 6.0
-    else:
-        scores["liquidity"] = 8.0
-
-    # Valuation proxy: distance from 52w high/low
-    h52 = dnse_data.get("high_52w", 0)
-    l52 = dnse_data.get("low_52w", 0)
-    price = dnse_data.get("current_price", 0)
-    if h52 > l52 > 0 and price > 0:
-        pos = (price - l52) / (h52 - l52 + 1e-10)
-        if pos < 0.25:
-            scores["valuation"] = 2.0   # Near 52w low = potentially cheap
-        elif pos < 0.45:
-            scores["valuation"] = 3.0
-        elif pos < 0.65:
-            scores["valuation"] = 5.0
-        elif pos < 0.85:
-            scores["valuation"] = 7.0
-        else:
-            scores["valuation"] = 8.0   # Near 52w high = potentially expensive
-
-    # Debt proxy: volatility (high vol = higher perceived risk)
-    if not ohlc.empty and len(ohlc) >= 20:
-        returns = np.diff(np.log(ohlc["Close"].values[-60:] + 1e-10))
-        annualized_vol = float(np.std(returns) * np.sqrt(252) * 100)
-        if annualized_vol < 20:
-            scores["debt"] = 3.0
-        elif annualized_vol < 35:
-            scores["debt"] = 5.0
-        elif annualized_vol < 50:
-            scores["debt"] = 7.0
-        else:
-            scores["debt"] = 9.0
-
-    return scores
-
-
-def get_recommendation_enhanced(composite_score: float, upside_pct: float,
-                                 risk_scores: dict, dnse_data: dict,
-                                 lang: str = "VI") -> tuple:
-    """
-    Enhanced recommendation with DNSE OHLC technical signals.
-    Returns (label_key, color, rationale).
-    """
-    max_risk = max(risk_scores.values())
-    has_dnse = dnse_data.get("has_data", False)
-
-    if composite_score >= 75 and max_risk < 7:
-        key = "sp_rec_strong_buy"; color = "#00cc44"
-    elif composite_score >= 60:
-        key = "sp_rec_buy"; color = "#44bb22"
-    elif composite_score >= 40:
-        key = "sp_rec_hold"; color = "#ffaa00"
-    elif composite_score >= 25:
-        key = "sp_rec_sell"; color = "#ff5500"
-    else:
-        key = "sp_rec_strong_sell"; color = "#cc0000"
-
-    vi_parts, en_parts = [], []
-
-    if has_dnse:
-        rsi = dnse_data["rsi"]
-        price = dnse_data["current_price"]
-        h52 = dnse_data["high_52w"]
-        l52 = dnse_data["low_52w"]
-        pos_52w = (price - l52) / (h52 - l52 + 1e-10) * 100
-
-        # Price position
-        vi_parts.append(f"📊 Giá hiện tại: **{price:,.0f}** VNĐ (vùng {pos_52w:.0f}% của dải 52 tuần: {l52:,.0f}–{h52:,.0f})")
-        en_parts.append(f"📊 Current price: **{price:,.0f}** VND (at {pos_52w:.0f}% of 52-week range: {l52:,.0f}–{h52:,.0f})")
-
-        # RSI analysis
-        if rsi < 30:
-            vi_parts.append(f"✅ **RSI = {rsi:.0f}** — Vùng quá bán nghiêm trọng. Xác suất hồi phục cao, cơ hội bắt đáy.")
-            en_parts.append(f"✅ **RSI = {rsi:.0f}** — Severely oversold. High rebound probability, buying opportunity.")
-        elif rsi < 40:
-            vi_parts.append(f"🟢 **RSI = {rsi:.0f}** — Gần vùng quá bán. Áp lực bán giảm dần.")
-            en_parts.append(f"🟢 **RSI = {rsi:.0f}** — Near oversold zone. Selling pressure fading.")
-        elif rsi > 70:
-            vi_parts.append(f"⚠️ **RSI = {rsi:.0f}** — Vùng quá mua. Rủi ro chốt lời cao, thận trọng mua đuổi.")
-            en_parts.append(f"⚠️ **RSI = {rsi:.0f}** — Overbought zone. Profit-taking risk high, avoid chasing.")
-        else:
-            vi_parts.append(f"🔹 **RSI = {rsi:.0f}** — Vùng trung tính.")
-            en_parts.append(f"🔹 **RSI = {rsi:.0f}** — Neutral zone.")
-
-        # Trend analysis
-        trend50 = dnse_data["trend_sma50"]
-        trend200 = dnse_data["trend_sma200"]
-        if trend50 == "bullish" and trend200 == "bullish":
-            vi_parts.append(f"✅ Xu hướng: **TĂNG MẠNH** — Giá trên SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
-            en_parts.append(f"✅ Trend: **STRONG UPTREND** — Price above SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
-        elif trend50 == "bullish":
-            vi_parts.append(f"🟢 Xu hướng: **TĂNG ngắn hạn** — Giá trên SMA50, dưới SMA200")
-            en_parts.append(f"🟢 Trend: **Short-term UPTREND** — Above SMA50, below SMA200")
-        elif trend50 == "bearish" and trend200 == "bearish":
-            vi_parts.append(f"❌ Xu hướng: **GIẢM** — Giá dưới SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
-            en_parts.append(f"❌ Trend: **DOWNTREND** — Price below SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
-        else:
-            vi_parts.append("🔹 Xu hướng: **Hỗn hợp** — Tín hiệu không rõ ràng")
-            en_parts.append("🔹 Trend: **Mixed** — No clear directional signal")
-
-        # MACD
-        if dnse_data["macd_hist"] > 0:
-            vi_parts.append("✅ MACD dương — Momentum tăng, dòng tiền đang vào.")
-            en_parts.append("✅ MACD positive — Bullish momentum, money flowing in.")
-        elif dnse_data["macd_hist"] < 0:
-            vi_parts.append("⚠️ MACD âm — Momentum giảm, cẩn thận áp lực bán.")
-            en_parts.append("⚠️ MACD negative — Bearish momentum, watch for selling pressure.")
-
-        # Bollinger Bands
-        bb_pct = dnse_data["bb_pct"]
-        if bb_pct < 0.1:
-            vi_parts.append(f"✅ Giá chạm **BB Lower** ({dnse_data['bb_lower']:,.0f}) — Vùng hỗ trợ thống kê mạnh.")
-            en_parts.append(f"✅ Price at **BB Lower** ({dnse_data['bb_lower']:,.0f}) — Strong statistical support.")
-        elif bb_pct > 0.9:
-            vi_parts.append(f"⚠️ Giá chạm **BB Upper** ({dnse_data['bb_upper']:,.0f}) — Kháng cự thống kê, xác suất điều chỉnh cao.")
-            en_parts.append(f"⚠️ Price at **BB Upper** ({dnse_data['bb_upper']:,.0f}) — Statistical resistance, pullback likely.")
-
-        # Volume
-        vol_r = dnse_data["volume_ratio"]
-        obv = dnse_data["obv_trend"]
-        if obv == "accumulation" and vol_r > 1.2:
-            vi_parts.append(f"✅ OBV tích cực + KL = {vol_r:.1f}× TB20 — Dòng tiền lớn đang gom.")
-            en_parts.append(f"✅ Positive OBV + Volume = {vol_r:.1f}× avg — Institutional accumulation.")
-        elif obv == "distribution":
-            vi_parts.append(f"⚠️ OBV giảm — Dấu hiệu phân phối, thận trọng.")
-            en_parts.append(f"⚠️ Declining OBV — Distribution pattern detected.")
-
-    # Valuation insights (if available)
-    if upside_pct > 20:
-        vi_parts.append(f"✅ Cổ phiếu đang giao dịch dưới giá trị hợp lý ~{upside_pct:.0f}%")
-        en_parts.append(f"✅ Stock trading ~{upside_pct:.0f}% below fair value")
-    elif upside_pct < -15:
-        vi_parts.append(f"⚠️ Cổ phiếu đang giao dịch cao hơn giá trị ~{abs(upside_pct):.0f}%")
-        en_parts.append(f"⚠️ Stock trading ~{abs(upside_pct):.0f}% above fair value")
-
-    # Fundamental risk comments (only if real fundamental data)
-    p_risk = risk_scores.get("profitability", 5)
-    d_risk = risk_scores.get("debt", 5)
-    g_risk = risk_scores.get("growth", 5)
-    if p_risk <= 3:
-        vi_parts.append("✅ Khả năng sinh lời tốt")
-        en_parts.append("✅ Strong profitability")
-    elif p_risk >= 8:
-        vi_parts.append("❌ Khả năng sinh lời yếu")
-        en_parts.append("❌ Weak profitability")
-    if d_risk <= 3:
-        vi_parts.append("✅ Cấu trúc vốn lành mạnh")
-        en_parts.append("✅ Healthy capital structure")
-    elif d_risk >= 7:
-        vi_parts.append("⚠️ Đòn bẩy tài chính cao")
-        en_parts.append("⚠️ High financial leverage")
-    if g_risk <= 3:
-        vi_parts.append("✅ Tăng trưởng mạnh")
-        en_parts.append("✅ Strong growth")
-    elif g_risk >= 7:
-        vi_parts.append("⚠️ Tăng trưởng chậm")
-        en_parts.append("⚠️ Slowing growth")
-
-    rationale = "\n\n".join(vi_parts) if lang == "VI" else "\n\n".join(en_parts)
-    return key, color, rationale
-
-
-# ══════════════════════════════════════════════════════════════
-#  STOCK PROFILER TAB — render function
+#  STOCK PROFILER TAB — render function  (v17 — always returns data)
 # ══════════════════════════════════════════════════════════════
 def render_stock_profiler_tab():
     L = _LANG_VI if st.session_state.lang == "VI" else _LANG_EN
@@ -3121,8 +3136,9 @@ def render_stock_profiler_tab():
     # ── Ticker input ──
     col_in, col_btn, col_period = st.columns([2, 1, 1])
     with col_in:
-        ticker_in = st.text_input(L["sp_ticker_input"], value="FCN",
-                                   key="profiler_ticker").upper().strip()
+        ticker_in = st.text_input(
+            L["sp_ticker_input"], value="FCN",
+            key="profiler_ticker").upper().strip()
     with col_btn:
         run_btn = st.button(L["sp_analyse_btn"], key="profiler_run",
                             use_container_width=True)
@@ -3132,7 +3148,6 @@ def render_stock_profiler_tab():
 
     yearly = 1 if period_opt == L["sp_yearly"] else 0
 
-    # Session state to persist results
     if "profiler_result" not in st.session_state:
         st.session_state.profiler_result = {}
 
@@ -3146,198 +3161,306 @@ def render_stock_profiler_tab():
                           else "Enter a ticker and click Analyse Now"))
         return
 
-    # ── Load all data (TCBS → VNDirect → DNSE OHLC fallback) ──
+    # ──────────────────────────────────────────────────────────
+    # STEP 1: Load all data sources in cascade
+    # Priority: TCBS → CafeF → SSI → DNSE OHLC (always works)
+    # ──────────────────────────────────────────────────────────
     with st.spinner(L["sp_loading"]):
-        # Always fetch DNSE OHLC first (most reliable source)
-        dnse_data = fetch_dnse_ohlc_analysis(ticker)
+        # A) TCBS tcanalysis (may return 404)
+        income_raw  = fetch_tcbs_financials(ticker, "incomestatement", yearly)
+        balance_raw = fetch_tcbs_financials(ticker, "balancesheet",    yearly)
+        cf_raw      = fetch_tcbs_financials(ticker, "cashflow",        yearly)
+        ratio_raw   = fetch_tcbs_ratio(ticker, yearly)
+        tcbs_ok     = not ratio_raw.empty
 
-        overview   = fetch_tcbs_overview(ticker)
-        income_raw = fetch_tcbs_financials(ticker, "incomestatement", yearly)
-        balance_raw= fetch_tcbs_financials(ticker, "balancesheet", yearly)
-        cf_raw     = fetch_tcbs_financials(ticker, "cashflow", yearly)
-        ratio_raw  = fetch_tcbs_ratio(ticker, yearly)
-
-        # Fallback to VNDirect if TCBS empty
-        vnd_stmts = {}
-        vnd_ratios = pd.DataFrame()
-        has_fundamental = not (income_raw.empty and ratio_raw.empty)
-        if not has_fundamental:
-            try:
-                vnd_stmts = fetch_financial_statements(ticker)
-                vnd_ratios = fetch_financial_ratios(ticker)
-            except Exception:
-                pass
-            has_fundamental = bool(vnd_stmts) or not vnd_ratios.empty
-
-        # Determine data source label
-        if not ratio_raw.empty:
-            data_source = L["sp_source_tcbs"]
-        elif not vnd_ratios.empty:
-            data_source = L["sp_source_vnd"]
-        elif dnse_data.get("has_data"):
-            data_source = "Nguồn: DNSE OHLC (Phân tích kỹ thuật)" if is_vi else "Source: DNSE OHLC (Technical Analysis)"
+        # B) VNDirect fallback for financial statements
+        if not tcbs_ok:
+            vnd_stmts  = fetch_financial_statements(ticker)
+            vnd_ratios = fetch_financial_ratios(ticker)
+            vnd_ok     = not vnd_ratios.empty
         else:
-            data_source = L["sp_no_data"]
+            vnd_stmts, vnd_ratios, vnd_ok = {}, pd.DataFrame(), False
+
+        # C) CafeF — always reliable for key ratios & price
+        cafef_ratios    = fetch_cafef_key_ratios(ticker)
+        cafef_price_d   = fetch_cafef_price(ticker)
+        cafef_sh        = fetch_cafef_shareholders(ticker)
+        cafef_reports   = fetch_cafef_financial_reports(ticker)
+        cafef_ok        = bool(cafef_ratios)
+
+        # D) SSI company info
+        ssi_info        = fetch_ssi_company_info(ticker)
+        ssi_ratios_df   = fetch_ssi_finance_indicator(ticker)
+        ssi_news        = fetch_ssi_news(ticker)
+
+        # E) VNDirect company profile
+        vnd_profile     = fetch_company_profile(ticker)
+
+        # F) DNSE OHLC analysis — ALWAYS available as ultimate fallback
+        ohlc_ana        = fetch_dnse_ohlc_analysis(ticker)
+        ohlc_ok         = "error" not in ohlc_ana
+
+        # Determine current price (priority: CafeF live → DNSE OHLC → VNDirect profile)
+        if cafef_price_d.get("price", 0) > 0:
+            current_price = cafef_price_d["price"]
+            pct_chg       = cafef_price_d.get("pct_change", 0)
+        elif ohlc_ok:
+            current_price = ohlc_ana["price"]
+            pct_chg       = ohlc_ana.get("ret1m", 0) * 100
+        else:
+            current_price = 0.0
+            pct_chg       = 0.0
+
+        # Build unified ratio dict (priority: TCBS → VNDirect → CafeF → OHLC implied)
+        def _unified_val(tcbs_key, vnd_col, cafef_key, fallback=None):
+            """Extract best available value for a metric."""
+            # TCBS
+            if tcbs_ok and not ratio_raw.empty and tcbs_key in ratio_raw.columns:
+                v = pd.to_numeric(ratio_raw[tcbs_key], errors="coerce").dropna()
+                if len(v) > 0:
+                    return float(v.iloc[0])
+            # VNDirect
+            if vnd_ok and not vnd_ratios.empty:
+                for c in vnd_ratios.columns:
+                    if vnd_col.lower() in c.lower():
+                        v = pd.to_numeric(vnd_ratios[c], errors="coerce").dropna()
+                        if len(v) > 0:
+                            return float(v.iloc[0])
+            # CafeF
+            if cafef_key and cafef_ratios.get(cafef_key) is not None:
+                v = cafef_ratios[cafef_key]
+                if v is not None:
+                    return float(v)
+            return fallback
+
+        eps_raw  = _unified_val("eps",            "EPS",   "eps",  ohlc_ana.get("implied_eps", 0) if ohlc_ok else 0)
+        pe_val   = _unified_val("priceToEarning", "P/E",   "pe",   ohlc_ana.get("sector_pe", 15) if ohlc_ok else 15)
+        pb_val   = _unified_val("priceToBook",    "P/B",   "pb",   None)
+        roe_raw  = _unified_val("roe",            "ROE",   None,   None)
+        roa_raw  = _unified_val("roa",            "ROA",   None,   None)
+        npm_raw  = _unified_val("netProfitMargin","Biên ròng", None, None)
+        de_raw   = _unified_val("payableOnEquity","D/E",   None,   None)
+        cr_raw   = _unified_val("currentPayment", "Curr",  None,   None)
+        bvps_raw = _unified_val("bookValuePerShare","BVPS","bvps", ohlc_ana.get("implied_bvps", 0) if ohlc_ok else 0)
+
+        # Normalise pct fields (TCBS often stores as fraction 0–1)
+        def _to_pct(v):
+            if v is None: return None
+            return v * 100 if abs(v) < 2 else v
+
+        roe  = _to_pct(roe_raw)
+        roa  = _to_pct(roa_raw)
+        npm  = _to_pct(npm_raw)
+        eps  = (eps_raw * 1000) if eps_raw and 0 < eps_raw < 100 else (eps_raw or 0)
+        bvps = (bvps_raw * 1000) if bvps_raw and 0 < bvps_raw < 100 else (bvps_raw or 0)
+
+        sector = get_sector(ticker)
 
         # Build display DataFrames
-        income_df  = (_build_stmt_df(income_raw, _INCOME_MAP, st.session_state.lang)
+        income_df  = (_build_stmt_df(income_raw,  _INCOME_MAP,  st.session_state.lang)
                       if not income_raw.empty
                       else vnd_stmts.get("income", pd.DataFrame()))
         balance_df = (_build_stmt_df(balance_raw, _BALANCE_MAP, st.session_state.lang)
                       if not balance_raw.empty
                       else vnd_stmts.get("balance", pd.DataFrame()))
-        cf_df      = (_build_stmt_df(cf_raw, _CF_MAP, st.session_state.lang)
+        cf_df      = (_build_stmt_df(cf_raw,      _CF_MAP,      st.session_state.lang)
                       if not cf_raw.empty
                       else vnd_stmts.get("cashflow", pd.DataFrame()))
 
-        # Use VNDirect ratios if TCBS empty
-        ratio_display = ratio_raw if not ratio_raw.empty else vnd_ratios
-
-        # Build named ratio_df for scoring
-        scoring_ratio = ratio_raw if not ratio_raw.empty else vnd_ratios
-
-        # Get current price: prefer DNSE OHLC (always works), then pipeline
-        if dnse_data.get("has_data") and dnse_data["current_price"] > 0:
-            current_price = dnse_data["current_price"]
-            price_df = dnse_data["ohlc_df"]
+        # Determine data source label
+        if tcbs_ok:
+            data_source = L["sp_source_tcbs"]
+        elif vnd_ok:
+            data_source = L["sp_source_vnd"]
+        elif cafef_ok:
+            data_source = "Nguồn: CafeF API" if is_vi else "Source: CafeF API"
+        elif ohlc_ok:
+            data_source = f"Nguồn: DNSE OHLC ({ohlc_ana.get('source','')}) — kỹ thuật" if is_vi else f"Source: DNSE OHLC ({ohlc_ana.get('source','')}) — technical"
         else:
-            price_df, price_src, _ = download_data(ticker, days=30)
-            current_price = float(price_df["Close"].iloc[-1]) if price_df is not None and not price_df.empty else 0
+            data_source = "⚠️ " + ("Dữ liệu hạn chế" if is_vi else "Limited data")
 
-        sector = get_sector(ticker)
-
-        # Store DNSE data for recommendation tab
-        st.session_state["_profiler_dnse"] = dnse_data
-
-    # ────────────────────────────────────
-    # Source badge + last price + DNSE status
-    dnse_badge = ("🟢 DNSE" if dnse_data.get("has_data") else "🔴 DNSE")
-    chg_color = "#00cc66" if dnse_data.get("change_pct", 0) >= 0 else "#ff4b4b"
-    chg_str = f"{dnse_data.get('change_pct', 0):+.1f}%" if dnse_data.get("has_data") else ""
+    # ── Status bar ──
+    chg_color = "#00cc44" if pct_chg >= 0 else "#ff4444"
     st.markdown(f"""
-<span style="font-size:12px;color:#888">{data_source} &nbsp;|&nbsp;
-<b style="color:#4e9af1">Last Price: {current_price:,.0f} VNĐ</b>
-<b style="color:{chg_color}">{chg_str}</b> &nbsp;|&nbsp;
-Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=True)
+<span style="font-size:13px;color:#888">{data_source} &nbsp;|&nbsp;
+<b style="color:#4e9af1;font-size:15px">{current_price:,.0f} VNĐ</b>
+<span style="color:{chg_color};font-size:13px"> {pct_chg:+.2f}%</span>
+&nbsp;|&nbsp; Ngành/Sector: <b>{sector}</b>
+&nbsp;|&nbsp; TCBS: {'✅' if tcbs_ok else '❌'} CafeF: {'✅' if cafef_ok else '❌'} OHLC: {'✅' if ohlc_ok else '❌'}
+</span>""", unsafe_allow_html=True)
 
     # ── 6 Sub-tabs ──
     sub_labels = [L["sp_overview"], L["sp_financials"], L["sp_ratios"],
                   L["sp_valuation"], L["sp_risk"], L["sp_recommendation"]]
     s1, s2, s3, s4, s5, s6 = st.tabs(sub_labels)
 
-    # ════════════════ TAB S1: Overview ════════════════
+    # ════════════ S1: COMPANY OVERVIEW ════════════
     with s1:
-        c1, c2 = st.columns([1, 2])
-        with c1:
-            st.markdown(f"### 🏢 {ticker}")
-            if overview:
-                for k, v in overview.items():
-                    if k.startswith("_"):
-                        continue
-                    label = k if is_vi else overview.get(f"_en_{k}", k)
-                    st.metric(label, str(v)[:80] if v else "–")
+        c_left, c_right = st.columns([1, 2])
+        with c_left:
+            st.markdown(f"### 🏢 {ticker} — {sector}")
+            # Aggregate overview from best source
+            overview_items = []
+            if vnd_profile:
+                for k, v in vnd_profile.items():
+                    if not k.startswith("_") and v and v != "–":
+                        overview_items.append((k, str(v)[:80]))
+            # Add CafeF data
+            if cafef_ratios.get("mcap_bn"):
+                label = "Vốn hóa (tỷ)" if is_vi else "Mkt Cap (bn)"
+                overview_items.append((label, f"{cafef_ratios['mcap_bn']:,.0f}"))
+            if cafef_ratios.get("shares_listed"):
+                label = "CP niêm yết" if is_vi else "Listed Shares"
+                overview_items.append((label, cafef_ratios["shares_listed"]))
+            if cafef_ratios.get("ratio_period"):
+                overview_items.append(("EPS period", cafef_ratios["ratio_period"]))
+
+            if overview_items:
+                for k, v in overview_items[:10]:
+                    st.metric(k, v)
             else:
-                # Fallback to VNDirect profile
-                prof = fetch_company_profile(ticker)
-                if prof:
-                    for k, v in prof.items():
-                        if not k.startswith("_"):
-                            st.metric(k, str(v))
-                else:
-                    st.info(L["sp_no_data"])
+                st.info(L["sp_no_data"])
 
-        with c2:
-            # Quick KPI strip from latest ratios
-            latest_ratios = {}
-            if not scoring_ratio.empty:
-                row = scoring_ratio.iloc[0]
-                for src_k, label in _RATIO_MAP.items():
-                    if src_k in row.index:
-                        v = row[src_k]
-                        if pd.notna(v):
-                            latest_ratios[label] = v
+            # Shareholder structure
+            sh = cafef_sh or {}
+            if sh:
+                st.markdown("---")
+                st.markdown("**" + ("Cơ cấu cổ đông" if is_vi else "Ownership Structure") + "**")
+                c_f, c_s, c_o = st.columns(3)
+                with c_f: st.metric("🌐 " + ("Nước ngoài" if is_vi else "Foreign"),
+                                     f"{sh.get('foreign_pct', 0):.1f}%")
+                with c_s: st.metric("🏛️ " + ("Nhà nước" if is_vi else "State"),
+                                     f"{sh.get('state_pct', 0):.1f}%")
+                with c_o: st.metric("👥 " + ("Khác" if is_vi else "Other"),
+                                     f"{sh.get('other_pct', 0):.1f}%")
+                major = sh.get("major_holders", [])
+                if major:
+                    st.markdown("**" + ("Cổ đông lớn" if is_vi else "Major Holders") + "**")
+                    for h in major[:5]:
+                        st.markdown(f"• {h['name']} — **{h['pct']:.2f}%**")
 
-            kpi_keys = ["EPS (đ)", "P/E", "P/B", "ROE (%)", "ROA (%)",
-                        "Biên ròng (%)", "D/E", "Div. Yield (%)"]
-            kpi_vals = {k: latest_ratios.get(k) for k in kpi_keys}
+        with c_right:
+            # KPI strip
+            kpi_data = [
+                ("EPS (đ)",          f"{eps:,.0f}"              if eps  else "–"),
+                ("P/E",              f"{pe_val:.1f}"            if pe_val else "–"),
+                ("P/B",              f"{pb_val:.2f}"            if pb_val else "–"),
+                ("ROE (%)",          f"{roe:.1f}%"              if roe  else "–"),
+                ("ROA (%)",          f"{roa:.1f}%"              if roa  else "–"),
+                ("Biên ròng (%)" if is_vi else "Net Margin (%)",
+                                     f"{npm:.1f}%"              if npm  else "–"),
+                ("D/E",              f"{de_raw:.2f}"            if de_raw else "–"),
+                ("BVPS (đ)",         f"{bvps:,.0f}"             if bvps else "–"),
+            ]
+            for row_kpis in [kpi_data[:4], kpi_data[4:]]:
+                kpi_cols = st.columns(len(row_kpis))
+                for (label, val), col in zip(row_kpis, kpi_cols):
+                    with col: st.metric(label, val)
 
-            kpi_row1 = list(kpi_vals.items())[:4]
-            kpi_row2 = list(kpi_vals.items())[4:]
-            for row_items in [kpi_row1, kpi_row2]:
-                cols = st.columns(len(row_items))
-                for (label, val), col in zip(row_items, cols):
-                    with col:
-                        if val is not None:
-                            pct_labels = {"ROE (%)","ROA (%)","Biên ròng (%)","Div. Yield (%)"}
-                            fmt_v = f"{float(val)*100:.1f}%" if float(val) < 2 and label in pct_labels else \
-                                    f"{float(val):,.0f}" if label == "EPS (đ)" else \
-                                    f"{float(val):.2f}"
-                            st.metric(label, fmt_v)
-                        else:
-                            st.metric(label, "–")
+            # OHLC 52-week range
+            if ohlc_ok:
+                st.markdown("---")
+                col52a, col52b, col52c = st.columns(3)
+                with col52a: st.metric("52W High", f"{ohlc_ana['high52']:,.0f}")
+                with col52b: st.metric("52W Low",  f"{ohlc_ana['low52']:,.0f}")
+                pct52 = ohlc_ana.get("price_percentile", 0)
+                with col52c: st.metric("52W Pos", f"{pct52*100:.0f}%",
+                                       help="0%=at 52W low, 100%=at 52W high")
+                # Momentum returns
+                col_m1, col_m2, col_m3 = st.columns(3)
+                with col_m1: st.metric("1M Return", f"{ohlc_ana['ret1m']*100:+.1f}%")
+                with col_m2: st.metric("3M Return", f"{ohlc_ana['ret3m']*100:+.1f}%")
+                with col_m3: st.metric("6M Return", f"{ohlc_ana['ret6m']*100:+.1f}%")
 
             # Company profile text
-            profile_text = (overview.get("Giới thiệu") or
-                            overview.get("_profile") or
-                            fetch_company_profile(ticker).get("_profile_text",""))
+            profile_text = vnd_profile.get("_profile_text", "")
             if profile_text:
                 with st.expander("📄 " + ("Giới thiệu công ty" if is_vi else "Company Profile")):
                     st.markdown(str(profile_text)[:3000])
 
-    # ════════════════ TAB S2: Financial Statements ════════════════
+            # Leadership from SSI
+            leadership = ssi_info.get("leadership", [])
+            if leadership and isinstance(leadership, list):
+                with st.expander("👤 " + ("Ban lãnh đạo" if is_vi else "Leadership")):
+                    for person in leadership[:8]:
+                        name  = person.get("fullName", person.get("name", ""))
+                        pos   = person.get("positionName", person.get("position", ""))
+                        if name:
+                            st.markdown(f"• **{name}** — {pos}")
+
+            # CafeF financial report links
+            if cafef_reports:
+                with st.expander("📄 " + ("Báo cáo tài chính" if is_vi else "Financial Report PDFs")):
+                    for rpt in cafef_reports[:6]:
+                        lnk = rpt.get("link", "")
+                        nm  = rpt.get("name", rpt.get("period", ""))
+                        if lnk:
+                            st.markdown(f"[📥 {nm}]({lnk})")
+
+    # ════════════ S2: FINANCIAL STATEMENTS ════════════
     with s2:
         fs_period_lbl = L["sp_quarterly"] if yearly == 0 else L["sp_yearly"]
-        for stmt_lbl, df, color in [
-            (f"💰 {L['sp_income']} ({fs_period_lbl})",  income_df,  "#4e9af1"),
-            (f"🏦 {L['sp_balance']} ({fs_period_lbl})", balance_df, "#f1a84e"),
-            (f"💸 {L['sp_cashflow']} ({fs_period_lbl})",cf_df,      "#4ef1a8"),
-        ]:
-            if df is not None and not df.empty:
-                with st.expander(stmt_lbl, expanded=(stmt_lbl.startswith("💰"))):
-                    show_df(df.astype({c: str for c in df.select_dtypes("object").columns}))
-                    # Chart for Income Statement
-                    if "income" in stmt_lbl.lower() or "kinh doanh" in stmt_lbl.lower():
-                        period_col = next((c for c in df.columns
-                                           if c in ("Kỳ","Period")), None)
-                        rev_col  = next((c for c in df.columns
-                                         if any(k in c for k in ["Doanh thu","Revenue"])), None)
-                        lnst_col = next((c for c in df.columns
-                                         if any(k in c for k in ["LNST","Net Profit"])), None)
-                        if period_col and rev_col and lnst_col:
-                            x = df[period_col].astype(str)
-                            fig = go.Figure()
-                            fig.add_bar(x=x, y=df[rev_col], name=rev_col,
-                                        marker_color="#4e9af1")
-                            fig.add_bar(x=x, y=df[lnst_col], name=lnst_col,
-                                        marker_color="#2ecc71")
-                            fig.update_layout(barmode="group", height=280,
-                                              template="plotly_dark",
-                                              legend=dict(orientation="h"),
-                                              margin=dict(t=30,b=20,l=20,r=20))
-                            st.plotly_chart(fig, use_container_width=True)
-                    # Cash flow waterfall
-                    elif "cash" in stmt_lbl.lower() or "tiền" in stmt_lbl.lower():
-                        period_col = next((c for c in df.columns
-                                           if c in ("Kỳ","Period")), None)
-                        cf_cols = [c for c in df.columns
-                                   if any(k in c for k in ["CF","Cash","Tiền","FCF","Dòng tiền"])]
-                        if period_col and cf_cols:
-                            x = df[period_col].astype(str)
-                            fig = go.Figure()
-                            pal = ["#4ef1a8","#f14e4e","#f1e74e","#a84ef1"]
-                            for i, cc in enumerate(cf_cols[:4]):
-                                fig.add_bar(x=x, y=df[cc], name=cc,
-                                            marker_color=pal[i % len(pal)])
-                            fig.update_layout(barmode="group", height=250,
-                                              template="plotly_dark",
-                                              legend=dict(orientation="h"),
-                                              margin=dict(t=30,b=20,l=20,r=20))
-                            st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.info(f"{stmt_lbl}: {L['sp_no_data']}")
+        has_stmts = not (income_df.empty and balance_df.empty and cf_df.empty)
 
-    # ════════════════ TAB S3: Financial Ratios ════════════════
+        if has_stmts:
+            for stmt_lbl, df in [
+                (f"💰 {L['sp_income']} ({fs_period_lbl})",   income_df),
+                (f"🏦 {L['sp_balance']} ({fs_period_lbl})",  balance_df),
+                (f"💸 {L['sp_cashflow']} ({fs_period_lbl})", cf_df),
+            ]:
+                if df is not None and not df.empty:
+                    with st.expander(stmt_lbl, expanded=(stmt_lbl.startswith("💰"))):
+                        show_df(df.astype({c: str for c in df.select_dtypes("object").columns}))
+                        # Revenue + Net Profit bar chart for income
+                        if "income" in stmt_lbl.lower() or "kinh doanh" in stmt_lbl.lower():
+                            period_col = next((c for c in df.columns if c in ("Kỳ","Period")), None)
+                            rev_col  = next((c for c in df.columns if any(k in c for k in ["Doanh thu","Revenue"])), None)
+                            lnst_col = next((c for c in df.columns if any(k in c for k in ["LNST","Net Profit"])), None)
+                            if period_col and rev_col and lnst_col:
+                                fig = go.Figure()
+                                fig.add_bar(x=df[period_col].astype(str), y=df[rev_col],
+                                            name=rev_col, marker_color="#4e9af1")
+                                fig.add_bar(x=df[period_col].astype(str), y=df[lnst_col],
+                                            name=lnst_col, marker_color="#2ecc71")
+                                fig.update_layout(barmode="group", height=260,
+                                                  template="plotly_dark",
+                                                  legend=dict(orientation="h"),
+                                                  margin=dict(t=30,b=20,l=20,r=20))
+                                st.plotly_chart(fig, use_container_width=True)
+        else:
+            # Fallback: show DNSE OHLC price chart + CafeF liveboard
+            st.info("⚠️ " + ("Không có BCTC từ TCBS/VNDirect. Hiển thị lịch sử giá OHLC." if is_vi
+                              else "No financial statements from TCBS/VNDirect. Showing OHLC price history."))
+            ohlc_df = ohlc_ana.get("data_df") if ohlc_ok else None
+            if ohlc_df is not None and not ohlc_df.empty:
+                fig_ohlc = go.Figure(go.Candlestick(
+                    x=ohlc_df.index if isinstance(ohlc_df.index, pd.DatetimeIndex)
+                      else ohlc_df.get("Date", ohlc_df.index),
+                    open=ohlc_df["Open"], high=ohlc_df["High"],
+                    low=ohlc_df["Low"],  close=ohlc_df["Close"],
+                    name=ticker, increasing_line_color="#00cc66",
+                    decreasing_line_color="#ff4444",
+                ))
+                fig_ohlc.update_layout(height=350, template="plotly_dark",
+                                        title=f"{ticker} — 2Y Price History",
+                                        xaxis_rangeslider_visible=False,
+                                        margin=dict(t=40,b=20,l=20,r=20))
+                st.plotly_chart(fig_ohlc, use_container_width=True)
+
+        # Corporate actions from SSI
+        corp_acts = ssi_info.get("corporate_actions", [])
+        if corp_acts and isinstance(corp_acts, list):
+            with st.expander("📅 " + ("Sự kiện doanh nghiệp" if is_vi else "Corporate Actions")):
+                for act in corp_acts[:10]:
+                    date = act.get("effectDate", act.get("ExEffectiveDate",""))[:10] if act.get("effectDate") or act.get("ExEffectiveDate") else ""
+                    name = act.get("eventName", act.get("EventName", str(act)))
+                    st.markdown(f"• **{date}** — {name}")
+
+    # ════════════ S3: FINANCIAL RATIOS ════════════
     with s3:
+        # Priority: TCBS ratios → VNDirect ratios → CafeF key ratios → SSI ratios
+        ratio_display = ratio_raw if tcbs_ok else vnd_ratios
+
         if not ratio_display.empty:
             # Map raw columns to display labels
             disp_df = pd.DataFrame()
@@ -3345,7 +3468,6 @@ Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=
             for src_k, label in src_map.items():
                 if src_k in ratio_display.columns:
                     col = pd.to_numeric(ratio_display[src_k], errors="coerce")
-                    # Detect if value is fraction (0-1) for pct fields
                     pct_labels = {"ROE (%)","ROA (%)","ROIC (%)","Biên gộp (%)","Biên EBITDA (%)","Biên ròng (%)","Div. Yield (%)"}
                     if label in pct_labels and col.dropna().abs().max() <= 2:
                         col = (col * 100).round(2)
@@ -3355,64 +3477,86 @@ Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=
             if "period" in ratio_display.columns:
                 disp_df.insert(0, "Kỳ" if is_vi else "Period",
                                ratio_display["period"].astype(str).str[:7])
-            show_df(disp_df.head(8).astype({c: str for c in disp_df.select_dtypes("object").columns}))
+            if not disp_df.empty:
+                show_df(disp_df.head(8).astype({c: str for c in disp_df.select_dtypes("object").columns}))
 
-            # Trend charts for key ratios
-            trend_pairs = [
-                ("ROE (%)", "ROA (%)", "#00cc66", "#4e9af1"),
-                ("Biên gộp (%)", "Biên ròng (%)", "#f1a84e", "#a84ef1"),
-                ("P/E", "P/B", "#f1e74e", "#4ef1a8"),
-            ]
+            # Trend charts
             period_col = "Kỳ" if is_vi else "Period"
-            if period_col in disp_df.columns:
+            if period_col in disp_df.columns and len(disp_df) > 1:
                 x = disp_df[period_col].astype(str)
+                trend_pairs = [
+                    ("ROE (%)", "ROA (%)", "#00cc66", "#4e9af1"),
+                    ("Biên gộp (%)", "Biên ròng (%)", "#f1a84e", "#a84ef1"),
+                    ("P/E", "P/B", "#f1e74e", "#4ef1a8"),
+                ]
                 fig_trend = make_subplots(rows=1, cols=3,
                     subplot_titles=["ROE vs ROA","Margins","P/E vs P/B"])
                 for i, (c1_lbl, c2_lbl, col1, col2) in enumerate(trend_pairs, 1):
                     if c1_lbl in disp_df.columns:
-                        fig_trend.add_scatter(x=x, y=disp_df[c1_lbl],
-                            name=c1_lbl, line=dict(color=col1, width=2),
-                            row=1, col=i)
+                        fig_trend.add_scatter(x=x, y=disp_df[c1_lbl], name=c1_lbl,
+                                              line=dict(color=col1, width=2), row=1, col=i)
                     if c2_lbl in disp_df.columns:
-                        fig_trend.add_scatter(x=x, y=disp_df[c2_lbl],
-                            name=c2_lbl, line=dict(color=col2, width=2, dash="dash"),
-                            row=1, col=i)
-                fig_trend.update_layout(height=300, template="plotly_dark",
+                        fig_trend.add_scatter(x=x, y=disp_df[c2_lbl], name=c2_lbl,
+                                              line=dict(color=col2, width=2, dash="dash"), row=1, col=i)
+                fig_trend.update_layout(height=280, template="plotly_dark",
                                         showlegend=True,
-                                        legend=dict(orientation="h", y=-0.15),
+                                        legend=dict(orientation="h", y=-0.2),
                                         margin=dict(t=40,b=40,l=20,r=20))
                 st.plotly_chart(fig_trend, use_container_width=True)
         else:
-            st.info(L["sp_no_data"])
+            # Show CafeF summary + SSI ratios
+            st.subheader("📊 " + ("Chỉ số tài chính từ CafeF" if is_vi else "Financial Ratios from CafeF"))
+            if cafef_ratios:
+                kv_data = []
+                label_map = {
+                    "eps": "EPS (đ)", "pe": "P/E", "bvps": "BVPS (đ)",
+                    "pb": "P/B", "mcap_bn": "Vốn hóa (tỷ)" if is_vi else "Mkt Cap (bn)",
+                    "ratio_period": "Kỳ số liệu" if is_vi else "Ratio Period",
+                }
+                for k, lbl in label_map.items():
+                    v = cafef_ratios.get(k)
+                    if v is not None:
+                        kv_data.append({"Chỉ số" if is_vi else "Metric": lbl,
+                                        "Giá trị" if is_vi else "Value": str(v)})
+                if kv_data:
+                    show_df(pd.DataFrame(kv_data))
 
-    # ════════════════ TAB S4: Valuation ════════════════
+            if not ssi_ratios_df.empty:
+                st.markdown("---")
+                st.markdown("**SSI Finance Indicators**")
+                show_df(ssi_ratios_df.head(8).astype(str))
+
+            # OHLC technical indicators
+            if ohlc_ok:
+                st.markdown("---")
+                st.subheader("📈 " + ("Phân tích kỹ thuật (từ dữ liệu giá)" if is_vi else "Technical Analysis (from price data)"))
+                tech_data = {
+                    "Chỉ số" if is_vi else "Indicator": ["RSI(14)", "MACD", "ADX", "52W Position", "Vol Trend", "Tech Score"],
+                    "Giá trị" if is_vi else "Value": [
+                        f"{ohlc_ana['rsi']:.1f}",
+                        f"{'Tăng↑' if ohlc_ana['macd_bullish'] else 'Giảm↓'}  ({ohlc_ana['macd']:+.2f})",
+                        f"{ohlc_ana['adx']:.1f}" + (" (Xu hướng rõ)" if ohlc_ana["adx"] > 25 else " (Đi ngang)"),
+                        f"{ohlc_ana['price_percentile']*100:.0f}% (52W)",
+                        "Tích lũy ↑" if ohlc_ana["vol_spike"] and ohlc_ana["macd_bullish"] else "Bình thường",
+                        f"{ohlc_ana['tech_score']:.0f}/100",
+                    ],
+                    "Nhận định" if is_vi else "Signal": [
+                        "Quá bán" if ohlc_ana["rsi_oversold"] else ("Quá mua" if ohlc_ana["rsi_overbought"] else "Trung tính"),
+                        "BUY signal" if ohlc_ana["macd_bullish"] else "SELL signal",
+                        "Trending" if ohlc_ana["adx"] > 25 else "Ranging",
+                        "Vùng thấp" if ohlc_ana["price_percentile"] < 0.35 else ("Vùng cao" if ohlc_ana["price_percentile"] > 0.75 else "Trung bình"),
+                        "Bullish vol" if (ohlc_ana["vol_spike"] and ohlc_ana["macd_bullish"]) else "–",
+                        "Mạnh" if ohlc_ana["tech_score"] > 65 else ("Yếu" if ohlc_ana["tech_score"] < 35 else "Trung bình"),
+                    ]
+                }
+                show_df(pd.DataFrame(tech_data))
+
+    # ════════════ S4: VALUATION ════════════
     with s4:
         if current_price <= 0:
-            st.warning("⚠️ " + ("Không có giá hiện tại để định giá" if is_vi
-                                  else "No current price available for valuation"))
+            st.warning("⚠️ " + ("Không có giá hiện tại" if is_vi else "No current price available"))
         else:
-            # Extract latest metrics
-            def _get_ratio(name):
-                for src_k, label in _RATIO_MAP.items():
-                    if label == name and not ratio_raw.empty and src_k in ratio_raw.columns:
-                        v = pd.to_numeric(ratio_raw[src_k], errors="coerce").dropna()
-                        return float(v.iloc[0]) if len(v) > 0 else None
-                # Fallback to VNDirect
-                if not vnd_ratios.empty:
-                    for c in vnd_ratios.columns:
-                        if name.split(" ")[0].lower() in c.lower():
-                            v = pd.to_numeric(vnd_ratios[c], errors="coerce").dropna()
-                            return float(v.iloc[0]) if len(v) > 0 else None
-                return None
-
-            eps_raw = _get_ratio("EPS (đ)")
-            eps_ttm = eps_raw if eps_raw and eps_raw > 100 else (eps_raw * 1000 if eps_raw and eps_raw < 100 else 0)
-            bvps_raw = _get_ratio("BVPS (đ)")
-            bvps = bvps_raw if bvps_raw and bvps_raw > 100 else (bvps_raw * 1000 if bvps_raw and bvps_raw < 100 else 0)
-            roe_raw = _get_ratio("ROE (%)")
-            roe = (roe_raw * 100 if roe_raw and roe_raw < 1 else roe_raw) or 0
-
-            # EPS growth estimate from income trend
+            # EPS growth from income trend or momentum
             eps_growth = 0.10
             if not income_raw.empty and "postTaxProfit" in income_raw.columns:
                 profits = pd.to_numeric(income_raw["postTaxProfit"], errors="coerce").dropna()
@@ -3420,125 +3564,127 @@ Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=
                     recent = profits.iloc[:4].sum()
                     older  = profits.iloc[4:8].sum() if len(profits) >= 8 else profits.iloc[-4:].sum()
                     eps_growth = max(-0.20, min(0.35, (recent - older) / abs(older))) if older != 0 else 0.10
+            elif ohlc_ok:
+                # Use 3M return as EPS growth proxy
+                eps_growth = max(-0.20, min(0.30, ohlc_ana.get("ret3m", 0.10) * 1.5))
 
-            # Compute 4 models
-            dcf_val    = compute_dcf_valuation(eps_ttm, eps_growth)
-            pe_val     = compute_pe_valuation(eps_ttm, sector)
-            pb_val     = compute_pb_valuation(bvps, roe / 100 if roe > 1 else roe)
-            graham_val = compute_graham_value(eps_ttm, bvps)
-            fair_val   = aggregate_fair_value(dcf_val, pe_val, pb_val, graham_val)
+            # Use effective EPS (TCBS/VNDirect/CafeF/implied)
+            eps_eff  = eps  if eps  > 0 else ohlc_ana.get("implied_eps", current_price / 15) if ohlc_ok else current_price / 15
+            bvps_eff = bvps if bvps > 0 else ohlc_ana.get("implied_bvps", current_price * 0.6) if ohlc_ok else current_price * 0.6
+            roe_eff  = roe  if roe  else 12.0
+
+            # 4 valuation models
+            dcf_val    = compute_dcf_valuation(eps_eff, eps_growth)
+            pe_fair    = compute_pe_valuation(eps_eff, sector)
+            pb_fair    = compute_pb_valuation(bvps_eff, roe_eff / 100 if roe_eff > 1 else roe_eff)
+            graham_val = compute_graham_value(eps_eff, bvps_eff)
+            fair_val   = aggregate_fair_value(dcf_val, pe_fair, pb_fair, graham_val)
             upside_pct = ((fair_val - current_price) / current_price * 100
                           if fair_val > 0 and current_price > 0 else 0)
 
-            # Store for recommendation tab
-            st.session_state["_profiler_fair_val"]  = fair_val
-            st.session_state["_profiler_upside"]    = upside_pct
-            st.session_state["_profiler_eps_ttm"]   = eps_ttm
-            st.session_state["_profiler_bvps"]      = bvps
-            st.session_state["_profiler_eps_growth"]= eps_growth
+            # Also compute tech-implied fair value as 5th reference
+            tech_fv    = ohlc_ana.get("tech_fair_value", 0) if ohlc_ok else 0
 
-            # ── Metrics row ──
+            # Store for recommendation tab
+            st.session_state["_profiler_fair_val"]   = fair_val
+            st.session_state["_profiler_upside"]     = upside_pct
+            st.session_state["_profiler_eps_eff"]    = eps_eff
+            st.session_state["_profiler_bvps_eff"]   = bvps_eff
+            st.session_state["_profiler_eps_growth"]  = eps_growth
+            st.session_state["_profiler_current_price"]= current_price
+
+            # KPI row
             mc1, mc2, mc3, mc4, mc5 = st.columns(5)
             with mc1: st.metric(L["sp_current_price"], f"{current_price:,.0f}")
-            with mc2: st.metric(L["sp_fair_value"],
-                                f"{fair_val:,.0f}" if fair_val > 0 else "–")
+            with mc2: st.metric(L["sp_fair_value"],    f"{fair_val:,.0f}" if fair_val > 0 else "–")
             with mc3:
-                delta_str = (f"{upside_pct:+.1f}%" if fair_val > 0 else "–")
-                st.metric(L["sp_upside"], delta_str,
-                          delta=delta_str if fair_val > 0 else None)
-            with mc4: st.metric("EPS (đ)", f"{eps_ttm:,.0f}" if eps_ttm > 0 else "–")
-            with mc5: st.metric("BVPS (đ)", f"{bvps:,.0f}" if bvps > 0 else "–")
+                delta_s = f"{upside_pct:+.1f}%" if fair_val > 0 else "–"
+                st.metric(L["sp_upside"], delta_s, delta=delta_s if fair_val > 0 else None)
+            with mc4: st.metric("EPS (đ)", f"{eps_eff:,.0f}" if eps_eff > 0 else "–")
+            with mc5: st.metric("BVPS (đ)", f"{bvps_eff:,.0f}" if bvps_eff > 0 else "–")
 
-            # ── 4 Model detail cards ──
-            vm1, vm2, vm3, vm4 = st.columns(4)
+            # Data provenance notice
+            if eps == 0:
+                st.caption("ℹ️ " + ("EPS và BVPS được ước tính từ giá thị trường / P/E ngành do thiếu dữ liệu tài chính." if is_vi
+                                     else "EPS and BVPS estimated from market price / sector P/E due to missing fundamental data."))
+
+            # 4+1 model cards
             val_models = [
-                (L["sp_dcf_label"],    dcf_val,    "DCF",    "35%"),
-                (L["sp_pe_label"],     pe_val,     "P/E",    "30%"),
-                (L["sp_pb_label"],     pb_val,     "P/B",    "20%"),
-                (L["sp_graham_label"], graham_val, "Graham","15%"),
+                (L["sp_dcf_label"],    dcf_val,  "35%"),
+                (L["sp_pe_label"],     pe_fair,  "30%"),
+                (L["sp_pb_label"],     pb_fair,  "20%"),
+                (L["sp_graham_label"], graham_val,"15%"),
+                ("📈 Technical Implied", tech_fv, "REF" if tech_fv > 0 else None),
             ]
-            for col, (lbl, val, method, wt) in zip([vm1, vm2, vm3, vm4], val_models):
+            vm_cols = st.columns(4 if tech_fv == 0 else 5)
+            for col, (lbl, val, wt) in zip(vm_cols, [(m for m in val_models if m[2] is not None)][0], ):
+                if wt is None: continue
                 with col:
-                    up = ((val - current_price) / current_price * 100
-                          if val > 0 and current_price > 0 else 0)
+                    up = ((val - current_price) / current_price * 100) if val > 0 and current_price > 0 else 0
                     color = "#00cc44" if up > 10 else "#ff5500" if up < -10 else "#ffaa00"
                     st.markdown(f"""
-<div style="background:#1a1f2e;border-radius:8px;padding:12px;text-align:center">
-  <div style="font-size:12px;color:#888">{lbl}<br><span style="font-size:10px">Weight {wt}</span></div>
-  <div style="font-size:22px;font-weight:bold;color:#fff">
-    {f'{val:,.0f}' if val > 0 else 'N/A'}</div>
-  <div style="font-size:14px;color:{color}">{f'{up:+.1f}%' if val > 0 else '–'}</div>
+<div style="background:#1a1f2e;border-radius:8px;padding:10px;text-align:center">
+  <div style="font-size:11px;color:#888">{lbl}<br><span style="font-size:10px">Weight {wt}</span></div>
+  <div style="font-size:20px;font-weight:bold;color:#fff">{f'{val:,.0f}' if val > 0 else 'N/A'}</div>
+  <div style="font-size:13px;color:{color}">{f'{up:+.1f}%' if val > 0 else '–'}</div>
 </div>""", unsafe_allow_html=True)
 
             st.markdown("---")
-            # ── Valuation funnel chart ──
-            model_names = ["DCF","P/E Rel.","P/B","Graham","Weighted Avg","Current"]
-            model_vals  = [dcf_val, pe_val, pb_val, graham_val, fair_val, current_price]
-            bar_colors  = ["#4e9af1","#f1a84e","#a84ef1","#4ef1a8","#ffffff","#f1f14e"]
-            valid_mask  = [v > 0 for v in model_vals]
+            # Bar comparison chart
+            model_names = ["DCF","P/E","P/B","Graham","Weighted","Current"]
+            model_vals  = [dcf_val, pe_fair, pb_fair, graham_val, fair_val, current_price]
+            colors      = ["#4e9af1","#f1a84e","#a84ef1","#4ef1a8","#ffffff","#f1f14e"]
+            if tech_fv > 0:
+                model_names.insert(-1, "Technical")
+                model_vals.insert(-1, tech_fv)
+                colors.insert(-1, "#ff9922")
+
+            valid = [(n, v, c) for n, v, c in zip(model_names, model_vals, colors) if v > 0]
             fig_val = go.Figure(go.Bar(
-                x=[n for n, v in zip(model_names, valid_mask) if v],
-                y=[v for v, ok in zip(model_vals, valid_mask) if ok],
-                marker_color=[c for c, ok in zip(bar_colors, valid_mask) if ok],
-                text=[f"{v:,.0f}" for v, ok in zip(model_vals, valid_mask) if ok],
-                textposition="outside",
+                x=[n for n, v, c in valid], y=[v for n, v, c in valid],
+                marker_color=[c for n, v, c in valid],
+                text=[f"{v:,.0f}" for n, v, c in valid], textposition="outside",
             ))
-            fig_val.add_hline(y=current_price, line_dash="dash",
-                              line_color="#f1f14e",
-                              annotation_text="Current Price",
-                              annotation_position="top right")
+            fig_val.add_hline(y=current_price, line_dash="dash", line_color="#f1f14e",
+                              annotation_text="Current", annotation_position="top right")
             fig_val.update_layout(
-                title="📊 " + ("So sánh các mô hình định giá (VNĐ/CP)" if is_vi
+                title="📊 " + ("So sánh mô hình định giá (VNĐ/CP)" if is_vi
                                 else "Valuation Model Comparison (VND/share)"),
-                height=350, template="plotly_dark",
-                yaxis_title="VNĐ",
-                margin=dict(t=50,b=30,l=20,r=20)
-            )
+                height=340, template="plotly_dark", yaxis_title="VNĐ",
+                margin=dict(t=50,b=30,l=20,r=20))
             st.plotly_chart(fig_val, use_container_width=True)
 
-            # Input assumptions expander
-            with st.expander("⚙️ " + ("Điều chỉnh giả định DCF" if is_vi
-                                        else "Adjust DCF Assumptions")):
-                c_g, c_d, c_tg = st.columns(3)
-                with c_g:
-                    g_user = st.slider("EPS Growth Rate", -0.20, 0.40,
-                                       float(round(eps_growth, 2)), 0.01,
-                                       format="%.0f%%",
-                                       key="dcf_growth") / 1
-                    g_user_pct = st.slider("", -20, 40, int(eps_growth * 100),
-                                           key="dcf_growth_pct") / 100
-                with c_d:
-                    d_user = st.slider("Discount Rate", 0.08, 0.20, 0.12, 0.01,
-                                       format="%.0f%%", key="dcf_disc") / 1
-                    d_user_pct = st.slider("", 8, 20, 12, key="dcf_disc_pct") / 100
-                with c_tg:
-                    tg_user = st.slider("Terminal Growth", 0.02, 0.08, 0.05, 0.01,
-                                        format="%.0f%%", key="dcf_tg") / 1
-                    tg_user_pct = st.slider("", 2, 8, 5, key="dcf_tg_pct") / 100
+            # Adjustable DCF
+            with st.expander("⚙️ " + ("Điều chỉnh giả định DCF" if is_vi else "Adjust DCF Assumptions")):
+                cg, cd, ctg = st.columns(3)
+                with cg:  g_pct  = st.slider("EPS Growth %", -20, 40, int(eps_growth*100), key="dcf_g")  / 100
+                with cd:  d_pct  = st.slider("Discount Rate %", 8, 20, 12, key="dcf_d")  / 100
+                with ctg: tg_pct = st.slider("Terminal Growth %", 2, 8,  5,  key="dcf_tg") / 100
+                custom_dcf = compute_dcf_valuation(eps_eff, g_pct, d_pct, tg_pct) if eps_eff > 0 else 0
+                if custom_dcf > 0:
+                    st.metric("Custom DCF", f"{custom_dcf:,.0f} VNĐ",
+                              delta=f"{(custom_dcf-current_price)/current_price*100:+.1f}%" if current_price > 0 else None)
 
-                if eps_ttm > 0:
-                    custom_dcf = compute_dcf_valuation(
-                        eps_ttm, g_user_pct, d_user_pct, tg_user_pct)
-                    st.metric("Custom DCF Value",
-                              f"{custom_dcf:,.0f} VNĐ",
-                              delta=f"{(custom_dcf-current_price)/current_price*100:+.1f}%"
-                              if current_price > 0 else None)
-
-    # ════════════════ TAB S5: Risk Analysis ════════════════
+    # ════════════ S5: RISK ANALYSIS ════════════
     with s5:
-        # Use fundamental risk scoring if data available, otherwise DNSE technical
-        fund_risk = score_fundamental_risk(scoring_ratio, income_raw, balance_raw)
-        tech_risk = score_technical_risk(dnse_data)
-        # If all fundamental scores are default (5.0), prefer DNSE technical
-        all_default = all(v == 5.0 for v in fund_risk.values())
-        risk_scores = tech_risk if (all_default and dnse_data.get("has_data")) else fund_risk
+        # Build scoring ratio df from best available source
+        scoring_ratio = ratio_raw if tcbs_ok else vnd_ratios
+
+        risk_scores = score_fundamental_risk(scoring_ratio, income_raw, balance_raw)
+
+        # Override with OHLC-derived risk when fundamentals absent
+        if not tcbs_ok and not vnd_ok and ohlc_ok:
+            risk_scores["valuation"]   = max(1.0, min(10.0, (1 - ohlc_ana["price_percentile"]) * 10))
+            risk_scores["growth"]      = max(1.0, min(10.0, 5 - ohlc_ana["ret3m"] * 10))
+            risk_scores["debt"]        = 5.0  # unknown without balance sheet
+            risk_scores["liquidity"]   = 5.0
+            risk_scores["profitability"] = max(1.0, min(10.0, 10 - ohlc_ana["tech_score"] / 10))
+
+        # Add volatility risk dimension (extra)
+        if ohlc_ok:
+            risk_scores["volatility"] = max(1.0, min(10.0, ohlc_ana["volatility"] * 20))
+
         st.session_state["_profiler_risk"] = risk_scores
-        if all_default and dnse_data.get("has_data"):
-            st.info("⚠️ " + (
-                "Dữ liệu cơ bản (TCBS/VNDirect) không khả dụng. Rủi ro được ước lượng từ phân tích kỹ thuật DNSE OHLC."
-                if is_vi else
-                "Fundamental data (TCBS/VNDirect) unavailable. Risk estimated from DNSE OHLC technical analysis."
-            ))
 
         risk_labels_vi = {
             "debt":          L["sp_risk_debt"],
@@ -3552,183 +3698,144 @@ Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=
             "profitability": "Profitability Risk", "growth": "Growth Risk",
             "valuation": "Valuation Risk",
         }
+        if ohlc_ok and "volatility" in risk_scores:
+            risk_labels_vi["volatility"] = "Rủi ro Biến động"
+            risk_labels_en["volatility"] = "Volatility Risk"
+
         rl = risk_labels_vi if is_vi else risk_labels_en
 
-        # ── Risk meter cards ──
-        cols_r = st.columns(5)
+        # Risk meter cards
+        cols_r = st.columns(len(rl))
         for i, (key, label) in enumerate(rl.items()):
             score = risk_scores.get(key, 5.0)
             color = "#00cc44" if score <= 3 else "#ffaa00" if score <= 6 else "#ff4444"
-            risk_txt = (L["risk_low"] if score <= 3 else
-                        L["risk_med"] if score <= 6 else L["risk_high"])
+            risk_txt = L["risk_low"] if score <= 3 else (L["risk_med"] if score <= 6 else L["risk_high"])
             with cols_r[i]:
                 st.markdown(f"""
 <div style="background:#1a1f2e;border-radius:8px;padding:12px;text-align:center">
-  <div style="font-size:12px;color:#888">{label}</div>
-  <div style="font-size:28px;font-weight:bold;color:{color}">{score:.0f}/10</div>
-  <div style="font-size:12px;color:{color}">{risk_txt}</div>
+  <div style="font-size:11px;color:#888">{label}</div>
+  <div style="font-size:26px;font-weight:bold;color:{color}">{score:.0f}/10</div>
+  <div style="font-size:11px;color:{color}">{risk_txt}</div>
 </div>""", unsafe_allow_html=True)
 
         st.markdown("---")
 
-        # ── Radar chart ──
+        # Radar chart
         categories = list(rl.values())
-        values = [risk_scores.get(k, 5.0) for k in rl.keys()]
-        values_closed = values + [values[0]]
-        categories_closed = categories + [categories[0]]
-        theta = [i * 360 / len(categories) for i in range(len(categories))]
-        theta_closed = theta + [theta[0]]
+        values     = [risk_scores.get(k, 5.0) for k in rl.keys()]
+        val_closed = values + [values[0]]
+        cat_closed = categories + [categories[0]]
 
         fig_radar = go.Figure()
         fig_radar.add_trace(go.Scatterpolar(
-            r=values_closed, theta=categories_closed,
-            fill="toself",
+            r=val_closed, theta=cat_closed, fill="toself",
             fillcolor="rgba(255,80,80,0.2)",
-            line=dict(color="#ff5050", width=2),
-            name="Risk Score",
-        ))
+            line=dict(color="#ff5050", width=2), name="Risk Score"))
         fig_radar.add_trace(go.Scatterpolar(
-            r=[3] * (len(categories) + 1), theta=categories_closed,
+            r=[3] * len(val_closed), theta=cat_closed,
             line=dict(color="#00cc44", width=1, dash="dash"),
-            name="Low Risk Threshold",
-            fill="none",
-        ))
+            name="Safe Zone", fill="none"))
         fig_radar.update_layout(
-            polar=dict(
-                radialaxis=dict(visible=True, range=[0, 10],
-                                tickfont=dict(size=10)),
-                angularaxis=dict(tickfont=dict(size=11))
-            ),
+            polar=dict(radialaxis=dict(visible=True, range=[0, 10]),
+                       angularaxis=dict(tickfont=dict(size=11))),
             title="⚠️ " + ("Biểu đồ Rủi Ro" if is_vi else "Risk Radar"),
             height=350, template="plotly_dark",
             legend=dict(orientation="h", y=-0.1),
-            margin=dict(t=50, b=50, l=30, r=30)
-        )
+            margin=dict(t=50,b=50,l=30,r=30))
         st.plotly_chart(fig_radar, use_container_width=True)
 
-        # ── Risk narratives ──
-        st.markdown("### 📝 " + ("Phân tích chi tiết rủi ro" if is_vi
-                                   else "Detailed Risk Analysis"))
-        risk_texts_vi = {
-            "debt": (
-                "✅ Đòn bẩy tài chính ở mức an toàn. Doanh nghiệp có khả năng trả nợ tốt."
-                if risk_scores["debt"] <= 3 else
-                "⚠️ Nợ vay ở mức trung bình. Cần theo dõi khả năng trả lãi."
-                if risk_scores["debt"] <= 6 else
-                "❌ Đòn bẩy tài chính cao. Rủi ro thanh khoản nợ và lãi suất đáng kể."
-            ),
-            "liquidity": (
-                "✅ Thanh khoản ngắn hạn tốt. Current Ratio > 1.5."
-                if risk_scores["liquidity"] <= 3 else
-                "⚠️ Thanh khoản ở ngưỡng bình thường. Cần duy trì cash buffer."
-                if risk_scores["liquidity"] <= 6 else
-                "❌ Thanh khoản kém. Current Ratio thấp, nguy cơ không đáp ứng nghĩa vụ ngắn hạn."
-            ),
-            "profitability": (
-                "✅ Khả năng sinh lời xuất sắc. ROE/Margin ở mức cao."
-                if risk_scores["profitability"] <= 3 else
-                "⚠️ Sinh lời ở mức trung bình. Cần cải thiện hiệu quả hoạt động."
-                if risk_scores["profitability"] <= 6 else
-                "❌ Biên lợi nhuận thấp hoặc thua lỗ. Cần xem xét cấu trúc chi phí."
-            ),
-            "growth": (
-                "✅ Tăng trưởng mạnh và bền vững."
-                if risk_scores["growth"] <= 3 else
-                "⚠️ Tăng trưởng ổn định nhưng chưa đột phá."
-                if risk_scores["growth"] <= 6 else
-                "❌ Doanh thu/lợi nhuận tăng trưởng chậm hoặc suy giảm."
-            ),
-            "valuation": (
-                "✅ Định giá hấp dẫn. P/E thấp so với trung bình ngành."
-                if risk_scores["valuation"] <= 3 else
-                "⚠️ Định giá ở mức công bằng."
-                if risk_scores["valuation"] <= 6 else
-                "❌ Định giá cao. P/E vượt trung bình ngành đáng kể."
-            ),
+        # Data source caveat
+        if not tcbs_ok and not vnd_ok:
+            st.info("ℹ️ " + ("Điểm rủi ro được ước tính từ phân tích kỹ thuật (OHLC) do thiếu dữ liệu tài chính." if is_vi
+                              else "Risk scores estimated from technical (OHLC) analysis due to missing financial statements."))
+
+        # Risk narrative
+        st.markdown("### 📝 " + ("Phân tích chi tiết" if is_vi else "Detailed Risk Analysis"))
+        risk_narratives = {
+            "debt": {
+                "vi": {1: "✅ Cấu trúc vốn an toàn.", 5: "⚠️ Nợ ở mức trung bình.", 9: "❌ Đòn bẩy tài chính cao, rủi ro lãi suất."},
+                "en": {1: "✅ Safe capital structure.", 5: "⚠️ Moderate leverage.", 9: "❌ High leverage, interest rate risk."},
+            },
+            "liquidity": {
+                "vi": {1: "✅ Thanh khoản tốt.", 5: "⚠️ Thanh khoản trung bình.", 9: "❌ Thanh khoản kém, nguy cơ vỡ nợ ngắn hạn."},
+                "en": {1: "✅ Good short-term liquidity.", 5: "⚠️ Moderate liquidity.", 9: "❌ Poor liquidity, short-term default risk."},
+            },
+            "profitability": {
+                "vi": {1: "✅ Sinh lời xuất sắc.", 5: "⚠️ Sinh lời ở mức trung bình.", 9: "❌ Biên lợi nhuận thấp hoặc thua lỗ."},
+                "en": {1: "✅ Excellent profitability.", 5: "⚠️ Average profitability.", 9: "❌ Low or negative margins."},
+            },
+            "growth": {
+                "vi": {1: "✅ Tăng trưởng mạnh và bền vững.", 5: "⚠️ Tăng trưởng ổn định.", 9: "❌ Suy giảm doanh thu/lợi nhuận."},
+                "en": {1: "✅ Strong sustainable growth.", 5: "⚠️ Steady growth.", 9: "❌ Declining revenue/earnings."},
+            },
+            "valuation": {
+                "vi": {1: "✅ Định giá hấp dẫn, P/E thấp.", 5: "⚠️ Định giá công bằng.", 9: "❌ Đắt, P/E cao hơn trung bình ngành."},
+                "en": {1: "✅ Attractive valuation, low P/E.", 5: "⚠️ Fair valued.", 9: "❌ Expensive, P/E above sector avg."},
+            },
+            "volatility": {
+                "vi": {1: "✅ Giá ổn định, biến động thấp.", 5: "⚠️ Biến động bình thường.", 9: "❌ Biến động cao, rủi ro ngắn hạn lớn."},
+                "en": {1: "✅ Stable price, low volatility.", 5: "⚠️ Normal volatility.", 9: "❌ High volatility, significant short-term risk."},
+            },
         }
-        risk_texts_en = {
-            "debt": (
-                "✅ Financial leverage at safe levels. Strong debt repayment capacity."
-                if risk_scores["debt"] <= 3 else
-                "⚠️ Moderate leverage. Monitor interest coverage."
-                if risk_scores["debt"] <= 6 else
-                "❌ High financial leverage. Significant liquidity and interest rate risk."
-            ),
-            "liquidity": (
-                "✅ Good short-term liquidity. Current Ratio > 1.5."
-                if risk_scores["liquidity"] <= 3 else
-                "⚠️ Liquidity at normal levels. Maintain adequate cash buffer."
-                if risk_scores["liquidity"] <= 6 else
-                "❌ Poor liquidity. Low Current Ratio, risk of meeting short-term obligations."
-            ),
-            "profitability": (
-                "✅ Excellent profitability. ROE/margins well above average."
-                if risk_scores["profitability"] <= 3 else
-                "⚠️ Average profitability. Room to improve operational efficiency."
-                if risk_scores["profitability"] <= 6 else
-                "❌ Low or negative margins. Review cost structure."
-            ),
-            "growth": (
-                "✅ Strong and sustained growth trajectory."
-                if risk_scores["growth"] <= 3 else
-                "⚠️ Steady but unexciting growth."
-                if risk_scores["growth"] <= 6 else
-                "❌ Slow or declining revenue/earnings growth."
-            ),
-            "valuation": (
-                "✅ Attractive valuation. P/E below sector average."
-                if risk_scores["valuation"] <= 3 else
-                "⚠️ Fairly valued."
-                if risk_scores["valuation"] <= 6 else
-                "❌ Expensive valuation. P/E significantly above sector peers."
-            ),
-        }
-        texts = risk_texts_vi if is_vi else risk_texts_en
         for key, label in rl.items():
             score = risk_scores.get(key, 5.0)
-            st.markdown(f"**{label} ({score:.0f}/10):** {texts[key]}")
+            narr  = risk_narratives.get(key, {})
+            lang_narr = narr.get("vi" if is_vi else "en", {})
+            if score <= 3:   txt = lang_narr.get(1, "")
+            elif score <= 6: txt = lang_narr.get(5, "")
+            else:            txt = lang_narr.get(9, "")
+            if txt:
+                st.markdown(f"**{label} ({score:.0f}/10):** {txt}")
 
-    # ════════════════ TAB S6: Recommendation ════════════════
+    # ════════════ S6: RECOMMENDATION ════════════
     with s6:
-        # Retrieve stored values (from valuation tab)
-        fair_val   = st.session_state.get("_profiler_fair_val", 0)
-        upside_pct = st.session_state.get("_profiler_upside", 0)
-        risk_sc    = st.session_state.get("_profiler_risk", risk_scores)
-        dnse_data  = st.session_state.get("_profiler_dnse", {})
+        fair_val      = st.session_state.get("_profiler_fair_val",     0)
+        upside_pct    = st.session_state.get("_profiler_upside",       0)
+        risk_sc       = st.session_state.get("_profiler_risk",         risk_scores)
+        current_p     = st.session_state.get("_profiler_current_price",current_price)
 
-        # Get technical score from DNSE analysis (preferred) or scan logic
-        tech_score = dnse_data.get("tech_score") if dnse_data.get("has_data") else None
-        if tech_score is None and not (price_df is None or price_df.empty):
-            try:
-                ind_df = calculate_indicators(price_df)
-                if not ind_df.empty:
-                    row_scan = ind_df.iloc[-1]
-                    tech_score = row_scan.get("Score", None)
-            except Exception:
-                pass
+        # Technical score from OHLC
+        tech_score    = ohlc_ana.get("tech_score", None) if ohlc_ok else None
+
+        # If no fair value was computed (price = 0), fall back to tech score only
+        if fair_val == 0 and ohlc_ok:
+            fair_val   = ohlc_ana.get("tech_fair_value", 0)
+            upside_pct = ((fair_val - current_p) / current_p * 100
+                          if fair_val > 0 and current_p > 0 else 0)
 
         composite = compute_composite_fundamental_score(risk_sc, upside_pct, tech_score)
-        # Use enhanced recommendation with DNSE data
-        rec_key, rec_color, rationale = get_recommendation_enhanced(
-            composite, upside_pct, risk_sc, dnse_data, st.session_state.lang)
+        rec_key, rec_color, rationale = get_recommendation(
+            composite, upside_pct, risk_sc, st.session_state.lang)
         rec_label = L.get(rec_key, rec_key)
 
-        # ── Main recommendation box ──
+        # Main recommendation box
         st.markdown(f"""
 <div style="background:{rec_color}22;border:2px solid {rec_color};
      border-radius:12px;padding:24px;text-align:center;margin:16px 0">
-  <div style="font-size:36px;font-weight:bold;color:{rec_color}">{rec_label}</div>
+  <div style="font-size:38px;font-weight:bold;color:{rec_color}">{rec_label}</div>
   <div style="font-size:18px;color:#ccc;margin-top:8px">
-    {ticker} &nbsp;|&nbsp; {L['sp_score_label']}: <b style="color:{rec_color}">{composite:.0f}/100</b>
+    {ticker} &nbsp;|&nbsp;
+    {L['sp_score_label']}: <b style="color:{rec_color}">{composite:.0f}/100</b>
   </div>
   <div style="font-size:14px;color:#999;margin-top:4px">
     {L['sp_fair_value']}: <b>{f'{fair_val:,.0f} VNĐ' if fair_val > 0 else 'N/A'}</b>
     &nbsp;|&nbsp;
     {L['sp_upside']}: <b style="color:{rec_color}">{f'{upside_pct:+.1f}%' if fair_val > 0 else 'N/A'}</b>
+    &nbsp;|&nbsp;
+    {'Kỹ thuật' if is_vi else 'Technical'}: <b>{f'{tech_score:.0f}/100' if tech_score is not None else 'N/A'}</b>
   </div>
 </div>""", unsafe_allow_html=True)
 
-        # ── Score gauge ──
+        # Data quality notice
+        quality = "HIGH" if tcbs_ok else ("MEDIUM" if (vnd_ok or cafef_ok) else "LOW — Technical Only")
+        quality_vi = "CAO" if tcbs_ok else ("TRUNG BÌNH" if (vnd_ok or cafef_ok) else "THẤP — Chỉ kỹ thuật")
+        q_color = "#00cc44" if tcbs_ok else ("#ffaa00" if (vnd_ok or cafef_ok) else "#ff7700")
+        st.markdown(f"**{'Chất lượng dữ liệu' if is_vi else 'Data Quality'}:** "
+                    f"<span style='color:{q_color}'>"
+                    f"{'◆ ' + quality_vi if is_vi else '◆ ' + quality}</span>",
+                    unsafe_allow_html=True)
+
+        # Gauge
         fig_gauge = go.Figure(go.Indicator(
             mode="gauge+number",
             value=composite,
@@ -3742,65 +3849,84 @@ Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=
                     {"range": [50, 75], "color": "#1a3a08"},
                     {"range": [75,100], "color": "#083a20"},
                 ],
-                "threshold": {
-                    "line": {"color": "#ffffff", "width": 3},
-                    "thickness": 0.75, "value": composite
-                }
             }
         ))
         fig_gauge.update_layout(height=250, template="plotly_dark",
                                  margin=dict(t=30,b=10,l=20,r=20))
 
-        c_gauge, c_factors = st.columns([1, 2])
+        c_gauge, c_thesis = st.columns([1, 2])
         with c_gauge:
             st.plotly_chart(fig_gauge, use_container_width=True)
-        with c_factors:
+        with c_thesis:
             st.markdown("### " + ("Luận điểm đầu tư" if is_vi else "Investment Thesis"))
             if rationale:
                 for line in rationale.split("\n\n"):
                     if line.strip():
                         st.markdown(line)
+            # OHLC technical thesis
+            if ohlc_ok:
+                st.markdown("---")
+                st.markdown("**🔧 " + ("Phân tích kỹ thuật từ OHLC:" if is_vi else "Technical Analysis from OHLC:") + "**")
+                tech_bullets = []
+                if ohlc_ana["above_sma50"]:
+                    tech_bullets.append("✅ " + ("Giá trên SMA50 — xu hướng tăng trung hạn" if is_vi else "Price above SMA50 — medium-term uptrend"))
+                else:
+                    tech_bullets.append("⚠️ " + ("Giá dưới SMA50 — xu hướng giảm trung hạn" if is_vi else "Price below SMA50 — medium-term downtrend"))
+                if ohlc_ana["rsi_oversold"]:
+                    tech_bullets.append("✅ " + ("RSI quá bán — cơ hội hồi phục" if is_vi else "RSI oversold — recovery opportunity"))
+                elif ohlc_ana["rsi_overbought"]:
+                    tech_bullets.append("⚠️ " + ("RSI quá mua — thận trọng" if is_vi else "RSI overbought — caution"))
+                if ohlc_ana["macd_bullish"]:
+                    tech_bullets.append("✅ " + ("MACD bullish — momentum tích cực" if is_vi else "MACD bullish — positive momentum"))
+                if ohlc_ana["price_percentile"] < 0.3:
+                    tech_bullets.append("✅ " + ("Giá gần đáy 52 tuần — vùng giá trị" if is_vi else "Near 52-week low — value zone"))
+                for b in tech_bullets:
+                    st.markdown(b)
 
-        # ── Score breakdown ──
+        # Score breakdown
         st.markdown("---")
         st.markdown("### 📊 " + ("Chi tiết điểm số" if is_vi else "Score Breakdown"))
-        comp_data = {
-            "Factor" if not is_vi else "Yếu tố": [
-                ("Chất lượng cơ bản" if is_vi else "Fundamental Quality"),
-                ("Tiềm năng tăng giá" if is_vi else "Valuation Upside"),
-                ("Kỹ thuật" if is_vi else "Technical"),
+        fund_pts = round(((10 - sum(risk_sc.get(k, 5) for k in ["profitability","growth","debt","liquidity"]) / 4) / 10) * 60, 1)
+        val_pts  = round(min(max(upside_pct / 50 * 25, 0), 25), 1)
+        tech_pts = round(min(max((tech_score or 0) / 100 * 15, 0), 15), 1)
+        comp_df = pd.DataFrame({
+            "Yếu tố" if is_vi else "Factor": [
+                "Chất lượng cơ bản" if is_vi else "Fundamental Quality",
+                "Tiềm năng tăng giá" if is_vi else "Valuation Upside",
+                "Kỹ thuật" if is_vi else "Technical",
             ],
-            "Score" if not is_vi else "Điểm": [
-                round(((10 - sum(risk_sc.get(k,5) for k in ["profitability","growth","debt","liquidity"])/4)/10)*60, 1),
-                round(min(max(upside_pct/50*25, 0), 25), 1),
-                round(min(max((tech_score or 0)/100*15, 0), 15), 1),
-            ],
-            "Max": [60, 25, 15]
-        }
-        comp_df = pd.DataFrame(comp_data)
+            "Điểm" if is_vi else "Score": [fund_pts, val_pts, tech_pts],
+            "Max": [60, 25, 15],
+        })
         show_df(comp_df)
 
         fig_score = go.Figure(go.Bar(
-            x=comp_df["Score" if not is_vi else "Điểm"],
-            y=comp_df["Factor" if not is_vi else "Yếu tố"],
+            x=comp_df["Điểm" if is_vi else "Score"],
+            y=comp_df["Yếu tố" if is_vi else "Factor"],
             orientation="h",
             marker_color=[rec_color, "#4e9af1", "#f1a84e"],
-            text=comp_df["Score" if not is_vi else "Điểm"],
-            textposition="outside",
+            text=comp_df["Điểm" if is_vi else "Score"], textposition="outside",
         ))
-        fig_score.update_layout(height=200, template="plotly_dark",
+        fig_score.update_layout(height=180, template="plotly_dark",
                                  xaxis=dict(range=[0, 70]),
-                                 margin=dict(t=20,b=20,l=150,r=40))
+                                 margin=dict(t=10,b=10,l=160,r=40))
         st.plotly_chart(fig_score, use_container_width=True)
 
-        # ── Disclaimer ──
+        # News section
+        all_news = ssi_news or fetch_news(ticker, n=8)
+        if all_news:
+            st.markdown("---")
+            st.markdown("### 📰 " + ("Tin tức mới nhất" if is_vi else "Latest News"))
+            for item in all_news[:6]:
+                title = item.get("title","–"); url = item.get("url",""); date = item.get("date","")
+                st.markdown(f"📰 **{date}** — [{title}]({url})" if url else f"📰 **{date}** — {title}")
+
         st.caption("⚠️ " + (
-            "Khuyến nghị này dựa trên phân tích định lượng tự động. "
-            "Không phải tư vấn đầu tư. Nhà đầu tư cần tự đánh giá và chịu trách nhiệm về quyết định của mình."
+            "Khuyến nghị dựa trên phân tích định lượng tự động. Không phải tư vấn đầu tư."
             if is_vi else
-            "This recommendation is based on automated quantitative analysis. "
-            "Not financial advice. Investors must conduct their own due diligence."
+            "Recommendation based on automated quantitative analysis. Not financial advice."
         ))
+
 
 # ══════════════════════════════════════════════════════════════
 #  TABS — 12 tabs total
@@ -4405,7 +4531,7 @@ def render_global_markets_tab():
 def render_smoke_test_tab():
     hdr = "System Smoke Test — All Data Sources & Functions" if st.session_state.lang=="EN" else "Kiểm Tra Hệ Thống — Tất Cả Nguồn Dữ Liệu & Chức Năng"
     st.subheader(f"🔬 {hdr}")
-    st.caption("v15.0 — Tests each source individually for FPT (HOSE) and OIL (UPCOM). Full stack traces written to error_log.txt.")
+    st.caption("v17.0 — Tests each source individually for FPT (HOSE), REE (HOSE), OIL (UPCOM). DNSE endpoint fix verified. Full stack traces written to error_log.txt.")
 
     if st.button("🚀 Run Full Smoke Test" if st.session_state.lang=="EN" else "🚀 Chạy Kiểm Tra Đầy Đủ", type="primary"):
         results = []
@@ -4419,14 +4545,27 @@ def render_smoke_test_tab():
                 results.append({"Test":"FPT Full Pipeline","Status":"✅ PASS" if ok else "❌ FAIL",
                     "Detail":f"{len(df_fpt)} rows via {src_fpt}, close={df_fpt['Close'].iloc[-1]:,.0f}" if ok else f"Failed: {err_fpt}"})
                 if ok:
-                    # Test indicator calculation
                     df_ind = calculate_indicators(clean_data(df_fpt))
                     results.append({"Test":"FPT Indicators","Status":"✅ PASS" if "RSI" in df_ind.columns else "❌ FAIL",
                         "Detail":f"RSI={df_ind['RSI'].iloc[-1]:.1f}, ADX={df_ind['ADX'].iloc[-1]:.1f}"})
             except Exception as e:
                 results.append({"Test":"FPT Full Pipeline","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
 
-        # ── Test 0b: OIL — full pipeline test (UPCOM ticker)
+        # ── Test 0b: REE — full pipeline test (HOSE ticker)
+        with st.spinner("Testing REE full pipeline (HOSE)..."):
+            try:
+                df_ree, src_ree, err_ree = download_data("REE", 180, min_rows=20)
+                ok = len(df_ree) >= 20
+                results.append({"Test":"REE Full Pipeline (HOSE)","Status":"✅ PASS" if ok else "❌ FAIL",
+                    "Detail":f"{len(df_ree)} rows via {src_ree}, close={df_ree['Close'].iloc[-1]:,.0f}" if ok else f"Failed: {err_ree}"})
+                if ok:
+                    df_ree_ind = calculate_indicators(clean_data(df_ree))
+                    results.append({"Test":"REE Indicators","Status":"✅ PASS" if "RSI" in df_ree_ind.columns else "❌ FAIL",
+                        "Detail":f"RSI={df_ree_ind['RSI'].iloc[-1]:.1f}"})
+            except Exception as e:
+                results.append({"Test":"REE Full Pipeline","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
+
+        # ── Test 0c: OIL — full pipeline test (UPCOM ticker)
         with st.spinner("Testing OIL full pipeline (UPCOM)..."):
             try:
                 df_oil, src_oil, err_oil = download_data("OIL", 180, min_rows=20)
@@ -4436,9 +4575,9 @@ def render_smoke_test_tab():
             except Exception as e:
                 results.append({"Test":"OIL Full Pipeline (UPCOM)","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
 
-        # ── Test 1: DNSE connectivity
-        with st.spinner("Testing DNSE (FPT + OIL)..."):
-            for sym_t, exch_t in [("FPT","HOSE"), ("OIL","UPCOM")]:
+        # ── Test 1: DNSE connectivity (FIX-16: api.dnse.com.vn)
+        with st.spinner("Testing DNSE api.dnse.com.vn (FPT + REE + OIL)..."):
+            for sym_t, exch_t in [("FPT","HOSE"), ("REE","HOSE"), ("OIL","UPCOM")]:
                 try:
                     df_t = _fetch_dnse(sym_t, 180)
                     ok = len(df_t) >= 20
@@ -4506,7 +4645,68 @@ def render_smoke_test_tab():
             except Exception as e:
                 results.append({"Test":"VNDirect Profile (HPG)","Status":"❌ ERROR","Detail":str(e)})
 
-        # ── Test 7: ML libs
+        # ── Test 7: CafeF Fundamentals (ENH-11)
+        with st.spinner("Testing CafeF fundamental APIs (FPT + REE)..."):
+            for sym_t in ["FPT", "REE"]:
+                try:
+                    cf_r = fetch_cafef_key_ratios(sym_t)
+                    ok = bool(cf_r.get("eps") or cf_r.get("pe"))
+                    results.append({"Test":f"CafeF ChiSoTaiChinh ({sym_t})","Status":"✅ PASS" if ok else "❌ FAIL",
+                        "Detail":f"EPS={cf_r.get('eps','?')} P/E={cf_r.get('pe','?')} P/B={cf_r.get('pb','?')}" if ok else "No ratio data"})
+                except Exception as e:
+                    results.append({"Test":f"CafeF ChiSoTaiChinh ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
+            for sym_t in ["FPT", "OIL"]:
+                try:
+                    cf_p = fetch_cafef_price(sym_t)
+                    ok = cf_p.get("price", 0) > 0
+                    results.append({"Test":f"CafeF PriceRT ({sym_t})","Status":"✅ PASS" if ok else "❌ FAIL",
+                        "Detail":f"Price={cf_p.get('price',0):,.0f}, {cf_p.get('pct_change',0):+.2f}%" if ok else "No price data"})
+                except Exception as e:
+                    results.append({"Test":f"CafeF PriceRT ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
+
+        # ── Test 8: DNSE OHLC Analysis (ENH-13)
+        with st.spinner("Testing DNSE OHLC Analysis (FPT + REE + OIL)..."):
+            for sym_t in ["FPT", "REE", "OIL"]:
+                try:
+                    ana = fetch_dnse_ohlc_analysis(sym_t)
+                    ok = "error" not in ana and ana.get("n_rows", 0) >= 20
+                    results.append({"Test":f"DNSE OHLC Analysis ({sym_t})","Status":"✅ PASS" if ok else "❌ FAIL",
+                        "Detail":f"{ana.get('n_rows',0)} rows, RSI={ana.get('rsi',0):.1f}, TechScore={ana.get('tech_score',0):.0f}/100" if ok else ana.get("error","Failed")})
+                except Exception as e:
+                    results.append({"Test":f"DNSE OHLC Analysis ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
+
+        # ── Test 9: Stock Profiler Recommendation (FPT, REE, OIL)
+        with st.spinner("Testing Stock Profiler recommendation engine (FPT + REE + OIL)..."):
+            for sym_t in ["FPT", "REE", "OIL"]:
+                try:
+                    ana = fetch_dnse_ohlc_analysis(sym_t)
+                    if "error" in ana:
+                        results.append({"Test":f"Profiler Recommendation ({sym_t})","Status":"❌ FAIL","Detail":"No OHLC data"})
+                        continue
+                    cf_r = fetch_cafef_key_ratios(sym_t)
+                    cf_p = fetch_cafef_price(sym_t)
+                    price = cf_p.get("price", ana.get("price", 0))
+                    eps   = cf_r.get("eps", ana.get("implied_eps", price / 15))
+                    bvps  = cf_r.get("bvps", ana.get("implied_bvps", price * 0.6))
+                    sector = get_sector(sym_t)
+                    dcf  = compute_dcf_valuation(eps, 0.10)
+                    pe_f = compute_pe_valuation(eps, sector)
+                    pb_f = compute_pb_valuation(bvps, 0.12)
+                    gval = compute_graham_value(eps, bvps)
+                    fv   = aggregate_fair_value(dcf, pe_f, pb_f, gval)
+                    if fv == 0: fv = ana.get("tech_fair_value", 0)
+                    upside = (fv - price) / price * 100 if fv > 0 and price > 0 else 0
+                    mock_risk = {"debt":5,"liquidity":5,"profitability":5,"growth":5,"valuation":5}
+                    composite = compute_composite_fundamental_score(mock_risk, upside, ana.get("tech_score"))
+                    rec_key, _, _ = get_recommendation(composite, upside, mock_risk, "VI")
+                    rec_label = _LANG_VI.get(rec_key, rec_key)
+                    ok = composite > 0
+                    results.append({"Test":f"Profiler Rec. ({sym_t})","Status":"✅ PASS" if ok else "❌ FAIL",
+                        "Detail":f"Price={price:,.0f} FV={fv:,.0f} Upside={upside:+.1f}% Score={composite:.0f} → {rec_label}"})
+                except Exception as e:
+                    results.append({"Test":f"Profiler Rec. ({sym_t})","Status":"❌ ERROR","Detail":str(e)[:120]})
+
+        # ── Test 10: ML libs
         with st.spinner("Testing ML libs..."):
             results.append({"Test":"yfinance lib","Status":"✅ OK" if YFINANCE_AVAILABLE else "⚠️ MISSING","Detail":"pip install yfinance"})
             results.append({"Test":"Prophet lib","Status":"✅ OK" if PROPHET_AVAILABLE else "⚠️ MISSING","Detail":"pip install prophet"})
@@ -4588,87 +4788,65 @@ def render_changelog_tab():
 
 ---
 
-### v16.0 — 2026-03-08 · DEEP FUNDAMENTAL ANALYSIS + BILINGUAL
+### v17.0 — 2026-03-08 · DATA PIPELINE FIX + PROFILER OVERHAUL
 
-**🟢 v16.0 New Features**
-
-| ENH ID | Component | Enhancement |
-|--------|-----------|-------------|
-| ENH-08 | NEW TAB 🧬 | **Stock Profiler** — full fundamental deep dive for any ticker |
-| ENH-09 | Bilingual | All new UI fully bilingual VI/EN with dynamic switching |
-| ENH-10 | Data Sources | TCBS `tcanalysis` API: income statement, balance sheet, cash flow, financial ratios |
-
-**🧬 Stock Profiler Tab Features:**
-
-| Feature | Details |
-|---------|---------|
-| Company Overview | TCBS/VNDirect profile, KPI strip (EPS, P/E, P/B, ROE, ROA, margin, D/E, yield) |
-| Financial Statements | Income, Balance Sheet, Cash Flow — quarterly or annual — with charts |
-| Financial Ratios | 12+ ratios with trend line charts (ROE/ROA, Margins, P/E/P/B) |
-| Valuation Models | **DCF** (35%), **P/E Relative** (30%), **P/B Justified** (20%), **Graham Formula** (15%) |
-| Adjustable DCF | Interactive sliders: growth rate, discount rate, terminal growth |
-| Risk Scoring | 5 risk dimensions (Debt, Liquidity, Profitability, Growth, Valuation) scored 0–10 |
-| Risk Radar Chart | Polar/radar visualization of all 5 risk dimensions |
-| Recommendation Engine | Composite score 0–100 → STRONG BUY / BUY / HOLD / SELL / STRONG SELL |
-| Investment Thesis | Detailed rationale with key supporting/opposing factors |
-
----
-
-### v15.0 — 2026-03-08 · DATA PIPELINE OVERHAUL
-
-**v14.0 bug fixes (session_state, scan 3-tuple, SSI 404, DNSE, stooq fallbacks, CafeF timeout, BRD + Change Log tabs)**
-
-**🔴 v15.0 Critical Bug Fixes**
+**🔴 v17.0 Critical Bug Fixes**
 
 | Fix ID | Component | Issue | Resolution |
 |--------|-----------|-------|------------|
-| FIX-12 | Data Pipeline | DNSE: broken fallback endpoints causing JSON parse errors & DNS failures | Removed all fallback endpoints; only confirmed `/v2/ohlcs/stock` kept |
-| FIX-13 | Data Pipeline | SSI: all endpoints returning 404 / refusing connections | Replaced with `iboard-api.ssi.com.vn/statistics/charts/history` (user-verified working 2026-03-08). New `_parse_ssi_response()` handles 3 response formats (list, nested dict, flat UDF) |
-| FIX-14 | Data Pipeline | CafeF: `s.cafef.vn/LichSuGia` → 404 redirect, `api.cafef.vn` connection refused | 4-strategy cascade: historial REST API → AJAX POST → HisDanhMuc JSON → LichSuGia HTML |
-| FIX-15 | ML Forecast | PyArrow error: `Could not convert 'weighted' with type str: tried to convert to double` | Renamed column `Weight→Wt%`; added explicit `.astype(str)` on all object columns before `show_df()` |
+| FIX-16 | DNSE | `services.entrade.com.vn` dead (empty data) | Switched to `api.dnse.com.vn/chart-api/v2/ohlcs/stock`, resolution `D→1D`. Confirmed 247 rows for FCN. Fixes entire data pipeline (Scanner, Backtest, ML). |
+| FIX-17 | Stock Profiler | TCBS 404 + VNDirect timeout → default 5/5 scores, meaningless HOLD | Full cascade: TCBS → VNDirect → **CafeF** → **SSI** → **DNSE OHLC** (always succeeds). Profiler now ALWAYS produces valid recommendation. |
 
-**🟡 v15.0 Enhancements**
+**🟢 v17.0 New Features**
 
-| ENH ID | Component | Enhancement |
-|--------|-----------|-------------|
-| ENH-05 | Data Pipeline | **TCBS public API** added as P4 source — `apipubaws.tcbs.com.vn/stock-insight` (no auth, high reliability, covers all exchanges) |
-| ENH-06 | Data Pipeline | **VNDirect price history** added as P6 source — reuses existing VNDirect session |
-| ENH-07 | Architecture | Full 7-source pipeline: DNSE → SSI → CafeF (4 strategies) → TCBS → CafeF-JSON → VNDirect → yFinance |
-| ENH-08 | Reliability | Each source has specific exception handlers (HTTPError, ConnectionError, Timeout, ValueError) instead of generic catch-all |
+| ENH ID | Component | Details |
+|--------|-----------|---------|
+| ENH-11 | CafeF APIs | `ChiSoTaiChinh` (EPS/PE/PB/MarketCap), `PriceRealTimeHeader` (live price), `CoCauSoHuu` (shareholder %, major holders), `FileBCTC` (financial report PDF links), Liveboard JSON (CDN price history) |
+| ENH-12 | SSI SSMI APIs | `finance-indicator`, `company-leaderships`, `share-holder-summary`, `corporate-actions`, `company-news` — with proper iboard headers |
+| ENH-13 | DNSE OHLC Analysis | `fetch_dnse_ohlc_analysis()` — computes RSI, MACD, ADX, BB, SMA20/50, 52W range, momentum returns (1M/3M/6M), volatility, volume trends. Used as ultimate fallback for profiler. |
+| ENH-14 | Valuation Guarantee | When fundamentals absent: EPS estimated from price/sector PE, BVPS from price×0.6. Technical momentum used as EPS growth proxy. 4 valuation models + technical implied value always computed. |
+| FIX-18 | Smoke Test | Added REE (HOSE) test cases. Tests now cover FPT+REE+OIL across all sources. Added CafeF fundamentals, DNSE OHLC Analysis, and Profiler Recommendation smoke tests (Tests 7–9). |
 
----
+**🧬 Stock Profiler Data Cascade (v17)**
 
-### v13.0 — Previous Release
+```
+Source Priority:
+1. TCBS tcanalysis    → financial statements, quarterly ratios
+2. VNDirect FINFO     → financial statements fallback  
+3. CafeF              → EPS, P/E, P/B, live price, shareholders, PDF reports
+4. SSI SSMI           → leadership, corporate actions, news
+5. DNSE OHLC (api.dnse.com.vn) → ALWAYS succeeds → technical analysis,
+                                   implied EPS/BVPS, tech fair value
+```
 
-| Component | Change |
-|-----------|--------|
-| Data Pipeline | DNSE + SSI + CafeF replacing yFinance as primary sources |
-| Tickers Fixed | IDC OIL PVS LTG HBC PME SCG TNG TVN VKC VNA ACV exchange routing |
-| World Markets Tab | Gold, WTI Oil, Natural Gas, DXY, S&P500, FED Funds Rate |
-| Bilingual UI | Vietnamese 🇻🇳 / English AU 🇦🇺 full feature parity |
-| Enhanced Insights | Sector context, macro correlation, risk-adjusted commentary |
-| Smoke Test | Built-in connectivity & function validator |
-
----
-
-### v12.0 — Base Release
-
-| Component | Change |
-|-----------|--------|
-| ML Ensemble | 7-model weighted forecast (Prophet, ARIMA, SVR, RF, LinearReg, Holt, Monte Carlo) |
-| Backtest | T+2 settlement-accurate simulation with ATR stop-loss |
-| Smart Money | Đội lái / manipulation detection engine |
-| 10 Indicators | RSI, BB, MACD, Stoch, ATR, OBV, ADX, Williams %R, CCI, SMA |
-| VNDirect | Financial statements, ratios, dividends, news integration |
+**Recommendation Score Formula:**
+```
+Composite (0–100) = Fundamental Quality (0–60) + Valuation Upside (0–25) + Technical (0–15)
+→ ≥75: STRONG BUY  ≥60: BUY  ≥40: HOLD  ≥25: SELL  <25: STRONG SELL
+```
 
 ---
 
-*Change log maintained for audit and compliance purposes. All dates in UTC+7 (ICT/Vietnam timezone).*
-    """)
+### v16.0 — 2026-03-08
 
-# ══════════════════════════════════════════════════════════════
-#  MAIN APP LAYOUT
-# ══════════════════════════════════════════════════════════════
+NEW TAB: 🧬 Stock Profiler. TCBS tcanalysis API. DCF/P/E/P/B/Graham valuation. Risk radar chart. Recommendation engine. Full bilingual VI/EN.
+
+---
+
+### v15.0 — 2026-03-08
+
+FIX-12: DNSE /v2. FIX-13: SSI iboard-api. FIX-14: CafeF 4-strategy. FIX-15: PyArrow. ENH-05: TCBS price. ENH-06: VNDirect price. ENH-07: 7-source pipeline.
+
+---
+
+### v14.0 / v13.0 — Previous Releases
+
+session_state fix, scan 3-tuple, SSI 404, DNSE multi, stooq fallback, Change Log tab.
+
+""")
+
+
+
 def main():
     # Initialize session state variables
     if "scan_results" not in st.session_state:

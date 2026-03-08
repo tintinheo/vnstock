@@ -14,6 +14,23 @@
     "Confirms": 1,
     "⚠️ DL": 0,
     "Nguồn": "SSI",
+    "scan_time": "2026-03-08 21:08:37"
+  },
+  {
+    "Mã": "HPG",
+    "Ngành/Sector": "Thép",
+    "Giá": 27250,
+    "Hành vi": "THEO DÕI",
+    "BB Buy": 25750,
+    "BB Sell": 29400,
+    "RSI": 47.3,
+    "Stoch%K": 25.8,
+    "ADX": 17.0,
+    "Vol/MA20": "0.8×",
+    "Điểm": 4.0,
+    "Confirms": 1,
+    "⚠️ DL": 0,
+    "Nguồn": "SSI",
     "scan_time": "2026-03-08 15:14:43"
   },
   {
