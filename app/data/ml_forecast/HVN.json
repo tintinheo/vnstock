@@ -1,0 +1,89 @@
+[
+  {
+    "symbol": "HVN",
+    "timestamp": "2026-03-08 13:39:30",
+    "days_forecast": 12,
+    "last_price": 24350.0,
+    "models_used": [
+      "LinearReg",
+      "Holt",
+      "MonteCarlo",
+      "SVR",
+      "RandomForest",
+      "Prophet"
+    ],
+    "results": {
+      "LinearReg": {
+        "weight": 0.1,
+        "final": 33321.77086861344,
+        "pct_change": 36.85
+      },
+      "Holt": {
+        "weight": 0.15,
+        "final": 23528.710270101623,
+        "pct_change": -3.37
+      },
+      "MonteCarlo": {
+        "weight": 0.2,
+        "final": 24743.80458519896,
+        "pct_change": 1.62
+      },
+      "SVR": {
+        "weight": 0.1,
+        "final": 26002.310130571277,
+        "pct_change": 6.79
+      },
+      "RandomForest": {
+        "weight": 0.1,
+        "final": 27022.4,
+        "pct_change": 10.97
+      },
+      "Prophet": {
+        "weight": 0.2,
+        "final": 27668.356558623094,
+        "pct_change": 13.63
+      },
+      "ensemble": {
+        "weight": "weighted",
+        "final": 26642.808081409556,
+        "pct_change": 9.42,
+        "all_values": [
+          25871.0,
+          25948.0,
+          25960.0,
+          26007.0,
+          26046.0,
+          26212.0,
+          26300.0,
+          26416.0,
+          26495.0,
+          26532.0,
+          26660.0,
+          26643.0
+        ]
+      }
+    },
+    "indicators_at_forecast": {
+      "rsi": 32.12,
+      "close": 24350.0,
+      "macd": -553.97,
+      "adx": 20.22,
+      "stoch_k": 0.0,
+      "atr": 772.18
+    },
+    "forecast_dates": [
+      "2026-03-09",
+      "2026-03-10",
+      "2026-03-11",
+      "2026-03-12",
+      "2026-03-13",
+      "2026-03-16",
+      "2026-03-17",
+      "2026-03-18",
+      "2026-03-19",
+      "2026-03-20",
+      "2026-03-23",
+      "2026-03-24"
+    ]
+  }
+]

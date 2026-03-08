@@ -471,16 +471,16 @@ def _parse_udf(raw: dict, source: str = "UDF") -> pd.DataFrame:
 
 def _fetch_dnse(symbol: str, days: int = 730) -> pd.DataFrame:
     """
-    P1: DNSE Entrade UDF — services.entrade.com.vn/chart-api/v2
-    Confirmed working: only the /v2/ohlcs/stock endpoint is valid.
-    Returns TradingView UDF format: {t, o, h, l, c, v, s}
+    P1: DNSE chart-api v2 — api.dnse.com.vn/chart-api/v2
+    Confirmed working 2026-03-08: /v2/ohlcs/stock with resolution=1D
+    Returns TradingView UDF format: {t, o, h, l, c, v}
     ✓ No auth  ✓ HOSE+HNX+UPCOM  ✓ Real-time intraday
     """
     import traceback
     to_ts   = _unix(datetime.now())
     from_ts = _unix(datetime.now() - timedelta(days=days))
-    url = (f"https://services.entrade.com.vn/chart-api/v2/ohlcs/stock"
-           f"?symbol={symbol}&resolution=D&from={from_ts}&to={to_ts}")
+    url = (f"https://api.dnse.com.vn/chart-api/v2/ohlcs/stock"
+           f"?symbol={symbol}&resolution=1D&from={from_ts}&to={to_ts}")
     try:
         r = _HTTP.get(url, timeout=API_TIMEOUT)
         r.raise_for_status()
@@ -2689,6 +2689,428 @@ def get_recommendation(composite_score: float, upside_pct: float,
     return key, color, rationale
 
 # ══════════════════════════════════════════════════════════════
+#  DNSE OHLC DEEP ANALYSIS — Technical analysis from price data
+#  Source: https://api.dnse.com.vn/chart-api/v2/ohlcs/stock
+# ══════════════════════════════════════════════════════════════
+_DNSE_OHLC_HDR = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+    "Accept": "application/json",
+}
+
+@st.cache_data(ttl=1800)
+def fetch_dnse_ohlc_analysis(ticker: str, days: int = 1095) -> dict:
+    """
+    Fetch OHLC data from DNSE and compute comprehensive technical analysis.
+    Returns a dict with price info, technical indicators, and signals.
+    Source: https://api.dnse.com.vn/chart-api/v2/ohlcs/stock
+    """
+    result = {
+        "has_data": False, "source": "DNSE OHLC",
+        "current_price": 0, "prev_close": 0, "change_pct": 0,
+        "high_52w": 0, "low_52w": 0, "avg_volume_20": 0,
+        "sma20": 0, "sma50": 0, "sma200": 0,
+        "rsi": 50, "macd": 0, "macd_signal": 0, "macd_hist": 0,
+        "bb_upper": 0, "bb_lower": 0, "bb_mid": 0, "bb_pct": 0.5,
+        "adx": 0, "stoch_k": 50, "obv_trend": "neutral",
+        "volume_ratio": 1.0, "trend_sma20": "neutral",
+        "trend_sma50": "neutral", "trend_sma200": "neutral",
+        "momentum_signals": [], "ohlc_df": pd.DataFrame(),
+        "tech_score": 50.0,
+    }
+    try:
+        to_ts = _unix(datetime.now())
+        from_ts = _unix(datetime.now() - timedelta(days=days))
+        url = (f"https://api.dnse.com.vn/chart-api/v2/ohlcs/stock"
+               f"?symbol={ticker}&resolution=1D&from={from_ts}&to={to_ts}")
+        r = requests.get(url, headers=_DNSE_OHLC_HDR, timeout=15)
+        r.raise_for_status()
+        raw = r.json()
+        t_arr = raw.get("t", [])
+        c_arr = raw.get("c", [])
+        if not t_arr or len(t_arr) < 30:
+            return result
+
+        df = pd.DataFrame({
+            "Open":   pd.to_numeric(raw.get("o", c_arr), errors="coerce"),
+            "High":   pd.to_numeric(raw.get("h", c_arr), errors="coerce"),
+            "Low":    pd.to_numeric(raw.get("l", c_arr), errors="coerce"),
+            "Close":  pd.to_numeric(c_arr, errors="coerce"),
+            "Volume": pd.to_numeric(raw.get("v", [0]*len(t_arr)), errors="coerce"),
+        }, index=pd.to_datetime(t_arr, unit="s").normalize())
+        df.index.name = "Date"
+        df = df.dropna(subset=["Close"]).sort_index()
+        df = df[~df.index.duplicated(keep="last")]
+        # Normalise price scale (DNSE returns kilo-VND for some tickers)
+        if not df.empty and df["Close"].dropna().median() < 500:
+            for col in ["Open","High","Low","Close"]:
+                df[col] = df[col] * 1000
+        if len(df) < 30:
+            return result
+
+        cls = df["Close"].values.astype(float)
+        hgh = df["High"].values.astype(float)
+        low = df["Low"].values.astype(float)
+        vol = df["Volume"].fillna(0).values.astype(float)
+        n = len(df)
+
+        result["has_data"] = True
+        result["ohlc_df"] = df
+        result["current_price"] = float(cls[-1])
+        result["prev_close"] = float(cls[-2]) if n > 1 else float(cls[-1])
+        result["change_pct"] = ((cls[-1] - cls[-2]) / cls[-2] * 100) if n > 1 else 0
+
+        # 52-week high/low
+        w52 = min(252, n)
+        result["high_52w"] = float(np.nanmax(hgh[-w52:]))
+        result["low_52w"] = float(np.nanmin(low[-w52:]))
+
+        # Moving averages
+        sma20 = float(np.mean(cls[-20:])) if n >= 20 else float(cls[-1])
+        sma50 = float(np.mean(cls[-50:])) if n >= 50 else float(cls[-1])
+        sma200 = float(np.mean(cls[-200:])) if n >= 200 else sma50
+        result["sma20"] = sma20
+        result["sma50"] = sma50
+        result["sma200"] = sma200
+
+        # Trends
+        result["trend_sma20"] = "bullish" if cls[-1] > sma20 else "bearish"
+        result["trend_sma50"] = "bullish" if cls[-1] > sma50 else "bearish"
+        result["trend_sma200"] = "bullish" if cls[-1] > sma200 else "bearish"
+
+        # RSI (14)
+        delta = np.diff(cls)
+        gain = np.where(delta > 0, delta, 0.0)
+        loss = np.where(delta < 0, -delta, 0.0)
+        if len(gain) >= 14:
+            avg_g = np.mean(gain[-14:])
+            avg_l = np.mean(loss[-14:])
+            rs = avg_g / (avg_l + 1e-10)
+            result["rsi"] = round(100 - 100 / (1 + rs), 1)
+
+        # MACD (12,26,9)
+        if n >= 26:
+            ema12 = pd.Series(cls).ewm(span=12, adjust=False).mean().values
+            ema26 = pd.Series(cls).ewm(span=26, adjust=False).mean().values
+            macd_line = ema12 - ema26
+            signal_line = pd.Series(macd_line).ewm(span=9, adjust=False).mean().values
+            result["macd"] = float(macd_line[-1])
+            result["macd_signal"] = float(signal_line[-1])
+            result["macd_hist"] = float(macd_line[-1] - signal_line[-1])
+
+        # Bollinger Bands (20)
+        if n >= 20:
+            bb_mid = sma20
+            bb_std = float(np.std(cls[-20:]))
+            result["bb_mid"] = bb_mid
+            result["bb_upper"] = bb_mid + 2 * bb_std
+            result["bb_lower"] = bb_mid - 2 * bb_std
+            bb_range = result["bb_upper"] - result["bb_lower"]
+            result["bb_pct"] = (cls[-1] - result["bb_lower"]) / bb_range if bb_range > 0 else 0.5
+
+        # ADX (14)
+        if n >= 28:
+            df_ind = calculate_indicators(df.copy())
+            adx_val = df_ind["ADX"].iloc[-1]
+            result["adx"] = float(adx_val) if pd.notna(adx_val) else 0
+
+        # Stochastic %K (14)
+        if n >= 14:
+            hh14 = np.nanmax(hgh[-14:])
+            ll14 = np.nanmin(low[-14:])
+            result["stoch_k"] = round(100 * (cls[-1] - ll14) / (hh14 - ll14 + 1e-10), 1)
+
+        # Volume analysis
+        avg_vol_20 = float(np.mean(vol[-20:])) if n >= 20 else float(np.mean(vol))
+        result["avg_volume_20"] = avg_vol_20
+        result["volume_ratio"] = float(vol[-1] / (avg_vol_20 + 1e-10))
+
+        # OBV trend
+        if n >= 20:
+            obv = np.zeros(n)
+            for i in range(1, n):
+                obv[i] = obv[i-1] + (vol[i] if cls[i] > cls[i-1] else
+                                     (-vol[i] if cls[i] < cls[i-1] else 0))
+            obv_sma = np.mean(obv[-20:])
+            result["obv_trend"] = "accumulation" if obv[-1] > obv_sma else "distribution"
+
+        # Build momentum signals
+        signals = []
+        rsi_v = result["rsi"]
+        if rsi_v < 30:
+            signals.append(("bullish", f"RSI={rsi_v:.0f} oversold — high rebound probability"))
+        elif rsi_v > 70:
+            signals.append(("bearish", f"RSI={rsi_v:.0f} overbought — pullback risk"))
+        if result["macd_hist"] > 0 and result["macd"] > result["macd_signal"]:
+            signals.append(("bullish", "MACD bullish crossover — positive momentum"))
+        elif result["macd_hist"] < 0:
+            signals.append(("bearish", "MACD bearish — negative momentum"))
+        if cls[-1] < result["bb_lower"] and result["bb_lower"] > 0:
+            signals.append(("bullish", "Price below BB Lower — statistical support zone"))
+        elif cls[-1] > result["bb_upper"] and result["bb_upper"] > 0:
+            signals.append(("bearish", "Price above BB Upper — statistical resistance"))
+        if result["trend_sma50"] == "bullish" and result["trend_sma200"] == "bullish":
+            signals.append(("bullish", "Price above SMA50 & SMA200 — strong uptrend"))
+        elif result["trend_sma50"] == "bearish" and result["trend_sma200"] == "bearish":
+            signals.append(("bearish", "Price below SMA50 & SMA200 — downtrend"))
+        if result["adx"] > 25:
+            trend_dir = "up" if result["trend_sma20"] == "bullish" else "down"
+            signals.append(("neutral", f"ADX={result['adx']:.0f} — strong {trend_dir}trend"))
+        if result["volume_ratio"] > 2.0:
+            signals.append(("neutral", f"Volume spike {result['volume_ratio']:.1f}× avg — high activity"))
+        if result["obv_trend"] == "accumulation":
+            signals.append(("bullish", "OBV above MA20 — institutional accumulation"))
+        elif result["obv_trend"] == "distribution":
+            signals.append(("bearish", "OBV below MA20 — distribution pattern"))
+        if n >= 50 and sma20 > sma50 and float(np.mean(cls[-25:20:-1])) < float(np.mean(cls[-55:50:-1]) if n > 55 else sma50):
+            signals.append(("bullish", "Golden cross forming — SMA20 crossing above SMA50"))
+        result["momentum_signals"] = signals
+
+        # Composite technical score (0-100)
+        tech_score = 50.0
+        bull_count = sum(1 for s, _ in signals if s == "bullish")
+        bear_count = sum(1 for s, _ in signals if s == "bearish")
+        tech_score += (bull_count - bear_count) * 8
+        # RSI contribution
+        if rsi_v < 30: tech_score += 10
+        elif rsi_v < 40: tech_score += 5
+        elif rsi_v > 70: tech_score -= 10
+        elif rsi_v > 60: tech_score -= 5
+        # Trend contribution
+        if result["trend_sma50"] == "bullish": tech_score += 8
+        else: tech_score -= 8
+        if result["trend_sma200"] == "bullish": tech_score += 5
+        else: tech_score -= 5
+        # BB position
+        if result["bb_pct"] < 0.2: tech_score += 8
+        elif result["bb_pct"] > 0.8: tech_score -= 5
+        # 52w position
+        pos_52w = (cls[-1] - result["low_52w"]) / (result["high_52w"] - result["low_52w"] + 1e-10)
+        if pos_52w < 0.3: tech_score += 5  # near 52w low = potential value
+        elif pos_52w > 0.9: tech_score -= 5  # near 52w high = stretched
+        result["tech_score"] = round(min(max(tech_score, 0), 100), 1)
+
+        _log.info(f"DNSE OHLC analysis ✅ {ticker}: {n} rows, "
+                  f"price={cls[-1]:,.0f}, RSI={rsi_v:.0f}, tech_score={result['tech_score']:.0f}")
+    except Exception as e:
+        _log.warning(f"DNSE OHLC analysis failed for {ticker}: {e}")
+    return result
+
+
+def score_technical_risk(dnse_data: dict) -> dict:
+    """
+    Compute risk scores from DNSE OHLC technical analysis
+    when fundamental data (TCBS/VNDirect) is unavailable.
+    Returns same format as score_fundamental_risk: 5 dimensions, 0-10 scale.
+    """
+    scores = {
+        "debt": 5.0,        # Unknown — neutral
+        "liquidity": 5.0,
+        "profitability": 5.0,
+        "growth": 5.0,
+        "valuation": 5.0,
+    }
+    if not dnse_data.get("has_data"):
+        return scores
+
+    # Profitability proxy: price trend strength
+    if dnse_data["trend_sma50"] == "bullish" and dnse_data["trend_sma200"] == "bullish":
+        scores["profitability"] = 3.0
+    elif dnse_data["trend_sma50"] == "bearish" and dnse_data["trend_sma200"] == "bearish":
+        scores["profitability"] = 8.0
+    elif dnse_data["trend_sma50"] == "bullish":
+        scores["profitability"] = 4.0
+    else:
+        scores["profitability"] = 6.0
+
+    # Growth proxy: price momentum (3-month vs 6-month)
+    ohlc = dnse_data.get("ohlc_df", pd.DataFrame())
+    if not ohlc.empty and len(ohlc) >= 130:
+        c = ohlc["Close"].values
+        pct_3m = (c[-1] - c[-63]) / (c[-63] + 1e-10) * 100
+        pct_6m = (c[-1] - c[-126]) / (c[-126] + 1e-10) * 100
+        if pct_3m > 15 and pct_6m > 20:
+            scores["growth"] = 2.0
+        elif pct_3m > 5:
+            scores["growth"] = 3.0
+        elif pct_3m > -5:
+            scores["growth"] = 5.0
+        elif pct_3m > -15:
+            scores["growth"] = 7.0
+        else:
+            scores["growth"] = 9.0
+
+    # Liquidity proxy: volume trend
+    vol_ratio = dnse_data.get("volume_ratio", 1.0)
+    avg_vol = dnse_data.get("avg_volume_20", 0)
+    if avg_vol > 500_000:
+        scores["liquidity"] = 2.0
+    elif avg_vol > 100_000:
+        scores["liquidity"] = 4.0
+    elif avg_vol > 20_000:
+        scores["liquidity"] = 6.0
+    else:
+        scores["liquidity"] = 8.0
+
+    # Valuation proxy: distance from 52w high/low
+    h52 = dnse_data.get("high_52w", 0)
+    l52 = dnse_data.get("low_52w", 0)
+    price = dnse_data.get("current_price", 0)
+    if h52 > l52 > 0 and price > 0:
+        pos = (price - l52) / (h52 - l52 + 1e-10)
+        if pos < 0.25:
+            scores["valuation"] = 2.0   # Near 52w low = potentially cheap
+        elif pos < 0.45:
+            scores["valuation"] = 3.0
+        elif pos < 0.65:
+            scores["valuation"] = 5.0
+        elif pos < 0.85:
+            scores["valuation"] = 7.0
+        else:
+            scores["valuation"] = 8.0   # Near 52w high = potentially expensive
+
+    # Debt proxy: volatility (high vol = higher perceived risk)
+    if not ohlc.empty and len(ohlc) >= 20:
+        returns = np.diff(np.log(ohlc["Close"].values[-60:] + 1e-10))
+        annualized_vol = float(np.std(returns) * np.sqrt(252) * 100)
+        if annualized_vol < 20:
+            scores["debt"] = 3.0
+        elif annualized_vol < 35:
+            scores["debt"] = 5.0
+        elif annualized_vol < 50:
+            scores["debt"] = 7.0
+        else:
+            scores["debt"] = 9.0
+
+    return scores
+
+
+def get_recommendation_enhanced(composite_score: float, upside_pct: float,
+                                 risk_scores: dict, dnse_data: dict,
+                                 lang: str = "VI") -> tuple:
+    """
+    Enhanced recommendation with DNSE OHLC technical signals.
+    Returns (label_key, color, rationale).
+    """
+    max_risk = max(risk_scores.values())
+    has_dnse = dnse_data.get("has_data", False)
+
+    if composite_score >= 75 and max_risk < 7:
+        key = "sp_rec_strong_buy"; color = "#00cc44"
+    elif composite_score >= 60:
+        key = "sp_rec_buy"; color = "#44bb22"
+    elif composite_score >= 40:
+        key = "sp_rec_hold"; color = "#ffaa00"
+    elif composite_score >= 25:
+        key = "sp_rec_sell"; color = "#ff5500"
+    else:
+        key = "sp_rec_strong_sell"; color = "#cc0000"
+
+    vi_parts, en_parts = [], []
+
+    if has_dnse:
+        rsi = dnse_data["rsi"]
+        price = dnse_data["current_price"]
+        h52 = dnse_data["high_52w"]
+        l52 = dnse_data["low_52w"]
+        pos_52w = (price - l52) / (h52 - l52 + 1e-10) * 100
+
+        # Price position
+        vi_parts.append(f"📊 Giá hiện tại: **{price:,.0f}** VNĐ (vùng {pos_52w:.0f}% của dải 52 tuần: {l52:,.0f}–{h52:,.0f})")
+        en_parts.append(f"📊 Current price: **{price:,.0f}** VND (at {pos_52w:.0f}% of 52-week range: {l52:,.0f}–{h52:,.0f})")
+
+        # RSI analysis
+        if rsi < 30:
+            vi_parts.append(f"✅ **RSI = {rsi:.0f}** — Vùng quá bán nghiêm trọng. Xác suất hồi phục cao, cơ hội bắt đáy.")
+            en_parts.append(f"✅ **RSI = {rsi:.0f}** — Severely oversold. High rebound probability, buying opportunity.")
+        elif rsi < 40:
+            vi_parts.append(f"🟢 **RSI = {rsi:.0f}** — Gần vùng quá bán. Áp lực bán giảm dần.")
+            en_parts.append(f"🟢 **RSI = {rsi:.0f}** — Near oversold zone. Selling pressure fading.")
+        elif rsi > 70:
+            vi_parts.append(f"⚠️ **RSI = {rsi:.0f}** — Vùng quá mua. Rủi ro chốt lời cao, thận trọng mua đuổi.")
+            en_parts.append(f"⚠️ **RSI = {rsi:.0f}** — Overbought zone. Profit-taking risk high, avoid chasing.")
+        else:
+            vi_parts.append(f"🔹 **RSI = {rsi:.0f}** — Vùng trung tính.")
+            en_parts.append(f"🔹 **RSI = {rsi:.0f}** — Neutral zone.")
+
+        # Trend analysis
+        trend50 = dnse_data["trend_sma50"]
+        trend200 = dnse_data["trend_sma200"]
+        if trend50 == "bullish" and trend200 == "bullish":
+            vi_parts.append(f"✅ Xu hướng: **TĂNG MẠNH** — Giá trên SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
+            en_parts.append(f"✅ Trend: **STRONG UPTREND** — Price above SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
+        elif trend50 == "bullish":
+            vi_parts.append(f"🟢 Xu hướng: **TĂNG ngắn hạn** — Giá trên SMA50, dưới SMA200")
+            en_parts.append(f"🟢 Trend: **Short-term UPTREND** — Above SMA50, below SMA200")
+        elif trend50 == "bearish" and trend200 == "bearish":
+            vi_parts.append(f"❌ Xu hướng: **GIẢM** — Giá dưới SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
+            en_parts.append(f"❌ Trend: **DOWNTREND** — Price below SMA50 ({dnse_data['sma50']:,.0f}) & SMA200 ({dnse_data['sma200']:,.0f})")
+        else:
+            vi_parts.append("🔹 Xu hướng: **Hỗn hợp** — Tín hiệu không rõ ràng")
+            en_parts.append("🔹 Trend: **Mixed** — No clear directional signal")
+
+        # MACD
+        if dnse_data["macd_hist"] > 0:
+            vi_parts.append("✅ MACD dương — Momentum tăng, dòng tiền đang vào.")
+            en_parts.append("✅ MACD positive — Bullish momentum, money flowing in.")
+        elif dnse_data["macd_hist"] < 0:
+            vi_parts.append("⚠️ MACD âm — Momentum giảm, cẩn thận áp lực bán.")
+            en_parts.append("⚠️ MACD negative — Bearish momentum, watch for selling pressure.")
+
+        # Bollinger Bands
+        bb_pct = dnse_data["bb_pct"]
+        if bb_pct < 0.1:
+            vi_parts.append(f"✅ Giá chạm **BB Lower** ({dnse_data['bb_lower']:,.0f}) — Vùng hỗ trợ thống kê mạnh.")
+            en_parts.append(f"✅ Price at **BB Lower** ({dnse_data['bb_lower']:,.0f}) — Strong statistical support.")
+        elif bb_pct > 0.9:
+            vi_parts.append(f"⚠️ Giá chạm **BB Upper** ({dnse_data['bb_upper']:,.0f}) — Kháng cự thống kê, xác suất điều chỉnh cao.")
+            en_parts.append(f"⚠️ Price at **BB Upper** ({dnse_data['bb_upper']:,.0f}) — Statistical resistance, pullback likely.")
+
+        # Volume
+        vol_r = dnse_data["volume_ratio"]
+        obv = dnse_data["obv_trend"]
+        if obv == "accumulation" and vol_r > 1.2:
+            vi_parts.append(f"✅ OBV tích cực + KL = {vol_r:.1f}× TB20 — Dòng tiền lớn đang gom.")
+            en_parts.append(f"✅ Positive OBV + Volume = {vol_r:.1f}× avg — Institutional accumulation.")
+        elif obv == "distribution":
+            vi_parts.append(f"⚠️ OBV giảm — Dấu hiệu phân phối, thận trọng.")
+            en_parts.append(f"⚠️ Declining OBV — Distribution pattern detected.")
+
+    # Valuation insights (if available)
+    if upside_pct > 20:
+        vi_parts.append(f"✅ Cổ phiếu đang giao dịch dưới giá trị hợp lý ~{upside_pct:.0f}%")
+        en_parts.append(f"✅ Stock trading ~{upside_pct:.0f}% below fair value")
+    elif upside_pct < -15:
+        vi_parts.append(f"⚠️ Cổ phiếu đang giao dịch cao hơn giá trị ~{abs(upside_pct):.0f}%")
+        en_parts.append(f"⚠️ Stock trading ~{abs(upside_pct):.0f}% above fair value")
+
+    # Fundamental risk comments (only if real fundamental data)
+    p_risk = risk_scores.get("profitability", 5)
+    d_risk = risk_scores.get("debt", 5)
+    g_risk = risk_scores.get("growth", 5)
+    if p_risk <= 3:
+        vi_parts.append("✅ Khả năng sinh lời tốt")
+        en_parts.append("✅ Strong profitability")
+    elif p_risk >= 8:
+        vi_parts.append("❌ Khả năng sinh lời yếu")
+        en_parts.append("❌ Weak profitability")
+    if d_risk <= 3:
+        vi_parts.append("✅ Cấu trúc vốn lành mạnh")
+        en_parts.append("✅ Healthy capital structure")
+    elif d_risk >= 7:
+        vi_parts.append("⚠️ Đòn bẩy tài chính cao")
+        en_parts.append("⚠️ High financial leverage")
+    if g_risk <= 3:
+        vi_parts.append("✅ Tăng trưởng mạnh")
+        en_parts.append("✅ Strong growth")
+    elif g_risk >= 7:
+        vi_parts.append("⚠️ Tăng trưởng chậm")
+        en_parts.append("⚠️ Slowing growth")
+
+    rationale = "\n\n".join(vi_parts) if lang == "VI" else "\n\n".join(en_parts)
+    return key, color, rationale
+
+
+# ══════════════════════════════════════════════════════════════
 #  STOCK PROFILER TAB — render function
 # ══════════════════════════════════════════════════════════════
 def render_stock_profiler_tab():
@@ -2724,8 +3146,11 @@ def render_stock_profiler_tab():
                           else "Enter a ticker and click Analyse Now"))
         return
 
-    # ── Load all data in parallel (sequential w/ spinners) ──
+    # ── Load all data (TCBS → VNDirect → DNSE OHLC fallback) ──
     with st.spinner(L["sp_loading"]):
+        # Always fetch DNSE OHLC first (most reliable source)
+        dnse_data = fetch_dnse_ohlc_analysis(ticker)
+
         overview   = fetch_tcbs_overview(ticker)
         income_raw = fetch_tcbs_financials(ticker, "incomestatement", yearly)
         balance_raw= fetch_tcbs_financials(ticker, "balancesheet", yearly)
@@ -2733,14 +3158,26 @@ def render_stock_profiler_tab():
         ratio_raw  = fetch_tcbs_ratio(ticker, yearly)
 
         # Fallback to VNDirect if TCBS empty
-        if income_raw.empty or ratio_raw.empty:
-            vnd_stmts = fetch_financial_statements(ticker)
-            vnd_ratios = fetch_financial_ratios(ticker)
-            data_source = L["sp_source_vnd"]
-        else:
-            vnd_stmts = {}
-            vnd_ratios = pd.DataFrame()
+        vnd_stmts = {}
+        vnd_ratios = pd.DataFrame()
+        has_fundamental = not (income_raw.empty and ratio_raw.empty)
+        if not has_fundamental:
+            try:
+                vnd_stmts = fetch_financial_statements(ticker)
+                vnd_ratios = fetch_financial_ratios(ticker)
+            except Exception:
+                pass
+            has_fundamental = bool(vnd_stmts) or not vnd_ratios.empty
+
+        # Determine data source label
+        if not ratio_raw.empty:
             data_source = L["sp_source_tcbs"]
+        elif not vnd_ratios.empty:
+            data_source = L["sp_source_vnd"]
+        elif dnse_data.get("has_data"):
+            data_source = "Nguồn: DNSE OHLC (Phân tích kỹ thuật)" if is_vi else "Source: DNSE OHLC (Technical Analysis)"
+        else:
+            data_source = L["sp_no_data"]
 
         # Build display DataFrames
         income_df  = (_build_stmt_df(income_raw, _INCOME_MAP, st.session_state.lang)
@@ -2759,18 +3196,29 @@ def render_stock_profiler_tab():
         # Build named ratio_df for scoring
         scoring_ratio = ratio_raw if not ratio_raw.empty else vnd_ratios
 
-        # Get current price from existing pipeline
-        price_df, price_src, _ = download_data(ticker, days=30)
-        current_price = float(price_df["Close"].iloc[-1]) if price_df is not None and not price_df.empty else 0
+        # Get current price: prefer DNSE OHLC (always works), then pipeline
+        if dnse_data.get("has_data") and dnse_data["current_price"] > 0:
+            current_price = dnse_data["current_price"]
+            price_df = dnse_data["ohlc_df"]
+        else:
+            price_df, price_src, _ = download_data(ticker, days=30)
+            current_price = float(price_df["Close"].iloc[-1]) if price_df is not None and not price_df.empty else 0
 
         sector = get_sector(ticker)
 
+        # Store DNSE data for recommendation tab
+        st.session_state["_profiler_dnse"] = dnse_data
+
     # ────────────────────────────────────
-    # Source badge + last price
+    # Source badge + last price + DNSE status
+    dnse_badge = ("🟢 DNSE" if dnse_data.get("has_data") else "🔴 DNSE")
+    chg_color = "#00cc66" if dnse_data.get("change_pct", 0) >= 0 else "#ff4b4b"
+    chg_str = f"{dnse_data.get('change_pct', 0):+.1f}%" if dnse_data.get("has_data") else ""
     st.markdown(f"""
 <span style="font-size:12px;color:#888">{data_source} &nbsp;|&nbsp;
-<b style="color:#4e9af1">Last Price: {current_price:,.0f} VNĐ</b> &nbsp;|&nbsp;
-Sector: <b>{sector}</b></span>""", unsafe_allow_html=True)
+<b style="color:#4e9af1">Last Price: {current_price:,.0f} VNĐ</b>
+<b style="color:{chg_color}">{chg_str}</b> &nbsp;|&nbsp;
+Sector: <b>{sector}</b> &nbsp;|&nbsp; {dnse_badge}</span>""", unsafe_allow_html=True)
 
     # ── 6 Sub-tabs ──
     sub_labels = [L["sp_overview"], L["sp_financials"], L["sp_ratios"],
@@ -3078,8 +3526,19 @@ Sector: <b>{sector}</b></span>""", unsafe_allow_html=True)
 
     # ════════════════ TAB S5: Risk Analysis ════════════════
     with s5:
-        risk_scores = score_fundamental_risk(scoring_ratio, income_raw, balance_raw)
+        # Use fundamental risk scoring if data available, otherwise DNSE technical
+        fund_risk = score_fundamental_risk(scoring_ratio, income_raw, balance_raw)
+        tech_risk = score_technical_risk(dnse_data)
+        # If all fundamental scores are default (5.0), prefer DNSE technical
+        all_default = all(v == 5.0 for v in fund_risk.values())
+        risk_scores = tech_risk if (all_default and dnse_data.get("has_data")) else fund_risk
         st.session_state["_profiler_risk"] = risk_scores
+        if all_default and dnse_data.get("has_data"):
+            st.info("⚠️ " + (
+                "Dữ liệu cơ bản (TCBS/VNDirect) không khả dụng. Rủi ro được ước lượng từ phân tích kỹ thuật DNSE OHLC."
+                if is_vi else
+                "Fundamental data (TCBS/VNDirect) unavailable. Risk estimated from DNSE OHLC technical analysis."
+            ))
 
         risk_labels_vi = {
             "debt":          L["sp_risk_debt"],
@@ -3235,10 +3694,11 @@ Sector: <b>{sector}</b></span>""", unsafe_allow_html=True)
         fair_val   = st.session_state.get("_profiler_fair_val", 0)
         upside_pct = st.session_state.get("_profiler_upside", 0)
         risk_sc    = st.session_state.get("_profiler_risk", risk_scores)
+        dnse_data  = st.session_state.get("_profiler_dnse", {})
 
-        # Also get technical score from existing scan logic if available
-        tech_score = None
-        if not (price_df is None or price_df.empty):
+        # Get technical score from DNSE analysis (preferred) or scan logic
+        tech_score = dnse_data.get("tech_score") if dnse_data.get("has_data") else None
+        if tech_score is None and not (price_df is None or price_df.empty):
             try:
                 ind_df = calculate_indicators(price_df)
                 if not ind_df.empty:
@@ -3248,8 +3708,9 @@ Sector: <b>{sector}</b></span>""", unsafe_allow_html=True)
                 pass
 
         composite = compute_composite_fundamental_score(risk_sc, upside_pct, tech_score)
-        rec_key, rec_color, rationale = get_recommendation(
-            composite, upside_pct, risk_sc, st.session_state.lang)
+        # Use enhanced recommendation with DNSE data
+        rec_key, rec_color, rationale = get_recommendation_enhanced(
+            composite, upside_pct, risk_sc, dnse_data, st.session_state.lang)
         rec_label = L.get(rec_key, rec_key)
 
         # ── Main recommendation box ──
