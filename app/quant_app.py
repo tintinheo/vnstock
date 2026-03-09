@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v24.0                         ║
+║   Captain Seventh QUANT TERMINAL  v25.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v20 → v21:                                           ║
@@ -62,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v24.0",
+    page_title="Captain Seventh QUANT TERMINAL v25.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -109,7 +109,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v24.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v25.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -132,6 +132,7 @@ _LANG_VI = {
     "tab10": "📖 Hướng Dẫn",
     "tab11": "📝 Change Log",
     "tab12": "🔬 Smoke Test",
+    "tab15": "📋 Nhật Ký Audit",
     "tab13": "📈 Lịch Sử Dự Báo",
     "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
@@ -228,7 +229,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v24.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v25.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -251,6 +252,7 @@ _LANG_EN = {
     "tab10": "📖 Guide",
     "tab11": "📝 Change Log",
     "tab12": "🔬 Smoke Test",
+    "tab15": "📋 Audit Log",
     "tab13": "📈 Forecast Log",
     "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
@@ -349,6 +351,139 @@ _LANG_EN = {
 # Language init (before sidebar to avoid widget ordering issues)
 if "lang" not in st.session_state:
     st.session_state.lang = "VI"
+
+
+# ══════════════════════════════════════════════════════════════
+#  ENH-V25: TOOLTIP CSS + AUDIT INFRASTRUCTURE
+# ══════════════════════════════════════════════════════════════
+
+TOOLTIP_CSS = """
+<style>
+.q-tip { position:relative; display:inline-block; border-bottom:1px dotted #aaa; cursor:help; color:inherit; }
+.q-tip .q-tip-text {
+    visibility:hidden; opacity:0; background:#1a2035; color:#e8e8e8;
+    border:1px solid #4e9af1; border-radius:8px; padding:10px 14px;
+    font-size:12px; line-height:1.5; width:280px;
+    position:absolute; z-index:9999; bottom:125%; left:50%; transform:translateX(-50%);
+    transition:opacity .25s; pointer-events:none; box-shadow:0 4px 20px rgba(0,0,0,.5);
+}
+.q-tip .q-tip-text::after { content:""; position:absolute; top:100%; left:50%;
+    transform:translateX(-50%); border:6px solid transparent; border-top-color:#4e9af1; }
+.q-tip:hover .q-tip-text { visibility:visible; opacity:1; }
+.audit-entry { background:#111827; border-left:3px solid #4e9af1; border-radius:6px;
+    padding:10px 14px; margin:6px 0; font-size:12px; line-height:1.6; }
+.audit-entry.buy  { border-color:#00cc44; }
+.audit-entry.sell { border-color:#ff4444; }
+.audit-entry.warn { border-color:#ffaa00; }
+.insight-card { background:linear-gradient(135deg,#0f172a,#1e293b);
+    border:1px solid #334155; border-radius:12px; padding:16px 20px; margin:8px 0; }
+.insight-card h4 { margin:0 0 6px; color:#93c5fd; font-size:14px; }
+.insight-card p  { margin:0; color:#cbd5e1; font-size:13px; line-height:1.5; }
+</style>
+"""
+
+TOOLTIPS = {
+    "RSI":{
+        "VI": "RSI: Đo lường vận tốc thay đổi giá.<br>• &lt;35: Quá bán — tìm tín hiệu hồi phục<br>• &gt;65: Quá mua — rủi ro điều chỉnh<br>• 40–60: Trung tính",
+        "EN": "RSI: Measures price momentum.<br>• &lt;35: Oversold — watch for bounce<br>• &gt;65: Overbought — correction risk<br>• 40–60: Neutral",
+    },
+    "MACD":{
+        "VI": "MACD: So sánh EMA12 vs EMA26.<br>• MACD &gt; Signal: Momentum tăng<br>• Histogram mở rộng: Xu hướng mạnh thêm<br>• MACD &lt; Signal: Cảnh báo giảm",
+        "EN": "MACD: Compares EMA12 vs EMA26.<br>• MACD &gt; Signal: Bullish momentum<br>• Expanding histogram: Trend strengthening<br>• MACD &lt; Signal: Bearish caution",
+    },
+    "SMA50":{
+        "VI": "SMA50: Ngưỡng xác nhận xu hướng quan trọng nhất.<br>• Giá &gt; SMA50: Xu hướng TĂNG trung hạn ✅<br>• Giá &lt; SMA50: Xu hướng GIẢM — chia nhỏ lệnh",
+        "EN": "SMA50: Most important trend confirmation.<br>• Price &gt; SMA50: Medium-term UPTREND ✅<br>• Price &lt; SMA50: DOWNTREND — scale in carefully",
+    },
+    "EMA200":{
+        "VI": "EMA200: Xu hướng dài hạn.<br>• Golden Cross (EMA50&gt;EMA200): Tăng giá dài hạn ✅<br>• Death Cross (EMA50&lt;EMA200): Giảm giá dài hạn ⚠️",
+        "EN": "EMA200: Long-term trend line.<br>• Golden Cross (EMA50&gt;EMA200): Long-term bullish ✅<br>• Death Cross (EMA50&lt;EMA200): Long-term bearish ⚠️",
+    },
+    "BB":{
+        "VI": "Bollinger Bands (20 ngày ±2σ).<br>• Giá &lt; BB Lower: Ngoài dải — xác suất hồi phục cao<br>• Giá &gt; BB Upper: Cảnh báo điều chỉnh<br>• BB thắt: Sắp đột phá",
+        "EN": "Bollinger Bands (20-day ±2σ).<br>• Price &lt; BB Lower: Mean reversion likely<br>• Price &gt; BB Upper: Correction warning<br>• BB squeeze: Breakout imminent",
+    },
+    "ADX":{
+        "VI": "ADX: Sức mạnh xu hướng (không phân biệt tăng/giảm).<br>• &lt;15: Đi ngang — tránh lệnh xu hướng<br>• 15–25: Xu hướng hình thành<br>• &gt;25: Xu hướng rõ ràng ✅",
+        "EN": "ADX: Trend strength (direction-agnostic).<br>• &lt;15: Sideways — avoid trend entries<br>• 15–25: Trend forming<br>• &gt;25: Clear trend ✅",
+    },
+    "VWAP":{
+        "VI": "VWAP 20 ngày: Giá bình quân theo khối lượng.<br>• Giá &gt; VWAP: Mua ròng chiếm ưu thế ✅<br>• Giá &lt; VWAP: Bán ròng — thận trọng",
+        "EN": "VWAP 20-day: Volume-weighted average price.<br>• Price &gt; VWAP: Net buying dominates ✅<br>• Price &lt; VWAP: Net selling — caution",
+    },
+    "ROE":{
+        "VI": "ROE: Hiệu quả vốn cổ đông.<br>• &gt;20%: Tốt<br>• 12–20%: Khá<br>• &lt;10%: Yếu",
+        "EN": "ROE: Shareholder capital efficiency.<br>• &gt;20%: Excellent<br>• 12–20%: Good<br>• &lt;10%: Weak",
+    },
+    "PE":{
+        "VI": "P/E: Bội số thu nhập. KHÔNG dùng cho Ngân hàng (dùng P/B).<br>• &lt; P/E ngành: Có thể đang rẻ<br>• &gt; P/E ngành: Kỳ vọng cao hoặc đắt",
+        "EN": "P/E: Earnings multiple. NOT for Banking (use P/B).<br>• Below sector P/E: Potentially cheap<br>• Above sector P/E: High growth priced in or expensive",
+    },
+    "composite_score":{
+        "VI": "Điểm Tổng Hợp (0–100): Kết hợp kỹ thuật + cơ bản + rủi ro.<br>• 70–100: Tốt, rủi ro thấp<br>• 50–70: Trung bình, cần xác nhận thêm<br>• &lt;50: Yếu, thận trọng",
+        "EN": "Composite Score (0–100): Technical + fundamental + risk blend.<br>• 70–100: Strong, low risk<br>• 50–70: Moderate, needs confirmation<br>• &lt;50: Weak, exercise caution",
+    },
+    "ATR":{
+        "VI": "ATR: Biên độ biến động bình quân 14 ngày.<br>• Dùng để tính Stop-Loss (SL = Giá - 1.5×ATR)<br>• ATR lớn: Biến động cao — tăng khoảng cách SL",
+        "EN": "ATR: 14-day average true range (volatility).<br>• Used for Stop-Loss (SL = Price - 1.5×ATR)<br>• High ATR: High volatility — widen SL distance",
+    },
+}
+
+def tip(label: str, key: str, lang: str = "VI") -> str:
+    tt = TOOLTIPS.get(key, {})
+    text = tt.get(lang, tt.get("VI", ""))
+    if not text: return label
+    return f'<span class="q-tip">{label}<span class="q-tip-text">{text}</span></span>'
+
+
+# ─── Universal Audit Log ──────────────────────────────────────
+def append_audit(category: str, action: str, ticker: str, signal: str,
+                 score: float, details: dict, lang: str = "VI"):
+    """Append structured audit entry. Called from every analysis action."""
+    if "audit_log" not in st.session_state:
+        st.session_state.audit_log = []
+    entry = {
+        "ts":       datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "date":     datetime.now().strftime("%Y-%m-%d"),
+        "time":     datetime.now().strftime("%H:%M:%S"),
+        "category": category,
+        "action":   action,
+        "ticker":   ticker,
+        "signal":   signal,
+        "score":    round(float(score or 0), 2),
+        "details":  details,
+        "lang":     lang,
+    }
+    st.session_state.audit_log.insert(0, entry)
+    if len(st.session_state.audit_log) > 3000:
+        st.session_state.audit_log = st.session_state.audit_log[:3000]
+    try:
+        import json as _json
+        _apath = os.path.join(DATA_DIR, "audit_log.jsonl")
+        with open(_apath, "a", encoding="utf-8") as _f:
+            _f.write(_json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        pass
+
+
+def load_audit_from_disk() -> list:
+    """Load audit log from JSONL file on disk."""
+    import json as _json
+    _apath = os.path.join(DATA_DIR, "audit_log.jsonl")
+    entries = []
+    if not os.path.exists(_apath): return entries
+    try:
+        with open(_apath, "r", encoding="utf-8") as _f:
+            for line in _f:
+                line = line.strip()
+                if line:
+                    try: entries.append(_json.loads(line))
+                    except: pass
+        entries.sort(key=lambda x: x.get("ts", ""), reverse=True)
+    except Exception:
+        pass
+    return entries[:5000]
+
 
 # ══════════════════════════════════════════════════════════════
 #  PATHS & TRADING CONSTANTS
@@ -2307,6 +2442,15 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         "_ema9":        ema9_v,  "_ema21": ema21_v, "_ema50": ema50_v, "_ema200": ema200_v,
         "_atr":         _atr,    "_stop":  _stop_loss, "_tp1": _tp1, "_tp2": _tp2,
     }
+    # ENH-V25: Audit log
+    try:
+        append_audit("SCANNER", "SCAN_TICKER", t, hanh_vi, score, {
+            "close": c_v, "rsi": round(rsi_v,1), "adx": round(adx_v,1) if adx_v else 0,
+            "sma50": round(s50) if s50 else None, "atr": round(_atr,0),
+            "stop_loss": _stop_loss, "tp1": _tp1, "tp2": _tp2,
+            "confirms": len(confirms), "src": src, "sector": get_sector(t),
+        }, lang)
+    except Exception: pass
     return row, src, None
 
 # ══════════════════════════════════════════════════════════════
@@ -3424,6 +3568,171 @@ def score_fundamental_risk(ratio_df: pd.DataFrame,
         elif pe < 40:  scores["valuation"] = 7.0
         else:          scores["valuation"] = 9.0
 
+    # Build human-readable explanation for each dimension
+    explanations = {}
+    de_val = _latest(ratio_df, "payableOnEquity") or _latest(ratio_df, "D/E")
+    roe_val = _latest(ratio_df, "roe") or _latest(ratio_df, "ROE")
+    npm_val = _latest(ratio_df, "netProfitMargin") or _latest(ratio_df, "Biên ròng")
+    cr_val  = _latest(ratio_df, "currentPayment") or _latest(ratio_df, "Curr")
+    pe_val  = _latest(ratio_df, "priceToEarning") or _latest(ratio_df, "P/E")
+
+    # Debt explanation
+    if de_val is not None:
+        if de_val < 0.5:
+            explanations["debt"] = {
+                "VI": f"D/E = {de_val:.2f} — Rất thấp (<0.5). Cấu trúc vốn cực kỳ an toàn, không phụ thuộc vào nợ vay. Rủi ro tài chính tối thiểu.",
+                "EN": f"D/E = {de_val:.2f} — Very low (<0.5). Extremely safe capital structure, minimal financial risk.",
+            }
+        elif de_val < 1.0:
+            explanations["debt"] = {
+                "VI": f"D/E = {de_val:.2f} — Thấp (0.5–1.0). Nợ vay được quản lý tốt, cấu trúc vốn lành mạnh.",
+                "EN": f"D/E = {de_val:.2f} — Low (0.5–1.0). Well-managed debt, healthy capital structure.",
+            }
+        elif de_val < 2.0:
+            explanations["debt"] = {
+                "VI": f"D/E = {de_val:.2f} — Trung bình (1–2). Mức nợ chấp nhận được, cần theo dõi chi phí lãi vay.",
+                "EN": f"D/E = {de_val:.2f} — Moderate (1–2). Acceptable leverage, monitor interest costs.",
+            }
+        elif de_val < 3.0:
+            explanations["debt"] = {
+                "VI": f"D/E = {de_val:.2f} — Cao (2–3). Gánh nặng nợ đáng kể, dễ bị tổn thương khi lãi suất tăng.",
+                "EN": f"D/E = {de_val:.2f} — High (2–3). Significant debt burden, vulnerable to rising rates.",
+            }
+        else:
+            explanations["debt"] = {
+                "VI": f"D/E = {de_val:.2f} — Rất cao (>3). Cấu trúc vốn nguy hiểm, rủi ro mất khả năng thanh toán.",
+                "EN": f"D/E = {de_val:.2f} — Very high (>3). Dangerous capital structure, solvency risk.",
+            }
+    else:
+        explanations["debt"] = {"VI": "Không có dữ liệu D/E từ nguồn hiện tại.", "EN": "D/E data unavailable from current source."}
+
+    # Liquidity explanation
+    if cr_val is not None:
+        if cr_val > 2.5:
+            explanations["liquidity"] = {
+                "VI": f"Hệ số hiện thời = {cr_val:.2f} — Tốt (>2.5). Khả năng thanh toán ngắn hạn rất mạnh.",
+                "EN": f"Current Ratio = {cr_val:.2f} — Good (>2.5). Strong short-term liquidity.",
+            }
+        elif cr_val > 1.5:
+            explanations["liquidity"] = {
+                "VI": f"Hệ số hiện thời = {cr_val:.2f} — Khá (1.5–2.5). Thanh khoản ngắn hạn ổn định.",
+                "EN": f"Current Ratio = {cr_val:.2f} — Fair (1.5–2.5). Adequate short-term liquidity.",
+            }
+        elif cr_val > 1.0:
+            explanations["liquidity"] = {
+                "VI": f"Hệ số hiện thời = {cr_val:.2f} — Thấp (1–1.5). Thanh khoản tương đối chặt chẽ, cần theo dõi dòng tiền.",
+                "EN": f"Current Ratio = {cr_val:.2f} — Low (1–1.5). Tight liquidity, monitor cash flow.",
+            }
+        else:
+            explanations["liquidity"] = {
+                "VI": f"Hệ số hiện thời = {cr_val:.2f} — Rủi ro cao (<1). Nợ ngắn hạn vượt tài sản ngắn hạn.",
+                "EN": f"Current Ratio = {cr_val:.2f} — High risk (<1). Short-term liabilities exceed current assets.",
+            }
+    else:
+        explanations["liquidity"] = {"VI": "Không có dữ liệu hệ số thanh khoản.", "EN": "Liquidity ratio data unavailable."}
+
+    # Profitability explanation
+    if roe_val is not None:
+        roe_p = roe_val * 100 if roe_val < 1 else roe_val
+        npm_p = (npm_val * 100 if npm_val and npm_val < 1 else npm_val) if npm_val else None
+        npm_str = f", Biên ròng={npm_p:.1f}%" if npm_p else ""
+        if roe_p > 20:
+            explanations["profitability"] = {
+                "VI": f"ROE = {roe_p:.1f}%{npm_str} — Xuất sắc (>20%). Doanh nghiệp tạo giá trị vượt trội cho cổ đông. Lợi thế cạnh tranh bền vững.",
+                "EN": f"ROE = {roe_p:.1f}%{npm_str} — Excellent (>20%). Outstanding value creation. Sustainable competitive advantage.",
+            }
+        elif roe_p > 12:
+            explanations["profitability"] = {
+                "VI": f"ROE = {roe_p:.1f}%{npm_str} — Tốt (12–20%). Khả năng sinh lời trên mức trung bình, quản lý hiệu quả.",
+                "EN": f"ROE = {roe_p:.1f}%{npm_str} — Good (12–20%). Above-average profitability, efficient management.",
+            }
+        elif roe_p > 5:
+            explanations["profitability"] = {
+                "VI": f"ROE = {roe_p:.1f}%{npm_str} — Trung bình (5–12%). Khả năng sinh lời ở mức tương đối thấp. Cần cải thiện hiệu quả.",
+                "EN": f"ROE = {roe_p:.1f}%{npm_str} — Average (5–12%). Below-average profitability, efficiency improvement needed.",
+            }
+        elif roe_p > 0:
+            explanations["profitability"] = {
+                "VI": f"ROE = {roe_p:.1f}%{npm_str} — Yếu (0–5%). Lợi nhuận thấp, đặt câu hỏi về lợi thế cạnh tranh.",
+                "EN": f"ROE = {roe_p:.1f}%{npm_str} — Weak (0–5%). Low profitability, competitive advantage in question.",
+            }
+        else:
+            explanations["profitability"] = {
+                "VI": f"ROE = {roe_p:.1f}%{npm_str} — Thua lỗ. Doanh nghiệp đang phá huỷ giá trị cổ đông.",
+                "EN": f"ROE = {roe_p:.1f}%{npm_str} — Loss-making. Destroying shareholder value.",
+            }
+    else:
+        explanations["profitability"] = {"VI": "Không có dữ liệu ROE.", "EN": "ROE data unavailable."}
+
+    # Growth explanation (from income_df)
+    if not income_df.empty:
+        rev_col = next((c for c in income_df.columns
+                        if any(k in c for k in ["revenue","Revenue","Doanh thu"])), None)
+        if rev_col:
+            revs = pd.to_numeric(income_df[rev_col], errors="coerce").dropna()
+            if len(revs) >= 4:
+                recent = revs.iloc[:4].mean(); older = revs.iloc[4:8].mean() if len(revs) >= 8 else revs.iloc[-4:].mean()
+                growth = (recent - older) / abs(older) if older != 0 else 0
+                g_pct = growth * 100
+                if g_pct > 20:
+                    explanations["growth"] = {
+                        "VI": f"Tăng trưởng doanh thu = +{g_pct:.1f}%/năm — Tăng trưởng cao. Doanh nghiệp đang mở rộng quy mô nhanh.",
+                        "EN": f"Revenue growth = +{g_pct:.1f}%/yr — High growth. Business rapidly scaling.",
+                    }
+                elif g_pct > 10:
+                    explanations["growth"] = {
+                        "VI": f"Tăng trưởng doanh thu = +{g_pct:.1f}%/năm — Tốt. Doanh nghiệp tăng trưởng ổn định.",
+                        "EN": f"Revenue growth = +{g_pct:.1f}%/yr — Good. Stable, consistent growth.",
+                    }
+                elif g_pct > 0:
+                    explanations["growth"] = {
+                        "VI": f"Tăng trưởng doanh thu = +{g_pct:.1f}%/năm — Yếu. Tăng trưởng nhỏ, gần như đình trệ.",
+                        "EN": f"Revenue growth = +{g_pct:.1f}%/yr — Weak. Barely growing, near stagnation.",
+                    }
+                elif g_pct > -10:
+                    explanations["growth"] = {
+                        "VI": f"Tăng trưởng doanh thu = {g_pct:.1f}%/năm — Suy giảm nhẹ. Cần theo dõi xu hướng dài hạn.",
+                        "EN": f"Revenue growth = {g_pct:.1f}%/yr — Slight decline. Monitor long-term trend.",
+                    }
+                else:
+                    explanations["growth"] = {
+                        "VI": f"Tăng trưởng doanh thu = {g_pct:.1f}%/năm — Suy giảm mạnh. Tín hiệu cảnh báo cơ bản đáng lo ngại.",
+                        "EN": f"Revenue growth = {g_pct:.1f}%/yr — Sharp decline. Concerning fundamental warning sign.",
+                    }
+    if "growth" not in explanations:
+        explanations["growth"] = {"VI": "Không đủ dữ liệu doanh thu để đánh giá tăng trưởng.", "EN": "Insufficient revenue data to assess growth."}
+
+    # Valuation explanation
+    if pe_val is not None and pe_val > 0:
+        if pe_val < 8:
+            explanations["valuation"] = {
+                "VI": f"P/E = {pe_val:.1f} — Rất rẻ (<8). Có thể bị định giá thấp hoặc thị trường lo ngại về chất lượng lợi nhuận.",
+                "EN": f"P/E = {pe_val:.1f} — Very cheap (<8). May be undervalued or market concerned about earnings quality.",
+            }
+        elif pe_val < 15:
+            explanations["valuation"] = {
+                "VI": f"P/E = {pe_val:.1f} — Hợp lý (8–15). Định giá thị trường phản ánh giá trị hợp lý.",
+                "EN": f"P/E = {pe_val:.1f} — Fair (8–15). Market price reflects reasonable value.",
+            }
+        elif pe_val < 25:
+            explanations["valuation"] = {
+                "VI": f"P/E = {pe_val:.1f} — Đắt vừa (15–25). Thị trường kỳ vọng tăng trưởng; cần kiểm tra xem có cơ sở không.",
+                "EN": f"P/E = {pe_val:.1f} — Moderately expensive (15–25). Growth expectations priced in; verify if justified.",
+            }
+        elif pe_val < 40:
+            explanations["valuation"] = {
+                "VI": f"P/E = {pe_val:.1f} — Đắt (25–40). Định giá cao, cần tăng trưởng mạnh để biện hộ.",
+                "EN": f"P/E = {pe_val:.1f} — Expensive (25–40). High valuation requires strong growth justification.",
+            }
+        else:
+            explanations["valuation"] = {
+                "VI": f"P/E = {pe_val:.1f} — Rất đắt (>40). Rủi ro định giá cao, dễ điều chỉnh mạnh nếu tăng trưởng không đạt kỳ vọng.",
+                "EN": f"P/E = {pe_val:.1f} — Very expensive (>40). High valuation risk; sharp correction if growth disappoints.",
+            }
+    else:
+        explanations["valuation"] = {"VI": "Không có dữ liệu P/E.", "EN": "P/E data unavailable."}
+
+    scores["_explanations"] = explanations
     return scores
 
 def compute_composite_fundamental_score(risk_scores: dict,
@@ -3804,6 +4113,7 @@ def get_unified_recommendation(tech_signal: dict, fund_composite: float,
 # ══════════════════════════════════════════════════════════════
 def render_stock_profiler_tab():
     L = _LANG_VI if st.session_state.lang == "VI" else _LANG_EN
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
     st.title(L["sp_title"])
     is_vi = st.session_state.lang == "VI"
 
@@ -3829,6 +4139,10 @@ def render_stock_profiler_tab():
     if run_btn and ticker_raw.strip():
         raw_tickers = [t.strip().upper() for t in ticker_raw.replace(",", ";").split(";") if t.strip()]
         st.session_state.profiler_result = {"tickers": raw_tickers, "yearly": yearly}
+        # Pre-log profiler run
+        for _t in raw_tickers:
+            append_audit("PROFILER", "PROFILER_RUN", _t, "ANALYSING", 0,
+                         {"yearly": yearly, "n_tickers": len(raw_tickers)}, st.session_state.lang)
 
     result       = st.session_state.profiler_result
     saved_tickers = result.get("tickers", [])
@@ -4446,6 +4760,33 @@ def render_stock_profiler_tab():
             with mc4: st.metric("EPS (đ)", f"{eps_eff:,.0f}" if eps_eff > 0 else "–")
             with mc5: st.metric("BVPS (đ)", f"{bvps_eff:,.0f}" if bvps_eff > 0 else "–")
 
+            # ENH-V25: Valuation explanation
+            if fair_val > 0:
+                up = upside_pct
+                if up > 25:
+                    expl_color_v, expl_icon = "#00cc44", "🟢"
+                    expl_vi = f"**Chiết khấu sâu ({up:+.1f}%)**: Giá thị trường đang thấp hơn giá trị hợp lý ước tính {abs(up):.0f}%. Đây là vùng tích lũy hấp dẫn cho nhà đầu tư dài hạn. Phương pháp định giá: {val_method.get('method_label','')}"
+                    expl_en = f"**Deep discount ({up:+.1f}%)**: Market price is {abs(up):.0f}% below estimated fair value. Attractive accumulation zone for long-term investors. Method: {val_method.get('method_label','')}"
+                elif up > 10:
+                    expl_color_v, expl_icon = "#88cc44", "🟩"
+                    expl_vi = f"**Chiết khấu vừa phải ({up:+.1f}%)**: Cổ phiếu giao dịch dưới giá trị hợp lý, tiềm năng tăng giá trung hạn. Phương pháp: {val_method.get('method_label','')}"
+                    expl_en = f"**Moderate discount ({up:+.1f}%)**: Stock below fair value, medium-term upside potential. Method: {val_method.get('method_label','')}"
+                elif up > -10:
+                    expl_color_v, expl_icon = "#ffaa00", "🟡"
+                    expl_vi = f"**Định giá hợp lý ({up:+.1f}%)**: Giá thị trường phản ánh gần đúng giá trị cơ bản. Chờ pullback để có điểm vào tốt hơn. Phương pháp: {val_method.get('method_label','')}"
+                    expl_en = f"**Fair value ({up:+.1f}%)**: Market price reflects fundamentals accurately. Wait for pullback for better entry. Method: {val_method.get('method_label','')}"
+                else:
+                    expl_color_v, expl_icon = "#ff4444", "🔴"
+                    expl_vi = f"**Định giá đắt ({up:+.1f}%)**: Giá thị trường vượt giá trị hợp lý ước tính {abs(up):.0f}%. Rủi ro điều chỉnh cao. Phương pháp: {val_method.get('method_label','')}"
+                    expl_en = f"**Overvalued ({up:+.1f}%)**: Market price exceeds fair value by {abs(up):.0f}%. High correction risk. Method: {val_method.get('method_label','')}"
+                st.markdown(
+                    f'<div style="background:{expl_color_v}15;border-left:3px solid {expl_color_v};'
+                    f'border-radius:6px;padding:8px 14px;margin:6px 0;font-size:12px">'
+                    f'{expl_icon} {expl_vi if is_vi else expl_en}'
+                    f'<br><span style="color:#888;font-size:11px">'
+                    f'{"DCF: " + (str(round(dcf_val)) if dcf_val else "N/A") + " | PE: " + (str(round(pe_fair)) if pe_fair else "N/A") + " | PB: " + (str(round(pb_fair)) if pb_fair else "N/A")}'
+                    f'</span></div>', unsafe_allow_html=True)
+
             if eps == 0:
                 st.caption("ℹ️ EPS/BVPS ước tính từ giá thị trường / P/E ngành (thiếu dữ liệu tài chính).")
 
@@ -4576,6 +4917,26 @@ def render_stock_profiler_tab():
   <div style="font-size:26px;font-weight:bold;color:{color}">{score:.0f}/10</div>
   <div style="font-size:11px;color:{color}">{risk_txt}</div>
 </div>""", unsafe_allow_html=True)
+
+        st.markdown("---")
+
+        # ENH-V25: Show per-dimension explanations
+        risk_expl = risk_scores.get("_explanations", {})
+        if risk_expl:
+            st.markdown("**" + ("📝 Giải thích chi tiết từng chiều rủi ro:" if is_vi else "📝 Per-dimension risk explanations:") + "**")
+            for key, label in rl.items():
+                if key in risk_expl:
+                    expl_dict = risk_expl[key]
+                    expl_text = expl_dict.get("VI" if is_vi else "EN", "")
+                    if expl_text:
+                        score_v = risk_scores.get(key, 5.0)
+                        color_e = "#00cc44" if score_v <= 3 else "#ffaa00" if score_v <= 6 else "#ff4444"
+                        st.markdown(
+                            f'<div style="background:#111827;border-left:3px solid {color_e};'
+                            f'border-radius:6px;padding:8px 12px;margin:3px 0;font-size:12px">'
+                            f'<b style="color:{color_e}">{label} ({score_v:.0f}/10)</b><br>'
+                            f'<span style="color:#ccc">{expl_text}</span></div>',
+                            unsafe_allow_html=True)
 
         st.markdown("---")
 
@@ -5063,6 +5424,164 @@ def get_geopolitical_context(sector: str = None) -> dict:
     }
 
 
+
+# ══════════════════════════════════════════════════════════════
+#  ENH-V25: MARKET INSIGHTS — Daily briefing on app open
+# ══════════════════════════════════════════════════════════════
+def render_market_insights_panel():
+    """
+    ENH-V25: Auto market insights displayed every time the app opens.
+    Combines VN-Index level, global macro context, and session guidance.
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+
+    # Only show once per session (collapse if already shown)
+    if "insights_shown" not in st.session_state:
+        st.session_state.insights_shown = False
+
+    expanded_default = not st.session_state.insights_shown
+
+    with st.expander(
+        "🌅 " + ("Nhận định Thị trường Hôm nay — " if is_vi else "Today's Market Insights — ") +
+        datetime.now().strftime("%d/%m/%Y %H:%M"),
+        expanded=expanded_default):
+
+        st.session_state.insights_shown = True
+
+        geo = get_geopolitical_context()
+        dxy_lvl   = st.session_state.get("_world_dxy_level", None)
+        sp500_chg = st.session_state.get("_world_sp500_chg", 0) or 0
+        oil_chg   = st.session_state.get("_world_oil_chg", 0)   or 0
+        gold_chg  = st.session_state.get("_world_gold_chg", 0)  or 0
+        vni_chg   = st.session_state.get("_world_vni_chg", 0)   or 0
+
+        # Overall sentiment
+        macro_score = geo["score_adj"]
+        if macro_score >= 8:
+            sentiment_vi = "🟢 Tích cực — Dòng tiền ngoại thuận lợi, khẩu vị rủi ro tốt"
+            sentiment_en = "🟢 Positive — Favourable foreign flows, good risk appetite"
+            snt_color = "#00cc44"
+        elif macro_score >= 2:
+            sentiment_vi = "🟡 Thận trọng — Môi trường hỗn hợp, chọn lọc ngành"
+            sentiment_en = "🟡 Cautious — Mixed environment, be selective"
+            snt_color = "#ffaa00"
+        elif macro_score >= -5:
+            sentiment_vi = "🟠 Trung tính — Không có tín hiệu rõ ràng, giảm tỷ trọng"
+            sentiment_en = "🟠 Neutral — No clear signal, reduce exposure"
+            snt_color = "#ff8800"
+        else:
+            sentiment_vi = "🔴 Tiêu cực — Áp lực bán từ ngoại, risk-off toàn cầu"
+            sentiment_en = "🔴 Negative — Foreign selling pressure, global risk-off"
+            snt_color = "#ff4444"
+
+        st.markdown(
+            f'<div class="insight-card">'
+            f'<h4>{"Tâm lý thị trường tổng thể" if is_vi else "Overall Market Sentiment"}</h4>'
+            f'<p style="color:{snt_color};font-size:15px;font-weight:bold">'
+            f'{sentiment_vi if is_vi else sentiment_en}</p>'
+            f'<p style="color:#888;font-size:11px">Macro Score: {macro_score:+.0f} | '
+            f'{datetime.now().strftime("%A, %d %B %Y")}</p>'
+            f'</div>', unsafe_allow_html=True)
+
+        # Individual macro indicators
+        col1, col2, col3, col4 = st.columns(4)
+
+        with col1:
+            dxy_str = f"{dxy_lvl:.1f}" if dxy_lvl else "N/A"
+            dxy_color = "#ff4444" if (dxy_lvl and dxy_lvl >= 106) else ("#ffaa00" if dxy_lvl and dxy_lvl >= 103 else "#00cc44")
+            st.markdown(
+                f'<div class="insight-card">'
+                f'<h4>💵 DXY (USD Index)</h4>'
+                f'<p style="color:{dxy_color};font-size:18px;font-weight:bold">{dxy_str}</p>'
+                f'<p>{"≥106: Bất lợi mạnh cho EM" if dxy_lvl and dxy_lvl >= 106 else ("103–106: Áp lực vừa" if dxy_lvl and dxy_lvl >= 103 else "≤103: Thuận lợi cho VN") if dxy_lvl else ""}</p>'
+                f'</div>', unsafe_allow_html=True)
+
+        with col2:
+            sp_color = "#00cc44" if sp500_chg > 0.5 else ("#ff4444" if sp500_chg < -0.5 else "#888")
+            st.markdown(
+                f'<div class="insight-card">'
+                f'<h4>📈 S&P500</h4>'
+                f'<p style="color:{sp_color};font-size:18px;font-weight:bold">{sp500_chg:+.1f}%</p>'
+                f'<p>{"Tốt — risk appetite tăng" if sp500_chg > 1 else ("Xấu — risk-off" if sp500_chg < -1 else "Trung tính") if is_vi else ("Good — risk-on" if sp500_chg > 1 else ("Bad — risk-off" if sp500_chg < -1 else "Neutral"))}</p>'
+                f'</div>', unsafe_allow_html=True)
+
+        with col3:
+            oil_color = "#ffaa00" if abs(oil_chg) > 2 else "#888"
+            st.markdown(
+                f'<div class="insight-card">'
+                f'<h4>🛢️ {"Dầu WTI" if is_vi else "WTI Oil"}</h4>'
+                f'<p style="color:{oil_color};font-size:18px;font-weight:bold">{oil_chg:+.1f}%</p>'
+                f'<p>{"GAS/PVD tăng" if oil_chg > 2 else ("HVN/VJC chi phí tăng" if oil_chg > 0 else "Dầu khí chịu áp lực") if is_vi else ("GAS/PVD benefit" if oil_chg > 2 else ("HVN/VJC cost pressure" if oil_chg > 0 else "Oil sector pressured"))}</p>'
+                f'</div>', unsafe_allow_html=True)
+
+        with col4:
+            gold_color = "#ffaa00" if gold_chg > 1.5 else "#00cc44" if gold_chg < 0 else "#888"
+            st.markdown(
+                f'<div class="insight-card">'
+                f'<h4>🪙 {"Vàng" if is_vi else "Gold"}</h4>'
+                f'<p style="color:{gold_color};font-size:18px;font-weight:bold">{gold_chg:+.1f}%</p>'
+                f'<p>{"PNJ/SJC hưởng lợi" if gold_chg > 1 else ("Rủi ro risk-off" if gold_chg > 2 else "Ổn định") if is_vi else ("PNJ/SJC benefit" if gold_chg > 1 else ("Risk-off warning" if gold_chg > 2 else "Stable"))}</p>'
+                f'</div>', unsafe_allow_html=True)
+
+        # Geo-political detailed reasons
+        if geo["reasons"]:
+            st.markdown("**" + ("🌍 Các yếu tố vĩ mô chi tiết:" if is_vi else "🌍 Macro Detail:") + "**")
+            for r in geo["reasons"]:
+                st.caption(r)
+
+        # Session strategy
+        now_h = datetime.now().hour
+        now_m = datetime.now().minute
+        now_total = now_h * 60 + now_m
+
+        st.markdown("---")
+        st.markdown("**" + ("⏰ Chiến lược theo khung giờ:" if is_vi else "⏰ Session Strategy:") + "**")
+        if 9 * 60 <= now_total < 9 * 60 + 15:
+            session_txt_vi = "🔔 Mở cửa ATO — Spread rộng, biến động cao. Tránh vào lệnh ngay. Quan sát tín hiệu 30 phút đầu."
+            session_txt_en = "🔔 ATO Open — Wide spread, high volatility. Avoid entry. Observe first 30 minutes."
+        elif 9 * 60 + 15 <= now_total < 11 * 60 + 30:
+            session_txt_vi = "📊 Phiên sáng (9:15–11:30) — Quan sát và chờ tín hiệu xác nhận. Không mua đuổi."
+            session_txt_en = "📊 Morning session (9:15–11:30) — Observe and wait for confirmation. Don't chase."
+        elif 11 * 60 + 30 <= now_total < 13 * 60:
+            session_txt_vi = "⏸️ Nghỉ trưa — Thời gian tốt để phân tích và chuẩn bị lệnh buổi chiều."
+            session_txt_en = "⏸️ Lunch break — Good time to analyse and prepare afternoon orders."
+        elif 13 * 60 <= now_total <= 14 * 60:
+            session_txt_vi = "⭐ CỬA SỔ VÀNG (13:00–14:00) — Biến động giảm, khối lượng xác nhận. Thời điểm tốt nhất để vào lệnh."
+            session_txt_en = "⭐ GOLDEN WINDOW (13:00–14:00) — Volatility subsides, volume confirms. Best entry window."
+        elif 14 * 60 < now_total <= 14 * 60 + 30:
+            session_txt_vi = "💰 Chốt lời (14:00–14:30) — Cân nhắc bán nếu đã đạt TP1. Đặt lệnh ATC nếu cần."
+            session_txt_en = "💰 Profit-taking (14:00–14:30) — Consider selling if TP1 reached. Place ATC if needed."
+        elif now_total > 14 * 60 + 30:
+            session_txt_vi = "🔒 Sau ATC — Phiên đã đóng. Phân tích kết quả và chuẩn bị cho phiên kế tiếp."
+            session_txt_en = "🔒 Post-ATC — Session closed. Analyse results and prepare for next session."
+        else:
+            session_txt_vi = "⏳ Trước giờ mở cửa — Phân tích thị trường quốc tế, chuẩn bị danh sách theo dõi."
+            session_txt_en = "⏳ Pre-market — Analyse global markets, prepare watchlist."
+
+        st.info(session_txt_vi if is_vi else session_txt_en)
+
+        # Top sector recommendation
+        sector_recs_vi = []
+        sector_recs_en = []
+        if sp500_chg > 1:
+            sector_recs_vi.append("✅ Ngân hàng, Chứng khoán — hưởng lợi từ risk-on toàn cầu")
+            sector_recs_en.append("✅ Banking, Securities — benefit from global risk-on")
+        if oil_chg > 2:
+            sector_recs_vi.append("✅ Dầu khí (GAS, PVD, PVS) — dầu tăng hỗ trợ")
+            sector_recs_en.append("✅ Oil & Gas (GAS, PVD, PVS) — supported by oil price")
+        if dxy_lvl and dxy_lvl >= 106:
+            sector_recs_vi.append("⚠️ Giảm tỷ trọng ngành nhập khẩu nhiều (Thép, Dược, Bán lẻ)")
+            sector_recs_en.append("⚠️ Reduce import-heavy sectors (Steel, Pharma, Retail)")
+        if gold_chg > 1.5:
+            sector_recs_vi.append("✅ PNJ, SJC — vàng tăng hỗ trợ")
+            sector_recs_en.append("✅ PNJ, SJC — gold price supportive")
+        if sector_recs_vi or sector_recs_en:
+            recs = sector_recs_vi if is_vi else sector_recs_en
+            st.markdown("**" + ("📌 Khuyến nghị ngành hôm nay:" if is_vi else "📌 Sector recommendations today:") + "**")
+            for r in recs: st.caption(r)
+
+
 def render_sector_heatmap():
     """ENH-28: Sector Rotation Heatmap — money flow tracking per sector."""
     is_vi = st.session_state.lang == "VI"
@@ -5157,6 +5676,211 @@ def render_sector_heatmap():
 # ══════════════════════════════════════════════════════════════
 #  ENH-36: MODEL PORTFOLIOS (iFollow-style)
 # ══════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════
+#  ENH-V25: UNIVERSAL AUDIT LOG TAB
+# ══════════════════════════════════════════════════════════════
+def render_audit_log_tab():
+    """
+    ENH-V25: Comprehensive audit log for ALL app actions.
+    Shows every scan, profiler run, forecast, portfolio, ML run etc.
+    Enables comparison of recommendations vs actual market outcomes.
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    st.header("📋 " + ("Nhật Ký Toàn Diện — Audit Log" if is_vi else "Universal Audit Log"))
+    st.caption("📌 " + (
+        "Ghi lại MỌI hành động phân tích: scan, profiler, dự báo, danh mục, ML — "
+        "để audit, so sánh khuyến nghị với diễn biến thực tế."
+        if is_vi else
+        "Records EVERY analysis action: scans, profiler, forecasts, portfolios, ML — "
+        "for audit and comparison of recommendations against actual market outcomes."))
+
+    # Load from session + disk
+    mem_log = st.session_state.get("audit_log", [])
+    if not mem_log:
+        disk_log = load_audit_from_disk()
+        if disk_log:
+            st.session_state.audit_log = disk_log
+            mem_log = disk_log
+
+    # ── Filters ──────────────────────────────────────────────
+    col_f1, col_f2, col_f3, col_f4 = st.columns(4)
+    with col_f1:
+        cat_filter = st.selectbox("📂 " + ("Loại" if is_vi else "Category"),
+                                   ["ALL"] + AUDIT_CATEGORIES)
+    with col_f2:
+        sig_filter = st.selectbox("🎯 " + ("Tín hiệu" if is_vi else "Signal"),
+                                   ["ALL", "MUA", "BUY", "BÁN", "SELL", "THEO DÕI", "WATCH", "UP", "DOWN"])
+    with col_f3:
+        ticker_filter = st.text_input("🔍 Ticker", "").upper()
+    with col_f4:
+        date_filter = st.text_input("📅 " + ("Ngày (YYYY-MM-DD)" if is_vi else "Date (YYYY-MM-DD)"), "")
+
+    # ── Stats summary ────────────────────────────────────────
+    total = len(mem_log)
+    buy_ct  = sum(1 for e in mem_log if e.get("signal") in ("MUA","BUY","UP"))
+    sell_ct = sum(1 for e in mem_log if e.get("signal") in ("BÁN","SELL","DOWN"))
+    cat_ct  = len(set(e.get("category","") for e in mem_log))
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    m1.metric("📊 " + ("Tổng ghi" if is_vi else "Total entries"), total)
+    m2.metric("🟢 " + ("Khuyến nghị MUA/UP" if is_vi else "BUY/UP recs"), buy_ct)
+    m3.metric("🔴 " + ("Khuyến nghị BÁN/DOWN" if is_vi else "SELL/DOWN recs"), sell_ct)
+    m4.metric("📂 " + ("Loại hoạt động" if is_vi else "Action categories"), cat_ct)
+    m5.metric("💾 " + ("Lưu đĩa" if is_vi else "On disk"), "✅" if os.path.exists(os.path.join(DATA_DIR, "audit_log.jsonl")) else "❌")
+
+    # ── Filter application ───────────────────────────────────
+    filtered = mem_log
+    if cat_filter != "ALL":
+        filtered = [e for e in filtered if e.get("category") == cat_filter]
+    if sig_filter != "ALL":
+        filtered = [e for e in filtered if e.get("signal","").upper() == sig_filter.upper()]
+    if ticker_filter:
+        filtered = [e for e in filtered if ticker_filter in e.get("ticker","").upper()]
+    if date_filter:
+        filtered = [e for e in filtered if e.get("date","").startswith(date_filter)]
+
+    st.caption(f"🔎 {len(filtered)}/{total} " + ("mục sau lọc" if is_vi else "entries after filter"))
+
+    # ── Download buttons ─────────────────────────────────────
+    col_dl1, col_dl2 = st.columns(2)
+    with col_dl1:
+        if filtered:
+            import json as _json
+            dl_rows = []
+            for e in filtered[:1000]:
+                row = {k: v for k, v in e.items() if k != "details"}
+                details = e.get("details", {})
+                # Flatten important details
+                for dk in ["confirms", "score", "rsi", "adx", "sma50", "ema50", "atr",
+                            "stop_loss", "tp1", "tp2", "fair_val", "upside_pct",
+                            "composite_score", "mom_score"]:
+                    if dk in details:
+                        row[f"detail_{dk}"] = details[dk]
+                dl_rows.append(row)
+            df_dl = pd.DataFrame(dl_rows)
+            csv = df_dl.to_csv(index=False).encode("utf-8-sig")
+            st.download_button(
+                "📥 " + ("Tải CSV (đầy đủ)" if is_vi else "Download CSV (full)"),
+                csv,
+                f"audit_{datetime.now().strftime('%Y%m%d_%H%M')}.csv", "text/csv")
+    with col_dl2:
+        if st.button("🗑️ " + ("Xoá log phiên" if is_vi else "Clear session log")):
+            st.session_state.audit_log = []
+            st.success("✅ " + ("Đã xoá log phiên (file đĩa giữ nguyên)" if is_vi else "Session log cleared (disk file preserved)"))
+            st.rerun()
+
+    st.markdown("---")
+
+    # ── Entry display ────────────────────────────────────────
+    if not filtered:
+        st.info("📭 " + ("Chưa có mục nào. Chạy quét / phân tích để tạo audit entries." if is_vi
+                          else "No entries yet. Run scans/analyses to generate audit entries."))
+        st.markdown("**" + ("Các nguồn tạo audit log:" if is_vi else "Sources that generate audit entries:") + "**")
+        sources = [
+            "📊 Scanner — mỗi lần quét watchlist",
+            "🧬 Profiler — mỗi lần phân tích mã",
+            "🔬 Full Analysis — Deep Audit",
+            "🔮 Top Forecast — mỗi lần chạy dự báo",
+            "💼 Model Portfolios — mỗi lần xây danh mục",
+            "🧠 ML Forecast — mỗi lần chạy mô hình",
+        ] if is_vi else [
+            "📊 Scanner — every watchlist scan",
+            "🧬 Profiler — every ticker analysis",
+            "🔬 Full Analysis — Deep Audit",
+            "🔮 Top Forecast — every forecast run",
+            "💼 Model Portfolios — every portfolio build",
+            "🧠 ML Forecast — every model run",
+        ]
+        for s in sources: st.caption(s)
+        return
+
+    # Paginate
+    PAGE_SIZE = 30
+    total_pages = max(1, (len(filtered) - 1) // PAGE_SIZE + 1)
+    page = st.number_input("Page", min_value=1, max_value=total_pages, value=1, step=1) - 1
+    page_entries = filtered[page * PAGE_SIZE: (page + 1) * PAGE_SIZE]
+
+    for entry in page_entries:
+        sig  = entry.get("signal", "")
+        css_cls = ("buy"  if sig in ("MUA","BUY","UP")    else
+                   "sell" if sig in ("BÁN","SELL","DOWN") else "info")
+        cat  = entry.get("category", "")
+        tick = entry.get("ticker", "")
+        ts   = entry.get("ts", "")
+        sc   = entry.get("score", 0)
+        details = entry.get("details", {})
+
+        # Quick metrics from details
+        detail_str_parts = []
+        for dk, dlbl in [("rsi","RSI"), ("adx","ADX"), ("composite_score","CmpScore"),
+                          ("mom_score","MomScore"), ("fair_val","FairVal"),
+                          ("upside_pct","Upside"), ("stop_loss","SL"), ("tp1","TP1"),
+                          ("confirms","Confirms")]:
+            if dk in details and details[dk] is not None:
+                v = details[dk]
+                if isinstance(v, float): detail_str_parts.append(f"{dlbl}:{v:.1f}")
+                else: detail_str_parts.append(f"{dlbl}:{v}")
+        detail_inline = " | ".join(detail_str_parts[:6]) if detail_str_parts else "–"
+
+        sig_icon = {"MUA":"🟢","BUY":"🟢","UP":"🟢","BÁN":"🔴","SELL":"🔴","DOWN":"🔴"}.get(sig,"🟡")
+
+        st.markdown(
+            f'<div class="audit-entry {css_cls}">'
+            f'<b style="color:#ddd">[{ts}]</b> '
+            f'<span style="color:#4e9af1">[{cat}]</span> '
+            f'<b style="font-size:14px">{tick}</b> '
+            f'{sig_icon} <b style="color:{"#00cc44" if css_cls=="buy" else "#ff4444" if css_cls=="sell" else "#888"}">{sig}</b>'
+            f' | Score: {sc:.0f}'
+            f'<br><span style="color:#888;font-size:11px">{detail_inline}</span>'
+            f'</div>', unsafe_allow_html=True)
+
+        # Full detail expander
+        with st.expander(f"🔍 {'Chi tiết' if is_vi else 'Details'}: {tick} @ {ts[:16]}", expanded=False):
+            col_a, col_b = st.columns(2)
+            with col_a:
+                st.markdown("**" + ("Thông tin cơ bản:" if is_vi else "Basic Info:") + "**")
+                st.write({k: v for k, v in entry.items() if k != "details"})
+            with col_b:
+                if details:
+                    st.markdown("**" + ("Chi tiết phân tích:" if is_vi else "Analysis Details:") + "**")
+                    # Show details in a readable format
+                    for dk, dv in sorted(details.items()):
+                        if isinstance(dv, (int, float)):
+                            st.write(f"• **{dk}**: {dv:,.2f}" if isinstance(dv, float) else f"• **{dk}**: {dv}")
+                        elif isinstance(dv, str) and len(dv) < 200:
+                            st.write(f"• **{dk}**: {dv}")
+                        elif isinstance(dv, list) and len(dv) <= 10:
+                            st.write(f"• **{dk}**: {', '.join(str(x) for x in dv[:5])}")
+
+    # ── Audit comparison section ─────────────────────────────
+    st.markdown("---")
+    st.markdown("### 📊 " + ("So sánh Khuyến nghị vs Thực tế" if is_vi else "Recommendation vs Actual Comparison"))
+    st.caption("ℹ️ " + (
+        "Nhập giá thực tế để tính hiệu quả khuyến nghị. Dùng để đánh giá độ chính xác dự báo."
+        if is_vi else
+        "Enter actual prices to calculate recommendation effectiveness. Used to evaluate forecast accuracy."))
+
+    ticker_cmp = st.text_input("🎯 " + ("Mã để so sánh:" if is_vi else "Ticker to compare:"), key="audit_cmp_ticker").upper()
+    if ticker_cmp:
+        matching = [e for e in mem_log if e.get("ticker") == ticker_cmp]
+        if matching:
+            st.write(f"Found {len(matching)} audit entries for {ticker_cmp}")
+            cmp_cols = st.columns(min(len(matching[:5]), 5))
+            for i, e in enumerate(matching[:5]):
+                with cmp_cols[i % 5]:
+                    e_price = e.get("details", {}).get("close") or e.get("details", {}).get("price")
+                    e_sig   = e.get("signal", "")
+                    e_tp1   = e.get("details", {}).get("tp1")
+                    st.metric(
+                        f"{e_sig} @ {e.get('ts','')[:10]}",
+                        f"{e_price:,.0f}" if e_price else "N/A",
+                        f"TP1: {e_tp1:,.0f}" if e_tp1 else None)
+        else:
+            st.info(f"No audit entries for {ticker_cmp}")
+
+
 def render_model_portfolios_tab():
     """
     ENH-36: iFollow-style Model Portfolios.
@@ -5411,7 +6135,9 @@ def render_model_portfolios_tab():
 
 
 def render_scanner_tab():
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
     st.subheader("📡 " + ("Tín Hiệu Giao Dịch Tổng Hợp" if st.session_state.lang=="VI" else "Aggregated Trading Signals"))
+    render_market_insights_panel()
     watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
     st.info(f"Watchlist: **{len(watch_list)}** tickers  |  Pipeline: **DNSE** → SSI → CafeF  |  RSI Buy<{rsi_buy_thresh} / Sell>{rsi_sell_thresh}")
     st.caption("⏱️ " + ("Tín hiệu Scanner là **kỹ thuật ngắn hạn T+2 (1–5 phiên)**. Khác với Hồ Sơ Cổ Phiếu (cơ bản dài hạn 6–24 tháng) — hai góc nhìn bổ sung nhau, không mâu thuẫn."
@@ -5861,6 +6587,7 @@ def render_history_tab():
         st.info("No history yet. Run Market Scanner first." if st.session_state.lang=="EN" else "Chưa có lịch sử. Chạy Market Scanner trước.")
 
 def render_deep_audit_tab():
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
     hdr = "Deep Audit — 9 Indicators + Fundamentals" if st.session_state.lang=="EN" else "Deep Audit — 9 Chỉ Báo + Phân Tích Cơ Bản"
     st.subheader(f"🔍 {hdr}")
     ci1, ci2 = st.columns([3,1])
@@ -5935,6 +6662,18 @@ def render_deep_audit_tab():
                                 rt_price=rt_price, rt_ref=rt_ref,
                                 rt_ceil=rt_ceil, rt_floor=rt_floor, rt_src="SSI"
                             )
+                        # ENH-V25: Audit deep audit action
+                        try:
+                            append_audit("DEEP_AUDIT", "AUDIT_TICKER", sym, hanh_vi, score, {
+                                "close": c, "rsi": round(rsi,1), "adx": round(adx_v,1) if adx_v else 0,
+                                "sma50": round(s50) if s50 else None, "atr": round(atr_v,0) if atr_v else 0,
+                                "confirms": len(confirms), "score": round(score,1),
+                                "sector": get_sector(sym), "src": src,
+                                "stop_loss": round(c - 1.5*(atr_v or c*0.02), 0),
+                                "tp1": round(c + 2*(atr_v or c*0.02), 0),
+                                "tp2": round(c + 3.5*(atr_v or c*0.02), 0),
+                            }, lang)
+                        except Exception: pass
                         st.success(f"✅ {sym} analysed — Source: **{src}** | Exchange: {TICKER_EXCHANGE.get(sym,'HOSE')} | {len(df_a)} sessions")
                 else:
                     st.error(error_msg or f"Cannot load **{sym}**. Check ticker spelling.")
@@ -6619,7 +7358,7 @@ def render_global_markets_tab():
 def render_smoke_test_tab():
     hdr = "System Smoke Test — All Data Sources & Functions" if st.session_state.lang=="EN" else "Kiểm Tra Hệ Thống — Tất Cả Nguồn Dữ Liệu & Chức Năng"
     st.subheader(f"🔬 {hdr}")
-    st.caption("v24.0 — Mandatory smoke test: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE). Detects and auto-reports issues. Full traces → error_log.txt.")
+    st.caption("v25.0 — Mandatory smoke test: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE). Detects and auto-reports issues. Full traces → error_log.txt.")
 
     if st.button("🚀 Run Full Smoke Test" if st.session_state.lang=="EN" else "🚀 Chạy Kiểm Tra Đầy Đủ", type="primary"):
         results = []
@@ -6839,12 +7578,12 @@ def render_smoke_test_tab():
             st.success("🎉 **All tests passed!** System is fully operational.")
 
 def render_guide_tab():
-    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features — v24.0 BRD."""
+    """ENH-38/V25: Comprehensive bilingual (VI/EN AU) user guide for all features — v25.0 BRD."""
     is_vi = st.session_state.lang == "VI"
     st.header(f"📖 {L['tab10']}")
 
     lang_badge = "🇻🇳 Tiếng Việt" if is_vi else "🇦🇺 English (AU)"
-    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v24.0 | 14 tabs | Business Requirements Document (BRD)")
+    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v25.0 | 15 tabs | Business Requirements Document (BRD)")
 
     tabs_guide = st.tabs([
         "🚀 " + ("Bắt đầu" if is_vi else "Getting Started"),
@@ -7962,8 +8701,16 @@ Lot size HOSE = 100 shares | Buy fee: 0.15% | Sell fee: 0.25% + 0.1% tax
 #  CHANGE LOG TAB
 # ══════════════════════════════════════════════════════════════
 def _run_top_forecast(watch_list: list, horizon_days: int) -> tuple:
-    """ENH-37: Score each ticker for predicted direction over horizon_days."""
+    """
+    ENH-37 v25: Rich multi-factor forecast engine.
+    Each factor produces a numeric contribution AND a bilingual natural language
+    explanation so analysts can audit every decision step.
+    Returns (gainers, decliners) with full factor breakdown.
+    """
     scores = []
+    lang_now = getattr(st.session_state, "lang", "VI")
+    is_vi = lang_now == "VI"
+
     for ticker in watch_list:
         try:
             data, src, err = download_data(ticker, days=365, min_rows=40)
@@ -7975,81 +8722,280 @@ def _run_top_forecast(watch_list: list, horizon_days: int) -> tuple:
             def sv(k):
                 try: return float(last[k]) if pd.notna(last[k]) else None
                 except: return None
+
             c_v = sv("Close") or 0
             if c_v <= 0: continue
-            rsi    = sv("RSI") or 50
-            sma20  = sv("SMA20"); sma50 = sv("SMA50"); sma200 = sv("SMA200")
-            ema9   = sv("EMA9");  ema21 = sv("EMA21"); ema200_v = sv("EMA200")
-            macd   = sv("MACD"); macs  = sv("MACD_Signal")
-            adx    = sv("ADX") or 15
-            atr    = sv("ATR") or c_v * 0.02
-            obv    = sv("OBV"); obv_ma = sv("OBV_MA20")
-            avg_v  = float(data["Volume"].tail(20).mean())
-            last_v = float(last.get("Volume", avg_v))
-            sector = get_sector(ticker)
+            rsi     = sv("RSI") or 50
+            sma5    = sv("SMA5");  sma20 = sv("SMA20"); sma50 = sv("SMA50")
+            sma100  = sv("SMA100"); sma200 = sv("SMA200")
+            ema9    = sv("EMA9");  ema21 = sv("EMA21"); ema50 = sv("EMA50"); ema200_v = sv("EMA200")
+            macd    = sv("MACD"); macs  = sv("MACD_Signal")
+            adx     = sv("ADX") or 15
+            atr     = sv("ATR") or c_v * 0.02
+            obv     = sv("OBV"); obv_ma = sv("OBV_MA20")
+            stoch_k = sv("STOCH_K"); stoch_d = sv("STOCH_D")
+            cci     = sv("CCI"); wr = sv("WILLIAMS_R")
+            bb_low  = sv("BB_Lower"); bb_up = sv("BB_Upper")
+            avg_v   = float(data["Volume"].tail(20).mean())
+            last_v  = float(last.get("Volume", avg_v))
+            sector  = get_sector(ticker)
 
-            mom = 0.0
-            # RSI momentum
-            if rsi < 30: mom -= 15
-            elif rsi < 45: mom -= 5
-            elif rsi > 70: mom += 12
-            elif rsi > 55: mom += 5
-            # SMA trend
-            if c_v and sma20 and c_v > sma20: mom += 6
-            if c_v and sma50 and c_v > sma50: mom += 10
-            if c_v and sma200 and c_v > sma200: mom += 8
-            if ema9 and ema21 and ema9 > ema21: mom += 7
-            if ema9 and ema200_v and ema9 > ema200_v: mom += 5
-            # MACD
-            if macd and macs:
-                mom += 8 if macd > macs else -8
-                if len(data) > 2:
-                    ph = float(data["MACD"].iloc[-2]); ps = float(data["MACD_Signal"].iloc[-2])
-                    if (macd - macs) > (ph - ps): mom += 3
-            # ADX
-            if adx > 25: mom += 5 * (1 if (macd and macs and macd > macs) else -1)
-            # OBV
-            if obv and obv_ma and obv > obv_ma: mom += 6
-            # Volume
-            if avg_v > 0 and last_v / avg_v > 1.5: mom += 4
-            # Geopolitical
-            _geo = get_geopolitical_context(sector)
-            mom += _geo["score_adj"] * (horizon_days / 30)
+            # ── Factor-by-factor scoring WITH explanations ──────────────
+            factors = []   # list of (name_vi, name_en, contribution, explanation_vi, explanation_en)
 
-            # Direction
-            direction = "UP" if mom > 5 else ("DOWN" if mom < -5 else "NEUTRAL")
-            lang = st.session_state.lang
-            is_vi = lang == "VI"
-            reasons = []
+            def add_factor(name_vi, name_en, contrib, expl_vi, expl_en):
+                factors.append({
+                    "name_vi": name_vi, "name_en": name_en,
+                    "contrib": round(contrib, 1),
+                    "expl_vi": expl_vi, "expl_en": expl_en,
+                })
+
+            # 1. RSI
+            if rsi < 30:
+                add_factor("RSI quá bán", "RSI Oversold", -12,
+                    f"RSI={rsi:.1f} — Vùng quá bán sâu (<30). Áp lực bán đang cực kỳ cao. "
+                    f"Thường xảy ra sau chuỗi giảm mạnh. Xác suất hồi phục kỹ thuật ngắn hạn tăng "
+                    f"nhưng xu hướng giảm vẫn chiếm ưu thế. Điểm: -12.",
+                    f"RSI={rsi:.1f} — Deep oversold zone (<30). Extreme selling pressure. "
+                    f"Typically follows sharp decline. Short-term technical bounce likely "
+                    f"but downtrend still dominant. Score: -12.")
+            elif rsi < 45:
+                add_factor("RSI yếu", "RSI Weak", -5,
+                    f"RSI={rsi:.1f} — Vùng yếu (30–45). Momentum tiêu cực nhưng chưa quá bán. "
+                    f"Giá đang trong quá trình điều chỉnh. Điểm: -5.",
+                    f"RSI={rsi:.1f} — Weak zone (30–45). Negative momentum, not yet oversold. "
+                    f"Price in correction mode. Score: -5.")
+            elif rsi > 70:
+                add_factor("RSI quá mua", "RSI Overbought", +12,
+                    f"RSI={rsi:.1f} — Vùng quá mua (>70). Momentum rất mạnh, giá đang tăng nhanh. "
+                    f"Trong kỳ hạn {horizon_days} ngày, xu hướng tăng có thể tiếp tục nhưng "
+                    f"rủi ro điều chỉnh cũng tăng dần. Điểm: +12.",
+                    f"RSI={rsi:.1f} — Overbought (>70). Very strong momentum, rapid price gains. "
+                    f"Over {horizon_days}-day horizon, uptrend may continue but correction risk grows. Score: +12.")
+            elif rsi > 55:
+                add_factor("RSI tích cực", "RSI Positive", +5,
+                    f"RSI={rsi:.1f} — Vùng tích cực (55–70). Momentum tốt, dòng tiền đang vào. "
+                    f"Không quá mua, còn room tăng. Điểm: +5.",
+                    f"RSI={rsi:.1f} — Positive zone (55–70). Good momentum, money flowing in. "
+                    f"Not overbought, room to run. Score: +5.")
+            else:
+                add_factor("RSI trung tính", "RSI Neutral", 0,
+                    f"RSI={rsi:.1f} — Trung tính (45–55). Không có tín hiệu mạnh từ RSI. "
+                    f"Theo dõi các chỉ báo khác để xác định hướng. Điểm: 0.",
+                    f"RSI={rsi:.1f} — Neutral (45–55). No strong RSI signal. "
+                    f"Rely on other indicators for direction. Score: 0.")
+
+            # 2. SMA trend (most important)
+            sma_contrib = 0
+            sma_expl_vi = []; sma_expl_en = []
+            if c_v and sma20:
+                if c_v > sma20:
+                    sma_contrib += 6
+                    sma_expl_vi.append(f"Giá ({c_v:,.0f}) > SMA20 ({sma20:,.0f}) — xu hướng ngắn hạn tích cực (+6)")
+                    sma_expl_en.append(f"Price ({c_v:,.0f}) > SMA20 ({sma20:,.0f}) — positive short-term trend (+6)")
+                else:
+                    sma_contrib -= 6
+                    sma_expl_vi.append(f"Giá ({c_v:,.0f}) < SMA20 ({sma20:,.0f}) — xu hướng ngắn hạn tiêu cực (-6)")
+                    sma_expl_en.append(f"Price ({c_v:,.0f}) < SMA20 ({sma20:,.0f}) — negative short-term trend (-6)")
             if c_v and sma50:
-                reasons.append(("Giá > SMA50 ↑" if c_v>sma50 else "Giá < SMA50 ↓") if is_vi
-                                else ("Price > SMA50 ↑" if c_v>sma50 else "Price < SMA50 ↓"))
-            if c_v and sma200 and c_v > sma200:
-                reasons.append("Giá > SMA200 (trend dài hạn) ✅" if is_vi else "Price > SMA200 (long-term trend) ✅")
-            if ema9 and ema21 and ema9 > ema21:
-                reasons.append("EMA9 > EMA21 ✅")
-            if macd and macs:
-                reasons.append(("MACD bullish ✅" if macd>macs else "MACD bearish ⚠️"))
-            if rsi < 35:
-                reasons.append(f"RSI={rsi:.0f} oversold" + (" — tiềm năng bounce" if is_vi else " — bounce potential"))
-            elif rsi > 65:
-                reasons.append(f"RSI={rsi:.0f} overbought")
-            if obv and obv_ma and obv > obv_ma:
-                reasons.append("OBV > MA ✅")
-            for gr in _geo["reasons"][:1]: reasons.append(gr)
+                if c_v > sma50:
+                    sma_contrib += 10
+                    sma_expl_vi.append(f"Giá > SMA50 ({sma50:,.0f}) — xu hướng TĂNG trung hạn ✅ (+10)")
+                    sma_expl_en.append(f"Price > SMA50 ({sma50:,.0f}) — medium-term UPTREND ✅ (+10)")
+                else:
+                    sma_contrib -= 10
+                    sma_expl_vi.append(f"Giá < SMA50 ({sma50:,.0f}) — xu hướng GIẢM trung hạn ⚠️ (-10)")
+                    sma_expl_en.append(f"Price < SMA50 ({sma50:,.0f}) — medium-term DOWNTREND ⚠️ (-10)")
+            if c_v and sma200:
+                if c_v > sma200:
+                    sma_contrib += 8
+                    sma_expl_vi.append(f"Giá > SMA200 ({sma200:,.0f}) — xu hướng TĂNG dài hạn ✅ (+8)")
+                    sma_expl_en.append(f"Price > SMA200 ({sma200:,.0f}) — long-term UPTREND ✅ (+8)")
+                else:
+                    sma_contrib -= 8
+                    sma_expl_vi.append(f"Giá < SMA200 ({sma200:,.0f}) — xu hướng GIẢM dài hạn ⚠️ (-8)")
+                    sma_expl_en.append(f"Price < SMA200 ({sma200:,.0f}) — long-term DOWNTREND ⚠️ (-8)")
+            add_factor("Xu hướng SMA", "SMA Trend", sma_contrib,
+                "Phân tích xu hướng SMA20/50/200: " + " | ".join(sma_expl_vi) if sma_expl_vi else "Không đủ dữ liệu SMA.",
+                "SMA20/50/200 trend analysis: " + " | ".join(sma_expl_en) if sma_expl_en else "Insufficient SMA data.")
+
+            # 3. EMA cascade
+            ema_contrib = 0
+            ema_expl_vi = []; ema_expl_en = []
+            if ema9 and ema21:
+                if ema9 > ema21:
+                    ema_contrib += 7
+                    ema_expl_vi.append(f"EMA9 ({ema9:,.0f}) > EMA21 ({ema21:,.0f}) — momentum ngắn hạn tăng (+7)")
+                    ema_expl_en.append(f"EMA9 ({ema9:,.0f}) > EMA21 ({ema21:,.0f}) — short-term bullish momentum (+7)")
+                else:
+                    ema_contrib -= 7
+                    ema_expl_vi.append(f"EMA9 ({ema9:,.0f}) < EMA21 ({ema21:,.0f}) — momentum ngắn hạn giảm (-7)")
+                    ema_expl_en.append(f"EMA9 ({ema9:,.0f}) < EMA21 ({ema21:,.0f}) — short-term bearish momentum (-7)")
+            if ema50 and ema200_v:
+                if ema50 > ema200_v:
+                    ema_contrib += 5
+                    ema_expl_vi.append(f"Golden Cross: EMA50 > EMA200 — xu hướng dài hạn tích cực (+5)")
+                    ema_expl_en.append(f"Golden Cross: EMA50 > EMA200 — long-term positive trend (+5)")
+                else:
+                    ema_contrib -= 5
+                    ema_expl_vi.append(f"Death Cross: EMA50 < EMA200 — xu hướng dài hạn tiêu cực (-5)")
+                    ema_expl_en.append(f"Death Cross: EMA50 < EMA200 — long-term negative trend (-5)")
+            add_factor("Phân tích EMA", "EMA Analysis", ema_contrib,
+                "EMA cascade: " + " | ".join(ema_expl_vi) if ema_expl_vi else "Không đủ dữ liệu EMA.",
+                "EMA cascade: " + " | ".join(ema_expl_en) if ema_expl_en else "Insufficient EMA data.")
+
+            # 4. MACD
+            if macd is not None and macs is not None:
+                hist_now = macd - macs
+                hist_prev = 0
+                if len(data) > 2:
+                    try:
+                        hist_prev = float(data["MACD"].iloc[-2]) - float(data["MACD_Signal"].iloc[-2])
+                    except: pass
+                expanding = hist_now > hist_prev if macd > macs else hist_now < hist_prev
+                if macd > macs:
+                    contrib_m = 8 + (3 if expanding else 0)
+                    add_factor("MACD tăng", "MACD Bullish", contrib_m,
+                        f"MACD ({macd:.2f}) > Signal ({macs:.2f}) — dòng tiền đang VÀO. "
+                        f"Histogram dương{' và đang mở rộng ✅ — đà tăng đang tăng tốc' if expanding else ' nhưng thu hẹp — đà tăng chậm lại'}. "
+                        f"Điểm: +{contrib_m}.",
+                        f"MACD ({macd:.2f}) > Signal ({macs:.2f}) — money flowing IN. "
+                        f"Histogram positive{' and expanding ✅ — momentum accelerating' if expanding else ' but shrinking — momentum slowing'}. "
+                        f"Score: +{contrib_m}.")
+                else:
+                    contrib_m = -8 - (3 if expanding else 0)
+                    add_factor("MACD giảm", "MACD Bearish", contrib_m,
+                        f"MACD ({macd:.2f}) < Signal ({macs:.2f}) — dòng tiền đang RA. "
+                        f"Histogram âm{' và đang mở rộng ⚠️ — đà giảm tăng tốc' if expanding else ' nhưng thu hẹp — đà giảm yếu dần'}. "
+                        f"Điểm: {contrib_m}.",
+                        f"MACD ({macd:.2f}) < Signal ({macs:.2f}) — money flowing OUT. "
+                        f"Histogram negative{' and expanding ⚠️ — bearish momentum accelerating' if expanding else ' but shrinking — bearish momentum fading'}. "
+                        f"Score: {contrib_m}.")
+
+            # 5. ADX trend strength
+            if adx:
+                if adx > 25:
+                    direction_bias = 1 if (macd and macs and macd > macs) else -1
+                    contrib_adx = 5 * direction_bias
+                    add_factor("ADX xu hướng mạnh", "ADX Strong Trend", contrib_adx,
+                        f"ADX = {adx:.1f} (>25) — Xu hướng RÕ RÀNG. "
+                        f"Khi ADX > 25, xu hướng đang chiếm ưu thế {'tăng' if direction_bias > 0 else 'giảm'}. "
+                        f"Tín hiệu xu hướng đáng tin cậy hơn khi ADX cao. Điểm: {contrib_adx:+.0f}.",
+                        f"ADX = {adx:.1f} (>25) — CLEAR TREND. "
+                        f"ADX above 25 confirms {'bullish' if direction_bias > 0 else 'bearish'} trend dominance. "
+                        f"Trend-following signals more reliable. Score: {contrib_adx:+.0f}.")
+                else:
+                    add_factor("ADX thấp", "ADX Low", 0,
+                        f"ADX = {adx:.1f} (<25) — Không có xu hướng rõ ràng. Thị trường đang đi ngang. "
+                        f"Tránh lệnh theo xu hướng; phù hợp với chiến lược dao động. Điểm: 0.",
+                        f"ADX = {adx:.1f} (<25) — No clear trend. Market is ranging/sideways. "
+                        f"Avoid trend-following; oscillating strategy suits better. Score: 0.")
+
+            # 6. OBV (money flow proxy)
+            if obv is not None and obv_ma is not None:
+                if obv > obv_ma:
+                    add_factor("OBV dương", "OBV Positive", +6,
+                        f"OBV ({obv:,.0f}) > OBV_MA20 ({obv_ma:,.0f}) — Dòng tiền tích lũy tích cực. "
+                        f"Khối lượng mua tích lũy theo thời gian đang vượt trội hơn bán. "
+                        f"Smart money đang tích lũy. Điểm: +6.",
+                        f"OBV ({obv:,.0f}) > OBV_MA20 ({obv_ma:,.0f}) — Positive money flow accumulation. "
+                        f"Cumulative buy volume exceeds sell volume. Smart money accumulating. Score: +6.")
+                else:
+                    add_factor("OBV âm", "OBV Negative", -6,
+                        f"OBV ({obv:,.0f}) < OBV_MA20 ({obv_ma:,.0f}) — Dòng tiền phân phối. "
+                        f"Khối lượng bán tích lũy đang chiếm ưu thế — dấu hiệu smart money đang thoát hàng. "
+                        f"Điểm: -6.",
+                        f"OBV ({obv:,.0f}) < OBV_MA20 ({obv_ma:,.0f}) — Distribution phase. "
+                        f"Cumulative sell volume dominant — smart money distributing. Score: -6.")
+
+            # 7. Volume spike
+            if avg_v > 0 and last_v / avg_v > 1.5:
+                add_factor("Khối lượng đột biến", "Volume Spike", +4,
+                    f"Khối lượng phiên gần đây = {last_v/avg_v:.1f}× trung bình 20 phiên. "
+                    f"Tăng đột biến khối lượng xác nhận sự quan tâm của dòng tiền lớn. "
+                    f"Nếu đi kèm xu hướng tăng: tín hiệu tốt. Điểm: +4.",
+                    f"Recent session volume = {last_v/avg_v:.1f}× 20-session average. "
+                    f"Volume spike confirms institutional interest. "
+                    f"If accompanied by uptrend: strong signal. Score: +4.")
+
+            # 8. Bollinger Band position
+            if bb_low and bb_up:
+                if c_v < bb_low:
+                    add_factor("Giá dưới BB Lower", "Price below BB Lower", -8,
+                        f"Giá ({c_v:,.0f}) < BB Lower ({bb_low:,.0f}) — Giá đang ngoài dải dưới Bollinger. "
+                        f"Điều này phản ánh biến động bất thường về phía giảm. "
+                        f"Xác suất hồi về BB_Mid trong ngắn hạn cao, nhưng xu hướng giảm ngắn hạn đang chiếm ưu thế. Điểm: -8.",
+                        f"Price ({c_v:,.0f}) < BB Lower ({bb_low:,.0f}) — Price outside lower Bollinger Band. "
+                        f"Unusually high downside volatility. Mean reversion to BB_Mid likely short-term, "
+                        f"but near-term downtrend dominant. Score: -8.")
+                elif c_v > bb_up:
+                    add_factor("Giá trên BB Upper", "Price above BB Upper", +8,
+                        f"Giá ({c_v:,.0f}) > BB Upper ({bb_up:,.0f}) — Giá ngoài dải trên Bollinger. "
+                        f"Momentum cực kỳ mạnh; breakout thực sự trong xu hướng tăng có thể tiếp tục. "
+                        f"Tuy nhiên rủi ro điều chỉnh về BB_Mid tăng dần theo thời gian. Điểm: +8.",
+                        f"Price ({c_v:,.0f}) > BB Upper ({bb_up:,.0f}) — Price outside upper Bollinger Band. "
+                        f"Extreme bullish momentum; in an uptrend this can persist. "
+                        f"However mean-reversion risk to BB_Mid grows with time. Score: +8.")
+
+            # 9. Stochastic
+            if stoch_k is not None and stoch_d is not None:
+                if stoch_k < 20 and stoch_d < 20:
+                    add_factor("Stochastic quá bán", "Stochastic Oversold", -5,
+                        f"Stoch %K={stoch_k:.1f}, %D={stoch_d:.1f} — Cả hai dưới 20: Quá bán sâu. "
+                        f"Tín hiệu đảo chiều tiềm năng nhưng cần xác nhận giá trước khi vào lệnh. Điểm: -5.",
+                        f"Stoch %K={stoch_k:.1f}, %D={stoch_d:.1f} — Both below 20: Deep oversold. "
+                        f"Potential reversal signal but needs price confirmation before entry. Score: -5.")
+                elif stoch_k > 80 and stoch_d > 80:
+                    add_factor("Stochastic quá mua", "Stochastic Overbought", +5,
+                        f"Stoch %K={stoch_k:.1f}, %D={stoch_d:.1f} — Cả hai trên 80: Quá mua. "
+                        f"Momentum mạnh, xu hướng tăng đang chiếm ưu thế. Điểm: +5.",
+                        f"Stoch %K={stoch_k:.1f}, %D={stoch_d:.1f} — Both above 80: Overbought. "
+                        f"Strong momentum, uptrend dominant. Score: +5.")
+
+            # 10. Geopolitical / macro
+            _geo = get_geopolitical_context(sector)
+            geo_contrib = _geo["score_adj"] * (horizon_days / 30)
+            if _geo["reasons"]:
+                add_factor("Vĩ mô/Địa chính trị", "Macro/Geopolitical", geo_contrib,
+                    f"Tác động vĩ mô đến {sector} trong {horizon_days} ngày: " +
+                    " | ".join(_geo["reasons"][:3]) + f" Điểm tổng: {geo_contrib:+.1f}.",
+                    f"Macro impact on {sector} over {horizon_days} days: " +
+                    " | ".join(_geo["reasons"][:3]) + f" Total score: {geo_contrib:+.1f}.")
+
+            # Total momentum
+            mom = sum(f["contrib"] for f in factors)
+            direction = "UP" if mom > 5 else ("DOWN" if mom < -5 else "NEUTRAL")
+
+            # Short human summary (top 3 factors by abs contribution)
+            top_factors = sorted(factors, key=lambda x: abs(x["contrib"]), reverse=True)[:3]
+            summary_vi = "; ".join([f"[{f['name_vi']}: {f['contrib']:+.0f}] {f['expl_vi'][:80]}..." for f in top_factors])
+            summary_en = "; ".join([f"[{f['name_en']}: {f['contrib']:+.0f}] {f['expl_en'][:80]}..." for f in top_factors])
+
+            # Simple reasons list (for compact card display)
+            reasons_vi = [f"{f['name_vi']} ({f['contrib']:+.0f})" for f in top_factors]
+            reasons_en = [f"{f['name_en']} ({f['contrib']:+.0f})" for f in top_factors]
 
             scores.append({
-                "ticker": ticker, "sector": sector, "price": c_v,
-                "direction": direction, "mom_score": round(mom, 1),
-                "confidence": round(min(abs(mom)/50, 1.0)*100, 1),
-                "atr": round(atr, 0),
-                "stop_loss": round(c_v - 1.5*atr, 0),
-                "tp1": round(c_v + 2*atr, 0),
-                "tp2": round(c_v + 3.5*atr, 0),
-                "reasons": reasons, "rsi": round(rsi, 1), "adx": round(adx, 1), "src": src,
+                "ticker":      ticker,
+                "sector":      sector,
+                "price":       c_v,
+                "direction":   direction,
+                "mom_score":   round(mom, 1),
+                "confidence":  round(min(abs(mom)/60, 1.0)*100, 1),
+                "atr":         round(atr, 0),
+                "stop_loss":   round(c_v - 1.5*atr, 0),
+                "tp1":         round(c_v + 2*atr, 0),
+                "tp2":         round(c_v + 3.5*atr, 0),
+                "rsi":         round(rsi, 1),
+                "adx":         round(adx, 1),
+                "src":         src,
+                "factors":     factors,         # full factor breakdown
+                "summary_vi":  summary_vi,
+                "summary_en":  summary_en,
+                "reasons":     reasons_vi if is_vi else reasons_en,
             })
-        except Exception:
-            pass
+        except Exception as _e:
+            _log.debug(f"Top forecast {ticker}: {_e}")
 
     gainers   = sorted([s for s in scores if s["direction"]=="UP"],   key=lambda x: x["mom_score"], reverse=True)[:10]
     decliners = sorted([s for s in scores if s["direction"]=="DOWN"],  key=lambda x: x["mom_score"])[:10]
@@ -8057,20 +9003,47 @@ def _run_top_forecast(watch_list: list, horizon_days: int) -> tuple:
 
 
 def _render_forecast_card(s: dict, rank: int, is_vi: bool, card_type: str):
-    color = "#00cc44" if card_type=="gain" else "#ff4444"
-    arrow = "↑" if card_type=="gain" else "↓"
-    reasons_str = " | ".join(s["reasons"][:3]) if s["reasons"] else "–"
+    """Render a rich forecast card with expandable factor breakdown."""
+    color = "#00cc44" if card_type == "gain" else "#ff4444"
+    arrow = "↑" if card_type == "gain" else "↓"
+    reasons = s.get("reasons", [])
+    reasons_str = " | ".join(reasons[:3]) if reasons else "–"
+    summary = s.get("summary_vi" if is_vi else "summary_en", "")
+
     st.markdown(f"""
 <div style="background:{color}10;border-left:3px solid {color};border-radius:6px;
-     padding:8px 12px;margin:4px 0;font-size:12px">
-  <b style="color:{color};font-size:14px">#{rank} {s['ticker']}</b>
+     padding:10px 14px;margin:4px 0;font-size:12px">
+  <b style="color:{color};font-size:15px">#{rank} {s['ticker']}</b>
   <span style="color:#aaa;margin-left:8px">{s['sector']}</span>
-  <span style="float:right;color:{color};font-weight:bold">{arrow} {s['mom_score']:+.0f}</span><br>
-  <span style="color:#ddd">💰 {s['price']:,.0f}</span> | RSI:{s['rsi']} | ADX:{s['adx']}
-  | <span style="color:#ff5555">SL:{s['stop_loss']:,.0f}</span>
-  | <span style="color:#4e9af1">TP1:{s['tp1']:,.0f} TP2:{s['tp2']:,.0f}</span><br>
-  <span style="color:#999;font-size:11px">💡 {reasons_str}</span>
+  <span style="float:right;color:{color};font-weight:bold">{arrow} Score:{s['mom_score']:+.0f} | {s['confidence']:.0f}%</span><br>
+  <span style="color:#ddd">💰 {s['price']:,.0f} VNĐ</span>
+  &nbsp;|&nbsp; <span style="color:#888">RSI:{s['rsi']}</span>
+  &nbsp;|&nbsp; <span style="color:#888">ADX:{s['adx']}</span>
+  &nbsp;|&nbsp; <span style="color:#ff5555">SL:{s['stop_loss']:,.0f}</span>
+  &nbsp;|&nbsp; <span style="color:#4e9af1">TP1:{s['tp1']:,.0f} | TP2:{s['tp2']:,.0f}</span><br>
+  <span style="color:#aaa;font-size:11px">🔑 {reasons_str}</span>
 </div>""", unsafe_allow_html=True)
+
+    # Expandable factor breakdown
+    if s.get("factors"):
+        with st.expander(f"🔬 {'Phân tích chi tiết' if is_vi else 'Factor breakdown'} — {s['ticker']}", expanded=False):
+            if summary:
+                st.caption(f"📝 {'Tóm tắt' if is_vi else 'Summary'}: {summary[:300]}")
+            st.markdown("---")
+            for f in s["factors"]:
+                c_val = f["contrib"]
+                f_color = "#00cc44" if c_val > 0 else ("#ff4444" if c_val < 0 else "#888")
+                f_name = f["name_vi"] if is_vi else f["name_en"]
+                f_expl = f["expl_vi"] if is_vi else f["expl_en"]
+                bar_pct = min(abs(c_val)/15*100, 100)
+                st.markdown(
+                    f'<div style="margin:4px 0">'
+                    f'<span style="color:{f_color};font-weight:bold">{c_val:+.0f}</span> '
+                    f'<b style="color:#ddd">{f_name}</b>'
+                    f'<div style="background:#1a1f2e;border-radius:4px;height:6px;margin:2px 0">'
+                    f'<div style="width:{bar_pct:.0f}%;background:{f_color};height:6px;border-radius:4px"></div></div>'
+                    f'<span style="color:#999;font-size:11px">{f_expl}</span></div>',
+                    unsafe_allow_html=True)
 
 
 def _show_forecast_log(is_vi: bool, fc_log_key: str):
@@ -8123,6 +9096,26 @@ def render_top_forecast_tab():
             st.success("✅ " + (f"{len(gainers)} mã tăng, {len(decliners)} mã giảm" if is_vi
                                   else f"{len(gainers)} gainers, {len(decliners)} decliners"))
 
+        # ENH-V25: Audit each forecast entry
+        for g in gainers:
+            append_audit("TOP_FORECAST", f"FORECAST_{horizon}D", g["ticker"], "UP",
+                         g.get("mom_score", 0),
+                         {"price": g["price"], "mom_score": g["mom_score"],
+                          "confidence": g["confidence"], "stop_loss": g["stop_loss"],
+                          "tp1": g["tp1"], "tp2": g["tp2"], "rsi": g["rsi"],
+                          "adx": g["adx"], "sector": g["sector"],
+                          "factors_summary": str(g.get("summary_vi",""))[:200]},
+                         lang_now)
+        for d in decliners:
+            append_audit("TOP_FORECAST", f"FORECAST_{horizon}D", d["ticker"], "DOWN",
+                         d.get("mom_score", 0),
+                         {"price": d["price"], "mom_score": d["mom_score"],
+                          "confidence": d["confidence"], "stop_loss": d["stop_loss"],
+                          "tp1": d["tp1"], "tp2": d["tp2"], "rsi": d["rsi"],
+                          "adx": d["adx"], "sector": d["sector"],
+                          "factors_summary": str(d.get("summary_vi",""))[:200]},
+                         lang_now)
+
     forecast_data = st.session_state.get(fc_key)
     if not forecast_data:
         st.markdown("▶️ " + ("Bấm **Chạy Dự Báo** để bắt đầu." if is_vi else "Press **Run Forecast** to start."))
@@ -8164,6 +9157,24 @@ def render_top_forecast_tab():
 
 
 def render_changelog_tab():
+    # ENH-V25: Inject v25 at top
+    is_vi = st.session_state.lang == "VI"
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    v25_html = """
+<div style='background:#0f172a;border:1px solid #4e9af1;border-radius:10px;padding:16px 20px;margin:8px 0'>
+<h3 style='color:#4e9af1;margin:0 0 10px'>🚀 v25.0 — Insights, Audit & Explanations</h3>
+<p style='color:#cbd5e1;font-size:13px'>
+<b>ENH-V25-01</b> Bilingual Tooltip CSS — hover tooltips for RSI/MACD/SMA50/EMA200/BB/ADX/VWAP/ROE/PE/ATR trên mọi tab<br>
+<b>ENH-V25-02</b> Score Explanation Detail — giải thích ngôn ngữ tự nhiên cho từng chiều rủi ro (Nợ/Thanh khoản/Lợi nhuận/Tăng trưởng/Định giá) và valuation upside/discount<br>
+<b>ENH-V25-03</b> Combined Deep Audit + Stock Profiler — Tooltip CSS + risk/valuation explanations hiển thị trong cả hai tab<br>
+<b>ENH-V25-04</b> Universal Audit Log (Tab 15) — Ghi lại MỌI hành động: scanner, profiler, deep audit, top forecast, ML. Export CSV, lọc theo category/signal/ticker/date, so sánh khuyến nghị vs thực tế<br>
+<b>ENH-V25-05</b> Top Forecast 10-Factor Breakdown — mỗi dự báo giải thích 9–10 yếu tố (RSI, SMA trend, EMA cascade, MACD + histogram, ADX, OBV, Volume spike, BB position, Stochastic, Macro/Geo) bằng ngôn ngữ tự nhiên VI/EN với điểm đóng góp từng yếu tố<br>
+<b>ENH-V25-06</b> Daily Market Insights Panel — hiển thị tự động khi mở app: tâm lý thị trường tổng thể, DXY/S&P500/Oil/Gold metrics, chiến lược theo khung giờ (ATO/Sáng/Cửa sổ vàng 13–14h/ATC), khuyến nghị ngành hôm nay
+</p>
+</div>
+"""
+    st.markdown(v25_html, unsafe_allow_html=True)
+
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
 ## 📝 Application Change Log
@@ -8360,11 +9371,18 @@ def main():
         st.session_state.trade_history = pd.DataFrame()
     if "forecast_log" not in st.session_state:
         st.session_state.forecast_log = pd.DataFrame()
+    if "audit_log" not in st.session_state:
+        st.session_state.audit_log = []
+        # Load from disk on first run
+        try:
+            _disk_audit = load_audit_from_disk()
+            if _disk_audit: st.session_state.audit_log = _disk_audit
+        except Exception: pass
 
     # v24: Reorganized 14-tab menu for better UX
     # Group: [Trading] Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
     # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast
-    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14"]
+    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
@@ -8395,6 +9413,8 @@ def main():
         render_forecast_log_tab()
     with tabs[13]:
         render_top_forecast_tab()
+    with tabs[14]:
+        render_audit_log_tab()
 
 if __name__ == "__main__":
     main()
