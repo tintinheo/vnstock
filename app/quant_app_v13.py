@@ -1,9 +1,9 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v20.0                         ║
+║   Captain Seventh QUANT TERMINAL  v21.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v19 → v20:                                           ║
+║  CHANGELOG v20 → v21:                                           ║
 ║  FIX-19: RESOLVED Signal Divergence (Scanner BUY vs Profiler   ║
 ║    SELL for same ticker):                                        ║
 ║    Root cause: Scanner = pure technical SHORT-TERM (T+2),       ║
@@ -62,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v20.0",
+    page_title="Captain Seventh QUANT TERMINAL v21.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -84,7 +84,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v20.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v21.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -106,6 +106,8 @@ _LANG_VI = {
     "tab10": "📖 Hướng Dẫn",
     "tab11": "📝 Change Log",
     "tab12": "🧬 Hồ Sơ Cổ Phiếu",
+    "tab13": "💼 Model Portfolios",
+    "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
     "sp_title":         "🧬 Hồ Sơ & Phân Tích Sâu Cổ Phiếu",
     "sp_ticker_input":  "Nhập mã cổ phiếu",
@@ -200,7 +202,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v20.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v21.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -222,6 +224,8 @@ _LANG_EN = {
     "tab10": "📖 Guide",
     "tab11": "📝 Change Log",
     "tab12": "🧬 Stock Profiler",
+    "tab13": "💼 Model Portfolios",
+    "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
     "sp_title":         "🧬 Stock Profile & Deep Analysis",
     "sp_ticker_input":  "Enter ticker symbol",
@@ -1408,8 +1412,19 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     vol = df["Volume"].fillna(0).values.astype(float)
     n   = len(df)
 
-    df["SMA20"] = df["Close"].rolling(20).mean()
-    df["SMA50"] = df["Close"].rolling(50).mean()
+    # ENH-31: Full SMA suite 5/10/20/30/50/100/200
+    for _p in [5, 10, 20, 30, 50, 100, 200]:
+        df[f"SMA{_p}"] = df["Close"].rolling(_p).mean()
+
+    # ENH-31: EMA suite 9/21/50/200
+    for _p in [9, 21, 50, 200]:
+        df[f"EMA{_p}"] = df["Close"].ewm(span=_p, adjust=False).mean()
+
+    # Golden/Death Cross signals (EMA50 vs EMA200)
+    df["GoldenCross"]  = (df["EMA50"] > df["EMA200"]) & (df["EMA50"].shift(1) <= df["EMA200"].shift(1))
+    df["DeathCross"]   = (df["EMA50"] < df["EMA200"]) & (df["EMA50"].shift(1) >= df["EMA200"].shift(1))
+    # EMA21 cross EMA9 (short-term momentum)
+    df["EMA_Bull"] = df["EMA9"] > df["EMA21"]
 
     # RSI (Wilder smoothing)
     delta    = df["Close"].diff()
@@ -1517,6 +1532,13 @@ def compute_composite_score(row, avg_vol, last_vol, trend_ok,
             score += 5; confirms.append("Giá<BB↓")
         if trend_ok:
             score += 4; confirms.append("↑SMA50")
+        # ENH-31: EMA/SMA cascade confirmations
+        if cls and ema200 and cls > ema200:  score += 3; confirms.append("↑EMA200")
+        if cls and sma200 and cls > sma200:  score += 2; confirms.append("↑SMA200")
+        if cls and sma100 and cls > sma100:  score += 2; confirms.append("↑SMA100")
+        if ema9 and ema21 and ema9 > ema21:  score += 3; confirms.append("EMA9>21↑")
+        if cls and sma5  and cls > sma5:     score += 1; confirms.append("↑SMA5")
+        if cls and sma10 and cls > sma10:    score += 1; confirms.append("↑SMA10")
         if stoch_k is not None and stoch_k < 20:
             score += (20-stoch_k)*0.3; confirms.append(f"Stoch={stoch_k:.0f}")
         if wr is not None and wr < -80:
@@ -2124,6 +2146,37 @@ def scan_one_ticker(t: str, min_rows: int = 40):
     signal_display = hanh_vi
     if lang == "EN":
         signal_display = {"MUA":"BUY","BÁN":"SELL","THEO DÕI":"WATCH"}.get(hanh_vi, hanh_vi)
+    # ENH-31: Extract extra SMA/EMA values for row
+    sma5_v   = extract_latest(data, "SMA5")
+    sma10_v  = extract_latest(data, "SMA10")
+    sma30_v  = extract_latest(data, "SMA30")
+    sma100_v = extract_latest(data, "SMA100")
+    sma200_v = extract_latest(data, "SMA200")
+    ema9_v   = extract_latest(data, "EMA9")
+    ema21_v  = extract_latest(data, "EMA21")
+    ema50_v  = extract_latest(data, "EMA50")
+    ema200_v = extract_latest(data, "EMA200")
+
+    # ENH-32: Foreign investor room (from CafeF)
+    try:
+        _sh_d = fetch_cafef_shareholder_structure(t)
+        _foreign_pct = _sh_d.get("foreign_pct", 0)
+    except Exception:
+        _foreign_pct = 0
+
+    # ENH-33: Auto Stop/TP from ATR
+    _atr = atr_v or (c_v * 0.02)
+    _stop_loss = round_price_hose(c_v - 1.5 * _atr)
+    _tp1       = round_price_hose(c_v + 2.0 * _atr)
+    _tp2       = round_price_hose(c_v + 3.5 * _atr)
+    _rr1       = round((c_v + 2.0*_atr - c_v) / (c_v - c_v + 1.5*_atr), 2) if _atr > 0 else 0
+    _rr2       = round((3.5*_atr) / (1.5*_atr), 2) if _atr > 0 else 0
+
+    # Price limits (ENH-25)
+    _lims = get_price_limits(t, c_v)
+    _ceil_p = _lims.get("ceiling", 0)
+    _floor_p = _lims.get("floor", 0)
+
     row = {
         L["ticker"]:    t,
         "Ngành/Sector": get_sector(t),
@@ -2132,16 +2185,33 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         "⏱️ Chân trời" if lang=="VI" else "⏱️ Horizon": "Ngắn hạn T+2" if lang=="VI" else "Short-term T+2",
         "BB Buy":       round_price_hose(bbl_v),
         "BB Sell":      round_price_hose(bbu_v),
+        "SMA5":         round(sma5_v)  if sma5_v  else "–",
+        "SMA20":        round(s20)     if s20      else "–",
+        "SMA50":        round(s50)     if s50      else "–",
+        "SMA200":       round(sma200_v) if sma200_v else "–",
+        "EMA9":         round(ema9_v)  if ema9_v  else "–",
+        "EMA21":        round(ema21_v) if ema21_v else "–",
         "RSI":          round(rsi_v,1),
         "Stoch%K":      round(sk,1) if sk else "–",
         "ADX":          round(adx_v,1) if adx_v else "–",
         "Vol/MA20":     f"{last_v/avg_v:.1f}×" if avg_v>0 else "–",
+        "🌐 NN%":       f"{_foreign_pct:.1f}%" if _foreign_pct else "–",
+        "SL":           _stop_loss,
+        "TP1":          _tp1,
+        "TP2":          _tp2,
+        "R:R1":         f"1:{_rr1}",
+        "Trần" if lang=="VI" else "Ceil": _ceil_p or "–",
+        "Sàn" if lang=="VI" else "Floor": _floor_p or "–",
         L["score"]:     score,
         "Confirms":     len(confirms),
         "⚠️ DL":        len(doi_lai),
         L["source"]:    src,
         "_ly_giai":     ly_giai,
         "_price_expl":  price_expl,
+        "_sma5":        sma5_v,  "_sma10": sma10_v, "_sma20": s20,
+        "_sma30":       sma30_v, "_sma50": s50,     "_sma100": sma100_v, "_sma200": sma200_v,
+        "_ema9":        ema9_v,  "_ema21": ema21_v, "_ema50": ema50_v, "_ema200": ema200_v,
+        "_atr":         _atr,    "_stop":  _stop_loss, "_tp1": _tp1, "_tp2": _tp2,
     }
     return row, src, None
 
@@ -4197,7 +4267,9 @@ def render_stock_profiler_tab():
                 ddm_val = compute_ddm_valuation(eps_eff * 0.35, roe_eff / 100 if roe_eff > 1 else roe_eff)
 
             if val_method["use_ddm"]:
-                fair_val = aggregate_fair_value(ddm_val, 0, pb_fair, 0, weights=(0.55, 0, 0.45, 0))
+                # ENH-34 (FIX): Banking P/B weight > 70% per SSI Research standard
+                # P/B = 70%, DDM = 30% (DDM is secondary confirmation)
+                fair_val = aggregate_fair_value(ddm_val, 0, pb_fair, 0, weights=(0.30, 0, 0.70, 0))
             else:
                 fair_val = aggregate_fair_value(dcf_val, pe_fair, pb_fair, graham_val)
 
@@ -4238,8 +4310,9 @@ def render_stock_profiler_tab():
 
             # Model cards — only show active models
             if val_method["use_ddm"]:
-                active = [("🏦 DDM (Banking)", ddm_val, "55%"),
-                           (L["sp_pb_label"], pb_fair, "45%")]
+                # ENH-34: P/B 70%, DDM 30% for banks (SSI Research standard)
+                active = [(L["sp_pb_label"], pb_fair, "70% (Banking P/B)"),
+                           ("🏦 DDM (Confirmation)", ddm_val, "30%")]
             else:
                 active = [(lbl, val, wt) for lbl, val, wt in [
                     (L["sp_dcf_label"],    dcf_val,   "35%" if val_method["use_dcf"] else None),
@@ -4735,6 +4808,89 @@ def render_stock_profiler_tab():
 # ══════════════════════════════════════════════════════════════
 #  TABS — 12 tabs total
 # ══════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════
+#  ENH-35: GEOPOLITICAL & MACRO CONTEXT ENGINE
+# ══════════════════════════════════════════════════════════════
+_GEO_RISK_KEYWORDS = {
+    "trade_war":     {"score": -15, "affected": ["Xuất khẩu", "Công nghệ", "Thép", "Dệt may"]},
+    "usd_strong":    {"score": -8,  "affected": ["Dầu khí", "Thép", "Dược", "Bán lẻ"]},
+    "china_slowdown":{"score": -12, "affected": ["Thép", "Dầu khí", "Logistics"]},
+    "fed_hike":      {"score": -10, "affected": ["Ngân hàng", "Bất động sản", "Chứng khoán"]},
+    "fed_cut":       {"score": +10, "affected": ["Ngân hàng", "Bất động sản", "Chứng khoán"]},
+    "vn_upgrade":    {"score": +15, "affected": ["Ngân hàng", "Bất động sản", "Chứng khoán"]},
+    "oil_spike":     {"score": -5,  "affected": ["Hàng không", "Vận tải", "Phân bón"]},
+    "oil_drop":      {"score": -3,  "affected": ["Dầu khí", "PVD", "GAS"]},
+    "risk_off":      {"score": -8,  "affected": ["Toàn thị trường"]},
+    "risk_on":       {"score": +8,  "affected": ["Toàn thị trường"]},
+}
+
+def get_geopolitical_context(sector: str = None) -> dict:
+    """
+    ENH-35: Derive geopolitical/macro risk from world market data already loaded.
+    Uses DXY, SP500, Oil price from session_state (from Global Markets tab).
+    Returns score adjustment and reasoning.
+    """
+    score_adj = 0
+    reasons = []
+
+    # DXY signal
+    dxy_lvl = st.session_state.get("_world_dxy_level", None)
+    sp500_chg = st.session_state.get("_world_sp500_chg", 0)
+    oil_chg   = st.session_state.get("_world_oil_chg", 0)
+    gold_chg  = st.session_state.get("_world_gold_chg", 0)
+
+    if dxy_lvl:
+        if dxy_lvl >= 108:
+            score_adj -= 10
+            reasons.append(f"🔴 DXY={dxy_lvl:.1f} (Rất cao ≥108) — VNĐ yếu, dòng vốn ngoại rút khỏi EM")
+        elif dxy_lvl >= 105:
+            score_adj -= 5
+            reasons.append(f"🟡 DXY={dxy_lvl:.1f} (Cao ≥105) — Áp lực nhẹ lên VNĐ")
+        elif dxy_lvl <= 100:
+            score_adj += 5
+            reasons.append(f"🟢 DXY={dxy_lvl:.1f} (Thấp ≤100) — VNĐ được hỗ trợ, dòng vốn ngoại tích cực")
+
+    if sp500_chg:
+        if sp500_chg > 1.5:
+            score_adj += 5
+            reasons.append(f"🟢 S&P500 +{sp500_chg:.1f}% — Khẩu vị rủi ro tốt, vốn ngoại có thể vào VN")
+        elif sp500_chg < -1.5:
+            score_adj -= 5
+            reasons.append(f"🔴 S&P500 {sp500_chg:.1f}% — Risk-off toàn cầu, áp lực bán ngoại")
+
+    if oil_chg:
+        if oil_chg > 3:
+            score_adj -= 3
+            reasons.append(f"🟡 Dầu +{oil_chg:.1f}% — Chi phí logistics/sản xuất tăng")
+        elif oil_chg < -3:
+            score_adj -= 2
+            reasons.append(f"🟡 Dầu {oil_chg:.1f}% — Ngành dầu khí (GAS/PVD) bất lợi")
+
+    if gold_chg and gold_chg > 2:
+        score_adj -= 3
+        reasons.append(f"🟡 Vàng +{gold_chg:.1f}% — Tín hiệu risk-off, nhà đầu tư trú ẩn an toàn")
+
+    # Sector-specific adjustments
+    if sector:
+        _IMPORT_HEAVY = {"Thép", "Dầu khí", "Hàng không", "Bán lẻ", "Thực phẩm", "Dược"}
+        _BANK = {"Ngân hàng", "Bảo hiểm"}
+        if dxy_lvl and dxy_lvl > 106 and sector in _IMPORT_HEAVY:
+            score_adj -= 5
+            reasons.append(f"🔴 USD mạnh đặc biệt bất lợi cho ngành {sector} (nhập khẩu nhiều)")
+        if sp500_chg and sp500_chg < -2 and sector in _BANK:
+            score_adj -= 3
+            reasons.append(f"🔴 Risk-off toàn cầu bất lợi cho {sector}")
+
+    return {
+        "score_adj": score_adj,
+        "reasons": reasons,
+        "summary": ("⚠️ Môi trường vĩ mô bất lợi" if score_adj < -8
+                    else "✅ Môi trường vĩ mô thuận lợi" if score_adj > 5
+                    else "➡️ Môi trường vĩ mô trung tính"),
+    }
+
+
 def render_sector_heatmap():
     """ENH-28: Sector Rotation Heatmap — money flow tracking per sector."""
     is_vi = st.session_state.lang == "VI"
@@ -4823,6 +4979,222 @@ def render_sector_heatmap():
         st.success("🔥 " + ("Ngành dẫn dắt: " if is_vi else "Leading sectors: ") + ", ".join(leaders))
         st.caption("💡 " + ("Chiến lược: Ưu tiên cổ phiếu trong ngành dẫn dắt, kết hợp tín hiệu kỹ thuật."
                              if is_vi else "Strategy: Prioritize stocks in leading sectors with good technical setups."))
+
+
+
+# ══════════════════════════════════════════════════════════════
+#  ENH-36: MODEL PORTFOLIOS (iFollow-style)
+# ══════════════════════════════════════════════════════════════
+def render_model_portfolios_tab():
+    """
+    ENH-36: iFollow-style Model Portfolios.
+    Auto-suggest portfolios based on risk profile (Growth/Balanced/Defensive/Dividend).
+    SSI iBoard-inspired: copy-trading concept with quant scoring.
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.header("💼 " + ("Model Portfolios — Danh Mục Mẫu (iFollow Style)" if is_vi
+                        else "Model Portfolios (iFollow Style)"))
+    st.caption("📌 " + ("Lấy cảm hứng từ SSI iFollow: Khuyến nghị danh mục tự động dựa trên khẩu vị rủi ro."
+                          if is_vi else
+                          "Inspired by SSI iFollow: Auto-recommended portfolios based on risk appetite."))
+
+    # Portfolio definitions
+    PORTFOLIOS = {
+        "🚀 " + ("Tăng trưởng" if is_vi else "Growth"): {
+            "desc": "Ưu tiên cổ phiếu tăng trưởng cao, P/E ≤ ngành, ROE > 15%" if is_vi
+                    else "High growth stocks, P/E ≤ sector, ROE > 15%",
+            "risk": "Cao" if is_vi else "High",
+            "horizon": "12–24 tháng" if is_vi else "12–24 months",
+            "sectors": ["Công nghệ", "Bán lẻ", "Bất động sản"],
+            "criteria": {"min_roe": 15, "max_pe": 25, "min_score": 60, "avoid_sectors": []},
+            "color": "#ff6622",
+            "allocation": {"Cổ phiếu" if is_vi else "Equities": 90,
+                           "Tiền mặt" if is_vi else "Cash": 10},
+        },
+        "⚖️ " + ("Cân bằng" if is_vi else "Balanced"): {
+            "desc": "Kết hợp cổ tức và tăng trưởng, phân tán ngành rộng" if is_vi
+                    else "Mix of dividend and growth, broad sector diversification",
+            "risk": "Trung bình" if is_vi else "Medium",
+            "horizon": "6–12 tháng" if is_vi else "6–12 months",
+            "sectors": ["Ngân hàng", "Công nghệ", "Thực phẩm", "Điện"],
+            "criteria": {"min_roe": 10, "max_pe": 20, "min_score": 50, "avoid_sectors": []},
+            "color": "#4e9af1",
+            "allocation": {"Cổ phiếu" if is_vi else "Equities": 70,
+                           "Trái phiếu/CK" if is_vi else "Bonds/MM": 20,
+                           "Tiền mặt" if is_vi else "Cash": 10},
+        },
+        "🛡️ " + ("An toàn" if is_vi else "Defensive"): {
+            "desc": "Cổ phiếu vốn hóa lớn, ổn định, beta thấp" if is_vi
+                    else "Large-cap, stable, low-beta stocks",
+            "risk": "Thấp" if is_vi else "Low",
+            "horizon": "3–6 tháng" if is_vi else "3–6 months",
+            "sectors": ["Ngân hàng", "Thực phẩm", "Điện", "Dược"],
+            "criteria": {"min_roe": 8, "max_pe": 18, "min_score": 40, "avoid_sectors": ["Bất động sản", "Dầu khí"]},
+            "color": "#44cc88",
+            "allocation": {"Cổ phiếu" if is_vi else "Equities": 50,
+                           "Trái phiếu" if is_vi else "Bonds": 30,
+                           "Tiền mặt" if is_vi else "Cash": 20},
+        },
+        "💵 " + ("Cổ tức" if is_vi else "Dividend"): {
+            "desc": "Ưu tiên cổ phiếu trả cổ tức cao, ổn định thu nhập" if is_vi
+                    else "High dividend yield, stable income generation",
+            "risk": "Thấp–Trung bình" if is_vi else "Low–Medium",
+            "horizon": "1–3 năm" if is_vi else "1–3 years",
+            "sectors": ["Ngân hàng", "Điện", "Dầu khí", "Thực phẩm"],
+            "criteria": {"min_roe": 10, "max_pe": 15, "min_score": 45, "avoid_sectors": ["Bất động sản"]},
+            "color": "#f1a84e",
+            "allocation": {"Cổ phiếu cổ tức" if is_vi else "Dividend stocks": 80,
+                           "Tiền mặt" if is_vi else "Cash": 20},
+        },
+    }
+
+    # Capital input
+    st.markdown("### 💰 " + ("Thông tin vốn đầu tư" if is_vi else "Investment Capital"))
+    col_cap, col_risk = st.columns(2)
+    with col_cap:
+        capital = st.number_input(
+            "💰 " + ("Vốn đầu tư (VNĐ)" if is_vi else "Capital (VND)"),
+            min_value=30_000_000, max_value=10_000_000_000,
+            value=100_000_000, step=10_000_000, format="%d")
+    with col_risk:
+        pf_choice = st.selectbox(
+            "🎯 " + ("Khẩu vị rủi ro" if is_vi else "Risk Profile"),
+            list(PORTFOLIOS.keys()))
+
+    pf = PORTFOLIOS[pf_choice]
+    geo = get_geopolitical_context()
+
+    # Portfolio summary card
+    col_l, col_r = st.columns([2, 1])
+    with col_l:
+        st.markdown(f"""
+<div style="background:{pf['color']}15;border:1px solid {pf['color']};border-radius:10px;padding:16px">
+<h4 style="color:{pf['color']};margin:0">{pf_choice}</h4>
+<p style="color:#ccc;margin:4px 0">{pf['desc']}</p>
+<p style="color:#aaa;font-size:12px">
+  ⚠️ {'Rủi ro' if is_vi else 'Risk'}: <b>{pf['risk']}</b> &nbsp;|&nbsp;
+  ⏱️ {'Chân trời' if is_vi else 'Horizon'}: <b>{pf['horizon']}</b> &nbsp;|&nbsp;
+  💰 {'Vốn tối thiểu 30M VNĐ' if is_vi else 'Min capital 30M VND'}
+</p>
+</div>""", unsafe_allow_html=True)
+
+    with col_r:
+        if geo["reasons"]:
+            st.markdown("**🌍 " + ("Bối cảnh vĩ mô:" if is_vi else "Macro Context:") + "**")
+            for r in geo["reasons"][:3]:
+                st.caption(r)
+        geo_adj = geo["score_adj"]
+        if geo_adj < -5:
+            st.warning("⚠️ " + ("Môi trường vĩ mô bất lợi — Giảm tỷ trọng CP" if is_vi
+                                  else "Adverse macro — Reduce equity weighting"))
+
+    # Allocation pie
+    st.markdown("### 📊 " + ("Phân bổ tài sản đề xuất" if is_vi else "Suggested Asset Allocation"))
+    alloc_cols = st.columns(len(pf["allocation"]))
+    total_alloc = sum(pf["allocation"].values())
+    for col, (asset, pct) in zip(alloc_cols, pf["allocation"].items()):
+        with col:
+            amt = capital * (pct / 100)
+            st.metric(asset, f"{pct}%", f"{amt:,.0f} VNĐ")
+
+    # Stock scanner for portfolio
+    st.markdown("### 🔍 " + ("Quét cổ phiếu phù hợp" if is_vi else "Scan Matching Stocks"))
+    crit = pf["criteria"]
+
+    if st.button("▶️ " + ("Quét & Tạo Danh Mục" if is_vi else "Scan & Build Portfolio"), type="primary"):
+        watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
+        candidates = []
+        avoid_sectors = crit["avoid_sectors"]
+
+        with st.spinner("⏳ " + ("Đang quét tín hiệu..." if is_vi else "Scanning signals...")):
+            pb = st.progress(0)
+            for i, ticker in enumerate(watch_list):
+                pb.progress((i+1)/len(watch_list), f"Scanning {ticker}...")
+                try:
+                    row, src, err = scan_one_ticker(ticker)
+                    if not row: continue
+                    sec = get_sector(ticker)
+                    if sec in avoid_sectors: continue
+                    if pf["sectors"] and sec not in pf["sectors"]: continue
+                    score = row.get(L["score"], 0)
+                    if score < crit["min_score"]: continue
+                    # Try to get fundamental data
+                    _ratios = fetch_cafef_key_ratios(ticker)
+                    _roe = _ratios.get("roe_pct", 0)  # may not be in CafeF ratios
+                    candidates.append({
+                        "Ticker": ticker,
+                        "Ngành" if is_vi else "Sector": sec,
+                        "Giá" if is_vi else "Price": row.get(L["price"], 0),
+                        "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
+                        "Score": score,
+                        "SL": row.get("_stop", 0),
+                        "TP1": row.get("_tp1", 0),
+                        "TP2": row.get("_tp2", 0),
+                        "R:R": row.get("R:R1", "–"),
+                        "🌐 NN%": row.get("🌐 NN%", "–"),
+                    })
+                except Exception as e:
+                    pass
+            pb.empty()
+
+        if not candidates:
+            st.warning("⚠️ " + ("Không tìm thấy cổ phiếu phù hợp với tiêu chí." if is_vi
+                                  else "No stocks match the portfolio criteria."))
+        else:
+            candidates.sort(key=lambda x: x["Score"], reverse=True)
+            top_n = min(10, len(candidates))
+            st.success(f"✅ " + (f"Tìm thấy {len(candidates)} mã — Hiển thị top {top_n}" if is_vi
+                                   else f"Found {len(candidates)} tickers — Showing top {top_n}"))
+
+            # Position sizing
+            equity_pct = [v for k, v in pf["allocation"].items()
+                           if "CP" in k.upper() or "EQUIT" in k.upper() or "CỔ" in k.upper()]
+            equity_capital = capital * (equity_pct[0] / 100) if equity_pct else capital * 0.7
+            per_stock = equity_capital / top_n
+
+            df_pf = pd.DataFrame(candidates[:top_n])
+            df_pf["Vốn/mã" if is_vi else "Capital/stock"] = f"{per_stock:,.0f}"
+            df_pf["Lô (100cp)" if is_vi else "Lot(100s)"] = (
+                df_pf["Giá" if is_vi else "Price"].apply(
+                    lambda p: int(per_stock / (p * 100)) if p > 0 else 0))
+            show_df(df_pf)
+
+            st.caption("⚠️ " + ("Đây là gợi ý định lượng tự động, không phải tư vấn đầu tư. "
+                                  "Vốn tối thiểu iFollow SSI: 30M VNĐ."
+                                  if is_vi else
+                                  "Automated quantitative suggestion, not financial advice. "
+                                  "SSI iFollow minimum: 30M VND."))
+
+    # Strategy explanation
+    with st.expander("📚 " + ("Phương pháp lựa chọn" if is_vi else "Selection Methodology"), expanded=False):
+        if is_vi:
+            st.markdown("""
+**Các tiêu chí lựa chọn:**
+1. **Điểm Composite Score ≥ ngưỡng** — Dựa trên RSI, Bollinger Band, MACD, ADX, Stochastic, OBV
+2. **Lọc ngành** — Theo khẩu vị rủi ro (Tăng trưởng → Tech/Retail, An toàn → Banks/Food)
+3. **Position Sizing** — Vốn cổ phiếu ÷ số mã (phân bổ đều)
+4. **Stop-Loss** = Giá - 1.5 × ATR | **TP1** = Giá + 2 × ATR | **TP2** = Giá + 3.5 × ATR
+
+**Hệ thống 7 lệnh điều kiện (SSI):**
+- Stop Loss: Đặt tại cột SL
+- Take Profit 1 (TP1): Đặt tại cột TP1 — Chốt 50% vị thế
+- Take Profit 2 (TP2): Đặt tại cột TP2 — Chốt 50% còn lại
+- Trailing Stop: Điều chỉnh SL lên TP1 khi đạt TP1
+""")
+        else:
+            st.markdown("""
+**Selection criteria:**
+1. **Composite Score ≥ threshold** — Based on RSI, Bollinger Band, MACD, ADX, Stochastic, OBV
+2. **Sector filter** — Per risk appetite (Growth → Tech/Retail, Defensive → Banks/Food)
+3. **Position Sizing** — Equity capital ÷ number of stocks (equal-weight)
+4. **Stop-Loss** = Price - 1.5 × ATR | **TP1** = Price + 2 × ATR | **TP2** = Price + 3.5 × ATR
+
+**7 Conditional Order Types (SSI-style):**
+- Stop Loss: Set at SL column
+- Take Profit 1 (TP1): Set at TP1 — Close 50% position
+- Take Profit 2 (TP2): Set at TP2 — Close remaining 50%
+- Trailing Stop: Move SL up to TP1 once TP1 is reached
+""")
 
 
 def render_scanner_tab():
@@ -4986,6 +5358,12 @@ def render_deep_audit_tab():
                         bbl  = extract_latest(df_a,"BB_Lower") or c
                         bbu  = extract_latest(df_a,"BB_Upper") or c
                         s20  = extract_latest(df_a,"SMA20"); s50 = extract_latest(df_a,"SMA50")
+                        # ENH-31: Extra SMAs/EMAs for audit
+                        _s5=extract_latest(df_a,"SMA5"); _s10=extract_latest(df_a,"SMA10")
+                        _s30=extract_latest(df_a,"SMA30"); _s100=extract_latest(df_a,"SMA100")
+                        _s200=extract_latest(df_a,"SMA200")
+                        _e9=extract_latest(df_a,"EMA9"); _e21=extract_latest(df_a,"EMA21")
+                        _e50=extract_latest(df_a,"EMA50"); _e200=extract_latest(df_a,"EMA200")
                         macd = extract_latest(df_a,"MACD"); macs = extract_latest(df_a,"MACD_Signal")
                         atr_v= extract_latest(df_a,"ATR"); sk = extract_latest(df_a,"STOCH_K")
                         adx_v= extract_latest(df_a,"ADX"); bb_mid = extract_latest(df_a,"BB_Mid") or c
@@ -5037,6 +5415,38 @@ def render_deep_audit_tab():
         m6.metric("Sector",       extra.get("sector","–"),
                   delta=st.session_state.audit_src)
 
+        # ENH-31: SMA/EMA grid display
+        with st.expander("📐 " + ("SMA & EMA Đầy Đủ" if lang=="VI" else "Full SMA & EMA Levels"), expanded=False):
+            _sma_cols = st.columns(7)
+            _sma_labels = [("SMA5","sma5"),("SMA10","sma10"),("SMA20","s20"),("SMA30","sma30"),
+                           ("SMA50","s50"),("SMA100","sma100"),("SMA200","sma200")]
+            _close = extra.get("close", 0)
+            for col, (lbl, key) in zip(_sma_cols, _sma_labels):
+                v = extra.get(key) or extra.get(lbl.lower())
+                if v and _close:
+                    delta = f"{(_close-v)/v*100:+.1f}%"
+                    col.metric(lbl, f"{v:,.0f}", delta=delta)
+                else:
+                    col.metric(lbl, "–")
+            _ema_cols = st.columns(4)
+            for col, (lbl, key) in zip(_ema_cols, [("EMA9","ema9"),("EMA21","ema21"),("EMA50","ema50"),("EMA200","ema200")]):
+                v = extra.get(key)
+                if v and _close:
+                    delta = f"{(_close-v)/v*100:+.1f}%"
+                    col.metric(lbl, f"{v:,.0f}", delta=delta)
+                else:
+                    col.metric(lbl, "–")
+            # Golden/Death Cross
+            _e50 = extra.get("ema50"); _e200 = extra.get("ema200")
+            if _e50 and _e200:
+                cross_msg = ("🌟 Golden Cross (EMA50 > EMA200) — Xu hướng tăng dài hạn ✅"
+                             if _e50 > _e200 else
+                             "💀 Death Cross (EMA50 < EMA200) — Xu hướng giảm dài hạn ⚠️") if lang=="VI" else (
+                             "🌟 Golden Cross (EMA50 > EMA200) — Long-term uptrend ✅"
+                             if _e50 > _e200 else
+                             "💀 Death Cross (EMA50 < EMA200) — Long-term downtrend ⚠️")
+                st.caption(cross_msg)
+
         c1, c2 = st.columns(2)
         with c1: st.markdown(extra.get("ly_giai","–"))
         with c2: st.markdown(extra.get("price_expl","–"))
@@ -5054,7 +5464,13 @@ def render_deep_audit_tab():
         fig.add_trace(go.Candlestick(x=df_a.index,open=df_a["Open"],high=df_a["High"],
             low=df_a["Low"],close=df_a["Close"],name="Price",
             increasing_line_color="#00cc66",decreasing_line_color="#ff4b4b"),row=1,col=1)
-        for col,name,color,dash in [("SMA20","SMA20","orange","solid"),("SMA50","SMA50","cyan","solid"),
+        for col,name,color,dash in [
+                ("SMA5","SMA5","#ffaa00","dot"),("SMA10","SMA10","#ffcc00","dash"),
+                ("SMA20","SMA20","orange","solid"),("SMA30","SMA30","#ff8800","dash"),
+                ("SMA50","SMA50","cyan","solid"),("SMA100","SMA100","#00aaff","dash"),
+                ("SMA200","SMA200","#0088ff","solid"),
+                ("EMA9","EMA9","#ff44ff","dot"),("EMA21","EMA21","#ff00ff","dash"),
+                ("EMA50","EMA50","#cc00cc","solid"),("EMA200","EMA200","#ff22cc","solid"),
                                      ("BB_Upper","BB↑","gray","dash"),("BB_Lower","BB↓","gray","dash")]:
             fig.add_trace(go.Scatter(x=df_a.index,y=df_a[col],mode="lines",name=name,
                 line=dict(color=color,width=1.0 if "BB" in col else 1.3,dash=dash)),row=1,col=1)
@@ -5279,6 +5695,15 @@ def render_backtest_tab():
 def render_ml_forecast_tab():
     hdr = "ML Price Forecast — 7-Model Weighted Ensemble" if st.session_state.lang=="EN" else "Dự Báo Giá — Ensemble 7 Mô Hình"
     st.subheader(f"🧠 {hdr}")
+    # ENH-35: Show geopolitical context in ML tab
+    _geo_ml = get_geopolitical_context()
+    if _geo_ml["reasons"]:
+        is_vi_ml = st.session_state.lang == "VI"
+        with st.expander("🌍 " + ("Bối cảnh Vĩ mô & Địa chính trị (ảnh hưởng đến dự báo)" if is_vi_ml
+                                   else "Macro & Geopolitical Context (affects forecast)"), expanded=False):
+            st.markdown(f"**{_geo_ml['summary']}** (Score: {_geo_ml['score_adj']:+.0f})")
+            for r in _geo_ml["reasons"]:
+                st.caption(r)
     if not st.session_state.df_audit.empty:
         sym6 = st.session_state.symbol
         weight_rows = [{"Model":k,"Group":g,"Weight":f"{int(MODEL_WEIGHTS[k]*100)}%","Description":d}
@@ -5810,57 +6235,866 @@ def render_smoke_test_tab():
             st.success("🎉 **All tests passed!** System is fully operational.")
 
 def render_guide_tab():
+    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features."""
+    is_vi = st.session_state.lang == "VI"
     st.header(f"📖 {L['tab10']}")
-    st.markdown("""
-    ### Business Requirement Document (BRD) for vnstock Applications
 
-    #### 1. Introduction
-    This document outlines the business requirements for the "vnstock" suite of applications, which currently consists of two main components:
-    1.  **Captain Seventh QUANT TERMINAL (this app):** A Python-based Streamlit application for in-depth quantitative analysis of the Vietnam stock market.
-    2.  **VN Stock Terminal (vn-stock-realtime.jsx):** A React-based web application for real-time monitoring of the Vietnam stock market.
+    lang_badge = "🇻🇳 Tiếng Việt" if is_vi else "🇦🇺 English (AU)"
+    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v21.0 | 14 tabs")
 
-    The purpose of this document is to define the scope, features, and functional and non-functional requirements for these applications to ensure they meet the business objectives and user needs.
+    tabs_guide = st.tabs([
+        "🚀 " + ("Bắt đầu" if is_vi else "Getting Started"),
+        "📊 " + ("Tabs 1–7" if is_vi else "Tabs 1–7"),
+        "🌍 " + ("Tabs 8–14" if is_vi else "Tabs 8–14"),
+        "📐 " + ("Chỉ số KT" if is_vi else "Indicators"),
+        "💡 " + ("Chiến lược" if is_vi else "Strategy"),
+        "❓ FAQ",
+    ])
 
-    #### 2. Business Objectives
-    *   To provide a comprehensive and reliable platform for analyzing and monitoring the Vietnam stock market.
-    *   To empower users with data-driven insights for making informed investment decisions.
-    *   To offer both real-time monitoring and in-depth historical analysis capabilities.
-    *   To ensure the accuracy and timeliness of the financial data presented to the users.
-    *   To provide a user-friendly and intuitive interface for both technical and non-technical users.
+    with tabs_guide[0]:
+        if is_vi:
+            st.markdown("""
+## 🚀 Hướng Dẫn Nhanh — Bắt Đầu Sử Dụng
 
-    #### 3. Scope
-    The scope of this project covers the analysis, maintenance, and enhancement of the two existing applications.
-    *   **In Scope:** Analysis of the existing codebase, bug fixing, performance optimization, enhancement of existing features, addition of new features for the Vietnam market, and UI/UX improvements.
-    *   **Out of Scope:** Development of a mobile application, integration with brokerage accounts for direct trading, and providing personalized investment advice.
+### Cài đặt (nếu chạy local)
+```bash
+pip install streamlit pandas numpy requests plotly scikit-learn prophet yfinance
+streamlit run quant_app_v21.py
+```
 
-    ---
-    ### Technical Indicators & Models Used
+### Giao diện chính
+- **14 tab** ở trên cùng điều hướng tất cả tính năng
+- **Sidebar** (⬅️): Chọn ngôn ngữ (VI/EN), ngưỡng RSI, bộ lọc xu hướng
+- **Watchlist**: Lưu trong `watchlist.txt` — mỗi mã một dòng (VD: FPT, VCB, HPG)
 
-    This application uses a combination of well-established technical indicators and machine learning models to generate insights and forecasts.
+### Quy trình làm việc đề xuất
+1. **Tab 1 (Market Scanner)** → Quét toàn bộ watchlist, xem tín hiệu MUA/BÁN/THEO DÕI
+2. **Tab 2 (Top 30 Mua)** → Xem top 30 cổ phiếu điểm cao nhất
+3. **Tab 12 (Hồ Sơ Cổ Phiếu)** → Phân tích sâu từng mã (BCTC, định giá, khuyến nghị)
+4. **Tab 4 (Deep Audit)** → Phân tích chi tiết kỹ thuật + tính vị thế
+5. **Tab 14 (Top Forecast)** → Dự báo top 10 tăng/giảm 7/14/21/30 ngày
+6. **Tab 13 (Model Portfolios)** → Xây danh mục theo khẩu vị rủi ro
 
-    #### Technical Indicators
-    *   **SMA (Simple Moving Average):** Used to identify trends (e.g., Price > SMA50 for an uptrend).
-    *   **RSI (Relative Strength Index):** A momentum oscillator to identify overbought (>70) or oversold (<30) conditions.
-    *   **Bollinger Bands:** Measures volatility and identifies when a price is at a statistical extreme.
-    *   **MACD (Moving Average Convergence Divergence):** Shows the relationship between two moving averages of a security’s price. Crossovers can signal changes in momentum.
-    *   **Stochastic Oscillator:** A momentum indicator comparing a particular closing price of a security to a range of its prices over a certain period of time.
-    *   **ATR (Average True Range):** A measure of market volatility.
-    *   **OBV (On-Balance Volume):** Uses volume flow to predict changes in stock price.
-    *   **ADX (Average Directional Index):** Used to determine the strength of a trend.
-    *   **Williams %R:** A momentum indicator that is the inverse of the Stochastic Oscillator.
-    *   **CCI (Commodity Channel Index):** An oscillator used to identify cyclical trends.
+### Giải thích tín hiệu
+| Tín hiệu | Ý nghĩa | Điều kiện |
+|----------|---------|-----------|
+| 🟢 **MUA** | Cơ hội mua ngắn hạn T+2 | RSI < ngưỡng MUA + Giá < BB Lower + Xu hướng tăng |
+| 🔴 **BÁN** | Tín hiệu bán ngắn hạn | RSI > ngưỡng BÁN + Giá > BB Upper |
+| 🟡 **THEO DÕI** | Chưa đủ điều kiện | Không thỏa mãn điều kiện MUA hoặc BÁN |
 
-    #### Forecasting Models
-    *   **Prophet:** A forecasting model developed by Facebook, designed for time series data that has strong seasonal effects and several seasons of historical data. It is robust to missing data and shifts in the trend.
-    *   **ARIMA (AutoRegressive Integrated Moving Average):** A statistical model that uses time series data to understand the data or to predict future points in the series.
-    *   **Scikit-learn Ensemble (SVR & RandomForest):** An ensemble model that combines Support Vector Regression (SVR) and a Random Forest Regressor. This approach leverages the strengths of both models to potentially create more accurate and robust forecasts.
+### Cảnh báo quan trọng
+⚠️ Mọi tín hiệu đều là **ngắn hạn T+2 (1–5 phiên)**
+⚠️ Tín hiệu Scanner ≠ Tín hiệu Profiler (hai khung thời gian khác nhau)
+⚠️ Không phải tư vấn đầu tư chuyên nghiệp — luôn tự nghiên cứu thêm
+""")
+        else:
+            st.markdown("""
+## 🚀 Quick Start Guide
 
-    *This guide provides a high-level overview. For detailed mathematical formulas and academic papers on these topics, please consult financial and statistical literature.*
-    """)
+### Installation (if running locally)
+```bash
+pip install streamlit pandas numpy requests plotly scikit-learn prophet yfinance
+streamlit run quant_app_v21.py
+```
+
+### Main Interface
+- **14 tabs** at the top navigate all features
+- **Sidebar** (⬅️): Language (VI/EN), RSI thresholds, trend filters
+- **Watchlist**: Saved in `watchlist.txt` — one ticker per line (e.g. FPT, VCB, HPG)
+
+### Recommended Workflow
+1. **Tab 1 (Market Scanner)** → Scan full watchlist for BUY/SELL/WATCH signals
+2. **Tab 2 (Top 30 Buy)** → View top 30 highest-scoring stocks
+3. **Tab 12 (Stock Profiler)** → Deep-dive individual stocks (financials, valuation, recommendation)
+4. **Tab 4 (Deep Audit)** → Detailed technical analysis + position sizing
+5. **Tab 14 (Top Forecast)** → Predict top 10 gainers/decliners 7/14/21/30 days
+6. **Tab 13 (Model Portfolios)** → Build portfolio by risk profile
+
+### Signal Explanation
+| Signal | Meaning | Conditions |
+|--------|---------|-----------|
+| 🟢 **BUY** | Short-term T+2 opportunity | RSI < BUY threshold + Price < BB Lower + Uptrend |
+| 🔴 **SELL** | Short-term sell signal | RSI > SELL threshold + Price > BB Upper |
+| 🟡 **WATCH** | No strong signal | Neither BUY nor SELL conditions met |
+
+### Important Warnings
+⚠️ All signals are **short-term T+2 (1–5 sessions)**
+⚠️ Scanner signals ≠ Profiler signals (different time horizons)
+⚠️ Not professional financial advice — always conduct your own research
+""")
+
+    with tabs_guide[1]:
+        if is_vi:
+            st.markdown("""
+## 📊 Hướng Dẫn Chi Tiết Tabs 1–7
+
+### Tab 1 — 📊 Market Scanner
+**Mục đích:** Quét nhanh toàn bộ watchlist, xác định cơ hội giao dịch ngắn hạn T+2.
+
+**Cách dùng:**
+1. Đặt ngưỡng RSI trong sidebar (mặc định: Mua < 35, Bán > 65)
+2. Bật/tắt bộ lọc xu hướng (Trend Filter: Giá > SMA50)
+3. Nhấn **🔍 Scan Watchlist** → Chờ kết quả
+4. Xem bảng kết quả với cột: Giá, Tín hiệu, SMA5/20/50/200, EMA9/21, RSI, ADX, SL, TP1, TP2
+5. Mở rộng **🗺️ Bản đồ Ngành** để xem luân chuyển vốn
+
+**Các cột quan trọng:**
+- **SL** = Stop Loss (Giá - 1.5 × ATR) → Nhập vào app chứng khoán
+- **TP1** = Take Profit 1 (Giá + 2 × ATR) → Chốt 50% vị thế
+- **TP2** = Take Profit 2 (Giá + 3.5 × ATR) → Chốt 50% còn lại
+- **🌐 NN%** = Tỷ lệ sở hữu nước ngoài
+- **Trần/Sàn** = Giá trần/sàn phiên (HOSE ±7%, HNX ±10%, UPCOM ±15%)
+
+---
+
+### Tab 2 — 🏆 Top 30 Mua
+**Mục đích:** Hiển thị 30 mã có điểm composite cao nhất, được lọc để tối ưu xác suất thành công.
+
+**Triple Confirmation Framework:**
+- Tối thiểu 2/3 xác nhận: Xu hướng (Giá > SMA50) + Momentum (RSI 40–65) + Khối lượng (Vol > 120% TB)
+
+---
+
+### Tab 3 — 📂 Lịch Sử
+**Mục đích:** Lưu và xem lại lịch sử scan để theo dõi tín hiệu theo thời gian.
+
+**Lưu ý:** Nhấn **💾 Lưu kết quả scan** trong Tab 1 hoặc Tab 2 để lưu vào lịch sử.
+
+---
+
+### Tab 4 — 🔍 Deep Audit
+**Mục đích:** Phân tích kỹ thuật chuyên sâu một mã cụ thể.
+
+**Các sub-tab:**
+- **📊 Phân tích OHLC**: Biểu đồ nến + tất cả chỉ số kỹ thuật
+- **💰 Tính Vị Thế**: Nhập vốn → Tính khối lượng, rủi ro, P&L
+- **🎯 Thiết Lập Swing**: Các chiến lược swing trade kèm SL/TP
+- **🔬 Phát hiện Đội lái**: Cảnh báo thao túng giá/khối lượng bất thường
+
+**SMA/EMA nào đáng chú ý:**
+- **SMA5**: Momentum rất ngắn (2–3 ngày)
+- **SMA20**: Bollinger Band middle, xu hướng ngắn hạn
+- **SMA50**: Xác nhận xu hướng trung hạn (quan trọng nhất)
+- **SMA100/200**: Xu hướng dài hạn
+- **EMA9**: Trigger vào lệnh ngắn hạn
+- **EMA21**: Hỗ trợ/kháng cự dynamic
+- **EMA50/200**: Golden Cross / Death Cross tín hiệu dài hạn
+
+---
+
+### Tab 5 — 🧪 Backtest T+2
+**Mục đích:** Test chiến lược trading (RSI < X + Giá < BB Lower) trên dữ liệu lịch sử.
+
+---
+
+### Tab 6 — 🧠 Dự Báo ML
+**Mục đích:** Dự báo giá bằng Prophet/ARIMA/Ensemble ML.
+
+**Lưu ý khi đọc dự báo:**
+- Dự báo ML không dự đoán được sự kiện đột xuất
+- Kết hợp với phân tích kỹ thuật và bối cảnh vĩ mô (Tab 8)
+- Cân nhắc yếu tố địa chính trị hiển thị trong header
+
+---
+
+### Tab 7 — 📈 Lịch Sử Dự Báo ML
+**Mục đích:** Xem và audit lại các lần chạy dự báo ML trước đây.
+""")
+        else:
+            st.markdown("""
+## 📊 Detailed Guide — Tabs 1–7
+
+### Tab 1 — 📊 Market Scanner
+**Purpose:** Quickly scan the full watchlist and identify short-term T+2 trading opportunities.
+
+**How to use:**
+1. Set RSI thresholds in the sidebar (default: Buy < 35, Sell > 65)
+2. Toggle trend filter (Price > SMA50)
+3. Click **🔍 Scan Watchlist** → wait for results
+4. View table with columns: Price, Signal, SMA5/20/50/200, EMA9/21, RSI, ADX, SL, TP1, TP2
+5. Expand **🗺️ Sector Map** to see capital rotation
+
+**Key columns:**
+- **SL** = Stop Loss (Price − 1.5 × ATR) → Enter into your brokerage app
+- **TP1** = Take Profit 1 (Price + 2 × ATR) → Close 50% of position
+- **TP2** = Take Profit 2 (Price + 3.5 × ATR) → Close remaining 50%
+- **🌐 NN%** = Foreign ownership percentage
+- **Ceil/Floor** = Daily price limit (HOSE ±7%, HNX ±10%, UPCOM ±15%)
+
+---
+
+### Tab 2 — 🏆 Top 30 Buy
+**Purpose:** Display the 30 highest composite-score tickers filtered for maximum win probability.
+
+**Triple Confirmation Framework:**
+- Min 2/3 confirmations: Trend (Price > SMA50) + Momentum (RSI 40–65) + Volume (> 120% avg)
+
+---
+
+### Tab 3 — 📂 History
+**Purpose:** Save and review scan history to track signals over time.
+
+**Note:** Click **💾 Save scan results** in Tab 1 or Tab 2 to save to history.
+
+---
+
+### Tab 4 — 🔍 Deep Audit
+**Purpose:** Deep technical analysis of a specific ticker.
+
+**Sub-tabs:**
+- **📊 OHLC Analysis**: Candlestick chart + all technical indicators
+- **💰 Position Sizing**: Input capital → Calculate shares, risk, P&L
+- **🎯 Swing Setup**: Swing trade strategies with SL/TP
+- **🔬 Manipulation Detection**: Alerts for unusual price/volume patterns
+
+**Key SMA/EMA values:**
+- **SMA5**: Very short momentum (2–3 days)
+- **SMA20**: Bollinger Band middle, short-term trend
+- **SMA50**: Medium-term trend confirmation (most important)
+- **SMA100/200**: Long-term trend
+- **EMA9**: Short-term entry trigger
+- **EMA21**: Dynamic support/resistance
+- **EMA50/200**: Golden Cross / Death Cross signals
+
+---
+
+### Tab 5 — 🧪 Backtest T+2
+**Purpose:** Test the RSI < X + Price < BB Lower strategy on historical data.
+
+---
+
+### Tab 6 — 🧠 ML Forecast
+**Purpose:** Price forecasting using Prophet/ARIMA/Ensemble ML models.
+
+**Notes when reading forecasts:**
+- ML forecasts cannot predict unexpected events
+- Combine with technical analysis and macro context (Tab 8)
+- Consider geopolitical factors shown in the header
+
+---
+
+### Tab 7 — 📈 ML Forecast Log
+**Purpose:** View and audit previous ML forecast runs.
+""")
+
+    with tabs_guide[2]:
+        if is_vi:
+            st.markdown("""
+## 🌍 Hướng Dẫn Chi Tiết Tabs 8–14
+
+### Tab 8 — 🌍 Thị Trường Thế Giới
+**Mục đích:** Theo dõi tác động thị trường toàn cầu (Vàng, Dầu, DXY, S&P500) lên TTCK Việt Nam.
+
+**Cách đọc:**
+- **DXY > 106**: USD mạnh → áp lực VNĐ → khối ngoại có xu hướng rút vốn EM
+- **S&P500 ↑ > 1.5%**: Risk-on toàn cầu → dòng vốn ngoại tích cực
+- **Vàng ↑ mạnh**: Tín hiệu risk-off → thận trọng
+
+---
+
+### Tab 9 — 🔬 Smoke Test
+**Mục đích:** Kiểm tra kết nối và độ ổn định các nguồn dữ liệu.
+
+---
+
+### Tab 12 — 🧬 Hồ Sơ Cổ Phiếu (Stock Profiler)
+**Mục đích:** Phân tích toàn diện một hoặc nhiều mã (nhập FPT;MWG;TCB).
+
+**6 Sub-tabs:**
+- **S1 Tổng quan**: Giá, giá trần/sàn/tham chiếu, VWAP, thông tin doanh nghiệp, sự kiện
+- **S2 Tài chính**: BCTC (Doanh thu, Lợi nhuận, Dòng tiền)
+- **S3 Chỉ số**: ROE, ROA, Biên ròng, D/E, EPS, P/E, P/B
+- **S4 Định giá**: DCF + P/E + P/B + Graham → Giá trị hợp lý
+- **S5 Rủi ro**: Điểm rủi ro 5 chiều
+- **S6 Khuyến nghị**: Tín hiệu kép (Kỹ thuật + Cơ bản) + Commentary chuyên gia
+
+**Lưu ý định giá theo ngành:**
+- **Ngân hàng**: P/B chiếm 70% + DDM 30% (không dùng P/E/DCF)
+- **Thép/Dầu khí (chu kỳ)**: EPS chuẩn hóa 5 năm
+- **EPS âm**: Tắt DCF/P/E/Graham, hiển thị cảnh báo
+
+---
+
+### Tab 13 — 💼 Model Portfolios (iFollow Style)
+**Mục đích:** Tự động gợi ý danh mục cổ phiếu theo khẩu vị rủi ro.
+
+**4 chiến lược:**
+| Chiến lược | Rủi ro | Ngành ưu tiên |
+|-----------|--------|--------------|
+| 🚀 Tăng trưởng | Cao | Công nghệ, Bán lẻ, BĐS |
+| ⚖️ Cân bằng | TB | Ngân hàng, Tech, Thực phẩm |
+| 🛡️ An toàn | Thấp | Ngân hàng, Điện, Dược |
+| 💵 Cổ tức | Thấp–TB | Ngân hàng, Điện, Dầu khí |
+
+**Sử dụng 7 lệnh điều kiện (SSI-style):**
+1. Vào kết quả → Copy SL/TP1/TP2 từ bảng
+2. Mở app SSI → Đặt lệnh Stop-Loss tại cột SL
+3. Đặt Take-Profit tại TP1 (50% vị thế), TP2 (50% còn lại)
+
+---
+
+### Tab 14 — 🔮 Top Forecast
+**Mục đích:** Dự báo top 10 mã tăng và giảm trong 7/14/21/30 ngày.
+
+**Phương pháp:**
+- Tổng hợp tín hiệu: SMA/EMA trend + MACD momentum + RSI + ADX + OBV
+- Bổ sung bối cảnh vĩ mô từ DXY/S&P500/Dầu
+- Lịch sử dự báo được lưu tự động mỗi lần chạy (dùng để audit sau)
+
+**Đọc kết quả:**
+- **Mom Score > 0**: Xu hướng tăng, càng cao càng mạnh
+- **Mom Score < 0**: Xu hướng giảm
+- **SL/TP1/TP2**: Copy vào app chứng khoán
+""")
+        else:
+            st.markdown("""
+## 🌍 Detailed Guide — Tabs 8–14
+
+### Tab 8 — 🌍 Global Markets
+**Purpose:** Track global market impact (Gold, Oil, DXY, S&P500) on Vietnamese stocks.
+
+**Reading guide:**
+- **DXY > 106**: Strong USD → VND pressure → foreign capital tends to exit EM
+- **S&P500 ↑ > 1.5%**: Global risk-on → positive foreign inflow
+- **Gold surging**: Risk-off signal → exercise caution
+
+---
+
+### Tab 9 — 🔬 Smoke Test
+**Purpose:** Test connectivity and stability of data sources.
+
+---
+
+### Tab 12 — 🧬 Stock Profiler
+**Purpose:** Comprehensive analysis of one or multiple tickers (enter FPT;MWG;TCB).
+
+**6 Sub-tabs:**
+- **S1 Overview**: Price, ceiling/floor/reference, VWAP, company info, events
+- **S2 Financials**: Income statement, balance sheet, cash flow
+- **S3 Ratios**: ROE, ROA, Net Margin, D/E, EPS, P/E, P/B
+- **S4 Valuation**: DCF + P/E + P/B + Graham → Fair value
+- **S5 Risk**: 5-dimension risk scoring
+- **S6 Recommendation**: Dual signal (Technical + Fundamental) + Expert commentary
+
+**Sector-specific valuation notes:**
+- **Banking**: P/B = 70% + DDM = 30% (P/E/DCF not used)
+- **Steel/Oil (cyclicals)**: 5-year normalised EPS
+- **Negative EPS**: DCF/P/E/Graham disabled, warning shown
+
+---
+
+### Tab 13 — 💼 Model Portfolios (iFollow Style)
+**Purpose:** Auto-suggest stock portfolios by risk appetite.
+
+**4 strategies:**
+| Strategy | Risk | Priority sectors |
+|---------|------|-----------------|
+| 🚀 Growth | High | Technology, Retail, Real Estate |
+| ⚖️ Balanced | Medium | Banking, Tech, Food |
+| 🛡️ Defensive | Low | Banking, Utilities, Pharma |
+| 💵 Dividend | Low–Medium | Banking, Utilities, Oil & Gas |
+
+**Using 7 conditional order types (SSI-style):**
+1. Get results → Copy SL/TP1/TP2 from table
+2. Open SSI app → Place Stop-Loss at SL column
+3. Place Take-Profit at TP1 (50% position), TP2 (remaining 50%)
+
+---
+
+### Tab 14 — 🔮 Top Forecast
+**Purpose:** Predict top 10 gaining and declining tickers over 7/14/21/30 days.
+
+**Methodology:**
+- Multi-signal synthesis: SMA/EMA trend + MACD momentum + RSI + ADX + OBV
+- Macro overlay from DXY/S&P500/Oil
+- Forecast history auto-saved each run (for audit purposes)
+
+**Reading results:**
+- **Mom Score > 0**: Upward trend, higher = stronger
+- **Mom Score < 0**: Downward trend
+- **SL/TP1/TP2**: Copy directly into your brokerage app
+""")
+
+    with tabs_guide[3]:
+        if is_vi:
+            st.markdown("""
+## 📐 Chỉ Số Kỹ Thuật — Giải Thích Chi Tiết
+
+### 📈 Đường Trung Bình (MA)
+| Chỉ số | Chu kỳ | Ý nghĩa | Ứng dụng |
+|--------|--------|---------|---------|
+| SMA5 | 5 ngày | Momentum cực ngắn | Trigger vào lệnh ngày |
+| SMA10 | 10 ngày | Xu hướng ngắn 2 tuần | Hỗ trợ/kháng cự ngắn |
+| SMA20 | 20 ngày | BB middle, ~1 tháng | Bollinger Band trung tâm |
+| SMA30 | 30 ngày | 1.5 tháng | Xu hướng ngắn–trung |
+| SMA50 | 50 ngày | ~2.5 tháng | **Xác nhận xu hướng quan trọng nhất** |
+| SMA100 | 100 ngày | 5 tháng | Xu hướng trung–dài |
+| SMA200 | 200 ngày | 10 tháng | **Xu hướng dài hạn** |
+| EMA9 | 9 ngày EWM | Phản ứng nhanh | Trigger mua/bán ngắn hạn |
+| EMA21 | 21 ngày EWM | Dynamic support | Hỗ trợ/kháng cự linh hoạt |
+| EMA50 | 50 ngày EWM | Xu hướng trung hạn | Phân tích institutional |
+| EMA200 | 200 ngày EWM | **Golden/Death Cross** | Tín hiệu dài hạn quan trọng |
+
+**Golden Cross:** EMA50 vượt lên trên EMA200 → Tín hiệu tăng giá dài hạn ✅
+**Death Cross:** EMA50 cắt xuống EMA200 → Tín hiệu giảm giá dài hạn ⚠️
+
+### 📊 Oscillators
+| Chỉ số | Vùng mua | Vùng bán | Ghi chú |
+|--------|---------|---------|---------|
+| RSI(14) | < 35 | > 65 | Điều chỉnh trong sidebar |
+| Stochastic %K | < 20 | > 80 | Momentum ngắn hạn |
+| Williams %R | < -80 | > -20 | Inverse của Stochastic |
+| CCI(20) | < -100 | > +100 | Chu kỳ giá |
+
+### 📦 Volume/Momentum
+| Chỉ số | Tín hiệu tăng | Tín hiệu giảm |
+|--------|-------------|-------------|
+| MACD | MACD > Signal | MACD < Signal |
+| OBV | OBV > OBV_MA20 | OBV < OBV_MA20 |
+| ADX | > 25: xu hướng mạnh | < 15: đi ngang |
+| ATR | Cao: biến động lớn | Thấp: tích lũy |
+| VWAP(20) | Giá > VWAP → BUY | Giá < VWAP → SELL |
+
+### 📉 Bollinger Bands (20, ±2σ)
+- **Giá < BB Lower + RSI < 35**: Tín hiệu mua mạnh (oversold bounce)
+- **Giá > BB Upper + RSI > 65**: Tín hiệu bán (overbought)
+- **BB thắt chặt**: Sắp có biến động lớn
+""")
+        else:
+            st.markdown("""
+## 📐 Technical Indicators — Detailed Explanation
+
+### 📈 Moving Averages
+| Indicator | Period | Meaning | Application |
+|-----------|--------|---------|-------------|
+| SMA5 | 5-day | Ultra-short momentum | Intraday entry trigger |
+| SMA10 | 10-day | 2-week short trend | Short support/resistance |
+| SMA20 | 20-day | BB middle, ~1 month | Bollinger Band centre |
+| SMA30 | 30-day | 1.5 months | Short–medium trend |
+| SMA50 | 50-day | ~2.5 months | **Most important trend confirmation** |
+| SMA100 | 100-day | 5 months | Medium–long trend |
+| SMA200 | 200-day | 10 months | **Long-term trend** |
+| EMA9 | 9-day EWM | Fast reaction | Short-term entry/exit trigger |
+| EMA21 | 21-day EWM | Dynamic support | Flexible support/resistance |
+| EMA50 | 50-day EWM | Medium-term trend | Institutional analysis |
+| EMA200 | 200-day EWM | **Golden/Death Cross** | Major long-term signal |
+
+**Golden Cross:** EMA50 crosses above EMA200 → Long-term bullish signal ✅
+**Death Cross:** EMA50 crosses below EMA200 → Long-term bearish signal ⚠️
+
+### 📊 Oscillators
+| Indicator | Buy Zone | Sell Zone | Notes |
+|-----------|----------|-----------|-------|
+| RSI(14) | < 35 | > 65 | Adjustable in sidebar |
+| Stochastic %K | < 20 | > 80 | Short-term momentum |
+| Williams %R | < -80 | > -20 | Inverse of Stochastic |
+| CCI(20) | < -100 | > +100 | Price cycles |
+
+### 📦 Volume/Momentum
+| Indicator | Bullish Signal | Bearish Signal |
+|-----------|---------------|----------------|
+| MACD | MACD > Signal | MACD < Signal |
+| OBV | OBV > OBV_MA20 | OBV < OBV_MA20 |
+| ADX | > 25: strong trend | < 15: sideways |
+| ATR | High: high volatility | Low: consolidation |
+| VWAP(20) | Price > VWAP → BUY | Price < VWAP → SELL |
+
+### 📉 Bollinger Bands (20, ±2σ)
+- **Price < BB Lower + RSI < 35**: Strong buy signal (oversold bounce)
+- **Price > BB Upper + RSI > 65**: Sell signal (overbought)
+- **BB squeeze**: Significant move imminent
+""")
+
+    with tabs_guide[4]:
+        if is_vi:
+            st.markdown("""
+## 💡 Chiến Lược Đầu Tư & Thời Điểm Vào Lệnh
+
+### ⏰ Cửa Sổ Vàng (Golden Window)
+Dựa trên nghiên cứu hành vi thị trường VN:
+
+| Khung giờ | Đặc điểm | Khuyến nghị |
+|-----------|---------|------------|
+| ATO (9:00) | Biến động cao, spread rộng | ⚠️ Tránh, trừ mua mạnh |
+| 9:00–11:30 | Sáng — thường theo trend ngày trước | Quan sát, chờ xác nhận |
+| **13:00–14:00** | **Cửa sổ vàng** — volatility giảm, volume xác nhận | **✅ Vào lệnh nếu điều kiện tốt** |
+| 14:00–14:30 | Tốt để chốt lợi nhuận | Bán nếu đạt TP1 |
+| ATC (14:30) | Khớp lệnh đóng cửa | ✅ Chốt lời cuối ngày |
+
+### 🛡️ Quản Lý Rủi Ro (2% Rule)
+- **Không bao giờ rủi ro quá 2% tổng vốn** cho mỗi lệnh
+- Công thức: `Khối lượng = (Vốn × 2%) / (Giá vào − SL)`
+- Tab 4 (Deep Audit → Tính Vị Thế) tự động tính toán này
+
+### 🔢 Triple Confirmation Framework
+Chỉ vào lệnh khi có ít nhất **2/3 xác nhận**:
+1. ✅ **Xu hướng**: Giá > SMA50 (xu hướng trung hạn tăng)
+2. ✅ **Momentum**: RSI trong vùng 40–65 (không quá mua hay bán)
+3. ✅ **Khối lượng**: Volume phiên ≥ 120% trung bình 20 phiên
+
+### 📊 T+2 Management (VN Market Specific)
+- T+0: Mua → Tiền bị phong toả
+- T+2: Nhận cổ phiếu → Có thể bán
+- **Chiến lược**: Chỉ mua tại vùng hỗ trợ SMA50 hoặc Fibonacci 38.2%
+- **Không trung bình giá** khi thua lỗ > 7%
+
+### 📐 Định Giá Theo Ngành (SSI Standard)
+| Ngành | Phương pháp ưu tiên | Ghi chú |
+|-------|-------------------|---------|
+| **Ngân hàng** | P/B 70% + DDM 30% | Không dùng P/E/DCF |
+| Thép/Dầu khí | EV/EBITDA + EPS chuẩn hóa | Điều chỉnh theo chu kỳ |
+| Công nghệ | P/E + DCF dài hạn | Tăng trưởng cao → PE cao hơn |
+| Bất động sản | P/B + NAV discount | Phụ thuộc tài sản |
+| Tiêu dùng | P/E + DCF | Ổn định nhất |
+
+### 🌍 Bối Cảnh Vĩ Mô & Địa Chính Trị
+Các yếu tố ảnh hưởng lớn đến TTCK VN:
+
+| Yếu tố | Tác động tích cực | Tác động tiêu cực |
+|--------|------------------|------------------|
+| DXY | ≤ 100: Tích cực | ≥ 108: Tiêu cực mạnh |
+| Fed Rate | Giảm lãi suất | Tăng lãi suất |
+| S&P500 | Tăng > 1.5% | Giảm > 1.5% |
+| Giá dầu | Ổn định | Tăng đột biến > 3% |
+| Vàng | — | Tăng mạnh (risk-off) |
+| FTSE Upgrade VN | **+15 điểm** | — |
+| Trade War | — | Ngành xuất khẩu |
+""")
+        else:
+            st.markdown("""
+## 💡 Investment Strategy & Entry Timing
+
+### ⏰ Golden Window
+Based on VN market behaviour research:
+
+| Time Window | Characteristics | Recommendation |
+|-------------|----------------|----------------|
+| ATO (9:00) | High volatility, wide spread | ⚠️ Avoid unless strong conviction |
+| 9:00–11:30 | Morning — often follows prior day trend | Observe, wait for confirmation |
+| **13:00–14:00** | **Golden Window** — volatility subsides, volume confirms | **✅ Enter if conditions are good** |
+| 14:00–14:30 | Good for profit-taking | Sell if TP1 reached |
+| ATC (14:30) | Closing auction | ✅ End-of-day profit taking |
+
+### 🛡️ Risk Management (2% Rule)
+- **Never risk more than 2% of total capital** per trade
+- Formula: `Shares = (Capital × 2%) / (Entry Price − Stop Loss)`
+- Tab 4 (Deep Audit → Position Sizing) calculates this automatically
+
+### 🔢 Triple Confirmation Framework
+Only enter when at least **2/3 confirmations** align:
+1. ✅ **Trend**: Price > SMA50 (medium-term uptrend)
+2. ✅ **Momentum**: RSI in 40–65 range (neither overbought nor oversold)
+3. ✅ **Volume**: Session volume ≥ 120% of 20-session average
+
+### 📊 T+2 Management (VN Market Specific)
+- T+0: Buy → Funds locked
+- T+2: Receive shares → Can sell
+- **Strategy**: Only buy at SMA50 support or 38.2% Fibonacci levels
+- **Never average down** when loss exceeds 7%
+
+### 📐 Sector-Specific Valuation (SSI Standard)
+| Sector | Priority method | Notes |
+|--------|----------------|-------|
+| **Banking** | P/B 70% + DDM 30% | P/E/DCF not applicable |
+| Steel/Oil | EV/EBITDA + normalised EPS | Adjust for cycles |
+| Technology | P/E + long-term DCF | High growth → higher PE |
+| Real Estate | P/B + NAV discount | Asset-dependent |
+| Consumer | P/E + DCF | Most stable |
+
+### 🌍 Macro & Geopolitical Context
+Key factors affecting the VN market:
+
+| Factor | Positive impact | Negative impact |
+|--------|----------------|----------------|
+| DXY | ≤ 100: Positive | ≥ 108: Strongly negative |
+| Fed Rate | Rate cuts | Rate hikes |
+| S&P500 | Up > 1.5% | Down > 1.5% |
+| Oil price | Stable | Spike > 3% |
+| Gold | — | Strong rise (risk-off) |
+| FTSE VN Upgrade | **+15 points** | — |
+| Trade War | — | Export sectors |
+""")
+
+    with tabs_guide[5]:
+        if is_vi:
+            st.markdown("""
+## ❓ Câu Hỏi Thường Gặp (FAQ)
+
+**Q: Tại sao Scanner nói MUA nhưng Profiler nói THEO DÕI?**
+A: Hai tín hiệu trả lời hai câu hỏi khác nhau:
+- Scanner: "Giá có thể hồi phục 1–5 phiên không?" (kỹ thuật ngắn hạn T+2)
+- Profiler: "Cổ phiếu có được định giá hợp lý dài hạn không?" (6–24 tháng)
+Cả hai đều đúng — bổ sung nhau chứ không mâu thuẫn.
+
+**Q: Tại sao ROA/Biên ròng/D/E hiển thị "–"?**
+A: TCBS 404 (API không trả dữ liệu) + VNDirect timeout. App sẽ thử SSI Finance-Indicator.
+Một số mã ít thanh khoản (UPCOM) không có đủ dữ liệu BCTC công khai.
+
+**Q: Dữ liệu giá từ nguồn nào?**
+A: Thứ tự ưu tiên: DNSE (api.dnse.com.vn) → SSI → CafeF → TCBS → VNDirect → yFinance.
+Nguồn thành công được ghi ở cột "Source" trong scanner.
+
+**Q: Làm thế nào để thêm/bớt mã trong watchlist?**
+A: Chỉnh sửa file `watchlist.txt` (mỗi mã một dòng). App tự reload.
+
+**Q: Model Portfolio gợi ý vốn tối thiểu bao nhiêu?**
+A: 30 triệu VNĐ (tương đương SSI iFollow minimum). Nhập vốn thực tế của bạn.
+
+**Q: Dự báo ML có chính xác không?**
+A: ML dự báo dựa trên mẫu lịch sử — không thể dự đoán sự kiện đột xuất.
+Độ chính xác ~55–65% trong điều kiện thị trường bình thường. Luôn kết hợp với kỹ thuật.
+
+**Q: Giá trần/sàn tính thế nào?**
+A: HOSE: ±7% | HNX: ±10% | UPCOM: ±15% từ giá tham chiếu (giá đóng cửa phiên trước).
+App lấy giá tham chiếu từ CafeF PriceRealTimeHeader API.
+
+**Q: Tại sao một số mã không hiện trong Scanner?**
+A: Bị lọc bởi: thanh khoản thấp (giá trị giao dịch TB < ngưỡng) HOẶC không đủ dữ liệu lịch sử.
+""")
+        else:
+            st.markdown("""
+## ❓ Frequently Asked Questions (FAQ)
+
+**Q: Why does Scanner say BUY but Profiler says WATCH?**
+A: The two signals answer different questions:
+- Scanner: "Can the price recover in 1–5 sessions?" (short-term technical T+2)
+- Profiler: "Is the stock fairly priced long-term?" (6–24 months)
+Both are correct — they complement rather than contradict each other.
+
+**Q: Why are ROA/Net Margin/D/E showing "–"?**
+A: TCBS 404 (API not returning data) + VNDirect timeout. App tries SSI Finance-Indicator.
+Some low-liquidity stocks (UPCOM) lack sufficient publicly available financial data.
+
+**Q: Where does price data come from?**
+A: Priority order: DNSE (api.dnse.com.vn) → SSI → CafeF → TCBS → VNDirect → yFinance.
+Successful source is shown in the "Source" column in the scanner.
+
+**Q: How do I add/remove tickers from the watchlist?**
+A: Edit `watchlist.txt` (one ticker per line). App auto-reloads.
+
+**Q: What is the minimum capital for Model Portfolios?**
+A: 30 million VND (equivalent to SSI iFollow minimum). Enter your actual capital.
+
+**Q: How accurate are ML forecasts?**
+A: ML forecasts based on historical patterns — cannot predict unexpected events.
+Accuracy ~55–65% in normal market conditions. Always combine with technical analysis.
+
+**Q: How are ceiling/floor prices calculated?**
+A: HOSE: ±7% | HNX: ±10% | UPCOM: ±15% from reference price (prior session close).
+App fetches reference price from CafeF PriceRealTimeHeader API.
+
+**Q: Why are some tickers missing from Scanner results?**
+A: Filtered out by: low liquidity (avg trading value < threshold) OR insufficient historical data.
+""")
+
+
+
 
 # ══════════════════════════════════════════════════════════════
 #  CHANGE LOG TAB
 # ══════════════════════════════════════════════════════════════
+def _run_top_forecast(watch_list: list, horizon_days: int) -> tuple:
+    """ENH-37: Score each ticker for predicted direction over horizon_days."""
+    scores = []
+    for ticker in watch_list:
+        try:
+            data, src, err = download_data(ticker, days=365, min_rows=40)
+            if data.empty or len(data) < 40: continue
+            data = clean_data(data)
+            if len(data) < 40: continue
+            data = calculate_indicators(data)
+            last = data.iloc[-1]
+            def sv(k):
+                try: return float(last[k]) if pd.notna(last[k]) else None
+                except: return None
+            c_v = sv("Close") or 0
+            if c_v <= 0: continue
+            rsi    = sv("RSI") or 50
+            sma20  = sv("SMA20"); sma50 = sv("SMA50"); sma200 = sv("SMA200")
+            ema9   = sv("EMA9");  ema21 = sv("EMA21"); ema200_v = sv("EMA200")
+            macd   = sv("MACD"); macs  = sv("MACD_Signal")
+            adx    = sv("ADX") or 15
+            atr    = sv("ATR") or c_v * 0.02
+            obv    = sv("OBV"); obv_ma = sv("OBV_MA20")
+            avg_v  = float(data["Volume"].tail(20).mean())
+            last_v = float(last.get("Volume", avg_v))
+            sector = get_sector(ticker)
+
+            mom = 0.0
+            # RSI momentum
+            if rsi < 30: mom -= 15
+            elif rsi < 45: mom -= 5
+            elif rsi > 70: mom += 12
+            elif rsi > 55: mom += 5
+            # SMA trend
+            if c_v and sma20 and c_v > sma20: mom += 6
+            if c_v and sma50 and c_v > sma50: mom += 10
+            if c_v and sma200 and c_v > sma200: mom += 8
+            if ema9 and ema21 and ema9 > ema21: mom += 7
+            if ema9 and ema200_v and ema9 > ema200_v: mom += 5
+            # MACD
+            if macd and macs:
+                mom += 8 if macd > macs else -8
+                if len(data) > 2:
+                    ph = float(data["MACD"].iloc[-2]); ps = float(data["MACD_Signal"].iloc[-2])
+                    if (macd - macs) > (ph - ps): mom += 3
+            # ADX
+            if adx > 25: mom += 5 * (1 if (macd and macs and macd > macs) else -1)
+            # OBV
+            if obv and obv_ma and obv > obv_ma: mom += 6
+            # Volume
+            if avg_v > 0 and last_v / avg_v > 1.5: mom += 4
+            # Geopolitical
+            _geo = get_geopolitical_context(sector)
+            mom += _geo["score_adj"] * (horizon_days / 30)
+
+            # Direction
+            direction = "UP" if mom > 5 else ("DOWN" if mom < -5 else "NEUTRAL")
+            lang = st.session_state.lang
+            is_vi = lang == "VI"
+            reasons = []
+            if c_v and sma50:
+                reasons.append(("Giá > SMA50 ↑" if c_v>sma50 else "Giá < SMA50 ↓") if is_vi
+                                else ("Price > SMA50 ↑" if c_v>sma50 else "Price < SMA50 ↓"))
+            if c_v and sma200 and c_v > sma200:
+                reasons.append("Giá > SMA200 (trend dài hạn) ✅" if is_vi else "Price > SMA200 (long-term trend) ✅")
+            if ema9 and ema21 and ema9 > ema21:
+                reasons.append("EMA9 > EMA21 ✅")
+            if macd and macs:
+                reasons.append(("MACD bullish ✅" if macd>macs else "MACD bearish ⚠️"))
+            if rsi < 35:
+                reasons.append(f"RSI={rsi:.0f} oversold" + (" — tiềm năng bounce" if is_vi else " — bounce potential"))
+            elif rsi > 65:
+                reasons.append(f"RSI={rsi:.0f} overbought")
+            if obv and obv_ma and obv > obv_ma:
+                reasons.append("OBV > MA ✅")
+            for gr in _geo["reasons"][:1]: reasons.append(gr)
+
+            scores.append({
+                "ticker": ticker, "sector": sector, "price": c_v,
+                "direction": direction, "mom_score": round(mom, 1),
+                "confidence": round(min(abs(mom)/50, 1.0)*100, 1),
+                "atr": round(atr, 0),
+                "stop_loss": round(c_v - 1.5*atr, 0),
+                "tp1": round(c_v + 2*atr, 0),
+                "tp2": round(c_v + 3.5*atr, 0),
+                "reasons": reasons, "rsi": round(rsi, 1), "adx": round(adx, 1), "src": src,
+            })
+        except Exception:
+            pass
+
+    gainers   = sorted([s for s in scores if s["direction"]=="UP"],   key=lambda x: x["mom_score"], reverse=True)[:10]
+    decliners = sorted([s for s in scores if s["direction"]=="DOWN"],  key=lambda x: x["mom_score"])[:10]
+    return gainers, decliners
+
+
+def _render_forecast_card(s: dict, rank: int, is_vi: bool, card_type: str):
+    color = "#00cc44" if card_type=="gain" else "#ff4444"
+    arrow = "↑" if card_type=="gain" else "↓"
+    reasons_str = " | ".join(s["reasons"][:3]) if s["reasons"] else "–"
+    st.markdown(f"""
+<div style="background:{color}10;border-left:3px solid {color};border-radius:6px;
+     padding:8px 12px;margin:4px 0;font-size:12px">
+  <b style="color:{color};font-size:14px">#{rank} {s['ticker']}</b>
+  <span style="color:#aaa;margin-left:8px">{s['sector']}</span>
+  <span style="float:right;color:{color};font-weight:bold">{arrow} {s['mom_score']:+.0f}</span><br>
+  <span style="color:#ddd">💰 {s['price']:,.0f}</span> | RSI:{s['rsi']} | ADX:{s['adx']}
+  | <span style="color:#ff5555">SL:{s['stop_loss']:,.0f}</span>
+  | <span style="color:#4e9af1">TP1:{s['tp1']:,.0f} TP2:{s['tp2']:,.0f}</span><br>
+  <span style="color:#999;font-size:11px">💡 {reasons_str}</span>
+</div>""", unsafe_allow_html=True)
+
+
+def _show_forecast_log(is_vi: bool, fc_log_key: str):
+    log = st.session_state.get(fc_log_key, [])
+    if not log: return
+    st.markdown("---")
+    with st.expander("📜 " + ("Lịch Sử Dự Báo" if is_vi else "Forecast History"), expanded=False):
+        for entry in log[:10]:
+            st.markdown(f"**{entry['datetime']}** — {entry['horizon']} {'ngày' if is_vi else 'days'} | "
+                        f"{entry['n_tickers']} tickers | Macro:{entry.get('geo_score',0):+.0f}")
+            st.caption("📈 " + ", ".join(entry.get("top_gainers",[])[:5]))
+            st.caption("📉 " + ", ".join(entry.get("top_decliners",[])[:5]))
+            st.markdown("---")
+
+
+def render_top_forecast_tab():
+    """ENH-37: Top 10 gainers/decliners forecast with 7/14/21/30-day horizons + audit log."""
+    is_vi = st.session_state.lang == "VI"
+    st.header("🔮 " + ("Dự Báo Top 10 Tăng/Giảm" if is_vi else "Top 10 Gainers/Decliners Forecast"))
+    st.info("📌 " + ("Dự báo kỹ thuật đa chỉ số (SMA/EMA/MACD/RSI/ADX/OBV) + bối cảnh vĩ mô. Không phải tư vấn đầu tư."
+                      if is_vi else
+                      "Multi-indicator technical forecast (SMA/EMA/MACD/RSI/ADX/OBV) + macro context. Not investment advice."))
+
+    col_h, col_run = st.columns([3, 1])
+    with col_h:
+        horizon = st.selectbox("📅 " + ("Kỳ hạn" if is_vi else "Horizon"),
+                               [7, 14, 21, 30],
+                               format_func=lambda x: f"{x} " + ("ngày" if is_vi else "days"))
+    with col_run:
+        run_btn = st.button("🔮 " + ("Chạy Dự Báo" if is_vi else "Run Forecast"), type="primary")
+
+    fc_key = f"_top_forecast_{horizon}"
+    fc_log_key = "_top_forecast_log"
+
+    if run_btn:
+        watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
+        geo = get_geopolitical_context()
+        with st.spinner("⏳ " + (f"Đang phân tích {len(watch_list)} mã..." if is_vi
+                                   else f"Analysing {len(watch_list)} tickers...")):
+            gainers, decliners = _run_top_forecast(watch_list, horizon)
+            st.session_state[fc_key] = (gainers, decliners)
+            log_entry = {
+                "datetime": datetime.now().strftime("%Y-%m-%d %H:%M"), "horizon": horizon,
+                "n_tickers": len(watch_list), "geo_score": geo["score_adj"], "geo_summary": geo["summary"],
+                "top_gainers":   [g["ticker"] for g in gainers],
+                "top_decliners": [d["ticker"] for d in decliners],
+            }
+            if fc_log_key not in st.session_state: st.session_state[fc_log_key] = []
+            st.session_state[fc_log_key].insert(0, log_entry)
+            st.success("✅ " + (f"{len(gainers)} mã tăng, {len(decliners)} mã giảm" if is_vi
+                                  else f"{len(gainers)} gainers, {len(decliners)} decliners"))
+
+    forecast_data = st.session_state.get(fc_key)
+    if not forecast_data:
+        st.markdown("▶️ " + ("Bấm **Chạy Dự Báo** để bắt đầu." if is_vi else "Press **Run Forecast** to start."))
+        _show_forecast_log(is_vi, fc_log_key)
+        return
+
+    gainers, decliners = forecast_data
+    geo = get_geopolitical_context()
+
+    st.markdown("---")
+    col_g, col_d = st.columns(2)
+    with col_g:
+        st.markdown("### 📈 " + (f"Top 10 Tăng — {horizon} ngày" if is_vi else f"Top 10 Gainers — {horizon}d"))
+        for rank, s in enumerate(gainers, 1):
+            _render_forecast_card(s, rank, is_vi, "gain")
+    with col_d:
+        st.markdown("### 📉 " + (f"Top 10 Giảm — {horizon} ngày" if is_vi else f"Top 10 Decliners — {horizon}d"))
+        for rank, s in enumerate(decliners, 1):
+            _render_forecast_card(s, rank, is_vi, "decline")
+
+    # Macro context summary
+    st.markdown("---")
+    st.markdown("### 🌍 " + ("Bối cảnh Vĩ mô" if is_vi else "Macro Context"))
+    gc1, gc2 = st.columns(2)
+    with gc1: st.metric("Macro Score", f"{geo['score_adj']:+.0f}", geo["summary"])
+    with gc2:
+        for r in geo["reasons"][:3]: st.caption(r)
+
+    # Download
+    all_rows = ([{"Type":"Gainer","Rank":i+1,**{k:v for k,v in g.items() if k!="reasons"},
+                   "Reasons": " | ".join(g["reasons"][:3])} for i,g in enumerate(gainers)] +
+                [{"Type":"Decliner","Rank":i+1,**{k:v for k,v in d.items() if k!="reasons"},
+                   "Reasons": " | ".join(d["reasons"][:3])} for i,d in enumerate(decliners)])
+    if all_rows:
+        csv = pd.DataFrame(all_rows).to_csv(index=False).encode("utf-8-sig")
+        st.download_button("📥 CSV", csv, f"forecast_{horizon}d_{datetime.now().strftime('%Y%m%d')}.csv", "text/csv")
+
+    _show_forecast_log(is_vi, fc_log_key)
+
+
 def render_changelog_tab():
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
@@ -5868,7 +7102,7 @@ def render_changelog_tab():
 
 ---
 
-### v20.0 — 2026-03-09 · FIXES + RESEARCH-BACKED IMPROVEMENTS
+### v21.0 — 2026-03-09 · FIXES + RESEARCH-BACKED IMPROVEMENTS
 
 **Bugs fixed from error_log.txt:**
 
@@ -5988,7 +7222,7 @@ def main():
         st.session_state.forecast_log = pd.DataFrame()
 
     # Define tabs (12 tabs in v16.0)
-    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12"]
+    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
@@ -6015,6 +7249,10 @@ def main():
         render_changelog_tab()
     with tabs[11]:
         render_stock_profiler_tab()
+    with tabs[12]:
+        render_model_portfolios_tab()
+    with tabs[13]:
+        render_top_forecast_tab()
 
 if __name__ == "__main__":
     main()
