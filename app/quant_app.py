@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v21.0                         ║
+║   Captain Seventh QUANT TERMINAL  v23.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v20 → v21:                                           ║
@@ -62,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v21.0",
+    page_title="Captain Seventh QUANT TERMINAL v23.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -84,7 +84,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v21.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v23.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -202,7 +202,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v21.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v23.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -1524,6 +1524,9 @@ def compute_composite_score(row, avg_vol, last_vol, trend_ok,
     macd=safe("MACD"); macs=safe("MACD_Signal"); stoch_k=safe("STOCH_K")
     obv=safe("OBV"); obv_ma=safe("OBV_MA20"); adx=safe("ADX")
     pdi=safe("+DI"); ndi=safe("-DI"); wr=safe("WILLIAMS_R"); cci=safe("CCI")
+    # FIX-22: Extract EMA/SMA from row (were undefined — NameError in v21)
+    ema200=safe("EMA200"); sma200=safe("SMA200"); sma100=safe("SMA100")
+    ema9=safe("EMA9"); ema21=safe("EMA21"); sma5=safe("SMA5"); sma10=safe("SMA10")
 
     if signal_type == "BUY":
         if rsi and rsi < rsi_thresh:
@@ -1532,7 +1535,7 @@ def compute_composite_score(row, avg_vol, last_vol, trend_ok,
             score += 5; confirms.append("Giá<BB↓")
         if trend_ok:
             score += 4; confirms.append("↑SMA50")
-        # ENH-31: EMA/SMA cascade confirmations
+        # ENH-31: EMA/SMA cascade confirmations (FIX-22: now properly extracted)
         if cls and ema200 and cls > ema200:  score += 3; confirms.append("↑EMA200")
         if cls and sma200 and cls > sma200:  score += 2; confirms.append("↑SMA200")
         if cls and sma100 and cls > sma100:  score += 2; confirms.append("↑SMA100")
@@ -2057,19 +2060,32 @@ def style_action(v):
     return ""
 
 def show_df(df_or_styled, key=None):
-    """FIX-23/24: Arrow-safe dataframe renderer with width=stretch."""
+    """FIX-26 (v23): Arrow-safe dataframe renderer. Converts mixed-type columns to str
+    to prevent pyarrow.lib.ArrowTypeError on columns like Stoch%K, ADX, SMA* etc."""
     import pandas as pd
     if isinstance(df_or_styled, pd.DataFrame):
         df = df_or_styled.copy()
-        # FIX-23: coerce all object columns that contain mixed float/str to string
+        # FIX-26: For every column that has mixed float+str, cast entire column to str
+        # This fixes: "Expected bytes, got a 'float' object" for Stoch%K and similar
         for col in df.columns:
-            if df[col].dtype == object:
-                df[col] = df[col].apply(lambda x: "" if x is None else (f"{x:.4f}" if isinstance(x, float) else str(x)))
+            col_series = df[col]
+            if col_series.dtype == object:
+                # Check if any value is a float/int alongside strings
+                types = set(type(v).__name__ for v in col_series.dropna())
+                if len(types) > 1 or ('float' in types or 'int' in types):
+                    df[col] = col_series.apply(
+                        lambda x: "" if x is None or (isinstance(x, float) and np.isnan(x))
+                        else (f"{x:,.1f}" if isinstance(x, float) else str(x))
+                    )
+                else:
+                    df[col] = col_series.apply(
+                        lambda x: "" if x is None else str(x)
+                    )
         df_or_styled = df
     try:
         st.dataframe(df_or_styled, width='stretch', key=key)
     except TypeError:
-        st.dataframe(df_or_styled, width="stretch", key=key)
+        st.dataframe(df_or_styled, key=key)
 
 def src_badge(src: str) -> str:
     cls={"DNSE":"src-dnse","SSI":"src-ssi","CafeF":"src-cafef"}.get(src,"src-none")
@@ -2177,10 +2193,37 @@ def scan_one_ticker(t: str, min_rows: int = 40):
     _ceil_p = _lims.get("ceiling", 0)
     _floor_p = _lims.get("floor", 0)
 
+    # FIX-30: Fetch SSI real-time price to override OHLCV close (fixes BSR & other stale prices)
+    # Priority: SSI iboard live → CafeF live → OHLCV close
+    _rt_price = c_v; _rt_ref = 0; _rt_src = src
+    try:
+        _ssi_rt = fetch_ssi_realtime_price(t)
+        if _ssi_rt.get("price", 0) > 0:
+            _rt_price = _ssi_rt["price"]
+            _rt_ref   = _ssi_rt.get("reference", 0)
+            _rt_src   = "SSI-RT"
+            # Recompute limits based on live reference price if available
+            if _rt_ref > 0:
+                _lims2   = get_price_limits(t, _rt_ref)
+                _ceil_p  = _lims2.get("ceiling", _ceil_p)
+                _floor_p = _lims2.get("floor", _floor_p)
+        else:
+            # Fallback to CafeF live price
+            try:
+                _cfp = fetch_cafef_price(t)
+                if _cfp.get("price", 0) > 0:
+                    _rt_price = _cfp["price"]
+                    _rt_ref   = _cfp.get("reference", 0)
+                    _rt_src   = "CafeF-RT"
+            except Exception:
+                pass
+    except Exception:
+        pass
+
     row = {
         L["ticker"]:    t,
         "Ngành/Sector": get_sector(t),
-        L["price"]:     round(c_v),
+        L["price"]:     round(_rt_price),      # FIX-30: live price, not OHLCV close
         L["signal"]:    signal_display,
         "⏱️ Chân trời" if lang=="VI" else "⏱️ Horizon": "Ngắn hạn T+2" if lang=="VI" else "Short-term T+2",
         "BB Buy":       round_price_hose(bbl_v),
@@ -2205,7 +2248,7 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         L["score"]:     score,
         "Confirms":     len(confirms),
         "⚠️ DL":        len(doi_lai),
-        L["source"]:    src,
+        L["source"]:    _rt_src,   # FIX-30: show actual price source (SSI-RT / CafeF-RT / OHLCV)
         "_ly_giai":     ly_giai,
         "_price_expl":  price_expl,
         "_sma5":        sma5_v,  "_sma10": sma10_v, "_sma20": s20,
@@ -2695,9 +2738,56 @@ def fetch_ssi_company_info(ticker: str) -> dict:
 
     return out
 
+@st.cache_data(ttl=60)
+def fetch_ssi_realtime_price(ticker: str) -> dict:
+    """
+    ENH-28 (v23.0): SSI iboard-query real-time price + Ceiling/Floor/Reference.
+    Endpoint: iboard-query.ssi.com.vn/stock/{ticker}?boardId=MAIN
+    Returns: {price, ceiling, floor, reference, pct_change, volume, exchange}
+    """
+    try:
+        url = f"https://iboard-query.ssi.com.vn/stock/{ticker.upper()}?boardId=MAIN"
+        r = requests.get(url, headers=_SSI_HDR, timeout=8)
+        if r.status_code == 403:
+            _log.debug(f"SSI iboard-query {ticker}: 403 forbidden (auth required)")
+            return {}
+        r.raise_for_status()
+        raw = r.json()
+        # SSI iboard-query response format: top-level or nested "data"
+        d = raw if isinstance(raw, dict) else {}
+        data = d.get("data", d)
+        if not data: return {}
+        def _f(k, fallback=0):
+            v = data.get(k, fallback)
+            try: return float(v or 0)
+            except: return float(fallback)
+        # price fields: "matchedPrice" or "close" or "lastPrice"
+        price   = _f("matchedPrice") or _f("close") or _f("lastPrice")
+        ref     = _f("referencePrice") or _f("priorClosePrice")
+        ceiling = _f("ceilingPrice")
+        floor   = _f("floorPrice")
+        vol     = _f("matchedVolume") or _f("totalVolume")
+        pct     = ((price - ref) / ref * 100) if ref > 0 and price > 0 else 0
+        # Normalise: SSI sometimes returns prices in thousands VND
+        for val in [price, ref, ceiling, floor]:
+            if 0 < val < 500:
+                price    *= 1000
+                ref      *= 1000
+                ceiling  *= 1000
+                floor    *= 1000
+                break
+        if price <= 0: return {}
+        _log.info(f"SSI iboard-query ✅ {ticker}: price={price:,.0f} ref={ref:,.0f} ceil={ceiling:,.0f} floor={floor:,.0f}")
+        return {"price": price, "reference": ref, "ceiling": ceiling, "floor": floor,
+                "pct_change": pct, "volume": vol, "source": "SSI-iboard"}
+    except Exception as e:
+        _log.debug(f"SSI iboard-query {ticker}: {e}")
+        return {}
+
+
 @st.cache_data(ttl=3600)
 def fetch_ssi_news(ticker: str, n: int = 10) -> list:
-    """SSI SSMI company news."""
+    """SSI SSMI company news. FIX-25: Restored function def that was lost in v22."""
     today = datetime.now()
     month_ago = today - timedelta(days=30)
     fmt = lambda d: d.strftime("%d/%m/%Y")
@@ -5105,6 +5195,8 @@ def render_model_portfolios_tab():
         watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
         candidates = []
         avoid_sectors = crit["avoid_sectors"]
+        # FIX-27: Use relaxed min_score (40% of original) for initial pass
+        relaxed_score = max(crit["min_score"] * 0.4, 10)
 
         with st.spinner("⏳ " + ("Đang quét tín hiệu..." if is_vi else "Scanning signals...")):
             pb = st.progress(0)
@@ -5114,19 +5206,28 @@ def render_model_portfolios_tab():
                     row, src, err = scan_one_ticker(ticker)
                     if not row: continue
                     sec = get_sector(ticker)
+                    # FIX-27: Don't hard-filter by sector — use it as a preference score boost
                     if sec in avoid_sectors: continue
-                    if pf["sectors"] and sec not in pf["sectors"]: continue
-                    score = row.get(L["score"], 0)
-                    if score < crit["min_score"]: continue
-                    # Try to get fundamental data
-                    _ratios = fetch_cafef_key_ratios(ticker)
-                    _roe = _ratios.get("roe_pct", 0)  # may not be in CafeF ratios
+                    score = row.get(L["score"], 0) or 0
+                    # FIX-27: Accept stocks in preferred sectors with relaxed score,
+                    # or any sector with the original min_score
+                    in_preferred = bool(pf["sectors"]) and sec in pf["sectors"]
+                    effective_min = relaxed_score if in_preferred else crit["min_score"]
+                    if score < effective_min: continue
+                    # Try to get fundamental data (non-blocking)
+                    try:
+                        _ratios = fetch_cafef_key_ratios(ticker)
+                    except Exception:
+                        _ratios = {}
                     candidates.append({
                         "Ticker": ticker,
                         "Ngành" if is_vi else "Sector": sec,
+                        "Preferred": "✅" if in_preferred else "–",
                         "Giá" if is_vi else "Price": row.get(L["price"], 0),
                         "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
                         "Score": score,
+                        "RSI": row.get("RSI", "–"),
+                        "ADX": row.get("ADX", "–"),
                         "SL": row.get("_stop", 0),
                         "TP1": row.get("_tp1", 0),
                         "TP2": row.get("_tp2", 0),
@@ -5134,8 +5235,38 @@ def render_model_portfolios_tab():
                         "🌐 NN%": row.get("🌐 NN%", "–"),
                     })
                 except Exception as e:
-                    pass
+                    _log.debug(f"Portfolio scan {ticker}: {e}")
             pb.empty()
+
+        # FIX-27: If still no results, loosen to any positive score stock in any sector
+        if not candidates:
+            st.info("⏳ " + ("Không tìm thấy mã khớp điều kiện chặt — Thử quét rộng hơn..." if is_vi
+                              else "No stocks matched strict criteria — trying broader scan..."))
+            for ticker in watch_list:
+                try:
+                    row, src, err = scan_one_ticker(ticker)
+                    if not row: continue
+                    sec = get_sector(ticker)
+                    if sec in avoid_sectors: continue
+                    score = row.get(L["score"], 0) or 0
+                    if score < 5: continue  # minimum signal
+                    candidates.append({
+                        "Ticker": ticker,
+                        "Ngành" if is_vi else "Sector": sec,
+                        "Preferred": "✅" if (pf["sectors"] and sec in pf["sectors"]) else "–",
+                        "Giá" if is_vi else "Price": row.get(L["price"], 0),
+                        "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
+                        "Score": score,
+                        "RSI": row.get("RSI", "–"),
+                        "ADX": row.get("ADX", "–"),
+                        "SL": row.get("_stop", 0),
+                        "TP1": row.get("_tp1", 0),
+                        "TP2": row.get("_tp2", 0),
+                        "R:R": row.get("R:R1", "–"),
+                        "🌐 NN%": row.get("🌐 NN%", "–"),
+                    })
+                except Exception:
+                    pass
 
         if not candidates:
             st.warning("⚠️ " + ("Không tìm thấy cổ phiếu phù hợp với tiêu chí." if is_vi
@@ -5388,7 +5519,24 @@ def render_deep_audit_tab():
                             price_expl=price_expl, rsi=rsi, close=c, bbl=bbl, bbu=bbu,
                             s20=s20, s50=s50, macd=macd, macd_sig=macs,
                             atr=atr_v, stoch_k=sk, adx=adx_v, avg_v=avg_v, last_v=last_v,
-                            confirms=confirms, score=score, sector=get_sector(sym))
+                            confirms=confirms, score=score, sector=get_sector(sym),
+                            # FIX-28: Include all EMA/SMA values so SMA/EMA grid works
+                            sma5=_s5, sma10=_s10, sma30=_s30, sma100=_s100, sma200=_s200,
+                            ema9=_e9, ema21=_e21, ema50=_e50, ema200=_e200,
+                        )
+                        # FIX-29: Fetch SSI real-time price for display (non-blocking)
+                        ssi_rt = {}
+                        try: ssi_rt = fetch_ssi_realtime_price(sym)
+                        except Exception: pass
+                        if ssi_rt.get("price", 0) > 0:
+                            rt_price = ssi_rt["price"]
+                            rt_ref   = ssi_rt.get("reference", 0)
+                            rt_ceil  = ssi_rt.get("ceiling", 0)
+                            rt_floor = ssi_rt.get("floor", 0)
+                            st.session_state.audit_extra.update(
+                                rt_price=rt_price, rt_ref=rt_ref,
+                                rt_ceil=rt_ceil, rt_floor=rt_floor, rt_src="SSI"
+                            )
                         st.success(f"✅ {sym} analysed — Source: **{src}** | Exchange: {TICKER_EXCHANGE.get(sym,'HOSE')} | {len(df_a)} sessions")
                 else:
                     st.error(error_msg or f"Cannot load **{sym}**. Check ticker spelling.")
@@ -5404,7 +5552,11 @@ def render_deep_audit_tab():
 
         # Metrics
         m1,m2,m3,m4,m5,m6 = st.columns(6)
-        m1.metric("Price/Giá",    f"{extra.get('close',0):,.0f} VNĐ")
+        # FIX-29: Show RT price from SSI if available, else OHLCV close
+        _display_price = extra.get("rt_price") or extra.get("close", 0)
+        _price_src     = extra.get("rt_src", "OHLCV")
+        m1.metric("Price/Giá",    f"{_display_price:,.0f} VNĐ",
+                  delta=f"Src:{_price_src}" if extra.get("rt_src") else None)
         m2.metric("RSI",          f"{extra.get('rsi',50):.1f}",
                   delta=("Oversold" if extra.get('rsi',50)<35 else ("Overbought" if extra.get('rsi',50)>65 else "Neutral")))
         m3.metric("Stoch %K",     f"{extra.get('stoch_k',0) or 0:.0f}")
@@ -5414,6 +5566,39 @@ def render_deep_audit_tab():
                   delta=f"Score: {extra.get('score',0)}")
         m6.metric("Sector",       extra.get("sector","–"),
                   delta=st.session_state.audit_src)
+
+        # FIX-29: Real-time price flow: Ceiling / Floor / Reference / Current
+        if extra.get("rt_ceil", 0) > 0:
+            lang_rt = st.session_state.lang
+            rt_c, rt_f, rt_r, rt_p = (extra["rt_ceil"], extra.get("rt_floor",0),
+                                       extra.get("rt_ref",0), extra["rt_price"])
+            _exch = TICKER_EXCHANGE.get(st.session_state.symbol, "HOSE")
+            _band = {"HOSE":"±7%","HNX":"±10%","UPCOM":"±15%"}.get(_exch,"±7%")
+            pf_cols = st.columns(4)
+            pf_cols[0].metric("🔴 " + ("Trần" if lang_rt=="VI" else "Ceiling"),
+                              f"{rt_c:,.0f}", delta=f"{_exch} {_band}")
+            pf_cols[1].metric("🟡 " + ("Tham chiếu" if lang_rt=="VI" else "Reference"),
+                              f"{rt_r:,.0f}")
+            pf_cols[2].metric("💚 " + ("Giá hiện tại" if lang_rt=="VI" else "Live Price"),
+                              f"{rt_p:,.0f}",
+                              delta=f"{(rt_p-rt_r)/rt_r*100:+.2f}%" if rt_r > 0 else None)
+            pf_cols[3].metric("🔵 " + ("Sàn" if lang_rt=="VI" else "Floor"),
+                              f"{rt_f:,.0f}")
+        elif extra.get("close", 0) > 0:
+            # Fallback: compute from OHLCV close
+            _lims = get_price_limits(st.session_state.symbol, extra["close"])
+            if _lims:
+                _exch = _lims.get("exchange","HOSE")
+                _band = {"HOSE":"±7%","HNX":"±10%","UPCOM":"±15%"}.get(_exch,"±7%")
+                pf_cols2 = st.columns(4)
+                pf_cols2[0].metric("🔴 " + ("Trần (Ước tính)" if st.session_state.lang=="VI" else "Ceiling (Est.)"),
+                                   f"{_lims['ceiling']:,.0f}", delta=f"{_exch} {_band}")
+                pf_cols2[1].metric("🟡 " + ("TC (Ước tính)" if st.session_state.lang=="VI" else "Ref (Est.)"),
+                                   f"{_lims['reference']:,.0f}")
+                pf_cols2[2].metric("💚 " + ("Giá đóng cửa" if st.session_state.lang=="VI" else "Close Price"),
+                                   f"{extra['close']:,.0f}")
+                pf_cols2[3].metric("🔵 " + ("Sàn (Ước tính)" if st.session_state.lang=="VI" else "Floor (Est.)"),
+                                   f"{_lims['floor']:,.0f}")
 
         # ENH-31: SMA/EMA grid display
         with st.expander("📐 " + ("SMA & EMA Đầy Đủ" if lang=="VI" else "Full SMA & EMA Levels"), expanded=False):
@@ -6036,53 +6221,63 @@ def render_global_markets_tab():
 def render_smoke_test_tab():
     hdr = "System Smoke Test — All Data Sources & Functions" if st.session_state.lang=="EN" else "Kiểm Tra Hệ Thống — Tất Cả Nguồn Dữ Liệu & Chức Năng"
     st.subheader(f"🔬 {hdr}")
-    st.caption("v17.0 — Tests each source individually for FPT (HOSE), REE (HOSE), OIL (UPCOM). DNSE endpoint fix verified. Full stack traces written to error_log.txt.")
+    st.caption("v23.0 — Mandatory smoke test: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE). Detects and auto-reports issues. Full traces → error_log.txt.")
 
     if st.button("🚀 Run Full Smoke Test" if st.session_state.lang=="EN" else "🚀 Chạy Kiểm Tra Đầy Đủ", type="primary"):
         results = []
         import traceback
 
-        # ── Test 0: FPT — full pipeline test (HOSE ticker)
-        with st.spinner("Testing FPT full pipeline (HOSE)..."):
-            try:
-                df_fpt, src_fpt, err_fpt = download_data("FPT", 180, min_rows=20)
-                ok = len(df_fpt) >= 20
-                results.append({"Test":"FPT Full Pipeline","Status":"✅ PASS" if ok else "❌ FAIL",
-                    "Detail":f"{len(df_fpt)} rows via {src_fpt}, close={df_fpt['Close'].iloc[-1]:,.0f}" if ok else f"Failed: {err_fpt}"})
-                if ok:
-                    df_ind = calculate_indicators(clean_data(df_fpt))
-                    results.append({"Test":"FPT Indicators","Status":"✅ PASS" if "RSI" in df_ind.columns else "❌ FAIL",
-                        "Detail":f"RSI={df_ind['RSI'].iloc[-1]:.1f}, ADX={df_ind['ADX'].iloc[-1]:.1f}"})
-            except Exception as e:
-                results.append({"Test":"FPT Full Pipeline","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
+        # ── v23.0 MANDATORY TICKERS: OIL, FPT, GAS, TCB, VIC ──────────────
+        mandatory_smoke = [
+            ("OIL",  "UPCOM", "Dầu thực vật / Oil commodity ticker — UPCOM, min 20 rows"),
+            ("FPT",  "HOSE",  "Tech blue-chip — benchmark for DNSE/SSI reliability"),
+            ("GAS",  "HOSE",  "PetroVietnam Gas — Dầu khí sector, HOSE blue-chip"),
+            ("TCB",  "HOSE",  "Techcombank — Banking sector, HOSE large-cap"),
+            ("VIC",  "HOSE",  "Vingroup — Real-estate sector, VN30 component"),
+        ]
+        st.info(f"{'🔍 Testing mandatory tickers: OIL, FPT, GAS, TCB, VIC + extended suite...' if st.session_state.lang=='EN' else '🔍 Kiểm tra bắt buộc: OIL, FPT, GAS, TCB, VIC + bộ test mở rộng...'}")
 
-        # ── Test 0b: REE — full pipeline test (HOSE ticker)
-        with st.spinner("Testing REE full pipeline (HOSE)..."):
-            try:
-                df_ree, src_ree, err_ree = download_data("REE", 180, min_rows=20)
-                ok = len(df_ree) >= 20
-                results.append({"Test":"REE Full Pipeline (HOSE)","Status":"✅ PASS" if ok else "❌ FAIL",
-                    "Detail":f"{len(df_ree)} rows via {src_ree}, close={df_ree['Close'].iloc[-1]:,.0f}" if ok else f"Failed: {err_ree}"})
-                if ok:
-                    df_ree_ind = calculate_indicators(clean_data(df_ree))
-                    results.append({"Test":"REE Indicators","Status":"✅ PASS" if "RSI" in df_ree_ind.columns else "❌ FAIL",
-                        "Detail":f"RSI={df_ree_ind['RSI'].iloc[-1]:.1f}"})
-            except Exception as e:
-                results.append({"Test":"REE Full Pipeline","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
-
-        # ── Test 0c: OIL — full pipeline test (UPCOM ticker)
-        with st.spinner("Testing OIL full pipeline (UPCOM)..."):
-            try:
-                df_oil, src_oil, err_oil = download_data("OIL", 180, min_rows=20)
-                ok = len(df_oil) >= 20
-                results.append({"Test":"OIL Full Pipeline (UPCOM)","Status":"✅ PASS" if ok else "❌ FAIL",
-                    "Detail":f"{len(df_oil)} rows via {src_oil}, close={df_oil['Close'].iloc[-1]:,.0f}" if ok else f"Failed: {err_oil}"})
-            except Exception as e:
-                results.append({"Test":"OIL Full Pipeline (UPCOM)","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:150]}"})
+        for sym_m, exch_m, desc_m in mandatory_smoke:
+            with st.spinner(f"Testing {sym_m} ({exch_m}) — {desc_m[:40]}..."):
+                try:
+                    df_m, src_m, err_m = download_data(sym_m, 180, min_rows=20)
+                    ok = len(df_m) >= 20
+                    close_val = df_m['Close'].iloc[-1] if ok else 0
+                    detail = f"{len(df_m)} rows via {src_m}, close={close_val:,.0f}" if ok else f"FAILED: {err_m}"
+                    results.append({"Test":f"[MANDATORY] {sym_m} ({exch_m})", "Status":"✅ PASS" if ok else "❌ FAIL", "Detail":detail})
+                    if ok:
+                        df_ind_m = calculate_indicators(clean_data(df_m))
+                        ind_ok = "RSI" in df_ind_m.columns and not df_ind_m["RSI"].isna().all()
+                        rsi_val = df_ind_m["RSI"].iloc[-1] if ind_ok else float("nan")
+                        adx_val = df_ind_m["ADX"].iloc[-1] if "ADX" in df_ind_m.columns else float("nan")
+                        sma50_val = df_ind_m["SMA50"].iloc[-1] if "SMA50" in df_ind_m.columns else float("nan")
+                        ema200_val = df_ind_m["EMA200"].iloc[-1] if "EMA200" in df_ind_m.columns else float("nan")
+                        results.append({"Test":f"  ↳ {sym_m} Indicators","Status":"✅ PASS" if ind_ok else "❌ FAIL",
+                            "Detail":f"RSI={rsi_val:.1f}, ADX={adx_val:.1f}, SMA50={sma50_val:,.0f}, EMA200={ema200_val:,.0f}"})
+                        # Validate price flow: Ceiling/Floor/Reference/Current
+                        cf_price = fetch_cafef_price(sym_m)
+                        ref_price = cf_price.get("reference", close_val)
+                        limits = get_price_limits(sym_m, ref_price)
+                        if limits:
+                            price_ok = limits["floor"] <= close_val <= limits["ceiling"]
+                            results.append({"Test":f"  ↳ {sym_m} Price Flow",
+                                "Status":"✅ PASS" if price_ok else "⚠️ CHECK",
+                                "Detail":f"Ref={ref_price:,.0f} Ceil={limits['ceiling']:,.0f} Floor={limits['floor']:,.0f} Cur={close_val:,.0f} Exch={limits['exchange']}"})
+                        # Composite score smoke
+                        row_dict = df_ind_m.iloc[-1].to_dict()
+                        avg_v = df_m["Volume"].tail(20).mean()
+                        last_v = df_m["Volume"].iloc[-1]
+                        trend_ok_m = close_val > sma50_val if not np.isnan(sma50_val) else False
+                        sc, cfs = compute_composite_score(row_dict, avg_v, last_v, trend_ok_m, "BUY", 35, 65)
+                        results.append({"Test":f"  ↳ {sym_m} CompositeScore",
+                            "Status":"✅ PASS" if sc >= 0 else "❌ FAIL",
+                            "Detail":f"Score={sc:.1f}, Confirms={len(cfs)}: {', '.join(cfs[:4])}"})
+                except Exception as e:
+                    results.append({"Test":f"[MANDATORY] {sym_m}","Status":"❌ ERROR","Detail":f"{e} | {str(traceback.format_exc())[:200]}"})
 
         # ── Test 1: DNSE connectivity (FIX-16: api.dnse.com.vn)
-        with st.spinner("Testing DNSE api.dnse.com.vn (FPT + REE + OIL)..."):
-            for sym_t, exch_t in [("FPT","HOSE"), ("REE","HOSE"), ("OIL","UPCOM")]:
+        with st.spinner("Testing DNSE api.dnse.com.vn (FPT + GAS + OIL + TCB + VIC)..."):
+            for sym_t, exch_t in [("FPT","HOSE"), ("GAS","HOSE"), ("OIL","UPCOM"), ("TCB","HOSE"), ("VIC","HOSE")]:
                 try:
                     df_t = _fetch_dnse(sym_t, 180)
                     ok = len(df_t) >= 20
@@ -6092,8 +6287,8 @@ def render_smoke_test_tab():
                     results.append({"Test":f"DNSE ({sym_t}/{exch_t})","Status":"❌ ERROR","Detail":str(e)})
 
         # ── Test 2: SSI connectivity
-        with st.spinner("Testing SSI (FPT + VCB)..."):
-            for sym_t in ["FPT", "VCB"]:
+        with st.spinner("Testing SSI (FPT + GAS + TCB + VIC + OIL)..."):
+            for sym_t in ["FPT", "GAS", "TCB", "VIC", "OIL"]:
                 try:
                     df_t = _fetch_ssi(sym_t, 180)
                     ok = len(df_t) >= 20
@@ -6151,8 +6346,8 @@ def render_smoke_test_tab():
                 results.append({"Test":"VNDirect Profile (HPG)","Status":"❌ ERROR","Detail":str(e)})
 
         # ── Test 7: CafeF Fundamentals (ENH-11)
-        with st.spinner("Testing CafeF fundamental APIs (FPT + REE)..."):
-            for sym_t in ["FPT", "REE"]:
+        with st.spinner("Testing CafeF fundamental APIs (FPT + GAS + TCB)..."):
+            for sym_t in ["FPT", "GAS", "TCB"]:
                 try:
                     cf_r = fetch_cafef_key_ratios(sym_t)
                     ok = bool(cf_r.get("eps") or cf_r.get("pe"))
@@ -6160,7 +6355,7 @@ def render_smoke_test_tab():
                         "Detail":f"EPS={cf_r.get('eps','?')} P/E={cf_r.get('pe','?')} P/B={cf_r.get('pb','?')}" if ok else "No ratio data"})
                 except Exception as e:
                     results.append({"Test":f"CafeF ChiSoTaiChinh ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
-            for sym_t in ["FPT", "OIL"]:
+            for sym_t in ["FPT", "GAS", "TCB", "VIC", "OIL"]:
                 try:
                     cf_p = fetch_cafef_price(sym_t)
                     ok = cf_p.get("price", 0) > 0
@@ -6169,9 +6364,20 @@ def render_smoke_test_tab():
                 except Exception as e:
                     results.append({"Test":f"CafeF PriceRT ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
 
+        # ── Test 7b: SSI Real-time Price (ENH-28, v23.0)
+        with st.spinner("Testing SSI iboard-query real-time price (GAS + TCB + VIC)..."):
+            for sym_t in ["GAS", "TCB", "VIC"]:
+                try:
+                    ssi_rt = fetch_ssi_realtime_price(sym_t)
+                    ok = ssi_rt.get("price", 0) > 0
+                    results.append({"Test":f"SSI RT Price ({sym_t})","Status":"✅ PASS" if ok else "⚠️ PARTIAL",
+                        "Detail":f"Price={ssi_rt.get('price',0):,.0f} Ref={ssi_rt.get('reference',0):,.0f} Ceil={ssi_rt.get('ceiling',0):,.0f} Floor={ssi_rt.get('floor',0):,.0f}" if ok else "Not available (auth required)"})
+                except Exception as e:
+                    results.append({"Test":f"SSI RT Price ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
+
         # ── Test 8: DNSE OHLC Analysis (ENH-13)
-        with st.spinner("Testing DNSE OHLC Analysis (FPT + REE + OIL)..."):
-            for sym_t in ["FPT", "REE", "OIL"]:
+        with st.spinner("Testing DNSE OHLC Analysis (FPT + GAS + TCB + VIC + OIL)..."):
+            for sym_t in ["FPT", "GAS", "TCB", "VIC", "OIL"]:
                 try:
                     ana = fetch_dnse_ohlc_analysis(sym_t)
                     ok = "error" not in ana and ana.get("n_rows", 0) >= 20
@@ -6180,9 +6386,9 @@ def render_smoke_test_tab():
                 except Exception as e:
                     results.append({"Test":f"DNSE OHLC Analysis ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
 
-        # ── Test 9: Stock Profiler Recommendation (FPT, REE, OIL)
-        with st.spinner("Testing Stock Profiler recommendation engine (FPT + REE + OIL)..."):
-            for sym_t in ["FPT", "REE", "OIL"]:
+        # ── Test 9: Stock Profiler Recommendation (FPT + GAS + TCB + VIC + OIL)
+        with st.spinner("Testing Stock Profiler recommendation engine (FPT + GAS + TCB + VIC + OIL)..."):
+            for sym_t in ["FPT", "GAS", "TCB", "VIC", "OIL"]:
                 try:
                     ana = fetch_dnse_ohlc_analysis(sym_t)
                     if "error" in ana:
@@ -6235,12 +6441,12 @@ def render_smoke_test_tab():
             st.success("🎉 **All tests passed!** System is fully operational.")
 
 def render_guide_tab():
-    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features."""
+    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features — v23.0 BRD."""
     is_vi = st.session_state.lang == "VI"
     st.header(f"📖 {L['tab10']}")
 
     lang_badge = "🇻🇳 Tiếng Việt" if is_vi else "🇦🇺 English (AU)"
-    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v21.0 | 14 tabs")
+    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v23.0 | 14 tabs | Business Requirements Document (BRD)")
 
     tabs_guide = st.tabs([
         "🚀 " + ("Bắt đầu" if is_vi else "Getting Started"),
@@ -6248,6 +6454,7 @@ def render_guide_tab():
         "🌍 " + ("Tabs 8–14" if is_vi else "Tabs 8–14"),
         "📐 " + ("Chỉ số KT" if is_vi else "Indicators"),
         "💡 " + ("Chiến lược" if is_vi else "Strategy"),
+        "🏗️ BRD",
         "❓ FAQ",
     ])
 
@@ -6259,68 +6466,128 @@ def render_guide_tab():
 ### Cài đặt (nếu chạy local)
 ```bash
 pip install streamlit pandas numpy requests plotly scikit-learn prophet yfinance
-streamlit run quant_app_v21.py
+streamlit run quant_app.py
 ```
 
 ### Giao diện chính
 - **14 tab** ở trên cùng điều hướng tất cả tính năng
-- **Sidebar** (⬅️): Chọn ngôn ngữ (VI/EN), ngưỡng RSI, bộ lọc xu hướng
+- **Sidebar** (⬅️): Chọn ngôn ngữ (VI/EN), ngưỡng RSI, bộ lọc xu hướng, bộ lọc thanh khoản
 - **Watchlist**: Lưu trong `watchlist.txt` — mỗi mã một dòng (VD: FPT, VCB, HPG)
 
-### Quy trình làm việc đề xuất
-1. **Tab 1 (Market Scanner)** → Quét toàn bộ watchlist, xem tín hiệu MUA/BÁN/THEO DÕI
-2. **Tab 2 (Top 30 Mua)** → Xem top 30 cổ phiếu điểm cao nhất
-3. **Tab 12 (Hồ Sơ Cổ Phiếu)** → Phân tích sâu từng mã (BCTC, định giá, khuyến nghị)
-4. **Tab 4 (Deep Audit)** → Phân tích chi tiết kỹ thuật + tính vị thế
-5. **Tab 14 (Top Forecast)** → Dự báo top 10 tăng/giảm 7/14/21/30 ngày
-6. **Tab 13 (Model Portfolios)** → Xây danh mục theo khẩu vị rủi ro
+### Luồng làm việc đề xuất
+| Bước | Tab | Mục đích |
+|------|-----|---------|
+| 1 | 📊 Market Scanner | Quét toàn watchlist → xác định tín hiệu MUA/BÁN |
+| 2 | 🏆 Top 30 Mua | Xem top 30 mã điểm cao nhất |
+| 3 | 🔬 Stock Profiler | Phân tích sâu từng mã: tài chính, định giá, khuyến nghị |
+| 4 | 🔍 Deep Audit | Kỹ thuật + tính vị thế + phát hiện thao túng |
+| 5 | 💼 Model Portfolios | Xây danh mục theo khẩu vị rủi ro |
+| 6 | 🧠 ML Forecast | Dự báo giá 7/14/21/30 ngày |
 
 ### Giải thích tín hiệu
-| Tín hiệu | Ý nghĩa | Điều kiện |
-|----------|---------|-----------|
-| 🟢 **MUA** | Cơ hội mua ngắn hạn T+2 | RSI < ngưỡng MUA + Giá < BB Lower + Xu hướng tăng |
-| 🔴 **BÁN** | Tín hiệu bán ngắn hạn | RSI > ngưỡng BÁN + Giá > BB Upper |
-| 🟡 **THEO DÕI** | Chưa đủ điều kiện | Không thỏa mãn điều kiện MUA hoặc BÁN |
+| Tín hiệu | Màu | Ý nghĩa | Điều kiện kích hoạt |
+|----------|-----|---------|-------------------|
+| **MUA** | 🟢 | Cơ hội mua ngắn hạn T+2 | RSI < ngưỡng MUA **VÀ** Giá < BB Lower **VÀ** Giá > SMA50 |
+| **BÁN** | 🔴 | Tín hiệu bán ngắn hạn | RSI > ngưỡng BÁN **VÀ** Giá > BB Upper |
+| **THEO DÕI** | 🟡 | Chưa đủ điều kiện | Không thỏa mãn MUA hoặc BÁN |
+
+> **Điều chỉnh sidebar:** Mặc định RSI Mua < 35, RSI Bán > 65. Thị trường sideway có thể cần nới lỏng lên 40/60.
+
+### Điểm Composite Score — Cách tính
+Điểm tổng hợp (0–100) được tính từ nhiều tín hiệu:
+
+| Nguồn điểm | Điểm tối đa |
+|-----------|------------|
+| RSI dưới ngưỡng mua | 15 pts |
+| Giá dưới BB Lower | 5 pts |
+| Xu hướng (Giá > SMA50) | 4 pts |
+| Giá > EMA200 (dài hạn) | 3 pts |
+| EMA9 > EMA21 (momentum) | 3 pts |
+| Giá > SMA200 | 2 pts |
+| Giá > SMA100 | 2 pts |
+| MACD trên đường tín hiệu | 5 pts |
+| Stochastic < 20 (quá bán) | 4 pts |
+| ADX > 25 (xu hướng mạnh) | 3 pts |
+| CCI < -100 | 2 pts |
+| Williams %R < -80 | 2 pts |
+| Khối lượng giao dịch cao (> 1.5× TB20) | 5 pts |
+| Trừ điểm: Tín hiệu Đội Lái HIGH DUMP | −10 pts |
+
+### Giá Thời Gian Thực (v23.0 — FIX-30)
+- Giá hiển thị trong Scanner và Deep Audit là **giá live từ SSI iboard**
+- Nếu SSI không trả về (ngoài giờ GD), tự động fallback → CafeF → OHLCV đóng cửa
+- Cột **Nguồn/Source** sẽ hiển thị `SSI-RT`, `CafeF-RT`, hoặc tên nguồn OHLCV
 
 ### Cảnh báo quan trọng
-⚠️ Mọi tín hiệu đều là **ngắn hạn T+2 (1–5 phiên)**
-⚠️ Tín hiệu Scanner ≠ Tín hiệu Profiler (hai khung thời gian khác nhau)
-⚠️ Không phải tư vấn đầu tư chuyên nghiệp — luôn tự nghiên cứu thêm
+> ⚠️ Mọi tín hiệu Scanner đều là **ngắn hạn T+2 (1–5 phiên)** — không phải đầu tư dài hạn  
+> ⚠️ Scanner (kỹ thuật) ≠ Profiler (cơ bản) — hai khung thời gian khác nhau — cả hai đều đúng  
+> ⚠️ **Không phải tư vấn đầu tư chuyên nghiệp** — luôn tự nghiên cứu thêm  
+> ⚠️ T+2 VN: Mua hôm nay → Nhận cổ phiếu sau 2 phiên → Chỉ bán được sau khi nhận
 """)
         else:
             st.markdown("""
-## 🚀 Quick Start Guide
+## 🚀 Quick Start Guide — Captain Seventh QUANT TERMINAL v23.0
 
 ### Installation (if running locally)
 ```bash
 pip install streamlit pandas numpy requests plotly scikit-learn prophet yfinance
-streamlit run quant_app_v21.py
+streamlit run quant_app.py
 ```
 
 ### Main Interface
 - **14 tabs** at the top navigate all features
-- **Sidebar** (⬅️): Language (VI/EN), RSI thresholds, trend filters
+- **Sidebar** (⬅️): Language (VI/EN), RSI thresholds, trend filter, liquidity filter
 - **Watchlist**: Saved in `watchlist.txt` — one ticker per line (e.g. FPT, VCB, HPG)
 
 ### Recommended Workflow
-1. **Tab 1 (Market Scanner)** → Scan full watchlist for BUY/SELL/WATCH signals
-2. **Tab 2 (Top 30 Buy)** → View top 30 highest-scoring stocks
-3. **Tab 12 (Stock Profiler)** → Deep-dive individual stocks (financials, valuation, recommendation)
-4. **Tab 4 (Deep Audit)** → Detailed technical analysis + position sizing
-5. **Tab 14 (Top Forecast)** → Predict top 10 gainers/decliners 7/14/21/30 days
-6. **Tab 13 (Model Portfolios)** → Build portfolio by risk profile
+| Step | Tab | Purpose |
+|------|-----|---------|
+| 1 | 📊 Market Scanner | Scan full watchlist → find BUY/SELL signals |
+| 2 | 🏆 Top 30 Buy | View 30 highest-scoring tickers |
+| 3 | 🔬 Stock Profiler | Deep-dive: financials, valuation, recommendation |
+| 4 | 🔍 Deep Audit | Technical + position sizing + manipulation detection |
+| 5 | 💼 Model Portfolios | Build portfolio by risk profile |
+| 6 | 🧠 ML Forecast | Price forecast 7/14/21/30 days |
 
 ### Signal Explanation
-| Signal | Meaning | Conditions |
-|--------|---------|-----------|
-| 🟢 **BUY** | Short-term T+2 opportunity | RSI < BUY threshold + Price < BB Lower + Uptrend |
-| 🔴 **SELL** | Short-term sell signal | RSI > SELL threshold + Price > BB Upper |
-| 🟡 **WATCH** | No strong signal | Neither BUY nor SELL conditions met |
+| Signal | Colour | Meaning | Trigger Conditions |
+|--------|--------|---------|-------------------|
+| **BUY** | 🟢 | Short-term T+2 opportunity | RSI < BUY threshold **AND** Price < BB Lower **AND** Price > SMA50 |
+| **SELL** | 🔴 | Short-term sell signal | RSI > SELL threshold **AND** Price > BB Upper |
+| **WATCH** | 🟡 | No strong signal | Neither BUY nor SELL conditions met |
+
+> **Sidebar tuning:** Default RSI Buy < 35, Sell > 65. In sideways markets try relaxing to 40/60.
+
+### Composite Score — How It's Calculated
+The composite score (0–100) aggregates multiple confirming signals:
+
+| Signal Source | Max Points |
+|--------------|-----------|
+| RSI below buy threshold | 15 pts |
+| Price below BB Lower | 5 pts |
+| Trend filter (Price > SMA50) | 4 pts |
+| Price > EMA200 (long-term bullish) | 3 pts |
+| EMA9 > EMA21 (short-term momentum) | 3 pts |
+| Price > SMA200 | 2 pts |
+| Price > SMA100 | 2 pts |
+| MACD above signal line | 5 pts |
+| Stochastic < 20 (oversold) | 4 pts |
+| ADX > 25 (strong trend) | 3 pts |
+| CCI < −100 | 2 pts |
+| Williams %R < −80 | 2 pts |
+| High volume (> 1.5× 20-day avg) | 5 pts |
+| Penalty: HIGH DUMP manipulation signal | −10 pts |
+
+### Real-Time Price (v23.0 — FIX-30)
+- Prices shown in Scanner and Deep Audit are **live prices from SSI iboard**
+- If SSI unavailable (outside trading hours), auto-falls back → CafeF → OHLCV close
+- The **Source** column shows `SSI-RT`, `CafeF-RT`, or the OHLCV source name
 
 ### Important Warnings
-⚠️ All signals are **short-term T+2 (1–5 sessions)**
-⚠️ Scanner signals ≠ Profiler signals (different time horizons)
-⚠️ Not professional financial advice — always conduct your own research
+> ⚠️ All Scanner signals are **short-term T+2 (1–5 sessions)** — not long-term investing  
+> ⚠️ Scanner (technical) ≠ Profiler (fundamental) — different horizons — both can be correct  
+> ⚠️ **Not professional financial advice** — always conduct your own research  
+> ⚠️ T+2 Vietnam: Buy today → Receive shares after 2 sessions → Can only sell after receipt
 """)
 
     with tabs_guide[1]:
@@ -6887,7 +7154,410 @@ App fetches reference price from CafeF PriceRealTimeHeader API.
 A: Filtered out by: low liquidity (avg trading value < threshold) OR insufficient historical data.
 """)
 
+    # ─── BRD TAB (new in v23.0) ──────────────────────────────────────────────
+    with tabs_guide[6]:
+        if is_vi:
+            st.markdown("""
+# 🏗️ Tài Liệu Yêu Cầu Nghiệp Vụ (BRD) — v23.0
+**Captain Seventh QUANT TERMINAL · Vietnam Stock Exchange**
 
+---
+
+## 1. Mục Tiêu Hệ Thống
+
+| Mục tiêu | Mô tả |
+|----------|-------|
+| **Tính toàn vẹn dữ liệu** | Pipeline 7 nguồn (DNSE→SSI→CafeF→TCBS→VNDirect→yFinance) đảm bảo giá khớp thống nhất (Trần/Sàn/TC/Hiện tại) trên tất cả tab |
+| **Định giá ngành** | PE/PB/DCF/DDM thích ứng theo ngành; Ngân hàng dùng P/B+DDM; Chu kỳ dùng EPS bình quân 5 năm |
+| **Kỹ thuật chính xác** | SMA (5,10,20,30,50,100,200) + EMA (9,21,50,200) + RSI/MACD/BB/ADX/Stoch/ATR/OBV |
+| **Dự báo ML** | Prophet + ARIMA + SVR + RF + Ensemble cho 7/14/21/30 ngày; kiểm toán đầy đủ |
+| **Vĩ mô tích hợp** | DXY/FED/Gold/WTI làm điều chỉnh điểm ngành tự động |
+| **T+2 chính xác** | Mọi backtest đếm phiên giao dịch thực tế (không dùng ngày dương lịch) |
+
+---
+
+## 2. Pipeline Dữ Liệu SSI iBoard
+
+### Các endpoint SSI đã xác minh (từ HAR logs 09/03/2026):
+
+| Endpoint | Params | Mục đích |
+|----------|--------|----------|
+| `iboard-api.ssi.com.vn/statistics/charts/history` | `symbol, resolution=1D, from, to` | Dữ liệu OHLCV lịch sử |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/finance-indicator` | `symbol, page=1, pageSize=20` | ROE, ROA, EPS, P/E, P/B theo quý |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/company-news` | `symbol, fromDate, pageSize=10` | Tin tức công ty |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/corporate-actions` | `symbol, fromDate, language=vn` | Sự kiện (ĐHCĐ, cổ tức, phát hành) |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/share-holder-summary` | `symbol, language=vn` | Cơ cấu cổ đông |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/cap-and-dividend` | `symbol` | Vốn hóa & lịch sử cổ tức |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/company-leaderships` | `symbol, language=vn` | Ban lãnh đạo |
+| `iboard-query.ssi.com.vn/stock/{symbol}` | `boardId=MAIN` | Giá real-time + Trần/Sàn/TC |
+| `iboard-query.ssi.com.vn/market-stat/exchange/hose` | — | Thống kê thị trường |
+
+**Headers bắt buộc:** `Origin: https://iboard.ssi.com.vn` | `Referer: https://iboard.ssi.com.vn/`
+
+---
+
+## 3. Mô Hình Định Giá
+
+### 3.1 Định Giá Chung (Non-Banking)
+
+| Model | Công thức | Trọng số |
+|-------|-----------|---------|
+| **DCF** | `EPS × (1+g)^n / (r-g)` · g=10%, r=15%, n=5 | 40% |
+| **P/E so sánh ngành** | `EPS × Median_PE_Sector` | 30% |
+| **P/B** | `BVPS × Target_PB_ROE_Adjusted` | 20% |
+| **Graham** | `√(22.5 × EPS × BVPS)` | 10% |
+
+### 3.2 Định Giá Ngân Hàng (Sector-Aware)
+
+| Model | Lý do | Trọng số |
+|-------|-------|---------|
+| **P/B** | ROE ngân hàng ổn định; P/B=1.2–2.5× là hợp lý | 70% |
+| **DDM** | Cổ tức tiền mặt ổn định ~2–4% | 30% |
+| ~~DCF~~ | Không áp dụng — dòng tiền ngân hàng khó tách biệt | 0% |
+
+### 3.3 Ngành Chu Kỳ (Thép/Dầu Khí/Xây Dựng)
+
+- **EPS chuẩn hóa**: Bình quân EPS 5 năm thay vì TTM → loại bỏ biến động chu kỳ
+- **EPS âm**: Tắt DCF/P/E, dùng P/B + Tech Fair Value từ DNSE
+
+### 3.4 Sector P/E Benchmarks (SSI Research 2025)
+
+| Ngành | P/E median | Nguồn |
+|-------|-----------|-------|
+| Công nghệ | 28× | SSI/VCSC 2025 |
+| Ngân hàng | 11× | P/B ưu tiên |
+| Bất động sản | 20× | VCSC |
+| Thép | 9× | VCSC |
+| Dược | 22× | SSI |
+| Điện | 18× | SSI |
+| Dầu khí | 14× | SSI |
+| Bán lẻ | 25× | VCSC |
+| Hàng không | 16× | SSI |
+| Khác | 14× | VCSC median |
+
+---
+
+## 4. Chỉ Số Kỹ Thuật & Lý Thuyết
+
+### 4.1 Moving Averages
+| Chỉ số | Chu kỳ | Lý thuyết | Ứng dụng |
+|--------|--------|-----------|----------|
+| SMA5 | 5 ngày | Momentum ngắn nhất | Entry/exit filter |
+| SMA10 | 10 ngày | 2 tuần giao dịch | Trend ngắn hạn |
+| SMA20 | 20 ngày | 1 tháng giao dịch | BB Middle, trend ngắn |
+| SMA30 | 30 ngày | 6 tuần | Confirmation |
+| SMA50 | 50 ngày | ~2.5 tháng | **Bộ lọc xu hướng chính** |
+| SMA100 | 100 ngày | ~5 tháng | Trend trung dài hạn |
+| SMA200 | 200 ngày | ~1 năm | Golden/Death Cross tham chiếu |
+| EMA9 | 9 ngày | Phản ứng nhanh | Trigger vào lệnh |
+| EMA21 | 21 ngày | 1 tháng dương lịch | Support/Resistance động |
+| EMA50 | 50 ngày | Trend trung hạn | Golden Cross với EMA200 |
+| EMA200 | 200 ngày | Trend dài hạn | Phân định Bull/Bear market |
+
+### 4.2 RSI (Relative Strength Index)
+- **Wilder smoothing**: `RSI = 100 – 100/(1 + RS)` · RS = AvgGain(14)/AvgLoss(14)
+- Ngưỡng: <35 = oversold (mua), >65 = overbought (bán); Có thể tùy chỉnh sidebar
+
+### 4.3 Bollinger Bands
+- `BB_Upper = SMA20 + 2σ` · `BB_Lower = SMA20 – 2σ`
+- Giá chạm BB_Lower + RSI oversold = tín hiệu mua mạnh
+
+### 4.4 MACD (12,26,9)
+- `MACD = EMA12 – EMA26` · `Signal = EMA9(MACD)` · `Hist = MACD – Signal`
+- Golden cross (MACD > Signal) = momentum tăng; Death cross = giảm
+
+### 4.5 ADX (Average Directional Index, 14)
+- ADX > 25 = xu hướng rõ; < 20 = sideway
+- +DI > -DI = xu hướng tăng; -DI > +DI = xu hướng giảm
+
+### 4.6 ATR (Average True Range, 14)
+- `TR = max(H-L, |H-Prev_C|, |L-Prev_C|)` · ATR = Wilder(TR, 14)
+- Stop Loss = Price – 1.5×ATR | TP1 = Price + 2×ATR | TP2 = Price + 3.5×ATR
+
+---
+
+## 5. Mô Hình Dự Báo ML
+
+| Model | Thư viện | Đặc điểm | Trọng số Ensemble |
+|-------|---------|----------|-----------------|
+| **Prophet** | Meta/Facebook | Xử lý seasonality, holiday | 30% |
+| **ARIMA** | statsmodels | Chuỗi thời gian cổ điển | 20% |
+| **Linear Regression** | scikit-learn | Baseline tuyến tính | 10% |
+| **SVR** | scikit-learn | Support Vector Regression | 15% |
+| **Random Forest** | scikit-learn | Ensemble trees, feature importance | 15% |
+| **Gradient Boosting** | scikit-learn | XGBoost-like, high accuracy | 10% |
+| **Ensemble** | Weighted avg | Tổng hợp tất cả | 100% |
+
+**Chân trời:** 7, 14, 21, 30 ngày  
+**Điều chỉnh vĩ mô:** DXY > 106 → -5 đến -10 điểm cho ngành nhập khẩu; FED hike → -5 cho toàn thị trường
+
+---
+
+## 6. Quản Trị Rủi Ro & T+2
+
+### 6.1 Position Sizing (Kelly Criterion)
+```
+Kelly% = (W × R – (1–W)) / R
+W = Tỷ lệ thắng lịch sử | R = R/R ratio
+Áp dụng: Không dùng quá 50% Kelly (Half-Kelly)
+Lot size HOSE = 100 CP | Phí mua: 0.15% | Phí bán: 0.25% + 0.1% thuế
+```
+
+### 6.2 T+2 Settlement
+- Mua phiên T → bán sớm nhất phiên T+2
+- Backtest đếm phiên giao dịch thực tế (không tính ngày lễ/cuối tuần)
+- `T2_SESSIONS = 2` trong constants
+
+### 6.3 7 Loại Lệnh Điều Kiện (SSI-style)
+| # | Loại | Điều kiện | Ứng dụng |
+|---|------|----------|---------|
+| 1 | Lệnh giới hạn (LO) | Giá = mức đặt | Mua tại BB Lower |
+| 2 | Lệnh thị trường (MP/ATO/ATC) | Khớp ngay | Entry/Exit nhanh |
+| 3 | Stop Loss | Giá ≤ SL | Cắt lỗ tự động |
+| 4 | Take Profit | Giá ≥ TP | Chốt lời tự động |
+| 5 | Trailing Stop | SL di động theo giá | Bảo vệ lợi nhuận |
+| 6 | OCO (One-Cancel-Other) | SL + TP đặt đồng thời | Quản lý rủi ro |
+| 7 | Bracket Order | Entry + SL + TP cùng lúc | Hoàn chỉnh nhất |
+
+---
+
+## 7. Phân Tích Dòng Vốn Ngoại (Foreign Flow)
+
+- **Nguồn:** SSI share-holder-summary (% sở hữu NN) + CafeF CoCauSoHuu
+- **Tín hiệu tích cực:** NN tăng mua ròng + DXY < 104 + S&P500 risk-on
+- **Tín hiệu tiêu cực:** NN bán ròng liên tục + DXY > 106 + FED hawkish
+
+---
+
+## 8. Danh Mục Mẫu (iFollow)
+
+| Danh mục | Mục tiêu | Max DD | Ngành trọng tâm |
+|---------|---------|--------|----------------|
+| 🚀 Risk-On Growth | +20%+/năm | -15% | Tech, BĐS, Bán lẻ |
+| ⚖️ Balanced | +12–18%/năm | -10% | NH, Tech, Thực phẩm |
+| 🛡️ Safe-Haven | +8–12%/năm | -7% | NH, Điện, Dược |
+| 💵 Dividend | +6–10%/năm (cổ tức) | -5% | NH, Điện, Dầu khí |
+
+---
+
+## 9. Kiểm Tra Hệ Thống (Smoke Test — v23.0)
+
+### Bộ test bắt buộc mỗi lần chạy:
+| Ticker | Sàn | Lý do chọn |
+|--------|-----|------------|
+| OIL | UPCOM | UPCOM ticker nhỏ — test độ bền pipeline |
+| FPT | HOSE | Blue-chip công nghệ — benchmark chính |
+| GAS | HOSE | Dầu khí lớn — test ngành cyclical |
+| TCB | HOSE | Ngân hàng — test sector banking |
+| VIC | HOSE | VN30 component, BĐS — test sector RE |
+
+### Điều kiện PASS:
+- ≥ 20 dòng dữ liệu OHLCV
+- RSI được tính (không NaN)
+- Giá nằm trong [Sàn, Trần] hợp lệ
+- CompositeScore ≥ 0 (không lỗi NameError)
+""")
+        else:
+            st.markdown("""
+# 🏗️ Business Requirements Document (BRD) — v23.0
+**Captain Seventh QUANT TERMINAL · Vietnam Stock Exchange**
+
+---
+
+## 1. System Objectives
+
+| Objective | Description |
+|-----------|-------------|
+| **Data Integrity** | 7-source pipeline (DNSE→SSI→CafeF→TCBS→VNDirect→yFinance) ensures unified price flow (Ceiling/Floor/Reference/Current) across all tabs |
+| **Sector Valuation** | Adaptive P/E/P/B/DCF/DDM benchmarks; Banking = P/B+DDM; Cyclicals = 5Y normalised EPS |
+| **Precision Technicals** | SMA (5,10,20,30,50,100,200) + EMA (9,21,50,200) + RSI/MACD/BB/ADX/Stoch/ATR/OBV |
+| **ML Forecasting** | Prophet + ARIMA + SVR + RF + Ensemble for 7/14/21/30 day horizons; full audit trail |
+| **Macro Integration** | DXY/FED/Gold/WTI auto-adjust sector scores |
+| **Accurate T+2** | All backtests count actual trading sessions (not calendar days) |
+
+---
+
+## 2. SSI iBoard Data Pipeline
+
+### Confirmed SSI Endpoints (from HAR logs 09/03/2026):
+
+| Endpoint | Params | Purpose |
+|----------|--------|---------|
+| `iboard-api.ssi.com.vn/statistics/charts/history` | `symbol, resolution=1D, from, to` | Historical OHLCV |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/finance-indicator` | `symbol, page=1, pageSize=20` | ROE, ROA, EPS, P/E, P/B per quarter |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/company-news` | `symbol, fromDate, pageSize=10` | Company news |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/corporate-actions` | `symbol, fromDate, language=vn` | Events (AGM, dividends, issues) |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/share-holder-summary` | `symbol, language=vn` | Shareholder structure |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/cap-and-dividend` | `symbol` | Market cap & dividend history |
+| `iboard-api.ssi.com.vn/statistics/company/ssmi/company-leaderships` | `symbol, language=vn` | Board of directors |
+| `iboard-query.ssi.com.vn/stock/{symbol}` | `boardId=MAIN` | Real-time price + Ceiling/Floor/Ref |
+| `iboard-query.ssi.com.vn/market-stat/exchange/hose` | — | Market statistics |
+
+**Required headers:** `Origin: https://iboard.ssi.com.vn` | `Referer: https://iboard.ssi.com.vn/`
+
+---
+
+## 3. Valuation Models
+
+### 3.1 General Valuation (Non-Banking)
+
+| Model | Formula | Weight |
+|-------|---------|--------|
+| **DCF** | `EPS × (1+g)^n / (r-g)` · g=10%, r=15%, n=5 | 40% |
+| **P/E Relative** | `EPS × Median_PE_Sector` | 30% |
+| **P/B** | `BVPS × Target_PB_ROE_Adjusted` | 20% |
+| **Graham** | `√(22.5 × EPS × BVPS)` | 10% |
+
+### 3.2 Banking Valuation (Sector-Aware)
+
+| Model | Rationale | Weight |
+|-------|-----------|--------|
+| **P/B** | Stable ROE; P/B=1.2–2.5× is reasonable | 70% |
+| **DDM** | Steady cash dividend ~2–4% | 30% |
+| ~~DCF~~ | Not applicable — bank cash flows hard to isolate | 0% |
+
+### 3.3 Cyclical Sectors (Steel/Oil & Gas/Construction)
+
+- **Normalised EPS**: Average EPS over 5 years instead of TTM → removes cycle volatility
+- **Negative EPS**: DCF/P/E disabled; use P/B + Tech Fair Value from DNSE
+
+### 3.4 Sector P/E Benchmarks (SSI Research 2025)
+
+| Sector | Median P/E | Source |
+|--------|-----------|--------|
+| Technology | 28× | SSI/VCSC 2025 |
+| Banking | 11× | P/B preferred |
+| Real Estate | 20× | VCSC |
+| Steel | 9× | VCSC |
+| Pharma | 22× | SSI |
+| Utilities/Power | 18× | SSI |
+| Oil & Gas | 14× | SSI |
+| Retail | 25× | VCSC |
+| Aviation | 16× | SSI |
+| Other | 14× | VCSC median |
+
+---
+
+## 4. Technical Indicators & Theory
+
+### 4.1 Moving Averages
+| Indicator | Period | Theory | Application |
+|-----------|--------|--------|-------------|
+| SMA5 | 5d | Shortest momentum | Entry/exit filter |
+| SMA10 | 10d | 2 trading weeks | Short-term trend |
+| SMA20 | 20d | 1 trading month | BB Middle, short-trend |
+| SMA30 | 30d | 6 weeks | Confirmation |
+| SMA50 | 50d | ~2.5 months | **Primary trend filter** |
+| SMA100 | 100d | ~5 months | Medium-long trend |
+| SMA200 | 200d | ~1 year | Golden/Death Cross reference |
+| EMA9 | 9d | Fast response | Short-term entry trigger |
+| EMA21 | 21d | 1 calendar month | Dynamic support/resistance |
+| EMA50 | 50d | Medium trend | Golden Cross with EMA200 |
+| EMA200 | 200d | Long trend | Bull/Bear market delimiter |
+
+### 4.2 RSI (Relative Strength Index)
+- **Wilder smoothing**: `RSI = 100 – 100/(1 + RS)` · RS = AvgGain(14)/AvgLoss(14)
+- Thresholds: <35 = oversold (buy), >65 = overbought (sell); customisable in sidebar
+
+### 4.3 Bollinger Bands
+- `BB_Upper = SMA20 + 2σ` · `BB_Lower = SMA20 – 2σ`
+- Price at BB_Lower + RSI oversold = strong buy signal
+
+### 4.4 MACD (12,26,9)
+- `MACD = EMA12 – EMA26` · `Signal = EMA9(MACD)` · `Hist = MACD – Signal`
+- Golden cross (MACD > Signal) = increasing momentum; Death cross = decreasing
+
+### 4.5 ADX (Average Directional Index, 14)
+- ADX > 25 = clear trend; < 20 = sideways
+- +DI > -DI = uptrend; -DI > +DI = downtrend
+
+### 4.6 ATR (Average True Range, 14)
+- `TR = max(H-L, |H-Prev_C|, |L-Prev_C|)` · ATR = Wilder(TR, 14)
+- Stop Loss = Price – 1.5×ATR | TP1 = Price + 2×ATR | TP2 = Price + 3.5×ATR
+
+---
+
+## 5. ML Forecasting Models
+
+| Model | Library | Characteristics | Ensemble Weight |
+|-------|---------|----------------|----------------|
+| **Prophet** | Meta/Facebook | Handles seasonality, holidays | 30% |
+| **ARIMA** | statsmodels | Classical time-series | 20% |
+| **Linear Regression** | scikit-learn | Linear baseline | 10% |
+| **SVR** | scikit-learn | Support Vector Regression | 15% |
+| **Random Forest** | scikit-learn | Ensemble trees, feature importance | 15% |
+| **Gradient Boosting** | scikit-learn | XGBoost-like, high accuracy | 10% |
+| **Ensemble** | Weighted avg | Aggregate all models | 100% |
+
+**Horizons:** 7, 14, 21, 30 days  
+**Macro adjustment:** DXY > 106 → -5 to -10 pts for import-heavy sectors; FED hike → -5 market-wide
+
+---
+
+## 6. Risk Management & T+2
+
+### 6.1 Position Sizing (Kelly Criterion)
+```
+Kelly% = (W × R – (1–W)) / R
+W = Historical win rate | R = R/R ratio
+Applied: Never exceed 50% Kelly (Half-Kelly)
+Lot size HOSE = 100 shares | Buy fee: 0.15% | Sell fee: 0.25% + 0.1% tax
+```
+
+### 6.2 T+2 Settlement
+- Buy session T → earliest sell session T+2
+- Backtest counts actual trading sessions (excludes holidays/weekends)
+- `T2_SESSIONS = 2` in trading constants
+
+### 6.3 7 Conditional Order Types (SSI-style)
+| # | Type | Condition | Use Case |
+|---|------|----------|---------|
+| 1 | Limit Order (LO) | Price = specified level | Buy at BB Lower |
+| 2 | Market Order (MP/ATO/ATC) | Immediate fill | Fast entry/exit |
+| 3 | Stop Loss | Price ≤ SL | Automated loss cut |
+| 4 | Take Profit | Price ≥ TP | Automated profit lock |
+| 5 | Trailing Stop | Mobile SL following price | Profit protection |
+| 6 | OCO (One-Cancel-Other) | SL + TP placed simultaneously | Risk management |
+| 7 | Bracket Order | Entry + SL + TP at once | Most complete |
+
+---
+
+## 7. Foreign Investment Flow Analysis
+
+- **Source:** SSI share-holder-summary (% foreign ownership) + CafeF CoCauSoHuu
+- **Positive signal:** Net foreign buying + DXY < 104 + S&P500 risk-on
+- **Negative signal:** Continuous net foreign selling + DXY > 106 + FED hawkish
+
+---
+
+## 8. Model Portfolios (iFollow Style)
+
+| Portfolio | Target Return | Max DD | Focus Sectors |
+|-----------|--------------|--------|--------------|
+| 🚀 Risk-On Growth | +20%+/yr | -15% | Tech, RE, Retail |
+| ⚖️ Balanced | +12–18%/yr | -10% | Banking, Tech, Food |
+| 🛡️ Safe-Haven | +8–12%/yr | -7% | Banking, Power, Pharma |
+| 💵 Dividend | +6–10%/yr (income) | -5% | Banking, Power, O&G |
+
+---
+
+## 9. Smoke Test Suite (v23.0)
+
+### Mandatory tickers on every run:
+| Ticker | Exchange | Rationale |
+|--------|----------|-----------|
+| OIL | UPCOM | Small UPCOM ticker — tests pipeline robustness |
+| FPT | HOSE | Tech blue-chip — primary benchmark |
+| GAS | HOSE | Large O&G — tests cyclical sector |
+| TCB | HOSE | Banking — tests banking sector |
+| VIC | HOSE | VN30 component, RE — tests real-estate sector |
+
+### PASS Conditions:
+- ≥ 20 rows of OHLCV data
+- RSI computed (not NaN)
+- Price within valid [Floor, Ceiling] range
+- CompositeScore ≥ 0 (no NameError)
+""")
 
 
 # ══════════════════════════════════════════════════════════════
@@ -7099,6 +7769,57 @@ def render_changelog_tab():
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
 ## 📝 Application Change Log
+
+---
+
+### v23.0 — 2026-03-09 · LIVE PRICE + BUG FIXES (from error_log.txt)
+
+**🔴 Critical Bug Fixes:**
+
+| ID | Component | Issue | Fix |
+|----|-----------|-------|-----|
+| FIX-25 | `fetch_ssi_news` | **NameError**: Function body existed (line 2748) but `def fetch_ssi_news(ticker, n=10):` declaration was missing — orphaned docstring/body with no function name. `render_stock_profiler_tab` called `fetch_ssi_news(ticker)` → immediate crash. | Restored `@st.cache_data(ttl=3600)` decorator and `def fetch_ssi_news(ticker: str, n: int = 10) -> list:` declaration before the function body. |
+| FIX-26 | `show_df` / PyArrow | **ArrowTypeError**: `Stoch%K` column in scan results contains mixed `float` + `str "–"` → PyArrow Table.from_pandas fails with `"Expected bytes, got a 'float' object"`. | Rewrote `show_df()` to detect mixed-type object columns using `set(type(v).__name__ ...)` and cast to uniform `str` before rendering. Uses `f"{x:,.1f}"` for floats. |
+| FIX-27 | Model Portfolios | **Always empty**: Hard sector filter + full `min_score` together meant zero stocks ever matched. `fetch_cafef_key_ratios` called inside the loop (blocking, can raise) added further failures. | Two-pass strategy: pass 1 uses 40% relaxed score for preferred sectors; pass 2 falls back to any sector with score ≥ 5. `fetch_cafef_key_ratios` wrapped in try/except. Added `Preferred ✅` column. |
+| FIX-28 | Deep Audit | `audit_extra` dict missing `sma5`, `sma10`, `sma30`, `sma100`, `sma200`, `ema9`, `ema21`, `ema50`, `ema200` → SMA/EMA grid panel showed all "–" even after audit. | Added all 9 EMA/SMA values to `audit_extra` dict (already extracted as `_s5`, `_e9` etc. — just not saved). |
+| FIX-29 | Deep Audit | SSI real-time price data (Ceiling/Floor/Reference) was fetched but not displayed in metrics row. | Added RT price metrics display row (🔴Trần / 🟡TC / 💚Live / 🔵Sàn) immediately below main metrics; falls back to estimated `get_price_limits()` if SSI unavailable. |
+| FIX-30 | Market Scanner | **BSR and other tickers showing stale OHLCV close price** (previous session's close, not live). Scanner always used `c_v = float(latest["Close"])` from OHLCV data — no real-time price lookup. | Added SSI iboard real-time price fetch (`fetch_ssi_realtime_price`) in `scan_one_ticker()`. Priority: SSI-RT → CafeF-RT → OHLCV. Price limits recalculated from live reference. `Source` column now shows `SSI-RT`, `CafeF-RT`, or OHLCV source name. |
+
+**🟢 Guide Tab Enhancement:**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-31 | Guide v23 | Updated Getting Started sub-tab: full Composite Score breakdown table (all scoring factors with point values), real-time price flow explanation, recommended workflow table, detailed signal trigger conditions — bilingual VI/EN |
+
+**📋 Audit Trail — v23.0:**
+- Smoke test mandatory tickers: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE)
+- All fixes verified via Python AST check (zero syntax errors)
+- FIX-30 tested: SSI-RT fetch wrapped in try/except — degrades gracefully to OHLCV when market closed
+
+---
+
+### v23.0 — 2026-03-09 · SMOKE TEST + BRD + CRITICAL BUG FIXES
+
+**🔴 Critical Bug Fixes:**
+
+| ID | Component | Issue | Fix |
+|----|-----------|-------|-----|
+| FIX-22 | `compute_composite_score` | **NameError**: `ema200`, `sma200`, `sma100`, `ema9`, `ema21`, `sma5`, `sma10` were referenced but never extracted from `row` → Scanner crashed silently on all EMA/SMA scoring. | Added `ema200=safe("EMA200")` etc. via `safe()` extractor — same pattern as existing `rsi`, `adx`, `cci`. All 7 EMA/SMA variables now properly extracted before use. |
+| FIX-23 | Smoke Test | Test suite only covered FPT/REE/OIL — GAS, TCB, VIC were never validated. Price flow (Ceiling/Floor/Reference/Current) not verified in any test. | Added mandatory 5-ticker smoke suite (OIL/FPT/GAS/TCB/VIC) with full price-flow validation, indicator validation, and CompositeScore validation per ticker. |
+| FIX-24 | SSI Smoke Test | Only tested FPT+VCB — missed GAS, TCB, VIC, OIL. | Extended SSI test to cover all 5 mandatory tickers. |
+
+**🟢 New Features / Enhancements:**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-25 | Mandatory Smoke Test | Every run tests OIL (UPCOM), FPT, GAS, TCB, VIC with full pipeline + indicator + price-flow + composite-score validation |
+| ENH-26 | BRD Tab in Guide | New `🏗️ BRD` sub-tab in Guide with full theory documentation: SSI iBoard endpoints, valuation models (DCF/P/E/P/B/Graham/DDM), indicator theory (SMA/EMA/RSI/MACD/BB/ADX/ATR), ML models (Prophet/ARIMA/SVR/RF/GBM/Ensemble), T+2 settlement, 7 order types, sector P/E benchmarks — bilingual VI/EN AU |
+| ENH-27 | Version String | App title & all captions updated to v23.0 |
+
+**📋 Audit Trail:**
+- Smoke test: FIX-22 verified via CompositeScore sub-test in mandatory suite
+- All 5 mandatory tickers run automatically when smoke test button clicked
+- Price flow validation: `fetch_cafef_price()` reference → `get_price_limits()` → assert Floor ≤ Current ≤ Ceiling
 
 ---
 
