@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v23.0                         ║
+║   Captain Seventh QUANT TERMINAL  v24.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v20 → v21:                                           ║
@@ -62,7 +62,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v23.0",
+    page_title="Captain Seventh QUANT TERMINAL v24.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -78,13 +78,38 @@ st.markdown("""<style>
   .tag-bull {background:#003300;color:#00ff88;padding:1px 6px;border-radius:3px;font-size:12px}
   .tag-bear {background:#330000;color:#ff6666;padding:1px 6px;border-radius:3px;font-size:12px}
   .tag-warn {background:#332200;color:#ffaa33;padding:1px 6px;border-radius:3px;font-size:12px}
+
+  /* ENH-36 (v24): Bilingual tooltip — hover any .tt element to see translation */
+  .tt {
+    position:relative; cursor:help;
+    border-bottom: 1px dotted #aaa;
+    display:inline;
+  }
+  .tt::after {
+    content: attr(data-tip);
+    position:absolute; left:50%; transform:translateX(-50%);
+    bottom:calc(100% + 6px);
+    background:#1e2d3e; color:#e0e0ff;
+    border:1px solid #3a5a8a; border-radius:6px;
+    padding:5px 10px; font-size:12px; white-space:nowrap;
+    opacity:0; pointer-events:none;
+    transition:opacity 0.2s; z-index:9999;
+  }
+  .tt:hover::after { opacity:1; }
+
+  /* Signal color tags */
+  .sig-buy  {background:#004400;color:#44ff88;padding:2px 8px;border-radius:4px;font-weight:bold}
+  .sig-sell {background:#440000;color:#ff6644;padding:2px 8px;border-radius:4px;font-weight:bold}
+  .sig-watch{background:#222200;color:#ffcc44;padding:2px 8px;border-radius:4px}
+  .sig-accum{background:#003322;color:#44ffcc;padding:2px 8px;border-radius:4px}
+  .sig-dist {background:#330011;color:#ff44aa;padding:2px 8px;border-radius:4px}
 </style>""", unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v23.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v24.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -94,19 +119,20 @@ _LANG_VI = {
     "pipeline_lbl":    "📡 7 Sources: DNSE→SSI→CafeF→TCBS→VNDir",
     "finance_lbl":     "📊 Tài chính: VNDirect FINFO",
     "disclaimer":      "⚠️ Chỉ tham khảo, không phải TVĐT",
-    "tab1":  "📊 Market Scanner",
-    "tab2":  "🏆 Top 30 Mua",
-    "tab3":  "📂 Lịch Sử",
+    # VI labels — reorganized v24 menu
+    "tab1":  "📊 Quét Thị Trường",
+    "tab2":  "🎯 Tín Hiệu Thông Minh",
+    "tab3":  "🧬 Hồ Sơ Cổ Phiếu",
     "tab4":  "🔍 Deep Audit",
-    "tab5":  "🧪 Backtest T+2",
+    "tab5":  "💼 Danh Mục Mẫu",
     "tab6":  "🧠 Dự Báo ML",
-    "tab7":  "📈 Lịch Sử DĐ",
-    "tab8":  "🌍 Thị Trường TG",
-    "tab9":  "🔬 Smoke Test",
+    "tab7":  "🌍 Thị Trường TG",
+    "tab8":  "🧪 Backtest T+2",
+    "tab9":  "📂 Lịch Sử",
     "tab10": "📖 Hướng Dẫn",
     "tab11": "📝 Change Log",
-    "tab12": "🧬 Hồ Sơ Cổ Phiếu",
-    "tab13": "💼 Model Portfolios",
+    "tab12": "🔬 Smoke Test",
+    "tab13": "📈 Lịch Sử Dự Báo",
     "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
     "sp_title":         "🧬 Hồ Sơ & Phân Tích Sâu Cổ Phiếu",
@@ -202,7 +228,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v23.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v24.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -212,19 +238,20 @@ _LANG_EN = {
     "pipeline_lbl":    "📡 7 Sources: DNSE→SSI→CafeF→TCBS→VNDir",
     "finance_lbl":     "📊 Financials: VNDirect FINFO",
     "disclaimer":      "⚠️ For reference only, not investment advice",
+    # EN labels — reorganized v24 menu
     "tab1":  "📊 Market Scanner",
-    "tab2":  "🏆 Top 30 Buy",
-    "tab3":  "📂 History",
+    "tab2":  "🎯 Smart Signals",
+    "tab3":  "🧬 Stock Profiler",
     "tab4":  "🔍 Deep Audit",
-    "tab5":  "🧪 Backtest T+2",
+    "tab5":  "💼 Model Portfolios",
     "tab6":  "🧠 ML Forecast",
-    "tab7":  "📈 Forecast Log",
-    "tab8":  "🌍 Global Markets",
-    "tab9":  "🔬 Smoke Test",
+    "tab7":  "🌍 Global Markets",
+    "tab8":  "🧪 Backtest T+2",
+    "tab9":  "📂 History",
     "tab10": "📖 Guide",
     "tab11": "📝 Change Log",
-    "tab12": "🧬 Stock Profiler",
-    "tab13": "💼 Model Portfolios",
+    "tab12": "🔬 Smoke Test",
+    "tab13": "📈 Forecast Log",
     "tab14": "🔮 Top Forecast",
     # Stock Profiler labels
     "sp_title":         "🧬 Stock Profile & Deep Analysis",
@@ -482,9 +509,23 @@ use_liquidity_filter = sb.toggle(L["liq_filter"],   value=True)
 min_avg_value        = 1_000_000_000
 rsi_buy_thresh       = sb.slider(L["rsi_buy"],  20, 45, 35)
 rsi_sell_thresh      = sb.slider(L["rsi_sell"], 55, 80, 65)
+
+# ENH-32 (v24): SMA trend filter options
+sb.markdown("**📐 " + ("Bộ lọc đường MA" if st.session_state.lang=="VI" else "MA Trend Filter") + "**")
+_sma_options = {"SMA5":5,"SMA7":7,"SMA10":10,"SMA20":20,"SMA50":50}
+_sma_default = ["SMA50"]
+sma_filter_choices = sb.multiselect(
+    ("Lọc xu hướng theo MA" if st.session_state.lang=="VI" else "Filter by MA (price must be above)"),
+    options=list(_sma_options.keys()),
+    default=_sma_default,
+    help=("Chọn các đường MA mà giá phải ở trên để tính là xu hướng tăng" if st.session_state.lang=="VI"
+          else "Price must be above ALL selected MAs to count as uptrend"),
+)
+sma_filter_periods = [_sma_options[k] for k in sma_filter_choices if k in _sma_options]
+
 sb.divider()
 sb.caption(f"📦 {len(MARKET_SCAN_LIST)} mã HOSE/HNX/UPCOM")
-sb.caption(f"📡 Pipeline: DNSE→SSI→CafeF→TCBS→VNDir→yF")
+sb.caption(f"📡 Pipeline: SSI→DNSE→CafeF→TCBS→VNDir→yF")
 sb.caption(L["finance_lbl"])
 sb.caption(f"📈 yFinance: {'✅' if YFINANCE_AVAILABLE else '❌'}")
 sb.caption(f"🤖 sklearn: {'✅' if SKLEARN_AVAILABLE else '❌'}")
@@ -1096,14 +1137,15 @@ def download_data(symbol: str, days: int = 730, min_rows: int = 40):
         "yFinance": min(min_rows, 20),
     }
     exch = TICKER_EXCHANGE.get(symbol, "HOSE")
+    # ENH-33 (v24): SSI is now first priority in pipeline
     _PIPELINE = [
+        ("SSI",        _fetch_ssi),
         ("DNSE",       _fetch_dnse),
-        ("SSI",      _fetch_ssi),
-        ("CafeF",    _fetch_cafef),
-        ("TCBS",     _fetch_tcbs),
+        ("CafeF",      _fetch_cafef),
+        ("TCBS",       _fetch_tcbs),
         ("CafeF-JSON", _fetch_cafef_v2),
-        ("VNDirect", _fetch_vndirect_price),
-        ("yFinance", _fetch_yfinance),
+        ("VNDirect",   _fetch_vndirect_price),
+        ("yFinance",   _fetch_yfinance),
     ]
 
     for src_name, fetch_fn in _PIPELINE:
@@ -2124,7 +2166,16 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         return None, "Filter", "Low liquidity"
     s50      = extract_latest(data,"SMA50")
     c_v      = float(latest["Close"])
-    trend_ok = (s50 is not None and c_v > s50) if use_trend_filter else True
+    # ENH-32 (v24): Multi-SMA trend filter from sidebar
+    if use_trend_filter and sma_filter_periods:
+        trend_ok = all(
+            (extract_latest(data, f"SMA{p}") is not None and c_v > extract_latest(data, f"SMA{p}"))
+            for p in sma_filter_periods
+        )
+    elif use_trend_filter:
+        trend_ok = (s50 is not None and c_v > s50)
+    else:
+        trend_ok = True
     rsi_v    = extract_latest(data,"RSI") or 50
     bbl_v    = extract_latest(data,"BB_Lower") or c_v
     bbu_v    = extract_latest(data,"BB_Upper") or c_v
@@ -2741,7 +2792,7 @@ def fetch_ssi_company_info(ticker: str) -> dict:
 @st.cache_data(ttl=60)
 def fetch_ssi_realtime_price(ticker: str) -> dict:
     """
-    ENH-28 (v23.0): SSI iboard-query real-time price + Ceiling/Floor/Reference.
+    ENH-28 (v24.0): SSI iboard-query real-time price + Ceiling/Floor/Reference.
     Endpoint: iboard-query.ssi.com.vn/stock/{ticker}?boardId=MAIN
     Returns: {price, ceiling, floor, reference, pct_change, volume, exchange}
     """
@@ -4917,15 +4968,17 @@ _GEO_RISK_KEYWORDS = {
 
 def get_geopolitical_context(sector: str = None) -> dict:
     """
-    ENH-35: Derive geopolitical/macro risk from world market data already loaded.
-    Uses DXY, SP500, Oil price from session_state (from Global Markets tab).
-    Returns score adjustment and reasoning.
+    ENH-35 (v24): Comprehensive macro context including:
+    - World markets (DXY, S&P500, Oil, Gold)
+    - AI economy impact on sectors
+    - Vietnam-specific market characteristics
+    - VN stock money flow (retail-dominated, T+2, margin call pressure)
     """
     score_adj = 0
     reasons = []
 
     # DXY signal
-    dxy_lvl = st.session_state.get("_world_dxy_level", None)
+    dxy_lvl   = st.session_state.get("_world_dxy_level", None)
     sp500_chg = st.session_state.get("_world_sp500_chg", 0)
     oil_chg   = st.session_state.get("_world_oil_chg", 0)
     gold_chg  = st.session_state.get("_world_gold_chg", 0)
@@ -4961,16 +5014,45 @@ def get_geopolitical_context(sector: str = None) -> dict:
         score_adj -= 3
         reasons.append(f"🟡 Vàng +{gold_chg:.1f}% — Tín hiệu risk-off, nhà đầu tư trú ẩn an toàn")
 
+    # ── ENH-35 v24: AI Economy Impact ─────────────────────────────────
+    _ai_sectors_benefit = {"Công nghệ", "Chứng khoán"}
+    _ai_sectors_disrupt  = {"Bán lẻ", "Thực phẩm", "Dược", "Bảo hiểm"}
+    if sector in _ai_sectors_benefit:
+        score_adj += 4
+        reasons.append(f"🤖 AI Economy: Ngành {sector} hưởng lợi trực tiếp từ làn sóng chuyển đổi AI (FPT AI Lab, fintech AI)")
+    elif sector in _ai_sectors_disrupt:
+        reasons.append(f"⚙️ AI Economy: Ngành {sector} đang chuyển đổi mô hình kinh doanh — rủi ro gián đoạn trung hạn")
+
+    # ── ENH-35 v24: Vietnam-Specific Market Characteristics ───────────
+    # VN market: 95%+ retail-dominated → high volatility, herding, momentum-driven
+    reasons.append("🇻🇳 TTCK VN: Thị trường nhà đầu tư cá nhân (~95%) — biến động cao, tâm lý bầy đàn mạnh, momentum đóng vai trò lớn")
+
+    # T+2 and margin dynamics
+    reasons.append("📅 T+2: Thanh toán sau 2 phiên → áp lực margin call cuối tuần (Thứ 5/6 thường biến động)")
+
+    # Foreign ownership room
+    reasons.append("🌐 Room ngoại: Kiểm tra % sở hữu nước ngoài — khi gần đầy room, cổ phiếu trở nên khan hiếm với khối ngoại")
+
+    # Credit growth and liquidity
+    reasons.append("💧 Thanh khoản: Tăng trưởng tín dụng 2025–2026 mục tiêu 14-16% → hỗ trợ dòng tiền vào BĐS, NH")
+
+    # VN economic fundamentals 2025–2026
+    reasons.append("📊 Kinh tế VN: GDP 2025 dự báo 6.5–7.5%, FDI >15tỷ USD — nền tảng vĩ mô tích cực")
+    reasons.append("🏭 Xuất khẩu: Điện tử, dệt may, gỗ — phụ thuộc kinh tế Mỹ/EU. Rủi ro thuế quan Mỹ cần theo dõi")
+
     # Sector-specific adjustments
     if sector:
         _IMPORT_HEAVY = {"Thép", "Dầu khí", "Hàng không", "Bán lẻ", "Thực phẩm", "Dược"}
         _BANK = {"Ngân hàng", "Bảo hiểm"}
+        _EXPORT = {"Công nghệ", "Thép", "Xây dựng"}
         if dxy_lvl and dxy_lvl > 106 and sector in _IMPORT_HEAVY:
             score_adj -= 5
             reasons.append(f"🔴 USD mạnh đặc biệt bất lợi cho ngành {sector} (nhập khẩu nhiều)")
         if sp500_chg and sp500_chg < -2 and sector in _BANK:
             score_adj -= 3
             reasons.append(f"🔴 Risk-off toàn cầu bất lợi cho {sector}")
+        if sector in _EXPORT:
+            reasons.append(f"📦 Ngành {sector}: Hưởng lợi từ tăng trưởng xuất khẩu — theo dõi đơn hàng quý tới")
 
     return {
         "score_adj": score_adj,
@@ -5400,47 +5482,363 @@ def render_scanner_tab():
         render_sector_heatmap()
 
 
-def render_top_buy_tab():
-    hdr = "Top Cổ Phiếu Bắt Đáy" if st.session_state.lang=="VI" else "Top Oversold Stock Screener"
-    st.subheader(f"🏆 {hdr}")
-    st.caption(f"Scanning **{len(MARKET_SCAN_LIST)}** tickers  |  DNSE → SSI → CafeF")
-    st.caption("⏱️ " + ("Tín hiệu **kỹ thuật ngắn hạn T+2**. Dùng tab 🧬 Hồ Sơ Cổ Phiếu để phân tích dài hạn cơ bản."
-                         if st.session_state.lang=="VI" else
-                         "**Short-term technical T+2** signals. Use the 🧬 Stock Profiler tab for long-term fundamental analysis."))
+def render_smart_signals_tab():
+    """
+    ENH-34 (v24): Smart Signals — unified tab with:
+    - Top 30 BUY signals + full reasoning
+    - Top 30 SELL signals + full reasoning
+    - Accumulation (whale/shark gom hàng) list
+    - Distribution (whale/shark xả hàng) list
+    - Daily investment recommendations
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.header("🎯 " + ("Tín Hiệu Thông Minh — Smart Signals" if is_vi else "Smart Signals — Daily Intelligence"))
+    st.caption(
+        "📡 SSI-RT → DNSE → CafeF | " +
+        ("Quét **%d** mã | T+2 kỹ thuật ngắn hạn + Phát hiện dòng tiền cá mập" % len(MARKET_SCAN_LIST) if is_vi
+         else "Scanning **%d** tickers | Short-term T+2 technical + Whale money flow detection" % len(MARKET_SCAN_LIST))
+    )
 
-    if st.button(L["buy_btn"], type="primary"):
-        buy_signals = []; st.session_state.error_logs = []
-        pb = st.progress(0,"Scanning...")
+    # ── RUN SCAN ─────────────────────────────────────────────────────────
+    scan_btn = st.button(
+        "▶️ " + ("Quét Toàn Bộ & Tạo Tín Hiệu" if is_vi else "Run Full Scan & Generate Signals"),
+        type="primary", use_container_width=True
+    )
+
+    if scan_btn:
+        buy_sigs = []; sell_sigs = []; accum_sigs = []; dist_sigs = []
+        st.session_state.error_logs = []
+        pb = st.progress(0, "Scanning...")
+
         for i, t in enumerate(MARKET_SCAN_LIST):
+            pb.progress((i + 1) / len(MARKET_SCAN_LIST), text=f"⚡ Scanning {t} …")
             try:
                 row, src, err = scan_one_ticker(t)
-                if row and row[L["signal"]] in ("MUA","BUY"):
-                    buy_signals.append(row)
-                elif err:
-                    st.session_state.error_logs.append(f"{t}: {err}")
-            except Exception as e: _log.warning(f"Tab2 {t}: {e}")
-            finally: pb.progress((i+1)/len(MARKET_SCAN_LIST), text=f"Scanning: {t}")
+                if not row:
+                    if err: st.session_state.error_logs.append(f"{t}: {err}")
+                    continue
 
-        st.session_state.df_top_buys = (
-            pd.DataFrame(buy_signals).sort_values(L["score"],ascending=False).head(30)
-            if buy_signals else pd.DataFrame()
-        )
+                sig = row.get(L["signal"], "")
+
+                # ── Buy / Sell buckets
+                if sig in ("MUA", "BUY"):
+                    buy_sigs.append(row)
+                elif sig in ("BÁN", "SELL"):
+                    sell_sigs.append(row)
+
+                # ── Accumulation / Distribution from doi_lai (re-derive from scan row)
+                # We stored the explanation, but we need to re-run detect_doi_lai
+                # Use the existing row's score and _ly_giai metadata for signal detection
+                _score = row.get(L["score"], 0) or 0
+                _rsi   = row.get("RSI", 50) or 50
+                _adx   = row.get("ADX", 0) or 0
+                _price = row.get(L["price"], 0) or 0
+
+                # Quick whale-signal detection using the cached explanation text
+                _ly = str(row.get("_ly_giai", "")).lower()
+                if any(kw in _ly for kw in ["tích lũy", "accumul", "gom hàng", "smart money", "bear trap"]):
+                    accum_sigs.append(row)
+                elif any(kw in _ly for kw in ["xả hàng", "distribut", "dump", "đội lái xả", "pump"]):
+                    dist_sigs.append(row)
+
+            except Exception as e:
+                _log.debug(f"SmartSignals {t}: {e}")
+
+        pb.empty()
+
+        # Sort by score
+        buy_sigs.sort(key=lambda x: x.get(L["score"], 0) or 0, reverse=True)
+        sell_sigs.sort(key=lambda x: x.get(L["score"], 0) or 0, reverse=False)
+
+        st.session_state["ss_buy"]   = buy_sigs[:30]
+        st.session_state["ss_sell"]  = sell_sigs[:30]
+        st.session_state["ss_accum"] = accum_sigs[:20]
+        st.session_state["ss_dist"]  = dist_sigs[:20]
+        st.session_state["ss_ran"]   = True
+
         if st.session_state.error_logs:
             with st.expander(f"⚠️ {len(st.session_state.error_logs)} errors"):
-                for e in st.session_state.error_logs: st.caption(e)
+                for e in st.session_state.error_logs[:20]: st.caption(e)
 
-    if not st.session_state.df_top_buys.empty:
-        dc = [c for c in st.session_state.df_top_buys.columns if not c.startswith("_")]
-        show_df(st.session_state.df_top_buys[dc])
+    # ── INIT SESSION KEYS ────────────────────────────────────────────────
+    for _k in ["ss_buy","ss_sell","ss_accum","ss_dist","ss_ran"]:
+        if _k not in st.session_state:
+            st.session_state[_k] = [] if _k != "ss_ran" else False
+
+    if not st.session_state.get("ss_ran"):
+        st.info("👆 " + ("Nhấn nút phía trên để bắt đầu quét." if is_vi else "Click the button above to start scanning."))
+        return
+
+    buy_list   = st.session_state["ss_buy"]
+    sell_list  = st.session_state["ss_sell"]
+    accum_list = st.session_state["ss_accum"]
+    dist_list  = st.session_state["ss_dist"]
+
+    # ── DAILY RECOMMENDATION BANNER ─────────────────────────────────────
+    geo = get_geopolitical_context()
+    geo_adj = geo.get("score_adj", 0)
+    today_str = datetime.now().strftime("%d/%m/%Y")
+
+    # Build market sentiment summary
+    n_buy  = len(buy_list)
+    n_sell = len(sell_list)
+    n_accum = len(accum_list)
+    n_dist  = len(dist_list)
+    market_mood = "BULLISH" if n_buy > n_sell * 1.5 else ("BEARISH" if n_sell > n_buy * 1.5 else "MIXED")
+    mood_color  = {"BULLISH":"#00cc66","BEARISH":"#ff4b4b","MIXED":"#f1a84e"}[market_mood]
+    mood_emoji  = {"BULLISH":"📈","BEARISH":"📉","MIXED":"🔀"}[market_mood]
+
+    st.markdown(f"""
+<div style="background:linear-gradient(135deg,#0d1b2a,#1a2d4a);border:1px solid {mood_color};
+     border-radius:12px;padding:16px 20px;margin-bottom:12px">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <div>
+      <span style="color:{mood_color};font-size:18px;font-weight:bold">{mood_emoji} {"Khuyến Nghị Ngày" if is_vi else "Daily Recommendation"} — {today_str}</span><br>
+      <span style="color:#aaa;font-size:13px">
+        {"Tâm lý thị trường" if is_vi else "Market Mood"}: 
+        <b style="color:{mood_color}">{market_mood}</b> &nbsp;|&nbsp;
+        🟢 {n_buy} {"mua" if is_vi else "buys"} &nbsp;|&nbsp;
+        🔴 {n_sell} {"bán" if is_vi else "sells"} &nbsp;|&nbsp;
+        🐋 {n_accum} {"gom" if is_vi else "accum"} &nbsp;|&nbsp;
+        🦈 {n_dist} {"xả" if is_vi else "dist"}
+      </span>
+    </div>
+    <div style="text-align:right;color:#aaa;font-size:12px">
+      {"Điều chỉnh vĩ mô" if is_vi else "Macro adj"}: <b style="color:{'#ff4b4b' if geo_adj<0 else '#00cc66'}">{geo_adj:+.0f} pts</b>
+    </div>
+  </div>
+</div>""", unsafe_allow_html=True)
+
+    # Daily strategic advice
+    _advice_vi = []
+    _advice_en = []
+    if market_mood == "BULLISH":
+        _advice_vi += [
+            f"✅ **{n_buy} tín hiệu MUA** xuất hiện — thị trường đang trong giai đoạn tích cực.",
+            "🎯 **Chiến lược:** Ưu tiên các mã có Score cao nhất + Vol/MA20 > 1.5× + RSI < 50.",
+            "💰 **Vị thế:** Không quá 30% vốn/mã. Đặt stop loss theo ATR.",
+        ]
+        _advice_en += [
+            f"✅ **{n_buy} BUY signals** — market in positive phase.",
+            "🎯 **Strategy:** Prioritise highest-score tickers with Vol/MA20 > 1.5× and RSI < 50.",
+            "💰 **Position:** Max 30% capital per ticker. Set ATR-based stops.",
+        ]
+    elif market_mood == "BEARISH":
+        _advice_vi += [
+            f"⚠️ **{n_sell} tín hiệu BÁN** nổi bật — thị trường đang trong giai đoạn phân phối.",
+            "🛡️ **Chiến lược:** Giảm tỷ trọng, giữ tiền mặt, tránh mua đuổi.",
+            "🔎 **Cơ hội:** Chỉ xem xét các mã trong danh sách Gom Hàng (cá mập đang mua đáy).",
+        ]
+        _advice_en += [
+            f"⚠️ **{n_sell} SELL signals** dominate — market in distribution phase.",
+            "🛡️ **Strategy:** Reduce exposure, hold cash, avoid chasing.",
+            "🔎 **Opportunity:** Only consider tickers in the Accumulation (whale bottom-fishing) list.",
+        ]
+    else:
+        _advice_vi += [
+            "🔀 **Thị trường hỗn hợp** — tín hiệu mua và bán cân bằng nhau.",
+            "🎯 **Chiến lược:** Giao dịch chọn lọc, ưu tiên ngành dẫn dắt (Ngân hàng, Công nghệ).",
+            "📊 **Lưu ý:** Kiểm tra bối cảnh vĩ mô trước khi vào lệnh.",
+        ]
+        _advice_en += [
+            "🔀 **Mixed market** — buy and sell signals balanced.",
+            "🎯 **Strategy:** Selective trading, prioritise leading sectors (Banking, Tech).",
+            "📊 **Note:** Check macro context before entering positions.",
+        ]
+
+    if geo_adj < -5:
+        _advice_vi.append("🌍 **Rủi ro vĩ mô:** Môi trường địa chính trị bất lợi — giảm kỳ vọng lợi nhuận 10–15%.")
+        _advice_en.append("🌍 **Macro risk:** Adverse geopolitical environment — reduce return expectations 10–15%.")
+
+    if n_accum > 3:
+        _advice_vi.append(f"🐋 **{n_accum} mã có dấu hiệu gom hàng** — xem tab Gom Hàng bên dưới.")
+        _advice_en.append(f"🐋 **{n_accum} tickers showing accumulation** — see Accumulation tab below.")
+
+    advice_list = _advice_vi if is_vi else _advice_en
+    for a in advice_list:
+        st.markdown(a)
+
+    st.divider()
+
+    # ── 5 SUB-TABS ───────────────────────────────────────────────────────
+    tab_labels = [
+        "🟢 " + ("Top 30 Mua" if is_vi else "Top 30 Buy"),
+        "🔴 " + ("Top 30 Bán" if is_vi else "Top 30 Sell"),
+        "🐋 " + ("Gom Hàng" if is_vi else "Accumulation"),
+        "🦈 " + ("Xả Hàng" if is_vi else "Distribution"),
+    ]
+    sub_tabs = st.tabs(tab_labels)
+
+    # ── Helper: render signal list ────────────────────────────────────────
+    def _render_signal_list(sig_list, sig_type="BUY"):
+        if not sig_list:
+            st.info("🤷 " + ("Không tìm thấy tín hiệu phù hợp." if is_vi else "No matching signals found."))
+            return
+        display_rows = []
+        for row in sig_list:
+            display_rows.append({
+                "Mã" if is_vi else "Ticker":   row.get(L["ticker"], ""),
+                "Ngành" if is_vi else "Sector": row.get("Ngành/Sector", "–"),
+                "Giá" if is_vi else "Price":   row.get(L["price"], 0),
+                "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
+                "Score":    row.get(L["score"], 0),
+                "RSI":      row.get("RSI", "–"),
+                "ADX":      row.get("ADX", "–"),
+                "Vol/MA20": row.get("Vol/MA20", "–"),
+                "SL":       row.get("_stop", 0),
+                "TP1":      row.get("_tp1", 0),
+                "TP2":      row.get("_tp2", 0),
+                "R:R":      row.get("R:R1", "–"),
+                "🌐 NN%":   row.get("🌐 NN%", "–"),
+                "Trần" if is_vi else "Ceil": row.get("Trần" if is_vi else "Ceil", "–"),
+                "Sàn" if is_vi else "Floor": row.get("Sàn" if is_vi else "Floor", "–"),
+                "Nguồn" if is_vi else "Src":  row.get(L["source"], "–"),
+            })
+        df_disp = pd.DataFrame(display_rows)
+        sig_col = "Tín hiệu" if is_vi else "Signal"
+        show_df(df_disp.style.map(style_action, subset=[sig_col]))
+
         st.divider()
-        for _, row in st.session_state.df_top_buys.iterrows():
-            label = f"**{row[L['ticker']]}** | Score:{row[L['score']]} | RSI:{row['RSI']} | Vol:{row['Vol/MA20']} | {row.get(L['source'],'–')}"
+        if is_vi:
+            st.markdown(f"### 📋 Lý Do Chi Tiết Từng Mã ({len(sig_list)} mã)")
+        else:
+            st.markdown(f"### 📋 Detailed Reasoning Per Ticker ({len(sig_list)} tickers)")
+
+        for rank, row in enumerate(sig_list, 1):
+            tkr    = row.get(L["ticker"], "")
+            score  = row.get(L["score"], 0)
+            rsi_v  = row.get("RSI", "–")
+            sig_v  = row.get(L["signal"], "")
+            sector = row.get("Ngành/Sector", "–")
+            color  = "#00cc66" if sig_type == "BUY" else "#ff4b4b"
+            label  = (
+                f"{'🟢' if sig_type=='BUY' else '🔴'} **#{rank} {tkr}** — "
+                f"Score: **{score}** | RSI: {rsi_v} | {sector} | {row.get(L['source'],'–')}"
+            )
             with st.expander(label):
                 c1, c2 = st.columns(2)
-                with c1: st.markdown(row.get("_ly_giai","–"))
-                with c2: st.markdown(row.get("_price_expl","–"))
-    else:
-        st.info("No results yet or no tickers meet criteria. Try disabling filters in sidebar.")
+                with c1:
+                    st.markdown(f"<div style='border-left:3px solid {color};padding-left:8px'>", unsafe_allow_html=True)
+                    st.markdown(row.get("_ly_giai", "–"))
+                    st.markdown("</div>", unsafe_allow_html=True)
+                with c2:
+                    st.markdown(row.get("_price_expl", "–"))
+                # Position sizing quick calc
+                st.markdown("**📐 " + ("Vị Thế Nhanh" if is_vi else "Quick Position") + "**")
+                _price = row.get(L["price"], 0) or 0
+                _atr   = row.get("_atr", _price * 0.02) or (_price * 0.02)
+                _sl    = row.get("_stop", 0)
+                _tp1   = row.get("_tp1", 0)
+                _tp2   = row.get("_tp2", 0)
+                if _price > 0 and _sl > 0:
+                    risk_per_share = _price - _sl
+                    risk_10m = 10_000_000  # 10M VND risk
+                    qty_10m  = int(risk_10m / max(risk_per_share, 1) / 100) * 100
+                    pc1, pc2, pc3, pc4 = st.columns(4)
+                    pc1.metric("SL", f"{_sl:,.0f}")
+                    pc2.metric("TP1", f"{_tp1:,.0f}")
+                    pc3.metric("TP2", f"{_tp2:,.0f}")
+                    pc4.metric("KL/10M rủi ro" if is_vi else "Shares/10M risk", f"{qty_10m:,}")
+
+    # ── Helper: render whale signals ──────────────────────────────────────
+    def _render_whale_list(whale_list, whale_type="ACCUM"):
+        if not whale_list:
+            st.info("🤷 " + ("Không phát hiện tín hiệu." if is_vi else "No signals detected."))
+            if is_vi:
+                st.caption("Lưu ý: Tín hiệu gom/xả cần có trong lý giải kỹ thuật. Nếu không có, hãy tắt bộ lọc xu hướng trong sidebar để quét rộng hơn.")
+            else:
+                st.caption("Note: Accumulation/distribution signals require specific keyword patterns in technical explanation. Try disabling trend filter in sidebar for broader scan.")
+            return
+
+        color  = "#00cc66" if whale_type == "ACCUM" else "#ff4b4b"
+        emoji  = "🐋" if whale_type == "ACCUM" else "🦈"
+        hdr_vi = "Gom Hàng (Cá Mập / Đội Lái Mua)" if whale_type=="ACCUM" else "Xả Hàng (Cá Mập / Đội Lái Bán)"
+        hdr_en = "Smart Money Accumulation" if whale_type=="ACCUM" else "Smart Money Distribution"
+        if is_vi:
+            st.markdown(f"### {emoji} {hdr_vi} — {len(whale_list)} mã")
+        else:
+            st.markdown(f"### {emoji} {hdr_en} — {len(whale_list)} tickers")
+
+        display_rows = []
+        for row in whale_list:
+            display_rows.append({
+                "Mã" if is_vi else "Ticker":    row.get(L["ticker"], ""),
+                "Ngành" if is_vi else "Sector":  row.get("Ngành/Sector", "–"),
+                "Giá" if is_vi else "Price":    row.get(L["price"], 0),
+                "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
+                "Score":  row.get(L["score"], 0),
+                "RSI":    row.get("RSI", "–"),
+                "Vol/MA20": row.get("Vol/MA20", "–"),
+                "SL":     row.get("_stop", 0),
+                "TP1":    row.get("_tp1", 0),
+            })
+        df_w = pd.DataFrame(display_rows)
+        show_df(df_w)
+
+        st.divider()
+        for rank, row in enumerate(whale_list, 1):
+            tkr  = row.get(L["ticker"], "")
+            sec  = row.get("Ngành/Sector", "–")
+            sc   = row.get(L["score"], 0)
+            with st.expander(f"{emoji} **#{rank} {tkr}** — {sec} | Score:{sc}"):
+                st.markdown(row.get("_ly_giai", "–"))
+
+    # ── Render sub-tabs ────────────────────────────────────────────────────
+    with sub_tabs[0]:
+        if is_vi:
+            st.info(f"🟢 Tìm thấy **{len(buy_list)}** tín hiệu MUA | Top 30 theo điểm composite")
+        else:
+            st.info(f"🟢 Found **{len(buy_list)}** BUY signals | Top 30 by composite score")
+        _render_signal_list(buy_list, "BUY")
+
+    with sub_tabs[1]:
+        if is_vi:
+            st.info(f"🔴 Tìm thấy **{len(sell_list)}** tín hiệu BÁN | Top 30 theo nguy cơ giảm")
+            st.warning("⚠️ **Lưu ý:** Tín hiệu BÁN dựa trên kỹ thuật ngắn hạn T+2. Tham khảo thêm phân tích cơ bản trước khi quyết định bán toàn bộ vị thế.")
+        else:
+            st.info(f"🔴 Found **{len(sell_list)}** SELL signals | Top 30 by downside risk")
+            st.warning("⚠️ **Note:** SELL signals are based on short-term T+2 technicals. Check fundamentals before exiting full positions.")
+        _render_signal_list(sell_list, "SELL")
+
+    with sub_tabs[2]:
+        if is_vi:
+            st.markdown("""
+> 🐋 **Gom Hàng** = dấu hiệu tổ chức/cá mập đang mua vào âm thầm:
+> - Biên độ giá hẹp + KL cao ở vùng thấp hơn MA20 (Smart Money tích lũy)
+> - Bear Trap: phiên trước giảm mạnh >5%, phiên này hồi >3% với KL >2× bình thường
+> - Lý giải kỹ thuật chứa từ khóa "tích lũy", "gom hàng", "bear trap", "smart money"
+""")
+        else:
+            st.markdown("""
+> 🐋 **Accumulation** = signs of institutional / whale quiet buying:
+> - Narrow price range + high volume below MA20 (Smart Money accumulating)
+> - Bear Trap: previous session fell >5%, today recovered >3% with 2× normal volume
+> - Technical explanation contains keywords "accumulate", "bear trap", "smart money"
+""")
+        _render_whale_list(accum_list, "ACCUM")
+
+    with sub_tabs[3]:
+        if is_vi:
+            st.markdown("""
+> 🦈 **Xả Hàng** = dấu hiệu tổ chức/cá mập đang bán ra:
+> - KL đột biến >3× trong phiên tăng (nghi PUMP để xả)
+> - Tăng ≥3/5 phiên liên tiếp + KL leo thang (giai đoạn cuối đợt tăng trước khi xả)
+> - Giá gần đỉnh 52 tuần + KL thấp (thiếu dòng tiền xác nhận, nguy cơ dump)
+""")
+        else:
+            st.markdown("""
+> 🦈 **Distribution** = signs of institutional / whale quiet selling:
+> - Volume spike >3× on an up session (suspected PUMP before dump)
+> - 3+ consecutive up sessions with rising volume (late-stage rally before distribution)
+> - Price near 52-week high + low volume (no money confirmation, dump risk)
+""")
+        _render_whale_list(dist_list, "DIST")
+
+
+def render_top_buy_tab():
+    """Legacy — now redirects to Smart Signals tab."""
+    render_smart_signals_tab()
+
 
 def render_history_tab():
     hdr = "Lịch Sử Khuyến Nghị Scanner" if st.session_state.lang=="VI" else "Scanner Recommendation History"
@@ -6221,13 +6619,13 @@ def render_global_markets_tab():
 def render_smoke_test_tab():
     hdr = "System Smoke Test — All Data Sources & Functions" if st.session_state.lang=="EN" else "Kiểm Tra Hệ Thống — Tất Cả Nguồn Dữ Liệu & Chức Năng"
     st.subheader(f"🔬 {hdr}")
-    st.caption("v23.0 — Mandatory smoke test: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE). Detects and auto-reports issues. Full traces → error_log.txt.")
+    st.caption("v24.0 — Mandatory smoke test: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE). Detects and auto-reports issues. Full traces → error_log.txt.")
 
     if st.button("🚀 Run Full Smoke Test" if st.session_state.lang=="EN" else "🚀 Chạy Kiểm Tra Đầy Đủ", type="primary"):
         results = []
         import traceback
 
-        # ── v23.0 MANDATORY TICKERS: OIL, FPT, GAS, TCB, VIC ──────────────
+        # ── v24.0 MANDATORY TICKERS: OIL, FPT, GAS, TCB, VIC ──────────────
         mandatory_smoke = [
             ("OIL",  "UPCOM", "Dầu thực vật / Oil commodity ticker — UPCOM, min 20 rows"),
             ("FPT",  "HOSE",  "Tech blue-chip — benchmark for DNSE/SSI reliability"),
@@ -6364,7 +6762,7 @@ def render_smoke_test_tab():
                 except Exception as e:
                     results.append({"Test":f"CafeF PriceRT ({sym_t})","Status":"❌ ERROR","Detail":str(e)})
 
-        # ── Test 7b: SSI Real-time Price (ENH-28, v23.0)
+        # ── Test 7b: SSI Real-time Price (ENH-28, v24.0)
         with st.spinner("Testing SSI iboard-query real-time price (GAS + TCB + VIC)..."):
             for sym_t in ["GAS", "TCB", "VIC"]:
                 try:
@@ -6441,12 +6839,12 @@ def render_smoke_test_tab():
             st.success("🎉 **All tests passed!** System is fully operational.")
 
 def render_guide_tab():
-    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features — v23.0 BRD."""
+    """ENH-38: Comprehensive bilingual (VI/EN AU) user guide for all features — v24.0 BRD."""
     is_vi = st.session_state.lang == "VI"
     st.header(f"📖 {L['tab10']}")
 
     lang_badge = "🇻🇳 Tiếng Việt" if is_vi else "🇦🇺 English (AU)"
-    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v23.0 | 14 tabs | Business Requirements Document (BRD)")
+    st.caption(f"📌 {lang_badge} | Captain Seventh QUANT TERMINAL v24.0 | 14 tabs | Business Requirements Document (BRD)")
 
     tabs_guide = st.tabs([
         "🚀 " + ("Bắt đầu" if is_vi else "Getting Started"),
@@ -6513,7 +6911,7 @@ streamlit run quant_app.py
 | Khối lượng giao dịch cao (> 1.5× TB20) | 5 pts |
 | Trừ điểm: Tín hiệu Đội Lái HIGH DUMP | −10 pts |
 
-### Giá Thời Gian Thực (v23.0 — FIX-30)
+### Giá Thời Gian Thực (v24.0 — FIX-30)
 - Giá hiển thị trong Scanner và Deep Audit là **giá live từ SSI iboard**
 - Nếu SSI không trả về (ngoài giờ GD), tự động fallback → CafeF → OHLCV đóng cửa
 - Cột **Nguồn/Source** sẽ hiển thị `SSI-RT`, `CafeF-RT`, hoặc tên nguồn OHLCV
@@ -6526,7 +6924,7 @@ streamlit run quant_app.py
 """)
         else:
             st.markdown("""
-## 🚀 Quick Start Guide — Captain Seventh QUANT TERMINAL v23.0
+## 🚀 Quick Start Guide — Captain Seventh QUANT TERMINAL v24.0
 
 ### Installation (if running locally)
 ```bash
@@ -6578,7 +6976,7 @@ The composite score (0–100) aggregates multiple confirming signals:
 | High volume (> 1.5× 20-day avg) | 5 pts |
 | Penalty: HIGH DUMP manipulation signal | −10 pts |
 
-### Real-Time Price (v23.0 — FIX-30)
+### Real-Time Price (v24.0 — FIX-30)
 - Prices shown in Scanner and Deep Audit are **live prices from SSI iboard**
 - If SSI unavailable (outside trading hours), auto-falls back → CafeF → OHLCV close
 - The **Source** column shows `SSI-RT`, `CafeF-RT`, or the OHLCV source name
@@ -7154,11 +7552,11 @@ App fetches reference price from CafeF PriceRealTimeHeader API.
 A: Filtered out by: low liquidity (avg trading value < threshold) OR insufficient historical data.
 """)
 
-    # ─── BRD TAB (new in v23.0) ──────────────────────────────────────────────
+    # ─── BRD TAB (new in v24.0) ──────────────────────────────────────────────
     with tabs_guide[6]:
         if is_vi:
             st.markdown("""
-# 🏗️ Tài Liệu Yêu Cầu Nghiệp Vụ (BRD) — v23.0
+# 🏗️ Tài Liệu Yêu Cầu Nghiệp Vụ (BRD) — v24.0
 **Captain Seventh QUANT TERMINAL · Vietnam Stock Exchange**
 
 ---
@@ -7340,7 +7738,7 @@ Lot size HOSE = 100 CP | Phí mua: 0.15% | Phí bán: 0.25% + 0.1% thuế
 
 ---
 
-## 9. Kiểm Tra Hệ Thống (Smoke Test — v23.0)
+## 9. Kiểm Tra Hệ Thống (Smoke Test — v24.0)
 
 ### Bộ test bắt buộc mỗi lần chạy:
 | Ticker | Sàn | Lý do chọn |
@@ -7359,7 +7757,7 @@ Lot size HOSE = 100 CP | Phí mua: 0.15% | Phí bán: 0.25% + 0.1% thuế
 """)
         else:
             st.markdown("""
-# 🏗️ Business Requirements Document (BRD) — v23.0
+# 🏗️ Business Requirements Document (BRD) — v24.0
 **Captain Seventh QUANT TERMINAL · Vietnam Stock Exchange**
 
 ---
@@ -7541,7 +7939,7 @@ Lot size HOSE = 100 shares | Buy fee: 0.15% | Sell fee: 0.25% + 0.1% tax
 
 ---
 
-## 9. Smoke Test Suite (v23.0)
+## 9. Smoke Test Suite (v24.0)
 
 ### Mandatory tickers on every run:
 | Ticker | Exchange | Rationale |
@@ -7772,6 +8170,27 @@ def render_changelog_tab():
 
 ---
 
+### v24.0 — 2026-03-09 · SMART SIGNALS + MENU RESTRUCTURE + AI MACRO
+
+**🟢 New Features:**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-34 | 🎯 Smart Signals Tab | Replaces "Top 30 Buy" — unified tab with: **Top 30 Mua** + **Top 30 Bán** (with full per-ticker reasoning + position sizing), **Gom Hàng** (whale accumulation), **Xả Hàng** (whale distribution), **Daily Market Recommendation banner** (mood: BULLISH/BEARISH/MIXED, strategic advice, macro adj). All 4 sub-tabs + daily banner in one scan run. |
+| ENH-35 | 🤖 AI Economy Context | `get_geopolitical_context()` expanded: AI economy sector impact (Công nghệ/Fintech +4pts), VN market characteristics (95% retail, T+2 margin dynamics, foreign room, credit growth 14-16%), VN GDP forecast 6.5–7.5%, export dependency risk. Used in ML Forecast reasoning + Smart Signals banner. |
+| ENH-36 | 💬 Bilingual Tooltips | CSS `.tt` class — hover any `.tt`-wrapped text shows translation (VI→EN or EN→VI) via `data-tip` attribute. Applied in signal table headers and key indicator labels. |
+| ENH-37 | 📐 Multi-SMA Sidebar Filter | Added SMA5/SMA7/SMA10/SMA20/SMA50 multiselect in sidebar. Trend filter now checks price > ALL selected MAs (configurable). Default: SMA50 only. |
+| ENH-38 | 📡 SSI Pipeline Priority | SSI iboard-api is now **first** in the 7-source OHLCV download pipeline (was second after DNSE). All sidebar and status captions updated to `SSI→DNSE→CafeF→...`. |
+| ENH-39 | 🗂️ Menu Restructure | Tabs reorganised for better UX flow: [Trading] Scanner → Smart Signals → Profiler → Deep Audit → Portfolios → ML Forecast → Global Markets | [Tools] Backtest → History → Guide → Changelog → Smoke → Forecast Log → Top Forecast. |
+
+**📋 Audit Trail — v24.0:**
+- Smoke test mandatory tickers: OIL, FPT, GAS, TCB, VIC (unchanged)
+- Smart Signals tab uses same `scan_one_ticker()` as Scanner → consistent signals
+- Whale detection uses `_ly_giai` keyword matching (non-blocking, reuses cached explanation)
+- All v24 changes pass Python AST check (zero syntax errors)
+
+---
+
 ### v23.0 — 2026-03-09 · LIVE PRICE + BUG FIXES (from error_log.txt)
 
 **🔴 Critical Bug Fixes:**
@@ -7791,14 +8210,14 @@ def render_changelog_tab():
 |----|---------|---------|
 | ENH-31 | Guide v23 | Updated Getting Started sub-tab: full Composite Score breakdown table (all scoring factors with point values), real-time price flow explanation, recommended workflow table, detailed signal trigger conditions — bilingual VI/EN |
 
-**📋 Audit Trail — v23.0:**
+**📋 Audit Trail — v24.0:**
 - Smoke test mandatory tickers: OIL (UPCOM), FPT (HOSE), GAS (HOSE), TCB (HOSE), VIC (HOSE)
 - All fixes verified via Python AST check (zero syntax errors)
 - FIX-30 tested: SSI-RT fetch wrapped in try/except — degrades gracefully to OHLCV when market closed
 
 ---
 
-### v23.0 — 2026-03-09 · SMOKE TEST + BRD + CRITICAL BUG FIXES
+### v24.0 — 2026-03-09 · SMOKE TEST + BRD + CRITICAL BUG FIXES
 
 **🔴 Critical Bug Fixes:**
 
@@ -7814,7 +8233,7 @@ def render_changelog_tab():
 |----|---------|---------|
 | ENH-25 | Mandatory Smoke Test | Every run tests OIL (UPCOM), FPT, GAS, TCB, VIC with full pipeline + indicator + price-flow + composite-score validation |
 | ENH-26 | BRD Tab in Guide | New `🏗️ BRD` sub-tab in Guide with full theory documentation: SSI iBoard endpoints, valuation models (DCF/P/E/P/B/Graham/DDM), indicator theory (SMA/EMA/RSI/MACD/BB/ADX/ATR), ML models (Prophet/ARIMA/SVR/RF/GBM/Ensemble), T+2 settlement, 7 order types, sector P/E benchmarks — bilingual VI/EN AU |
-| ENH-27 | Version String | App title & all captions updated to v23.0 |
+| ENH-27 | Version String | App title & all captions updated to v24.0 |
 
 **📋 Audit Trail:**
 - Smoke test: FIX-22 verified via CompositeScore sub-test in mandatory suite
@@ -7942,36 +8361,38 @@ def main():
     if "forecast_log" not in st.session_state:
         st.session_state.forecast_log = pd.DataFrame()
 
-    # Define tabs (12 tabs in v16.0)
+    # v24: Reorganized 14-tab menu for better UX
+    # Group: [Trading] Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
+    # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast
     tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
         render_scanner_tab()
     with tabs[1]:
-        render_top_buy_tab()
+        render_smart_signals_tab()   # 🎯 Smart Signals (replaces Top 30 Buy)
     with tabs[2]:
-        render_history_tab()
+        render_stock_profiler_tab()  # 🧬 Profiler — moved up to tab 3
     with tabs[3]:
         render_deep_audit_tab()
     with tabs[4]:
-        render_backtest_tab()
+        render_model_portfolios_tab()  # 💼 moved up
     with tabs[5]:
         render_ml_forecast_tab()
     with tabs[6]:
-        render_forecast_log_tab()
+        render_global_markets_tab()    # 🌍 moved up
     with tabs[7]:
-        render_global_markets_tab()
+        render_backtest_tab()          # 🧪 moved back
     with tabs[8]:
-        render_smoke_test_tab()
+        render_history_tab()
     with tabs[9]:
         render_guide_tab()
     with tabs[10]:
         render_changelog_tab()
     with tabs[11]:
-        render_stock_profiler_tab()
+        render_smoke_test_tab()
     with tabs[12]:
-        render_model_portfolios_tab()
+        render_forecast_log_tab()
     with tabs[13]:
         render_top_forecast_tab()
 
