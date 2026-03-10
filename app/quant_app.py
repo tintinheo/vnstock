@@ -436,6 +436,12 @@ def tip(label: str, key: str, lang: str = "VI") -> str:
     return f'<span class="q-tip">{label}<span class="q-tip-text">{text}</span></span>'
 
 
+# Audit category constants (used by render_audit_log_tab filter)
+AUDIT_CATEGORIES = [
+    "SCANNER", "PROFILER", "DEEP_AUDIT", "ML_FORECAST",
+    "TOP_FORECAST", "PORTFOLIO", "BACKTEST", "MANUAL",
+]
+
 # ─── Universal Audit Log ──────────────────────────────────────
 def append_audit(category: str, action: str, ticker: str, signal: str,
                  score: float, details: dict, lang: str = "VI"):
