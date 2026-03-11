@@ -1,7 +1,16 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v27.0                         ║
+║   Captain Seventh QUANT TERMINAL  v28.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
+╠══════════════════════════════════════════════════════════════════╣
+║  CHANGELOG v27 → v28:                                           ║
+║  ENH-42: Deep Scan tab — full per-ticker intelligence module:   ║
+║    SSI real-time price · Price forecasts (5d/10d/1M/2M/3M/6M)  ║
+║    via LinReg+Holt+Monte-Carlo ensemble · Intrinsic value via   ║
+║    sector P/E · DCF (tech-implied) · Graham proxy ·            ║
+║    Whale/MM accumulation/distribution detection · Swing-trade   ║
+║    risk level (Low/Med/High) · Entry + Exit + Stop prices ·    ║
+║    Bilingual BUY/SELL/HOLD/WATCH recommendation with reasoning  ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v26 → v27:                                           ║
 ║  ENH-40: Market Scanner — Custom ticker input (comma-separated) ║
@@ -11,31 +20,6 @@
 ║    SSI-RT live price, BB bands, RSI, MACD, ADX, Stochastic,    ║
 ║    ATR, Volume/MA, SMA/EMA crossovers + Price Derivation table  ║
 ║    showing exact formula used for each recommended price level. ║
-╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v25 → v26:                                           ║
-║  ENH-37: Market Scanner — added 💰 Giá Mua KN (Recommended     ║
-║    Buy) and 🎯 Giá Bán KN1/KN2 columns derived from live       ║
-║    SSI-RT / CafeF real-time price + ATR/BB analysis             ║
-║  ENH-38: Smart Signals — added Recommended Buy/Sell price       ║
-║    cards in all signal expanders; table now shows buy/sell      ║
-║    recommendation prices inline                                 ║
-║  ENH-39: compute_recommended_prices() — unified price           ║
-║    recommendation engine: live price → BB → ATR cascade        ║
-╠══════════════════════════════════════════════════════════════════╣
-║  CHANGELOG v20 → v21:                                           ║
-║  FIX-19: RESOLVED Signal Divergence (Scanner BUY vs Profiler   ║
-║    SELL for same ticker):                                        ║
-║    Root cause: Scanner = pure technical SHORT-TERM (T+2),       ║
-║    Profiler = fundamental+valuation LONG-TERM (6-24M).          ║
-║    Both can be TRUE simultaneously for different horizons.       ║
-║    Fix: Timeframe labels on all signals; Profiler S6 now shows  ║
-║    BOTH technical (scanner) AND fundamental signals with        ║
-║    explicit horizon labels; conflict detection banner; unified   ║
-║    blended recommendation with transparent weighting.           ║
-║  ENH-15: Scanner — added Horizon column (Short-term T+2)       ║
-║  ENH-16: Profiler S6 — Dual-signal view: Tech vs Fundamental   ║
-║  ENH-17: Conflict Detection — warns when Tech ≠ Fundamental    ║
-║  ENH-18: Unified Blended Recommendation in Profiler            ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
@@ -81,7 +65,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v27.0",
+    page_title="Captain Seventh QUANT TERMINAL v28.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -128,7 +112,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v27.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v28.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -154,6 +138,7 @@ _LANG_VI = {
     "tab15": "📋 Nhật Ký Audit",
     "tab13": "📈 Lịch Sử Dự Báo",
     "tab14": "🔮 Top Forecast",
+    "tab16": "🧭 Deep Scan",
     # Stock Profiler labels
     "sp_title":         "🧬 Hồ Sơ & Phân Tích Sâu Cổ Phiếu",
     "sp_ticker_input":  "Nhập mã cổ phiếu",
@@ -248,7 +233,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v27.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v28.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -274,6 +259,7 @@ _LANG_EN = {
     "tab15": "📋 Audit Log",
     "tab13": "📈 Forecast Log",
     "tab14": "🔮 Top Forecast",
+    "tab16": "🧭 Deep Scan",
     # Stock Profiler labels
     "sp_title":         "🧬 Stock Profile & Deep Analysis",
     "sp_ticker_input":  "Enter ticker symbol",
@@ -9714,10 +9700,953 @@ def render_top_forecast_tab():
     _show_forecast_log(is_vi, fc_log_key)
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════════
+#  ENH-42 (v28): DEEP SCAN MODULE
+#  Per-ticker intelligence: RT price · forecasts · intrinsic value ·
+#  whale/MM detection · swing-trade risk · entry/exit prices ·
+#  bilingual recommendation
+# ══════════════════════════════════════════════════════════════════════════
+
+def _ds_forecast_ensemble(closes: np.ndarray, horizon: int) -> np.ndarray:
+    """
+    Build a lightweight 3-model price-forecast ensemble for the Deep Scan.
+    Returns array of length `horizon` (daily closing price predictions).
+    Models: Linear Regression (35%) + Holt Double-Exp (35%) + Monte Carlo p50 (30%)
+    """
+    n = len(closes)
+    if n < 20:
+        return np.full(horizon, closes[-1])
+    try:
+        fc_lr, _, _ = forecast_linreg(closes, horizon)
+    except Exception:
+        fc_lr = np.full(horizon, closes[-1])
+    try:
+        fc_holt = forecast_holt(closes, horizon)
+        if len(fc_holt) < horizon:
+            fc_holt = np.pad(fc_holt, (0, horizon - len(fc_holt)), constant_values=fc_holt[-1])
+    except Exception:
+        fc_holt = np.full(horizon, closes[-1])
+    try:
+        mc = forecast_monte_carlo(closes, horizon)
+        fc_mc = mc.get("p50", np.full(horizon, closes[-1]))
+    except Exception:
+        fc_mc = np.full(horizon, closes[-1])
+    ensemble = fc_lr * 0.35 + fc_holt * 0.35 + fc_mc * 0.30
+    return ensemble
+
+
+def _ds_intrinsic_value(ticker: str, live_price: float, tech_analysis: dict) -> dict:
+    """
+    Compute a blended intrinsic value estimate using three complementary approaches.
+    1. Sector-P/E implied fair value  (most reliable for VN stocks)
+    2. DCF via implied EPS × growth    (conservative)
+    3. Graham Number proxy             (value floor)
+
+    Returns dict: {iv_pe, iv_dcf, iv_graham, iv_blended, upside_pct, method_used}
+    """
+    sector     = tech_analysis.get("sector", "Khác")
+    tech_score = tech_analysis.get("tech_score", 50)
+    ret3m      = tech_analysis.get("ret3m", 0)
+    volatility = tech_analysis.get("volatility", 0.25)
+    high52     = tech_analysis.get("high52", live_price * 1.2)
+    low52      = tech_analysis.get("low52",  live_price * 0.8)
+
+    # 1. Sector P/E implied (use tech_fair_value from DNSE analysis)
+    iv_pe = tech_analysis.get("tech_fair_value", 0)
+    if iv_pe <= 0:
+        sector_pe = tech_analysis.get("sector_pe", 15.0)
+        implied_eps = live_price / sector_pe
+        iv_pe = round(implied_eps * sector_pe * (1 + ret3m * 0.5), 0)
+
+    # 2. DCF with implied EPS + modest growth assumption
+    sector_pe    = tech_analysis.get("sector_pe", 15.0)
+    implied_eps  = live_price / max(sector_pe, 1)
+    growth_rate  = max(0.05, min(0.25, ret3m * 4 + 0.08))  # annualised from 3M return, bounded
+    iv_dcf       = compute_dcf_valuation(
+        eps_ttm=implied_eps, eps_growth_rate=growth_rate,
+        discount_rate=0.12, terminal_growth=0.05, years=5)
+
+    # 3. Graham Number proxy (use tech-implied EPS + BVPS)
+    implied_bvps = tech_analysis.get("implied_bvps", live_price * 0.6)
+    iv_graham    = compute_graham_value(implied_eps, implied_bvps)
+
+    # 4. Blended (weights: sector P/E 45% | DCF 35% | Graham 20%)
+    vals = [(iv_pe, 0.45), (iv_dcf, 0.35), (iv_graham, 0.20)]
+    valid = [(v, w) for v, w in vals if v > 0]
+    if valid:
+        total_w  = sum(w for _, w in valid)
+        iv_blend = sum(v * w for v, w in valid) / total_w
+    else:
+        iv_blend = live_price
+
+    iv_blend = round_price_hose(iv_blend)
+    upside   = round((iv_blend - live_price) / live_price * 100, 1) if live_price > 0 else 0
+
+    return {
+        "iv_pe":       round_price_hose(iv_pe),
+        "iv_dcf":      round_price_hose(iv_dcf),
+        "iv_graham":   round_price_hose(iv_graham),
+        "iv_blended":  iv_blend,
+        "upside_pct":  upside,
+        "method_used": "Sector P/E (45%) + DCF implied (35%) + Graham (20%)",
+    }
+
+
+def _ds_whale_summary(doi_lai: list) -> dict:
+    """
+    Translate detect_doi_lai signals into a structured whale/MM verdict.
+    Returns: {verdict, emoji, color, signals, score}
+      verdict = ACCUMULATING | DISTRIBUTING | WATCH | NEUTRAL
+    """
+    if not doi_lai:
+        return {"verdict": "NEUTRAL", "emoji": "➖", "color": "#aaaaaa",
+                "signals": [], "score": 0}
+
+    accum_score = 0
+    dist_score  = 0
+    signals     = []
+
+    for s in doi_lai:
+        sig  = s.get("signal", "").lower()
+        sev  = s.get("severity", "")
+        icon = s.get("icon", "")
+        detail = s.get("detail", "")
+
+        if sev == "POSITIVE" or any(k in sig for k in ["tích lũy","smart money","bear trap","accumul"]):
+            accum_score += 3 if sev == "POSITIVE" else 2
+        elif sev == "HIGH" and any(k in sig for k in ["pump","dump","xả","dump"]):
+            dist_score  += 4
+        elif sev == "MEDIUM":
+            dist_score  += 2
+        elif sev == "LOW":
+            dist_score  += 1
+
+        signals.append({"icon": icon, "text": s.get("signal",""), "detail": detail, "sev": sev})
+
+    net = accum_score - dist_score
+    if net >= 4:
+        verdict, emoji, color = "ACCUMULATING", "🐋", "#00cc66"
+    elif net <= -3:
+        verdict, emoji, color = "DISTRIBUTING", "🔴", "#ff4444"
+    elif net >= 1:
+        verdict, emoji, color = "WATCH — POSSIBLE ACCUM", "👀", "#66aaff"
+    elif net <= -1:
+        verdict, emoji, color = "WATCH — POSSIBLE DIST",  "⚠️", "#ffaa44"
+    else:
+        verdict, emoji, color = "NEUTRAL", "➖", "#aaaaaa"
+
+    return {"verdict": verdict, "emoji": emoji, "color": color,
+            "signals": signals, "score": net}
+
+
+def _ds_swing_risk(tech: dict, doi_lai_summary: dict, atr_pct: float) -> dict:
+    """
+    Evaluate short-term swing-trade risk level:
+    LOW / MEDIUM / HIGH / VERY HIGH
+    Based on: volatility, ATR%, RSI zone, ADX, trend position, whale signals.
+    """
+    risk_score = 0  # higher = riskier
+
+    # Volatility
+    vol = tech.get("volatility", 0.25)
+    if vol > 0.50:   risk_score += 4
+    elif vol > 0.35: risk_score += 2
+    elif vol > 0.20: risk_score += 1
+
+    # ATR % of price
+    if atr_pct > 5.0:  risk_score += 3
+    elif atr_pct > 3.0: risk_score += 2
+    elif atr_pct > 2.0: risk_score += 1
+
+    # RSI
+    rsi = tech.get("rsi", 50)
+    if rsi > 75 or rsi < 25: risk_score += 3
+    elif rsi > 65 or rsi < 35: risk_score += 1
+
+    # ADX (low ADX = sideways = noisy)
+    adx = tech.get("adx", 20)
+    if adx < 15:   risk_score += 2
+    elif adx > 40: risk_score += 1  # strong trend but could reverse quickly
+
+    # Trend alignment
+    above20 = tech.get("above_sma20", True)
+    above50 = tech.get("above_sma50", True)
+    if not above20 and not above50: risk_score += 2
+    elif not above50:               risk_score += 1
+
+    # Whale warning
+    whale_score = doi_lai_summary.get("score", 0)
+    if whale_score <= -3:  risk_score += 3  # distribution = high risk
+    elif whale_score <= -1: risk_score += 1
+
+    # Price near 52-week high (profit-taking risk)
+    pp = tech.get("price_percentile", 0.5)
+    if pp > 0.90: risk_score += 2
+    elif pp > 0.75: risk_score += 1
+
+    # Map to level
+    if risk_score >= 10:
+        level, color, emoji = "VERY HIGH",  "#ff1111", "🚨"
+    elif risk_score >= 7:
+        level, color, emoji = "HIGH",       "#ff6644", "🔴"
+    elif risk_score >= 4:
+        level, color, emoji = "MEDIUM",     "#ffcc44", "🟡"
+    else:
+        level, color, emoji = "LOW",        "#00cc66", "🟢"
+
+    return {"level": level, "color": color, "emoji": emoji,
+            "score": risk_score, "factors": {
+                "volatility": round(vol * 100, 1),
+                "atr_pct":    round(atr_pct, 2),
+                "rsi":        round(rsi, 1),
+                "adx":        round(adx, 1),
+                "whale":      whale_score,
+            }}
+
+
+def _ds_recommendation(tech: dict, iv: dict, risk: dict,
+                        whale: dict, live: float, lang: str) -> dict:
+    """
+    Generate a final swing-trade + investment recommendation with entry/exit prices.
+    """
+    is_vi    = lang == "VI"
+    rsi      = tech.get("rsi", 50)
+    adx      = tech.get("adx", 20)
+    above50  = tech.get("above_sma50", True)
+    macd_bull= tech.get("macd_bullish", False)
+    vol_spike= tech.get("vol_spike", False)
+    ret1m    = tech.get("ret1m", 0)
+    ret3m    = tech.get("ret3m", 0)
+    bbl      = tech.get("bb_lower", live * 0.97)
+    bbu      = tech.get("bb_upper", live * 1.03)
+    atr_pct  = risk["factors"].get("atr_pct", 2.0)
+    _atr     = live * atr_pct / 100
+    upside   = iv.get("upside_pct", 0)
+    iv_blend = iv.get("iv_blended", live)
+    whale_v  = whale.get("verdict", "NEUTRAL")
+
+    # ── Swing signal ──────────────────────────────────────────────
+    swing_bull = sum([
+        rsi < 40,
+        live < bbl * 1.02,
+        macd_bull,
+        above50,
+        whale_v == "ACCUMULATING",
+        vol_spike and macd_bull,
+    ])
+    swing_bear = sum([
+        rsi > 65,
+        live > bbu * 0.98,
+        not macd_bull,
+        whale_v == "DISTRIBUTING",
+        tech.get("rsi_overbought", False),
+    ])
+
+    if swing_bull >= 3 and swing_bear < 2:
+        swing_action = "MUA" if is_vi else "BUY"
+        swing_color  = "#00cc44"
+    elif swing_bear >= 3:
+        swing_action = "BÁN" if is_vi else "SELL"
+        swing_color  = "#ff4444"
+    elif swing_bull >= 2:
+        swing_action = "THEO DÕI — Chờ xác nhận" if is_vi else "WATCH — Await confirmation"
+        swing_color  = "#66aaff"
+    else:
+        swing_action = "TRUNG LẬP" if is_vi else "NEUTRAL"
+        swing_color  = "#aaaaaa"
+
+    # ── Investment signal (fundamental-aligned) ───────────────────
+    if upside >= 20 and ret3m > -0.15:
+        inv_action = "MUA DÀI HẠN" if is_vi else "LONG-TERM BUY"
+        inv_color  = "#00cc44"
+    elif upside >= 10:
+        inv_action = "TÍCH LŨY DẦN" if is_vi else "ACCUMULATE"
+        inv_color  = "#66cc88"
+    elif upside <= -15:
+        inv_action = "TRÁNH / BÁN" if is_vi else "AVOID / SELL"
+        inv_color  = "#ff4444"
+    elif upside <= -5:
+        inv_action = "NẮM GIỮ — THẬN TRỌNG" if is_vi else "HOLD — CAUTION"
+        inv_color  = "#ffaa44"
+    else:
+        inv_action = "NẮM GIỮ" if is_vi else "HOLD"
+        inv_color  = "#aaaaaa"
+
+    # ── Entry / Exit / Stop prices ────────────────────────────────
+    # Entry: near BB Lower + 20% ATR bounce confirmation
+    entry_ideal = round_price_hose(bbl + _atr * 0.20)
+    entry       = round_price_hose(min(live, entry_ideal) if entry_ideal < live * 1.01 else live)
+    tp1         = round_price_hose(live + 2.0 * _atr)
+    tp2         = round_price_hose(live + 3.5 * _atr)
+    tp3_inv     = round_price_hose(max(iv_blend, live + 5.0 * _atr))  # longer-term target
+    stop        = round_price_hose(max(live - 1.5 * _atr, live * 0.90))
+
+    rr_swing = round((tp1 - entry) / (entry - stop), 2) if (entry - stop) > 0 else 0
+
+    # ── Swing reasoning (key bullet points) ──────────────────────
+    bullets_vi = []
+    bullets_en = []
+    if rsi < 35:
+        bullets_vi.append(f"📉 RSI={rsi:.0f} quá bán — áp lực bán cạn dần, xác suất hồi phục cao")
+        bullets_en.append(f"📉 RSI={rsi:.0f} oversold — selling exhaustion, bounce probability elevated")
+    elif rsi > 65:
+        bullets_vi.append(f"📈 RSI={rsi:.0f} quá mua — rủi ro chốt lời ngắn hạn tăng")
+        bullets_en.append(f"📈 RSI={rsi:.0f} overbought — short-term profit-taking risk elevated")
+    if macd_bull:
+        bullets_vi.append("📊 MACD > Signal — momentum đang đảo chiều tăng")
+        bullets_en.append("📊 MACD > Signal — momentum turning bullish")
+    else:
+        bullets_vi.append("📊 MACD < Signal — momentum yếu, thận trọng mua mới")
+        bullets_en.append("📊 MACD < Signal — weak momentum, caution on new longs")
+    if adx > 25:
+        bullets_vi.append(f"📐 ADX={adx:.0f} — xu hướng rõ ràng, giao dịch thuận xu hướng")
+        bullets_en.append(f"📐 ADX={adx:.0f} — clear trend, trade with the trend")
+    if whale_v == "ACCUMULATING":
+        bullets_vi.append("🐋 Smart Money đang tích lũy — dòng tiền thông minh vào")
+        bullets_en.append("🐋 Smart Money accumulating — institutional inflows detected")
+    elif whale_v == "DISTRIBUTING":
+        bullets_vi.append("🔴 Phân phối hàng — cảnh báo đội lái xả")
+        bullets_en.append("🔴 Distribution detected — market maker offloading warning")
+    if vol_spike:
+        bullets_vi.append("📦 Khối lượng đột biến — dòng tiền lớn đang tham gia")
+        bullets_en.append("📦 Volume spike — large money flow active")
+    if upside > 15:
+        bullets_vi.append(f"💎 Định giá nội tại: +{upside}% tiềm năng tăng dài hạn")
+        bullets_en.append(f"💎 Intrinsic value: +{upside}% long-term upside potential")
+    elif upside < -10:
+        bullets_vi.append(f"⚠️ Định giá nội tại: giá thị trường cao hơn giá trị {abs(upside)}%")
+        bullets_en.append(f"⚠️ Intrinsic value: market price {abs(upside)}% above fair value")
+
+    bullets = bullets_vi if is_vi else bullets_en
+
+    return {
+        "swing_action":  swing_action,
+        "swing_color":   swing_color,
+        "inv_action":    inv_action,
+        "inv_color":     inv_color,
+        "entry":         entry,
+        "tp1":           tp1,
+        "tp2":           tp2,
+        "tp3_inv":       tp3_inv,
+        "stop":          stop,
+        "rr_swing":      rr_swing,
+        "bullets":       bullets,
+    }
+
+
+@st.cache_data(ttl=300)
+def deep_scan_one_ticker(t: str) -> dict | None:
+    """
+    ENH-42 (v28): Deep Scan — full intelligence profile for one ticker.
+    Returns None if data unavailable.
+    Uses SSI real-time price as primary price source.
+    Cache TTL = 5 min (300 s) to avoid re-fetching on every rerender.
+    """
+    try:
+        # ── 1. OHLCV + indicators ──────────────────────────────────
+        data, src, err = download_data(t, days=730, min_rows=40)
+        if data is None or data.empty:
+            return None
+        data = clean_data(data)
+        if len(data) < 40:
+            return None
+        data = calculate_indicators(data)
+        closes  = data["Close"].dropna().values.astype(float)
+        volumes = data["Volume"].fillna(0).values.astype(float)
+        highs   = data["High"].dropna().values.astype(float) if "High" in data.columns else closes
+        lows    = data["Low"].dropna().values.astype(float)  if "Low"  in data.columns else closes
+
+        # ── 2. SSI real-time price ─────────────────────────────────
+        rt       = fetch_ssi_realtime_price(t)
+        live     = rt.get("price", 0) or float(closes[-1])
+        ref_p    = rt.get("reference", live)
+        pct_chg  = rt.get("pct_change", (live / ref_p - 1) * 100 if ref_p > 0 else 0)
+        rt_vol   = rt.get("volume", float(volumes[-1]) if len(volumes) else 0)
+        rt_src   = rt.get("source", src) if rt.get("price", 0) > 0 else src
+
+        # ── 3. Price limits ────────────────────────────────────────
+        lims     = get_price_limits(t, ref_p if ref_p > 0 else live)
+        ceil_p   = lims.get("ceiling", 0)
+        floor_p  = lims.get("floor",   0)
+
+        # ── 4. Technical analysis (reuse DNSE analysis) ───────────
+        tech = fetch_dnse_ohlc_analysis(t)
+        if not tech or tech.get("error"):
+            # Build minimal tech dict from calculated data
+            last = data.iloc[-1]
+            tech = {
+                "price":       live,
+                "rsi":         float(last.get("RSI", 50)),
+                "adx":         float(last.get("ADX", 20)),
+                "macd":        float(last.get("MACD", 0)),
+                "macd_sig":    float(last.get("MACD_Signal", 0)),
+                "macd_bullish": float(last.get("MACD", 0)) > float(last.get("MACD_Signal", 0)),
+                "bb_lower":    float(last.get("BB_Lower", live * 0.97)),
+                "bb_upper":    float(last.get("BB_Upper", live * 1.03)),
+                "sma20":       float(last.get("SMA20", live)),
+                "sma50":       float(last.get("SMA50", live)),
+                "above_sma20": live > float(last.get("SMA20", 0) or 0),
+                "above_sma50": live > float(last.get("SMA50", 0) or 0),
+                "rsi_oversold": float(last.get("RSI", 50)) < 35,
+                "rsi_overbought": float(last.get("RSI", 50)) > 70,
+                "vol_spike":   False,
+                "ret1m":       (closes[-1] / closes[-22] - 1) if len(closes) >= 22 else 0,
+                "ret3m":       (closes[-1] / closes[-66] - 1) if len(closes) >= 66 else 0,
+                "ret6m":       (closes[-1] / closes[-126] - 1) if len(closes) >= 126 else 0,
+                "volatility":  float(np.std(np.diff(np.log(closes[-60:]))) * np.sqrt(252)) if len(closes) >= 20 else 0.25,
+                "tech_score":  50,
+                "tech_fair_value": live,
+                "sector_pe":   15.0,
+                "sector":      get_sector(t),
+                "high52":      float(highs[-252:].max()) if len(highs) >= 252 else float(highs.max()),
+                "low52":       float(lows[-252:].min())  if len(lows) >= 252 else float(lows.min()),
+                "price_percentile": 0.5,
+                "implied_eps": live / 15.0,
+                "implied_bvps": live * 0.6,
+            }
+
+        # ── 5. ATR ────────────────────────────────────────────────
+        last     = data.iloc[-1]
+        atr_v    = float(last.get("ATR", 0)) if "ATR" in data.columns else live * 0.02
+        atr_v    = max(atr_v, live * 0.015)  # floor at 1.5%
+        atr_pct  = atr_v / live * 100 if live > 0 else 2.0
+
+        # ── 6. Price forecasts (ensemble) ─────────────────────────
+        max_horizon = 126  # 6 months trading days
+        ensemble    = _ds_forecast_ensemble(closes, max_horizon)
+        horizons    = {
+            5:   round_price_hose(ensemble[4]),
+            10:  round_price_hose(ensemble[9]),
+            21:  round_price_hose(ensemble[20]),   # ~1 month
+            42:  round_price_hose(ensemble[41]),   # ~2 months
+            63:  round_price_hose(ensemble[62]),   # ~3 months
+            126: round_price_hose(ensemble[125]),  # ~6 months
+        }
+
+        # ── 7. Intrinsic value ────────────────────────────────────
+        iv = _ds_intrinsic_value(t, live, tech)
+
+        # ── 8. Whale / MM detection ───────────────────────────────
+        doi_lai        = detect_doi_lai(data)
+        whale_summary  = _ds_whale_summary(doi_lai)
+
+        # ── 9. Swing risk ─────────────────────────────────────────
+        risk = _ds_swing_risk(tech, whale_summary, atr_pct)
+
+        # ── 10. Final recommendation ──────────────────────────────
+        lang = st.session_state.lang
+        rec  = _ds_recommendation(tech, iv, risk, whale_summary, live, lang)
+
+        # ── 11. Volume context ────────────────────────────────────
+        avg_vol20  = float(np.mean(volumes[-20:])) if len(volumes) >= 20 else float(np.mean(volumes))
+        vol_ratio  = (rt_vol / avg_vol20) if avg_vol20 > 0 and rt_vol > 0 else (
+            float(volumes[-1]) / avg_vol20 if avg_vol20 > 0 else 1.0)
+
+        return {
+            "ticker":       t,
+            "sector":       tech.get("sector", get_sector(t)),
+            # ── Price
+            "live":         live,
+            "ref_price":    ref_p,
+            "pct_chg":      round(pct_chg, 2),
+            "rt_vol":       int(rt_vol) if rt_vol else int(volumes[-1]) if len(volumes) else 0,
+            "vol_ratio":    round(vol_ratio, 2),
+            "ceil_p":       ceil_p,
+            "floor_p":      floor_p,
+            "high52":       tech.get("high52", 0),
+            "low52":        tech.get("low52", 0),
+            "price_pct52":  round(tech.get("price_percentile", 0.5) * 100, 1),
+            "rt_src":       rt_src,
+            # ── Technicals
+            "rsi":          round(tech.get("rsi", 50), 1),
+            "adx":          round(tech.get("adx", 20), 1),
+            "macd_bull":    tech.get("macd_bullish", False),
+            "bb_lower":     round_price_hose(tech.get("bb_lower", 0)),
+            "bb_upper":     round_price_hose(tech.get("bb_upper", 0)),
+            "above_sma50":  tech.get("above_sma50", False),
+            "above_sma20":  tech.get("above_sma20", False),
+            "atr":          round(atr_v, 0),
+            "atr_pct":      round(atr_pct, 2),
+            "tech_score":   round(tech.get("tech_score", 50), 1),
+            "vol_spike":    tech.get("vol_spike", False),
+            "ret1m":        round(tech.get("ret1m", 0) * 100, 2),
+            "ret3m":        round(tech.get("ret3m", 0) * 100, 2),
+            "ret6m":        round(tech.get("ret6m", 0) * 100, 2),
+            "volatility":   round(tech.get("volatility", 0.25) * 100, 1),
+            # ── Forecasts
+            "fc":           horizons,
+            "fc_5d_pct":    round((horizons[5]  - live) / live * 100, 1) if live > 0 else 0,
+            "fc_10d_pct":   round((horizons[10] - live) / live * 100, 1) if live > 0 else 0,
+            "fc_1m_pct":    round((horizons[21] - live) / live * 100, 1) if live > 0 else 0,
+            "fc_3m_pct":    round((horizons[63] - live) / live * 100, 1) if live > 0 else 0,
+            "fc_6m_pct":    round((horizons[126]- live) / live * 100, 1) if live > 0 else 0,
+            # ── Intrinsic value
+            "iv":           iv,
+            # ── Whale
+            "whale":        whale_summary,
+            # ── Risk
+            "risk":         risk,
+            # ── Recommendation
+            "rec":          rec,
+        }
+    except Exception as e:
+        _log.warning(f"deep_scan_one_ticker({t}): {e}")
+        return None
+
+
+def _render_deep_scan_card(result: dict, is_vi: bool) -> None:
+    """
+    ENH-42 (v28): Render a single-ticker Deep Scan card with all intelligence panels.
+    Called once per ticker inside an st.expander.
+    """
+    t       = result["ticker"]
+    live    = result["live"]
+    pct_chg = result["pct_chg"]
+    sector  = result["sector"]
+    rt_src  = result["rt_src"]
+    rec     = result["rec"]
+    iv      = result["iv"]
+    whale   = result["whale"]
+    risk    = result["risk"]
+    fc      = result["fc"]
+
+    swing_a = rec["swing_action"]
+    inv_a   = rec["inv_action"]
+    pct_chg_color = "#00cc66" if pct_chg >= 0 else "#ff4444"
+    pct_chg_sign  = "+" if pct_chg >= 0 else ""
+
+    # ── Row 1: Price header ──────────────────────────────────────
+    c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
+    with c1:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 14px">'
+            f'<div style="color:#7eb8ff;font-size:13px;font-weight:bold">📡 {"Giá RT (SSI)" if is_vi else "Live (SSI)"}</div>'
+            f'<div style="color:#ffffff;font-size:22px;font-weight:bold">{live:,.0f}</div>'
+            f'<div style="color:{pct_chg_color};font-size:13px">{pct_chg_sign}{pct_chg:.2f}% | {rt_src}</div>'
+            f'<div style="color:#666;font-size:11px">{sector}</div>'
+            f'</div>', unsafe_allow_html=True)
+    with c2:
+        rr = rec["rr_swing"]
+        rr_col = "#00cc66" if rr >= 2 else ("#ffcc44" if rr >= 1.5 else "#ff6644")
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 14px">'
+            f'<div style="color:#888;font-size:11px">{"📊 Tín hiệu Swing" if is_vi else "📊 Swing Signal"}</div>'
+            f'<div style="color:{rec["swing_color"]};font-size:16px;font-weight:bold">{swing_a}</div>'
+            f'<div style="color:{rec["inv_color"]};font-size:12px">{"💼 Đầu tư: " if is_vi else "💼 Invest: "}{inv_a}</div>'
+            f'<div style="color:{rr_col};font-size:12px">R:R = {rr}:1</div>'
+            f'</div>', unsafe_allow_html=True)
+    with c3:
+        risk_lvl = risk["level"]
+        risk_col = risk["color"]
+        risk_emo = risk["emoji"]
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 14px">'
+            f'<div style="color:#888;font-size:11px">{"⚡ Rủi ro Swing" if is_vi else "⚡ Swing Risk"}</div>'
+            f'<div style="color:{risk_col};font-size:16px;font-weight:bold">{risk_emo} {risk_lvl}</div>'
+            f'<div style="color:#aaa;font-size:11px">Score: {risk["score"]} | '
+            f'Vol: {result["volatility"]}% | ATR: {result["atr_pct"]}%</div>'
+            f'<div style="color:#aaa;font-size:11px">RSI: {result["rsi"]} | ADX: {result["adx"]}</div>'
+            f'</div>', unsafe_allow_html=True)
+    with c4:
+        whale_v   = whale["verdict"]
+        whale_col = whale["color"]
+        whale_emo = whale["emoji"]
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 14px">'
+            f'<div style="color:#888;font-size:11px">{"🐋 Cá mập/MM" if is_vi else "🐋 Whale/MM"}</div>'
+            f'<div style="color:{whale_col};font-size:15px;font-weight:bold">{whale_emo} {whale_v}</div>'
+            f'<div style="color:#aaa;font-size:11px">{"Tín hiệu dòng tiền" if is_vi else "Money flow signals"}: {len(whale["signals"])}</div>'
+            f'<div style="color:#aaa;font-size:11px">{"Tích lũy" if is_vi else "Accum"} - {"Phân phối" if is_vi else "Dist"} score: {whale["score"]}</div>'
+            f'</div>', unsafe_allow_html=True)
+
+    st.markdown("<div style='margin:10px 0'></div>", unsafe_allow_html=True)
+
+    # ── Row 2: Entry/Exit/Stop + Intrinsic Value ────────────────
+    c5, c6 = st.columns(2)
+    with c5:
+        st.markdown(f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin-bottom:6px">{"💰 Giá Vào/Ra Khuyến Nghị" if is_vi else "💰 Entry / Exit / Stop Prices"}</div>',
+                    unsafe_allow_html=True)
+        entry, tp1, tp2, tp3, stop = rec["entry"], rec["tp1"], rec["tp2"], rec["tp3_inv"], rec["stop"]
+        ep  = round((entry - live) / live * 100, 1) if live > 0 else 0
+        p1  = round((tp1   - live) / live * 100, 1) if live > 0 else 0
+        p2  = round((tp2   - live) / live * 100, 1) if live > 0 else 0
+        p3  = round((tp3   - live) / live * 100, 1) if live > 0 else 0
+        sp  = round((stop  - live) / live * 100, 1) if live > 0 else 0
+        _ep_s = f"{ep:+.1f}%" if ep != 0 else "≈ live"
+        price_html = (
+            f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+            f'<tr><td style="padding:4px 8px;color:#00ff88;font-weight:bold">💰 {"Vào lệnh" if is_vi else "Entry"}</td>'
+            f'<td style="padding:4px 8px;color:#00ff88;font-weight:bold;text-align:right">{entry:,.0f}</td>'
+            f'<td style="padding:4px 8px;color:#666;text-align:right">{_ep_s}</td></tr>'
+            f'<tr><td style="padding:4px 8px;color:#ffcc44">🎯 TP1 {"Swing" if is_vi else "Swing"}</td>'
+            f'<td style="padding:4px 8px;color:#ffcc44;text-align:right">{tp1:,.0f}</td>'
+            f'<td style="padding:4px 8px;color:#666;text-align:right">{p1:+.1f}%</td></tr>'
+            f'<tr><td style="padding:4px 8px;color:#ffaa22">🎯 TP2 {"Swing" if is_vi else "Swing"}</td>'
+            f'<td style="padding:4px 8px;color:#ffaa22;text-align:right">{tp2:,.0f}</td>'
+            f'<td style="padding:4px 8px;color:#666;text-align:right">{p2:+.1f}%</td></tr>'
+            f'<tr><td style="padding:4px 8px;color:#aaddff">💎 TP3 {"Dài hạn" if is_vi else "Long-term"}</td>'
+            f'<td style="padding:4px 8px;color:#aaddff;text-align:right">{tp3:,.0f}</td>'
+            f'<td style="padding:4px 8px;color:#666;text-align:right">{p3:+.1f}%</td></tr>'
+            f'<tr style="border-top:1px solid #333">'
+            f'<td style="padding:4px 8px;color:#ff6644">🛑 {"Cắt lỗ" if is_vi else "Stop Loss"}</td>'
+            f'<td style="padding:4px 8px;color:#ff6644;text-align:right">{stop:,.0f}</td>'
+            f'<td style="padding:4px 8px;color:#666;text-align:right">{sp:+.1f}%</td></tr>'
+            f'</table>'
+        )
+        st.markdown(price_html, unsafe_allow_html=True)
+
+    with c6:
+        st.markdown(f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin-bottom:6px">{"💎 Giá Trị Nội Tại" if is_vi else "💎 Intrinsic Value"}</div>',
+                    unsafe_allow_html=True)
+        iv_pe      = iv["iv_pe"]
+        iv_dcf_v   = iv["iv_dcf"]
+        iv_gr      = iv["iv_graham"]
+        iv_blend   = iv["iv_blended"]
+        iv_upside  = iv["upside_pct"]
+        upside_col = "#00cc66" if iv_upside >= 10 else ("#ffaa44" if iv_upside >= 0 else "#ff6644")
+        iv_html = (
+            f'<table style="width:100%;border-collapse:collapse;font-size:12px">'
+            f'<tr><td style="padding:4px 8px;color:#aaa">📊 {"P/E Ngành" if is_vi else "Sector P/E"}</td>'
+            f'<td style="padding:4px 8px;color:#ccc;text-align:right">{iv_pe:,.0f}</td></tr>'
+            f'<tr><td style="padding:4px 8px;color:#aaa">🏗️ DCF ({"hàm ý" if is_vi else "implied"})</td>'
+            f'<td style="padding:4px 8px;color:#ccc;text-align:right">{iv_dcf_v:,.0f}</td></tr>'
+            f'<tr><td style="padding:4px 8px;color:#aaa">🔢 Graham</td>'
+            f'<td style="padding:4px 8px;color:#ccc;text-align:right">{iv_gr:,.0f}</td></tr>'
+            f'<tr style="border-top:1px solid #333">'
+            f'<td style="padding:4px 8px;color:#7eb8ff;font-weight:bold">⚖️ {"Hỗn hợp" if is_vi else "Blended"}</td>'
+            f'<td style="padding:4px 8px;color:#7eb8ff;font-weight:bold;text-align:right">{iv_blend:,.0f}</td></tr>'
+            f'<tr><td colspan="2" style="padding:4px 8px;color:{upside_col};font-weight:bold">'
+            f'{"Tiềm năng: " if is_vi else "Upside: "}{iv_upside:+.1f}% '
+            f'{"từ giá hiện tại" if is_vi else "vs current price"}</td></tr>'
+            f'</table>'
+            f'<div style="color:#555;font-size:10px;margin-top:4px">'
+            f'{iv["method_used"]}</div>'
+        )
+        st.markdown(iv_html, unsafe_allow_html=True)
+
+    # ── Row 3: Price Forecasts ───────────────────────────────────
+    st.markdown(f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin:10px 0 6px">{"📈 Dự Báo Giá (Ensemble: LinReg+Holt+MonteCarlo)" if is_vi else "📈 Price Forecasts (Ensemble: LinReg+Holt+MonteCarlo)"}</div>',
+                unsafe_allow_html=True)
+    fc_labels = [
+        ("5d",  fc[5],   result["fc_5d_pct"],  "5 ngày"  if is_vi else "5 days"),
+        ("10d", fc[10],  result["fc_10d_pct"], "10 ngày" if is_vi else "10 days"),
+        ("1M",  fc[21],  result["fc_1m_pct"],  "1 tháng" if is_vi else "1 month"),
+        ("2M",  fc[42],  round((fc[42]-live)/live*100,1) if live>0 else 0, "2 tháng" if is_vi else "2 months"),
+        ("3M",  fc[63],  result["fc_3m_pct"],  "3 tháng" if is_vi else "3 months"),
+        ("6M",  fc[126], result["fc_6m_pct"],  "6 tháng" if is_vi else "6 months"),
+    ]
+    fc_cols = st.columns(6)
+    for col, (lbl, price_fc, pct, full_lbl) in zip(fc_cols, fc_labels):
+        fc_col = "#00cc66" if pct >= 0 else "#ff4444"
+        fc_sign = "+" if pct >= 0 else ""
+        with col:
+            st.markdown(
+                f'<div style="background:#0d1525;border:1px solid #2a3555;border-radius:8px;'
+                f'padding:8px;text-align:center">'
+                f'<div style="color:#888;font-size:10px">{full_lbl}</div>'
+                f'<div style="color:#ccc;font-size:14px;font-weight:bold">{price_fc:,.0f}</div>'
+                f'<div style="color:{fc_col};font-size:12px;font-weight:bold">{fc_sign}{pct:.1f}%</div>'
+                f'</div>', unsafe_allow_html=True)
+
+    # ── Row 4: Whale signals detail ──────────────────────────────
+    if whale["signals"]:
+        with st.expander(f'🐋 {"Chi tiết dòng tiền cá mập / MM" if is_vi else "Whale/MM Money Flow Detail"} ({len(whale["signals"])} {"tín hiệu" if is_vi else "signals"})'):
+            for s in whale["signals"]:
+                sev_col = {"HIGH": "#ff4444", "MEDIUM": "#ffaa44", "LOW": "#888",
+                           "POSITIVE": "#00cc66"}.get(s["sev"], "#aaa")
+                st.markdown(
+                    f'<div style="background:#0d1525;border-left:3px solid {sev_col};'
+                    f'border-radius:6px;padding:8px 12px;margin:4px 0">'
+                    f'<b style="color:{sev_col}">{s["icon"]} {s["text"]}</b><br>'
+                    f'<span style="color:#aaa;font-size:12px">{s["detail"]}</span>'
+                    f'</div>', unsafe_allow_html=True)
+
+    # ── Row 5: Recommendation bullets ───────────────────────────
+    if rec["bullets"]:
+        st.markdown(f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin:10px 0 4px">{"📋 Luận Điểm Giao Dịch" if is_vi else "📋 Trading Rationale"}</div>',
+                    unsafe_allow_html=True)
+        for b in rec["bullets"]:
+            st.markdown(f'<div style="color:#b0b8cc;font-size:12px;padding:2px 0">{b}</div>',
+                        unsafe_allow_html=True)
+
+    # ── Row 6: 52-week + returns ─────────────────────────────────
+    st.markdown("<div style='margin-top:8px'></div>", unsafe_allow_html=True)
+    r_cols = st.columns(6)
+    metrics = [
+        (f"52W {"Đỉnh" if is_vi else "High"}", f"{result['high52']:,.0f}"),
+        (f"52W {"Đáy" if is_vi else "Low"}",  f"{result['low52']:,.0f}"),
+        (f"{"Vị trí 52W" if is_vi else "52W %ile"}", f"{result['price_pct52']:.0f}%"),
+        (f"1M {"Ret" if True else "Return"}", f"{result['ret1m']:+.1f}%"),
+        (f"3M {"Ret" if True else "Return"}", f"{result['ret3m']:+.1f}%"),
+        (f"{"Vol/MA20" if True else "Vol/MA20"}", f"{result['vol_ratio']:.1f}×"),
+    ]
+    for col, (lbl, val) in zip(r_cols, metrics):
+        with col:
+            st.metric(lbl, val)
+
+
+def render_deep_scan_tab():
+    """
+    ENH-42 (v28): Deep Scan — scan all tickers (or custom list) and render
+    a full intelligence card per ticker.
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    st.header("🧭 " + ("Deep Scan — Phân Tích Toàn Diện Từng Mã" if is_vi
+                        else "Deep Scan — Full Intelligence Per Ticker"))
+    st.caption(
+        "📡 SSI iboard real-time · " +
+        ("Dự báo giá 5d/10d/1M–6M · Giá trị nội tại · Phát hiện cá mập/MM · "
+         "Rủi ro swing · Khuyến nghị vào/ra với lý giải đầy đủ. "
+         "Dữ liệu giá thực từ SSI; forecasts = ensemble kỹ thuật (LinReg+Holt+MC)."
+         if is_vi else
+         "Price forecasts 5d/10d/1M–6M · Intrinsic value · Whale/MM detection · "
+         "Swing risk · Entry/exit with full rationale. "
+         "Live prices via SSI iboard; forecasts = technical ensemble (LinReg+Holt+MC).")
+    )
+    st.divider()
+
+    # ── Ticker input ──────────────────────────────────────────────
+    watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
+    _inp_label = ("🎯 Nhập mã cổ phiếu (cách nhau bằng dấy phẩy) — Để trống để quét toàn bộ Watchlist"
+                  if is_vi else
+                  "🎯 Enter ticker symbols (comma-separated) — Leave blank to scan full Watchlist")
+    custom_input = st.text_input(
+        _inp_label,
+        value="",
+        placeholder=("VD: FPT, VCB, SHB — hoặc để trống" if is_vi
+                     else "e.g. FPT, VCB, SHB — or leave blank"),
+        key="deep_scan_custom_tickers",
+        help=("Nhập mã HOSE/HNX/UPCOM cách nhau bằng dấu phẩy. Để trống = quét toàn bộ Watchlist."
+              if is_vi else
+              "Enter HOSE/HNX/UPCOM tickers separated by commas. Blank = full Watchlist scan."),
+    )
+
+    if custom_input and custom_input.strip():
+        raw_tokens = [t.strip().upper() for t in custom_input.replace(";", ",").split(",")]
+        scan_list  = list(dict.fromkeys(t for t in raw_tokens if t and t.isalpha()))
+        if not scan_list:
+            st.warning("⚠️ " + ("Không nhận ra mã nào — dùng Watchlist." if is_vi
+                                  else "No valid tickers — using Watchlist."))
+            scan_list = watch_list
+        else:
+            st.info(
+                f"🎯 {'Danh sách tuỳ chỉnh' if is_vi else 'Custom scan'}:  "
+                f"**{len(scan_list)}** tickers  |  `{'  ·  '.join(scan_list)}`"
+            )
+    else:
+        scan_list = watch_list
+        st.info(
+            f"📋 {'Watchlist' if is_vi else 'Watchlist'}: **{len(scan_list)}** tickers  |  "
+            f"{'Nhập mã ở trên để quét mã tuỳ chọn ↑' if is_vi else 'Enter tickers above for custom scan ↑'}"
+        )
+
+    # ── Filters ───────────────────────────────────────────────────
+    colA, colB, colC, colD = st.columns(4)
+    with colA:
+        show_buy_only = st.checkbox(
+            "🟢 " + ("Chỉ BUY" if is_vi else "BUY only"), value=False,
+            key="ds_filter_buy")
+    with colB:
+        show_accum_only = st.checkbox(
+            "🐋 " + ("Chỉ Tích lũy" if is_vi else "Accumulating only"), value=False,
+            key="ds_filter_accum")
+    with colC:
+        min_risk = st.selectbox(
+            ("Max rủi ro" if is_vi else "Max risk"),
+            options=["ALL","LOW","MEDIUM","HIGH","VERY HIGH"],
+            index=0, key="ds_risk_filter")
+    with colD:
+        sort_by = st.selectbox(
+            ("Sắp xếp theo" if is_vi else "Sort by"),
+            options=(["Tech Score", "Upside %", "Risk Score (asc)", "Ticker A-Z"]
+                     if not is_vi else
+                     ["Điểm kỹ thuật", "Upside %", "Rủi ro (thấp→cao)", "Mã A-Z"]),
+            index=0, key="ds_sort_by")
+
+    st.markdown("---")
+
+    # ── Run scan ──────────────────────────────────────────────────
+    _btn_lbl = (f"▶️ Quét Deep Scan {len(scan_list)} mã" if is_vi
+                else f"▶️ Run Deep Scan — {len(scan_list)} Tickers")
+    if st.button(_btn_lbl, type="primary", use_container_width=True):
+        results = []
+        errors  = []
+        pb = st.progress(0, "Initialising Deep Scan…")
+        status_ph = st.empty()
+
+        for i, t in enumerate(scan_list):
+            pb.progress((i + 1) / len(scan_list),
+                        text=f"🔬 {'Đang quét' if is_vi else 'Scanning'}: {t} ({i+1}/{len(scan_list)})")
+            status_ph.caption(f"⚡ {t}: SSI RT → OHLCV → indicators → forecast → IV…")
+            try:
+                r = deep_scan_one_ticker(t)
+                if r:
+                    results.append(r)
+                else:
+                    errors.append(f"{t}: No data returned")
+            except Exception as e:
+                errors.append(f"{t}: {e}")
+                _log.warning(f"deep_scan {t}: {e}")
+
+        pb.empty(); status_ph.empty()
+        st.session_state["ds_results"] = results
+        st.session_state["ds_errors"]  = errors
+        st.success(
+            f"✅ {'Hoàn tất' if is_vi else 'Complete'}: "
+            f"{len(results)} {'mã' if is_vi else 'tickers'} | "
+            f"{len(errors)} {'lỗi' if is_vi else 'errors'} | "
+            f"{datetime.now().strftime('%H:%M:%S')}"
+        )
+        if errors:
+            with st.expander(f"⚠️ {len(errors)} errors"):
+                for e in errors: st.caption(e)
+
+    # ── Display results ───────────────────────────────────────────
+    raw_results = st.session_state.get("ds_results", [])
+    if not raw_results:
+        st.info("☝️ " + ("Nhấn nút bên trên để bắt đầu Deep Scan." if is_vi
+                          else "Press the button above to start the Deep Scan."))
+        return
+
+    # Apply filters
+    RISK_ORDER = {"LOW": 0, "MEDIUM": 1, "HIGH": 2, "VERY HIGH": 3}
+    filtered = raw_results
+    if show_buy_only:
+        filtered = [r for r in filtered if "BUY" in r["rec"]["swing_action"].upper()
+                    or "MUA" in r["rec"]["swing_action"].upper()]
+    if show_accum_only:
+        filtered = [r for r in filtered if "ACCUM" in r["whale"]["verdict"].upper()
+                    or "TÍCH LŨY" in r["whale"]["verdict"].upper()]
+    if min_risk != "ALL":
+        max_idx = RISK_ORDER.get(min_risk, 3)
+        filtered = [r for r in filtered
+                    if RISK_ORDER.get(r["risk"]["level"], 3) <= max_idx]
+
+    # Sort
+    sort_lower = sort_by.lower()
+    if "tech" in sort_lower or "điểm" in sort_lower:
+        filtered.sort(key=lambda r: r["tech_score"], reverse=True)
+    elif "upside" in sort_lower:
+        filtered.sort(key=lambda r: r["iv"]["upside_pct"], reverse=True)
+    elif "risk" in sort_lower or "rủi ro" in sort_lower:
+        filtered.sort(key=lambda r: r["risk"]["score"])
+    else:
+        filtered.sort(key=lambda r: r["ticker"])
+
+    # ── Summary table ─────────────────────────────────────────────
+    st.subheader(f"{'📊 Bảng Tổng Hợp' if is_vi else '📊 Summary Table'} — {len(filtered)}/{len(raw_results)} tickers")
+    summary_rows = []
+    for r in filtered:
+        swing_sig  = r["rec"]["swing_action"]
+        whale_vd   = r["whale"]["verdict"]
+        risk_lvl   = r["risk"]["level"]
+        iv_upside  = r["iv"]["upside_pct"]
+        fc5        = r["fc"][5]
+        fc1m       = r["fc"][21]
+        fc3m       = r["fc"][63]
+        summary_rows.append({
+            ("Mã" if is_vi else "Ticker"):       r["ticker"],
+            ("Ngành" if is_vi else "Sector"):    r["sector"],
+            ("Giá RT" if is_vi else "Live"):     f"{r['live']:,.0f}",
+            ("% Ngày" if is_vi else "Day%"):     f"{r['pct_chg']:+.2f}%",
+            ("Tín hiệu Swing" if is_vi else "Swing Signal"): swing_sig,
+            ("RSI"):                             r["rsi"],
+            ("Tech Score"):                      r["tech_score"],
+            ("🐋 MM"):                            r["whale"]["emoji"] + " " + whale_vd[:10],
+            ("Risk"):                            r["risk"]["emoji"] + " " + risk_lvl,
+            ("IV Upside"):                       f"{iv_upside:+.1f}%",
+            ("Dự báo 5d" if is_vi else "FC 5d"): f"{fc5:,.0f} ({r['fc_5d_pct']:+.1f}%)",
+            ("Dự báo 1M" if is_vi else "FC 1M"): f"{fc1m:,.0f} ({r['fc_1m_pct']:+.1f}%)",
+            ("Dự báo 3M" if is_vi else "FC 3M"): f"{fc3m:,.0f} ({r['fc_3m_pct']:+.1f}%)",
+            ("Vào lệnh" if is_vi else "Entry"):  f"{r['rec']['entry']:,.0f}",
+            ("Cắt lỗ" if is_vi else "Stop"):     f"{r['rec']['stop']:,.0f}",
+        })
+    if summary_rows:
+        df_sum = pd.DataFrame(summary_rows)
+        sig_col = "Tín hiệu Swing" if is_vi else "Swing Signal"
+        try:
+            show_df(df_sum.style.map(style_action, subset=[sig_col]))
+        except Exception:
+            show_df(df_sum)
+
+    st.divider()
+
+    # ── Per-ticker expandable cards ───────────────────────────────
+    st.subheader("🔍 " + ("Chi Tiết Từng Mã" if is_vi else "Per-Ticker Detail"))
+
+    for r in filtered:
+        t        = r["ticker"]
+        swing_a  = r["rec"]["swing_action"]
+        risk_emo = r["risk"]["emoji"]
+        whale_emo= r["whale"]["emoji"]
+        live     = r["live"]
+        pct      = r["pct_chg"]
+        iv_up    = r["iv"]["upside_pct"]
+        pct_sign = "+" if pct >= 0 else ""
+        iv_sign  = "+" if iv_up >= 0 else ""
+        exp_label = (
+            f"{risk_emo} {t} | {live:,.0f} ({pct_sign}{pct:.2f}%) | "
+            f"{'Swing' if is_vi else 'Swing'}: {swing_a} | "
+            f"{whale_emo} | IV: {iv_sign}{iv_up:.1f}% | "
+            f"{'Rủi ro' if is_vi else 'Risk'}: {r['risk']['level']}"
+        )
+        with st.expander(exp_label, expanded=False):
+            _render_deep_scan_card(r, is_vi)
+
+    # ── Download CSV ──────────────────────────────────────────────
+    if summary_rows:
+        st.divider()
+        try:
+            csv_buf = pd.DataFrame(summary_rows).to_csv(index=False, encoding="utf-8-sig")
+            ts = datetime.now().strftime("%Y%m%d_%H%M")
+            st.download_button(
+                label="⬇️ " + ("Tải CSV" if is_vi else "Download CSV"),
+                data=csv_buf,
+                file_name=f"deep_scan_{ts}.csv",
+                mime="text/csv",
+                use_container_width=False,
+            )
+        except Exception:
+            pass
+
+    st.caption(
+        "⚠️ " + (
+            "Dự báo giá là mô hình toán học tự động, không phải dự đoán chắc chắn. "
+            "Giá trị nội tại dựa trên EPS/BVPS hàm ý từ giá thị trường và P/E ngành. "
+            "Không phải tư vấn đầu tư — chỉ mang tính tham khảo kỹ thuật."
+            if is_vi else
+            "Price forecasts are automated quantitative models, not guaranteed predictions. "
+            "Intrinsic values use market-implied EPS/BVPS and sector P/E benchmarks. "
+            "Not investment advice — for technical reference only."
+        )
+    )
+
+
 def render_changelog_tab():
     # ENH-V25: Inject v25 at top
     is_vi = st.session_state.lang == "VI"
     st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    v28_html = """
+<div style='background:#0f172a;border:2px solid #7eb8ff;border-radius:10px;padding:16px 20px;margin:8px 0'>
+<h3 style='color:#7eb8ff;margin:0 0 10px'>🆕 v28.0 — Deep Scan Module (ENH-42)</h3>
+<p style='color:#cbd5e1;font-size:13px'>
+<b>ENH-42</b> New <b>🧭 Deep Scan</b> tab — full per-ticker intelligence module scanning all Watchlist tickers (or a custom comma-separated list) via SSI real-time data:<br>
+• <b>SSI real-time prices</b> (iboard-query) with daily % change and volume<br>
+• <b>Price forecasts</b> for 5d / 10d / 1M / 2M / 3M / 6M — Ensemble of LinReg (35%) + Holt Double-Exponential (35%) + Monte Carlo p50 (30%)<br>
+• <b>Intrinsic Value</b> — blended Sector P/E (45%) + implied DCF (35%) + Graham Number (20%), with upside % vs current price<br>
+• <b>Entry / TP1 / TP2 / TP3 (long-term) / Stop-Loss</b> prices with % from live price<br>
+• <b>Swing Risk Level</b> (Low / Medium / High / Very High) — scored from volatility, ATR, RSI, ADX, trend position, whale signals<br>
+• <b>Whale / Market-Maker detection</b> — Accumulating / Distributing / Neutral verdict from detect_doi_lai analysis with detailed signals<br>
+• <b>Swing + Investment recommendation</b> with full rationale bullets (bilingual VI/EN)<br>
+• <b>Summary table</b> (all tickers at a glance) + per-ticker expandable cards + CSV download<br>
+• <b>Filters</b>: BUY only, Accumulating only, Max risk level, Sort by Tech Score / Upside / Risk / Ticker
+</p>
+</div>
+"""
+    st.markdown(v28_html, unsafe_allow_html=True)
     v27_html = """
 <div style='background:#0f172a;border:1px solid #00ff88;border-radius:10px;padding:16px 20px;margin:8px 0'>
 <h3 style='color:#00ff88;margin:0 0 10px'>🆕 v27.0 — Custom Ticker Input + Technical Indicators Panel (ENH-40/41)</h3>
@@ -9757,6 +10686,26 @@ def render_changelog_tab():
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
 ## 📝 Application Change Log
+
+---
+
+### v28.0 — 2026-03-11 · DEEP SCAN MODULE
+
+**🟢 New Tab: 🧭 Deep Scan (ENH-42)**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-42 | Deep Scan Tab | Full per-ticker intelligence: SSI-RT price · Forecasts 5d/10d/1M/2M/3M/6M · Intrinsic value (P/E+DCF+Graham blended) · Entry/TP1/TP2/TP3/Stop · Swing risk scoring · Whale/MM detection · Buy/Sell rationale |
+
+**Key capabilities:**
+- SSI iboard-query real-time prices with day% and volume
+- Price forecast ensemble (LinReg 35% + Holt 35% + Monte Carlo 30%) for 6 horizons
+- Intrinsic value: Sector P/E (45%) + implied DCF (35%) + Graham Number (20%)
+- Swing risk score from 8 factors: volatility, ATR%, RSI zone, ADX, trend, whale signals, 52W position
+- Whale/MM detection via detect_doi_lai: ACCUMULATING / DISTRIBUTING / NEUTRAL verdict
+- Entry price near BB Lower + 20% ATR; TP1/TP2/TP3; Stop at 1.5× ATR below live
+- Filters: BUY only, Accumulating only, Max risk, Sort options
+- Summary table + expandable cards + CSV download
 
 ---
 
@@ -9983,6 +10932,10 @@ def main():
         st.session_state.trade_history = pd.DataFrame()
     if "forecast_log" not in st.session_state:
         st.session_state.forecast_log = pd.DataFrame()
+    if "ds_results" not in st.session_state:
+        st.session_state.ds_results = []
+    if "ds_errors" not in st.session_state:
+        st.session_state.ds_errors  = []
     if "audit_log" not in st.session_state:
         st.session_state.audit_log = []
         # Load from disk on first run
@@ -9994,7 +10947,7 @@ def main():
     # v24: Reorganized 14-tab menu for better UX
     # Group: [Trading] Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
     # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast
-    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15"]
+    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
@@ -10027,6 +10980,8 @@ def main():
         render_top_forecast_tab()
     with tabs[14]:
         render_audit_log_tab()
+    with tabs[15]:
+        render_deep_scan_tab()
 
 if __name__ == "__main__":
     main()

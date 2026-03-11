@@ -39,3 +39,16 @@
   DTA
   HAX
   ABS
+  MSN
+  BID
+  SHB
+  STB
+  CTG
+  VIX
+  VSC
+  VNM
+  VRE
+  PGC
+  OCB
+  SCR
+  TCH
