@@ -1,7 +1,26 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v25.0                         ║
+║   Captain Seventh QUANT TERMINAL  v27.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
+╠══════════════════════════════════════════════════════════════════╣
+║  CHANGELOG v26 → v27:                                           ║
+║  ENH-40: Market Scanner — Custom ticker input (comma-separated) ║
+║    with fallback to Watchlist file when left blank; info bar    ║
+║    shows source (Custom N tickers vs Watchlist N tickers).      ║
+║  ENH-41: Scanner expanders — full Technical Indicators panel:   ║
+║    SSI-RT live price, BB bands, RSI, MACD, ADX, Stochastic,    ║
+║    ATR, Volume/MA, SMA/EMA crossovers + Price Derivation table  ║
+║    showing exact formula used for each recommended price level. ║
+╠══════════════════════════════════════════════════════════════════╣
+║  CHANGELOG v25 → v26:                                           ║
+║  ENH-37: Market Scanner — added 💰 Giá Mua KN (Recommended     ║
+║    Buy) and 🎯 Giá Bán KN1/KN2 columns derived from live       ║
+║    SSI-RT / CafeF real-time price + ATR/BB analysis             ║
+║  ENH-38: Smart Signals — added Recommended Buy/Sell price       ║
+║    cards in all signal expanders; table now shows buy/sell      ║
+║    recommendation prices inline                                 ║
+║  ENH-39: compute_recommended_prices() — unified price           ║
+║    recommendation engine: live price → BB → ATR cascade        ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v20 → v21:                                           ║
 ║  FIX-19: RESOLVED Signal Divergence (Scanner BUY vs Profiler   ║
@@ -62,7 +81,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v25.0",
+    page_title="Captain Seventh QUANT TERMINAL v27.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -109,7 +128,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v25.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v27.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -229,7 +248,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v25.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v27.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -629,6 +648,83 @@ def get_sector(ticker: str) -> str:
     for sector, tickers in SECTOR_MAP.items():
         if ticker in tickers: return sector
     return "Khác"
+
+
+# ── ENH-37/38/39 (v26): Unified Recommended Price Engine ─────────
+def compute_recommended_prices(
+    close: float,
+    bbl: float,
+    bbu: float,
+    atr: float,
+    signal: str,
+    rt_price: float = 0.0,
+    floor_p: float = 0.0,
+    ceil_p: float = 0.0,
+) -> dict:
+    """
+    v26 ENH-39: Compute recommended Buy & Sell prices from live data.
+
+    Logic:
+      BUY  → Entry near BB Lower (confirmed bounce zone); TP1/TP2 = ATR targets
+      SELL → Sell near current price (at/above BB Upper); re-entry at BB Lower
+      WATCH→ Show potential entry at BB Lower; TP targets still valid
+
+    Data priority: rt_price (SSI-RT / CafeF-RT) → close (OHLCV)
+    All prices rounded to nearest 100 VND (HOSE standard).
+    """
+    _atr  = max(atr or 0, close * 0.015)   # floor ATR at 1.5% of price
+    live  = rt_price if rt_price and rt_price > 0 else close
+    _bbl  = bbl if bbl and bbl > 0 else live * 0.97
+    _bbu  = bbu if bbu and bbu > 0 else live * 1.03
+
+    if signal in ("MUA", "BUY"):
+        # Best entry: slightly above BB Lower as bounce confirmation
+        ideal   = _bbl + _atr * 0.30
+        # Don't recommend buying above the current live price
+        rec_buy = round_price_hose(min(live, ideal) if ideal < live * 1.01 else live)
+        if live <= _bbl:
+            # Price already below BB Lower — safest entry is live + small buffer
+            rec_buy = round_price_hose(live * 1.002)
+        # Enforce exchange floor (never below floor price)
+        if floor_p > 0:
+            rec_buy = max(rec_buy, floor_p)
+
+        rec_sell_tp1 = round_price_hose(live + 2.0 * _atr)
+        rec_sell_tp2 = round_price_hose(live + 3.5 * _atr)
+        rec_stop     = round_price_hose(max(live - 1.5 * _atr, live * 0.90))
+        if ceil_p > 0:
+            rec_sell_tp2 = min(rec_sell_tp2, ceil_p)
+
+    elif signal in ("BÁN", "SELL"):
+        # Already holding — exit zone: at/near current price (below BB Upper)
+        rec_buy      = round_price_hose(_bbl)          # re-entry if price pulls back
+        rec_sell_tp1 = round_price_hose(min(live, _bbu * 0.995))
+        rec_sell_tp2 = round_price_hose(_bbu)
+        rec_stop     = round_price_hose(live + 1.5 * _atr)  # protective stop for shorts
+
+    else:  # THEO DÕI / WATCH
+        rec_buy      = round_price_hose(_bbl)
+        rec_sell_tp1 = round_price_hose(live + 2.0 * _atr)
+        rec_sell_tp2 = round_price_hose(_bbu)
+        rec_stop     = round_price_hose(max(live - 1.5 * _atr, live * 0.90))
+
+    ref          = live if live > 0 else close
+    pct_upside   = round((rec_sell_tp1 - ref) / ref * 100, 1) if ref > 0 else 0.0
+    pct_risk     = round((ref - rec_stop) / ref * 100, 1)     if ref > 0 else 0.0
+    rr           = round(pct_upside / pct_risk, 2)            if pct_risk > 0 else 0.0
+
+    return {
+        "rec_buy":      rec_buy,
+        "rec_sell_tp1": rec_sell_tp1,
+        "rec_sell_tp2": rec_sell_tp2,
+        "rec_stop":     rec_stop,
+        "pct_upside":   pct_upside,
+        "pct_risk":     pct_risk,
+        "rr":           rr,
+        "live_price":   live,
+    }
+
+
 
 # ══════════════════════════════════════════════════════════════
 #  SIDEBAR — Language first, then controls
@@ -2412,12 +2508,25 @@ def scan_one_ticker(t: str, min_rows: int = 40):
     except Exception:
         pass
 
+    # ENH-39 (v26): Compute recommended buy/sell prices from live data
+    _rec = compute_recommended_prices(
+        close=c_v, bbl=bbl_v, bbu=bbu_v, atr=_atr,
+        signal=hanh_vi, rt_price=_rt_price,
+        floor_p=_floor_p, ceil_p=_ceil_p,
+    )
+
     row = {
         L["ticker"]:    t,
         "Ngành/Sector": get_sector(t),
         L["price"]:     round(_rt_price),      # FIX-30: live price, not OHLCV close
         L["signal"]:    signal_display,
         "⏱️ Chân trời" if lang=="VI" else "⏱️ Horizon": "Ngắn hạn T+2" if lang=="VI" else "Short-term T+2",
+        # ── ENH-37 (v26): Recommended Buy & Sell prices ──────────
+        "💰 Mua KN":    _rec["rec_buy"],
+        "🎯 Bán TP1":   _rec["rec_sell_tp1"],
+        "🎯 Bán TP2":   _rec["rec_sell_tp2"],
+        "🛑 Cắt Lỗ":   _rec["rec_stop"],
+        # ─────────────────────────────────────────────────────────
         "BB Buy":       round_price_hose(bbl_v),
         "BB Sell":      round_price_hose(bbu_v),
         "SMA5":         round(sma5_v)  if sma5_v  else "–",
@@ -2447,6 +2556,14 @@ def scan_one_ticker(t: str, min_rows: int = 40):
         "_sma30":       sma30_v, "_sma50": s50,     "_sma100": sma100_v, "_sma200": sma200_v,
         "_ema9":        ema9_v,  "_ema21": ema21_v, "_ema50": ema50_v, "_ema200": ema200_v,
         "_atr":         _atr,    "_stop":  _stop_loss, "_tp1": _tp1, "_tp2": _tp2,
+        # Internal recommended prices (used by Smart Signals cards)
+        "_rec_buy":       _rec["rec_buy"],
+        "_rec_sell_tp1":  _rec["rec_sell_tp1"],
+        "_rec_sell_tp2":  _rec["rec_sell_tp2"],
+        "_rec_stop":      _rec["rec_stop"],
+        "_pct_upside":    _rec["pct_upside"],
+        "_pct_risk":      _rec["pct_risk"],
+        "_rec_rr":        _rec["rr"],
     }
     # ENH-V25: Audit log
     try:
@@ -6140,20 +6257,350 @@ def render_model_portfolios_tab():
 """)
 
 
-def render_scanner_tab():
-    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
-    st.subheader("📡 " + ("Tín Hiệu Giao Dịch Tổng Hợp" if st.session_state.lang=="VI" else "Aggregated Trading Signals"))
-    render_market_insights_panel()
-    watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
-    st.info(f"Watchlist: **{len(watch_list)}** tickers  |  Pipeline: **DNSE** → SSI → CafeF  |  RSI Buy<{rsi_buy_thresh} / Sell>{rsi_sell_thresh}")
-    st.caption("⏱️ " + ("Tín hiệu Scanner là **kỹ thuật ngắn hạn T+2 (1–5 phiên)**. Khác với Hồ Sơ Cổ Phiếu (cơ bản dài hạn 6–24 tháng) — hai góc nhìn bổ sung nhau, không mâu thuẫn."
-                         if st.session_state.lang=="VI" else
-                         "Scanner signals are **short-term technical T+2 (1–5 sessions)**. Different from Stock Profiler (long-term fundamental 6–24 months) — complementary views, not contradictions."))
+def _render_scanner_tech_panel(row: dict, is_vi: bool) -> None:
+    """
+    ENH-41 (v27): Render Technical Indicators & Price Derivation panel
+    inside a scanner signal expander.  All data comes from the scan row dict.
+    """
+    # ── pull values ──────────────────────────────────────────────────────
+    live      = row.get(L["price"], 0) or 0
+    src_lbl   = row.get(L["source"], "–")
+    rsi_v     = row.get("RSI", 0) or 0
+    adx_v     = row.get("ADX", 0) or 0
+    stoch_v   = row.get("Stoch%K", 0)
+    vol_ratio = row.get("Vol/MA20", "–")
+    bb_buy    = row.get("BB Buy", 0) or 0
+    bb_sell   = row.get("BB Sell", 0) or 0
+    sma5      = row.get("SMA5", "–")
+    sma20     = row.get("SMA20", "–")
+    sma50     = row.get("SMA50", "–")
+    sma200    = row.get("SMA200", "–")
+    ema9      = row.get("EMA9", "–")
+    ema21     = row.get("EMA21", "–")
+    atr_v     = row.get("_atr", 0) or 0
+    _rb       = row.get("_rec_buy", 0) or 0
+    _rt1      = row.get("_rec_sell_tp1", 0) or 0
+    _rt2      = row.get("_rec_sell_tp2", 0) or 0
+    _rst      = row.get("_rec_stop", 0) or 0
+    ceil_v    = row.get("Trần" if is_vi else "Ceil", "–")
+    floor_v   = row.get("Sàn" if is_vi else "Floor", "–")
+    sig       = row.get(L["signal"], "WATCH")
+    confirms  = row.get("Confirms", 0)
+    nn_pct    = row.get("🌐 NN%", "–")
+    atr_pct   = round(atr_v / live * 100, 2) if live > 0 and atr_v > 0 else 0
 
-    if st.button(L["scan_btn"], type="primary"):
+    # ── RSI colour helper ────────────────────────────────────────────────
+    def rsi_color(r):
+        if r < 30: return "#00cc66"
+        if r < 40: return "#66cc88"
+        if r > 70: return "#ff4444"
+        if r > 60: return "#ffaa44"
+        return "#aaaaaa"
+
+    # ── ADX helper ───────────────────────────────────────────────────────
+    def adx_label(a):
+        if a >= 40: return ("Xu hướng rất mạnh 🔥" if is_vi else "Very Strong Trend 🔥")
+        if a >= 25: return ("Xu hướng rõ ràng 📈"   if is_vi else "Clear Trend 📈")
+        if a >= 15: return ("Tích lũy / yếu"         if is_vi else "Accumulation / Weak")
+        return ("Sideway / không xu hướng" if is_vi else "Sideways / No Trend")
+
+    # ── BB band position ────────────────────────────────────────────────
+    bb_range   = (bb_sell - bb_buy) if (bb_sell > bb_buy) else 1
+    bb_pos_pct = round((live - bb_buy) / bb_range * 100, 1) if bb_range > 0 else 50
+    if bb_pos_pct < 20:
+        bb_zone = ("⬇️ Vùng quá bán BB" if is_vi else "⬇️ BB Oversold Zone")
+        bb_col  = "#00cc66"
+    elif bb_pos_pct > 80:
+        bb_zone = ("⬆️ Vùng quá mua BB" if is_vi else "⬆️ BB Overbought Zone")
+        bb_col  = "#ff4444"
+    else:
+        bb_zone = ("↔️ Giữa dải BB" if is_vi else "↔️ Mid BB Band")
+        bb_col  = "#aaaaaa"
+
+    # ── EMA9 vs EMA21 crossover ──────────────────────────────────────────
+    ema_cross = "–"
+    try:
+        e9n = float(str(ema9).replace("–","") or 0)
+        e21n = float(str(ema21).replace("–","") or 0)
+        if e9n > 0 and e21n > 0:
+            ema_cross = ("🟢 EMA9 > EMA21 (Bullish)" if e9n > e21n
+                         else "🔴 EMA9 < EMA21 (Bearish)")
+    except Exception:
+        pass
+
+    # ── SMA50 vs SMA200 (Golden / Death Cross) ───────────────────────────
+    sma_cross = "–"
+    try:
+        s50n  = float(str(sma50).replace("–","")  or 0)
+        s200n = float(str(sma200).replace("–","") or 0)
+        if s50n > 0 and s200n > 0:
+            sma_cross = ("🥇 Golden Cross: SMA50 > SMA200" if s50n > s200n
+                         else "💀 Death Cross: SMA50 < SMA200")
+    except Exception:
+        pass
+
+    # ── Price vs SMA50 ────────────────────────────────────────────────────
+    price_vs_sma50 = "–"
+    try:
+        s50n = float(str(sma50).replace("–","") or 0)
+        if s50n > 0:
+            diff = round((live - s50n) / s50n * 100, 1)
+            price_vs_sma50 = (f"{'▲' if diff>=0 else '▼'} {abs(diff)}% {'trên' if is_vi else 'above'} SMA50"
+                              if diff >= 0 else
+                              f"▼ {abs(diff)}% {'dưới' if is_vi else 'below'} SMA50")
+    except Exception:
+        pass
+
+    # ── Price Derivation formulas ─────────────────────────────────────────
+    if sig in ("MUA", "BUY"):
+        deriv_buy  = f"BB Lower ({bb_buy:,.0f}) + 30% × ATR ({atr_v:,.0f}) = capped at Live ({live:,.0f})"
+        deriv_tp1  = f"Live ({live:,.0f}) + 2.0 × ATR ({atr_v:,.0f})"
+        deriv_tp2  = f"Live ({live:,.0f}) + 3.5 × ATR ({atr_v:,.0f})"
+        deriv_stop = f"Live ({live:,.0f}) − 1.5 × ATR ({atr_v:,.0f})  [floor: 90% of Live]"
+    elif sig in ("BÁN", "SELL"):
+        deriv_buy  = f"BB Lower ({bb_buy:,.0f}) — Re-entry if price pulls back"
+        deriv_tp1  = f"min(Live {live:,.0f}, BB Upper×0.995 {round(bb_sell*0.995):,.0f})"
+        deriv_tp2  = f"BB Upper ({bb_sell:,.0f})"
+        deriv_stop = f"Live ({live:,.0f}) + 1.5 × ATR ({atr_v:,.0f})  [protective short stop]"
+    else:
+        deriv_buy  = f"BB Lower ({bb_buy:,.0f}) — Potential entry on pullback"
+        deriv_tp1  = f"Live ({live:,.0f}) + 2.0 × ATR ({atr_v:,.0f})"
+        deriv_tp2  = f"BB Upper ({bb_sell:,.0f})"
+        deriv_stop = f"Live ({live:,.0f}) − 1.5 × ATR ({atr_v:,.0f})  [floor: 90% of Live]"
+
+    hdr_tc  = "📊 CHỈ SỐ KỸ THUẬT"   if is_vi else "📊 TECHNICAL INDICATORS"
+    hdr_pd  = "🧮 PHÂN TÍCH GIÁ KHUYẾN NGHỊ" if is_vi else "🧮 PRICE RECOMMENDATION DERIVATION"
+    lbl_src = "📡 Giá thực (SSI-RT)"   if is_vi else "📡 Live Price (SSI-RT)"
+    lbl_bb  = "📉 Dải Bollinger"       if is_vi else "📉 Bollinger Bands"
+    lbl_rsi = "💹 RSI (14)"
+    lbl_adx = "📐 ADX (Xu hướng)"      if is_vi else "📐 ADX (Trend Strength)"
+    lbl_stc = "🎯 Stochastic %K"
+    lbl_vol = "📦 Volume / MA20"
+    lbl_ema = "⚡ EMA Cross"
+    lbl_sma = "📊 SMA Cross (GT/TC)"   if is_vi else "📊 SMA Cross (Golden/Death)"
+    lbl_atr = "📏 ATR (14) — Cơ sở tính giá" if is_vi else "📏 ATR (14) — Price Calc Basis"
+    lbl_nn  = "🌐 Tỷ lệ NĐTNN"         if is_vi else "🌐 Foreign Room"
+    lbl_cf  = "✅ Xác nhận tín hiệu"   if is_vi else "✅ Signal Confirmations"
+    lbl_lim = "🚧 Trần / Sàn sàn GD"  if is_vi else "🚧 Exchange Ceiling / Floor"
+
+    st.markdown(f"**{hdr_tc}**")
+    col_a, col_b, col_c = st.columns(3)
+
+    with col_a:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_src}</div>'
+            f'<div style="color:#7eb8ff;font-size:15px;font-weight:bold">{live:,.0f} VNĐ</div>'
+            f'<div style="color:#666;font-size:11px">source: {src_lbl}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_rsi}</div>'
+            f'<div style="color:{rsi_color(rsi_v)};font-size:15px;font-weight:bold">{rsi_v}</div>'
+            f'<div style="color:#666;font-size:11px">'
+            f'{"Quá bán 🟢" if rsi_v<35 else ("Quá mua 🔴" if rsi_v>65 else "Trung tính") if is_vi else ("Oversold 🟢" if rsi_v<35 else ("Overbought 🔴" if rsi_v>65 else "Neutral"))}'
+            f'</div></div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_stc}</div>'
+            f'<div style="color:#bbaaff;font-size:15px;font-weight:bold">{stoch_v}</div>'
+            f'<div style="color:#666;font-size:11px">'
+            f'{"<20 = quá bán | >80 = quá mua" if is_vi else "<20 = oversold | >80 = overbought"}'
+            f'</div></div>',
+            unsafe_allow_html=True)
+
+    with col_b:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_bb}</div>'
+            f'<div style="color:{bb_col};font-size:13px;font-weight:bold">{bb_zone}</div>'
+            f'<div style="color:#666;font-size:11px">'
+            f'Lower: {bb_buy:,.0f}  |  Upper: {bb_sell:,.0f}  |  Pos: {bb_pos_pct}%'
+            f'</div></div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_adx}</div>'
+            f'<div style="color:#ffcc44;font-size:15px;font-weight:bold">{adx_v}</div>'
+            f'<div style="color:#666;font-size:11px">{adx_label(float(adx_v) if adx_v and str(adx_v)!="–" else 0)}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_vol}</div>'
+            f'<div style="color:#66ccff;font-size:15px;font-weight:bold">{vol_ratio}</div>'
+            f'<div style="color:#666;font-size:11px">'
+            f'{">1.5× = dòng tiền mạnh" if is_vi else ">1.5× = strong money flow"}'
+            f'</div></div>',
+            unsafe_allow_html=True)
+
+    with col_c:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_atr}</div>'
+            f'<div style="color:#ffaa55;font-size:15px;font-weight:bold">{atr_v:,.0f} VNĐ</div>'
+            f'<div style="color:#666;font-size:11px">≈ {atr_pct}% {"của giá" if is_vi else "of price"}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_ema}</div>'
+            f'<div style="color:#cccccc;font-size:12px;font-weight:bold">{ema_cross}</div>'
+            f'<div style="color:#666;font-size:11px">EMA9: {ema9}  |  EMA21: {ema21}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:10px 12px;margin-bottom:8px">'
+            f'<div style="color:#888;font-size:11px">{lbl_sma}</div>'
+            f'<div style="color:#cccccc;font-size:12px;font-weight:bold">{sma_cross}</div>'
+            f'<div style="color:#666;font-size:11px">'
+            f'SMA5:{sma5} · SMA20:{sma20} · SMA50:{sma50} · SMA200:{sma200}</div>'
+            f'</div>',
+            unsafe_allow_html=True)
+
+    # ── Extra meta row ────────────────────────────────────────────────────
+    meta_a, meta_b, meta_c = st.columns(3)
+    with meta_a:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:8px 12px;margin-bottom:6px">'
+            f'<div style="color:#888;font-size:11px">{lbl_cf}</div>'
+            f'<div style="color:#aaffaa;font-size:14px;font-weight:bold">{confirms} / 9</div>'
+            f'</div>', unsafe_allow_html=True)
+    with meta_b:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:8px 12px;margin-bottom:6px">'
+            f'<div style="color:#888;font-size:11px">{lbl_nn}</div>'
+            f'<div style="color:#ccaaff;font-size:14px;font-weight:bold">{nn_pct}</div>'
+            f'</div>', unsafe_allow_html=True)
+    with meta_c:
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:8px 12px;margin-bottom:6px">'
+            f'<div style="color:#888;font-size:11px">{lbl_lim}</div>'
+            f'<div style="color:#ffccaa;font-size:12px">'
+            f'⬆️ {ceil_v:,.0f}  |  ⬇️ {floor_v:,.0f}'
+            f'</div></div>',
+            unsafe_allow_html=True) if (isinstance(ceil_v, (int,float)) and ceil_v > 0) else \
+        st.markdown(
+            f'<div style="background:#111827;border-radius:8px;padding:8px 12px;margin-bottom:6px">'
+            f'<div style="color:#888;font-size:11px">{lbl_lim}</div>'
+            f'<div style="color:#666;font-size:12px">{ceil_v} / {floor_v}</div>'
+            f'</div>', unsafe_allow_html=True)
+
+    # ── Price Derivation Table ────────────────────────────────────────────
+    st.markdown(f"**{hdr_pd}**")
+    lbl_entry  = "💰 Giá Mua KN"          if is_vi else "💰 Recommended Buy"
+    lbl_tp1    = "🎯 Chốt lãi TP1"        if is_vi else "🎯 Take Profit TP1"
+    lbl_tp2    = "🎯 Chốt lãi TP2"        if is_vi else "🎯 Take Profit TP2"
+    lbl_sl     = "🛑 Cắt lỗ Stop"         if is_vi else "🛑 Stop Loss"
+    lbl_level  = "Mức giá (VNĐ)"          if is_vi else "Price Level (VND)"
+    lbl_basis  = "Công thức tính"          if is_vi else "Formula"
+    lbl_pct    = "% từ Giá RT"             if is_vi else "% from Live"
+    rows_deriv = [
+        (lbl_entry, f"{_rb:,.0f}",  deriv_buy,  f"{round((_rb-live)/live*100,1):+.1f}%" if live>0 else "–", "#00cc66"),
+        (lbl_tp1,   f"{_rt1:,.0f}", deriv_tp1,  f"{round((_rt1-live)/live*100,1):+.1f}%" if live>0 else "–", "#ffcc44"),
+        (lbl_tp2,   f"{_rt2:,.0f}", deriv_tp2,  f"{round((_rt2-live)/live*100,1):+.1f}%" if live>0 else "–", "#ffaa22"),
+        (lbl_sl,    f"{_rst:,.0f}", deriv_stop, f"{round((_rst-live)/live*100,1):+.1f}%" if live>0 else "–", "#ff6644"),
+    ]
+    tbl_html = (
+        f'<table style="width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px">'
+        f'<thead><tr style="background:#1e2235;color:#aaa">'
+        f'<th style="padding:6px 10px;text-align:left">{lbl_level[:6] if is_vi else "Level"}</th>'
+        f'<th style="padding:6px 10px;text-align:right">{lbl_level}</th>'
+        f'<th style="padding:6px 10px;text-align:right">{lbl_pct}</th>'
+        f'<th style="padding:6px 10px;text-align:left">{lbl_basis}</th>'
+        f'</tr></thead><tbody>'
+    )
+    for lbl, px, formula, pct, col in rows_deriv:
+        tbl_html += (
+            f'<tr style="border-bottom:1px solid #2a2f45">'
+            f'<td style="padding:5px 10px;color:{col};font-weight:bold">{lbl}</td>'
+            f'<td style="padding:5px 10px;text-align:right;color:{col};font-weight:bold">{px}</td>'
+            f'<td style="padding:5px 10px;text-align:right;color:#ccc">{pct}</td>'
+            f'<td style="padding:5px 10px;color:#888;font-family:monospace">{formula}</td>'
+            f'</tr>'
+        )
+    tbl_html += (
+        f'<tr style="background:#0e1117;color:#666;font-size:11px">'
+        f'<td colspan="4" style="padding:5px 10px">'
+        f'{'ATR = True Range bình quân 14 phiên; BB = Bollinger Band 20 chu kỳ ±2σ; Giá RT = SSI iboard real-time' if is_vi else 'ATR = 14-period Average True Range; BB = Bollinger Bands 20-period ±2σ; Live = SSI iboard real-time price'}'
+        f'</td></tr></tbody></table>'
+    )
+    st.markdown(tbl_html, unsafe_allow_html=True)
+    # ── price vs SMA50 note ──────────────────────────────────────────────
+    if price_vs_sma50 != "–":
+        st.caption(f"📌 {price_vs_sma50}")
+
+
+def render_scanner_tab():
+    """
+    ENH-40 (v27): Custom ticker input (comma-separated). Blank = scan full watchlist.
+    ENH-41 (v27): Full Technical Indicators + Price Derivation panel per signal.
+    """
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    is_vi = st.session_state.lang == "VI"
+    st.subheader("📡 " + ("Tín Hiệu Giao Dịch Tổng Hợp" if is_vi else "Aggregated Trading Signals"))
+    render_market_insights_panel()
+
+    # ── ENH-40: Custom ticker input ──────────────────────────────────────
+    watch_list = load_watchlist_from_file(WATCHLIST_FILE_PATH)
+    st.markdown("---")
+    _inp_label = ("🎯 Nhập mã cổ phiếu (cách nhau bằng dấu phẩy) — Để trống để quét toàn bộ Watchlist"
+                  if is_vi else
+                  "🎯 Enter ticker symbols (comma-separated) — Leave blank to scan full Watchlist")
+    _inp_placeholder = ("VD: FPT, VCB, SHB, MWG — hoặc để trống" if is_vi
+                        else "e.g. FPT, VCB, SHB, MWG — or leave blank for watchlist")
+    custom_input = st.text_input(
+        _inp_label,
+        value="",
+        placeholder=_inp_placeholder,
+        key="scanner_custom_tickers",
+        help=("Nhập các mã cổ phiếu HOSE/HNX/UPCOM, cách nhau bằng dấu phẩy. "
+              "Để trống = quét tất cả mã trong Watchlist hiện tại."
+              if is_vi else
+              "Enter HOSE/HNX/UPCOM ticker symbols separated by commas. "
+              "Leave blank to scan all tickers from the current Watchlist file."),
+    )
+
+    # Parse custom input → deduplicated uppercase list
+    if custom_input and custom_input.strip():
+        raw_tokens = [t.strip().upper() for t in custom_input.replace(";",",").split(",")]
+        scan_list  = list(dict.fromkeys(t for t in raw_tokens if t and t.isalpha()))
+        _src_label = (f"Custom: **{len(scan_list)}** mã" if is_vi
+                      else f"Custom: **{len(scan_list)}** tickers")
+        if scan_list:
+            st.info(
+                f"{'🎯 Quét theo danh sách tuỳ chỉnh' if is_vi else '🎯 Custom ticker scan'}  |  "
+                f"{_src_label}  |  `{'  ·  '.join(scan_list)}`  |  "
+                f"Pipeline: **SSI-RT** → DNSE → CafeF  |  "
+                f"RSI Buy<{rsi_buy_thresh} / Sell>{rsi_sell_thresh}"
+            )
+        else:
+            st.warning("⚠️ " + ("Không nhận ra mã nào — quét Watchlist mặc định." if is_vi
+                                 else "No valid tickers recognised — falling back to Watchlist."))
+            scan_list = watch_list
+    else:
+        scan_list  = watch_list
+        st.info(
+            f"{'📋 Watchlist' if is_vi else '📋 Watchlist'}: **{len(scan_list)}** tickers  |  "
+            f"Pipeline: **SSI-RT** → DNSE → CafeF  |  "
+            f"RSI Buy<{rsi_buy_thresh} / Sell>{rsi_sell_thresh}  |  "
+            f"{'Nhập mã ở trên để quét nhanh mã tuỳ chọn ↑' if is_vi else 'Type tickers above for a custom scan ↑'}"
+        )
+
+    st.caption("⏱️ " + ("Tín hiệu Scanner là **kỹ thuật ngắn hạn T+2 (1–5 phiên)**. "
+                         "Giá thực-time từ SSI iboard. Khác với Hồ Sơ Cổ Phiếu (cơ bản dài hạn 6–24 tháng)."
+                         if is_vi else
+                         "Scanner signals are **short-term technical T+2 (1–5 sessions)**. "
+                         "Real-time prices from SSI iboard. Different from Stock Profiler (long-term fundamental 6–24 months)."))
+
+    # ── Scan button ───────────────────────────────────────────────────────
+    _btn_label = (f"🔄 Quét {len(scan_list)} mã" if is_vi else f"🔄 Scan {len(scan_list)} Tickers")
+    if st.button(_btn_label, type="primary"):
         scanner_data = []; st.session_state.error_logs = []
         pb = st.progress(0, "Scanning...")
-        for i, t in enumerate(watch_list):
+        for i, t in enumerate(scan_list):
             try:
                 row, src, err = scan_one_ticker(t)
                 if row:
@@ -6163,7 +6610,7 @@ def render_scanner_tab():
             except Exception as e:
                 msg = f"Scanner {t}: {e}"; st.session_state.error_logs.append(msg); _log.error(msg)
             finally:
-                pb.progress((i+1)/len(watch_list), text=f"Scanning: {t}")
+                pb.progress((i+1)/len(scan_list), text=f"Scanning: {t}")
 
         st.session_state.df_scan = pd.DataFrame(scanner_data)
         if not st.session_state.df_scan.empty:
@@ -6180,14 +6627,17 @@ def render_scanner_tab():
                 rec["scan_time"] = scan_time
                 hist.insert(0, rec)
                 with open(fp,"w",encoding="utf-8") as f: json.dump(hist[:100],f,ensure_ascii=False,indent=2)
-            st.success(f"✅ Completed {len(scanner_data)} tickers at {scan_time}")
+            st.success(f"✅ " + (f"Hoàn tất {len(scanner_data)} mã lúc {scan_time}" if is_vi
+                                  else f"Completed {len(scanner_data)} tickers at {scan_time}"))
         else:
-            st.warning("⚠️ No results. Check connection or disable filters.")
+            st.warning("⚠️ " + ("Không có kết quả. Kiểm tra kết nối hoặc tắt bộ lọc."
+                                  if is_vi else "No results. Check connection or disable filters."))
 
         if st.session_state.error_logs:
             with st.expander(f"⚠️ {len(st.session_state.error_logs)} errors"):
                 for e in st.session_state.error_logs: st.caption(e)
 
+    # ── Results table ─────────────────────────────────────────────────────
     if not st.session_state.df_scan.empty:
         sig_col = L["signal"]
         dc = [c for c in st.session_state.df_scan.columns if not c.startswith("_")]
@@ -6198,18 +6648,78 @@ def render_scanner_tab():
         ]
         if not sig_rows.empty:
             st.divider()
-            st.subheader("📋 " + ("Lý Giải & Mức Giá Chi Tiết" if st.session_state.lang=="VI" else "Detailed Signals & Price Levels"))
+            st.subheader("📋 " + ("Lý Giải & Mức Giá Chi Tiết" if is_vi else "Detailed Signals & Price Levels"))
             for _, row in sig_rows.iterrows():
-                label = (f"{row[sig_col]} — {row[L['ticker']]} | "
-                         f"Price:{row[L['price']]:,} | RSI:{row['RSI']} | "
-                         f"Score:{row[L['score']]} | {row.get(L['source'],'–')}")
+                _sig  = row[sig_col]
+                _tkr  = row[L['ticker']]
+                _px   = row[L['price']]
+                _rsi  = row['RSI']
+                _sc   = row[L['score']]
+                _src  = row.get(L['source'], '–')
+                _rb   = row.get("_rec_buy", 0)
+                _rt1  = row.get("_rec_sell_tp1", 0)
+                _rt2  = row.get("_rec_sell_tp2", 0)
+                _rst  = row.get("_rec_stop", 0)
+                _up   = row.get("_pct_upside", 0)
+                _risk = row.get("_pct_risk", 0)
+                _rr   = row.get("_rec_rr", 0)
+                is_buy = _sig in ("MUA", "BUY")
+                _color = "#00cc44" if is_buy else "#ff4444"
+                label = (f"{_sig} — {_tkr} | "
+                         f"Price:{_px:,} | RSI:{_rsi} | "
+                         f"Score:{_sc} | {_src}")
                 with st.expander(label):
+                    # ── ENH-37 (v26): Prominent Recommended Price Card ────
+                    if is_vi:
+                        _buy_lbl  = "💰 GIÁ MUA KHUYẾN NGHỊ"
+                        _sell_lbl = "🎯 GIÁ BÁN KHUYẾN NGHỊ"
+                        _stop_lbl = "🛑 GIÁ CẮT LỖ"
+                        _up_lbl   = "📈 Tiềm năng tăng"
+                        _risk_lbl = "⚠️ Rủi ro"
+                        _rr_lbl   = "⚖️ R:R"
+                    else:
+                        _buy_lbl  = "💰 RECOMMENDED BUY PRICE"
+                        _sell_lbl = "🎯 RECOMMENDED SELL PRICE"
+                        _stop_lbl = "🛑 STOP LOSS PRICE"
+                        _up_lbl   = "📈 Upside"
+                        _risk_lbl = "⚠️ Risk"
+                        _rr_lbl   = "⚖️ R:R"
+                    st.markdown(
+                        f'<div style="background:{"#002200" if is_buy else "#220000"};'
+                        f'border:2px solid {_color};border-radius:10px;'
+                        f'padding:12px 16px;margin-bottom:10px">'
+                        f'<div style="display:flex;gap:24px;flex-wrap:wrap;align-items:center">'
+                        f'<div><div style="color:#888;font-size:11px">{_buy_lbl}</div>'
+                        f'<div style="color:#00ff88;font-size:22px;font-weight:bold">'
+                        f'{_rb:,.0f} VNĐ</div></div>'
+                        f'<div><div style="color:#888;font-size:11px">{_sell_lbl} (TP1 / TP2)</div>'
+                        f'<div style="color:#ffcc44;font-size:18px;font-weight:bold">'
+                        f'{_rt1:,.0f} <span style="color:#888;font-size:13px">→</span> '
+                        f'{_rt2:,.0f}</div></div>'
+                        f'<div><div style="color:#888;font-size:11px">{_stop_lbl}</div>'
+                        f'<div style="color:#ff6644;font-size:18px;font-weight:bold">'
+                        f'{_rst:,.0f}</div></div>'
+                        f'<div style="border-left:1px solid #444;padding-left:16px">'
+                        f'<div style="color:#888;font-size:11px">{_up_lbl} / {_risk_lbl} / {_rr_lbl}</div>'
+                        f'<div style="color:#ccc;font-size:13px">'
+                        f'<span style="color:#00cc66">+{_up}%</span> / '
+                        f'<span style="color:#ff6644">-{_risk}%</span> / '
+                        f'<span style="color:#ffcc44">{_rr}:1</span></div></div>'
+                        f'</div></div>',
+                        unsafe_allow_html=True)
+
+                    # ── ENH-41 (v27): Technical Indicators + Derivation ───
+                    st.divider()
+                    _render_scanner_tech_panel(row.to_dict(), is_vi)
+
+                    # ── Existing signal explanation columns ───────────────
+                    st.divider()
                     c1, c2 = st.columns(2)
                     with c1: st.markdown(row.get("_ly_giai","–"))
                     with c2: st.markdown(row.get("_price_expl","–"))
 
     # ENH-28: Sector Heatmap at bottom of Scanner tab
-    with st.expander("🗺️ " + ("Bản đồ Luân chuyển Ngành (Sector Rotation)" if st.session_state.lang=="VI"
+    with st.expander("🗺️ " + ("Bản đồ Luân chuyển Ngành (Sector Rotation)" if is_vi
                                 else "Sector Rotation Heatmap"), expanded=False):
         render_sector_heatmap()
 
@@ -6411,24 +6921,24 @@ def render_smart_signals_tab():
             display_rows.append({
                 "Mã" if is_vi else "Ticker":   row.get(L["ticker"], ""),
                 "Ngành" if is_vi else "Sector": row.get("Ngành/Sector", "–"),
-                "Giá" if is_vi else "Price":   row.get(L["price"], 0),
+                "Giá RT" if is_vi else "Live Price":   row.get(L["price"], 0),
                 "Tín hiệu" if is_vi else "Signal": row.get(L["signal"], "–"),
+                "💰 Mua KN" if is_vi else "💰 Rec Buy": row.get("_rec_buy", 0),
+                "🎯 Bán TP1" if is_vi else "🎯 Sell TP1": row.get("_rec_sell_tp1", 0),
+                "🎯 Bán TP2" if is_vi else "🎯 Sell TP2": row.get("_rec_sell_tp2", 0),
+                "🛑 SL":    row.get("_rec_stop", 0),
+                "📈 Upside%": f"+{row.get('_pct_upside', 0):.1f}%",
                 "Score":    row.get(L["score"], 0),
                 "RSI":      row.get("RSI", "–"),
                 "ADX":      row.get("ADX", "–"),
                 "Vol/MA20": row.get("Vol/MA20", "–"),
-                "SL":       row.get("_stop", 0),
-                "TP1":      row.get("_tp1", 0),
-                "TP2":      row.get("_tp2", 0),
-                "R:R":      row.get("R:R1", "–"),
+                "R:R":      f"{row.get('_rec_rr', 0):.2f}:1",
                 "🌐 NN%":   row.get("🌐 NN%", "–"),
-                "Trần" if is_vi else "Ceil": row.get("Trần" if is_vi else "Ceil", "–"),
-                "Sàn" if is_vi else "Floor": row.get("Sàn" if is_vi else "Floor", "–"),
                 "Nguồn" if is_vi else "Src":  row.get(L["source"], "–"),
             })
         df_disp = pd.DataFrame(display_rows)
-        sig_col = "Tín hiệu" if is_vi else "Signal"
-        show_df(df_disp.style.map(style_action, subset=[sig_col]))
+        sig_col_d = "Tín hiệu" if is_vi else "Signal"
+        show_df(df_disp.style.map(style_action, subset=[sig_col_d]))
 
         st.divider()
         if is_vi:
@@ -6442,12 +6952,54 @@ def render_smart_signals_tab():
             rsi_v  = row.get("RSI", "–")
             sig_v  = row.get(L["signal"], "")
             sector = row.get("Ngành/Sector", "–")
+            _rb    = row.get("_rec_buy", 0)
+            _rt1   = row.get("_rec_sell_tp1", 0)
+            _rt2   = row.get("_rec_sell_tp2", 0)
+            _rst   = row.get("_rec_stop", 0)
+            _up    = row.get("_pct_upside", 0)
+            _risk  = row.get("_pct_risk", 0)
+            _rr    = row.get("_rec_rr", 0)
+            _px    = row.get(L["price"], 0)
             color  = "#00cc66" if sig_type == "BUY" else "#ff4b4b"
+            is_buy = sig_type == "BUY"
             label  = (
                 f"{'🟢' if sig_type=='BUY' else '🔴'} **#{rank} {tkr}** — "
                 f"Score: **{score}** | RSI: {rsi_v} | {sector} | {row.get(L['source'],'–')}"
             )
             with st.expander(label):
+                # ── ENH-38 (v26): Recommended Price Card at top ──────────
+                if is_vi:
+                    _buy_lbl  = "💰 GIÁ MUA KHUYẾN NGHỊ"
+                    _sell_lbl = "🎯 GIÁ BÁN (TP1 → TP2)"
+                    _stop_lbl = "🛑 CẮT LỖ"
+                else:
+                    _buy_lbl  = "💰 RECOMMENDED BUY"
+                    _sell_lbl = "🎯 SELL TARGETS (TP1 → TP2)"
+                    _stop_lbl = "🛑 STOP LOSS"
+
+                st.markdown(
+                    f'<div style="background:{"#001a00" if is_buy else "#1a0000"};'
+                    f'border:2px solid {color};border-radius:10px;'
+                    f'padding:12px 18px;margin-bottom:12px">'
+                    f'<div style="color:{color};font-size:13px;font-weight:bold;margin-bottom:8px">'
+                    f'{"🟢 LỆNH MUA — " if is_buy else "🔴 LỆNH BÁN — "}{tkr} @ {_px:,.0f} VNĐ (RT)</div>'
+                    f'<div style="display:flex;gap:20px;flex-wrap:wrap">'
+                    f'<div><div style="color:#888;font-size:10px">{_buy_lbl}</div>'
+                    f'<div style="color:#00ff88;font-size:20px;font-weight:bold">{_rb:,.0f}</div></div>'
+                    f'<div><div style="color:#888;font-size:10px">{_sell_lbl}</div>'
+                    f'<div style="color:#ffcc44;font-size:18px;font-weight:bold">'
+                    f'{_rt1:,.0f} <span style="color:#888">→</span> {_rt2:,.0f}</div></div>'
+                    f'<div><div style="color:#888;font-size:10px">{_stop_lbl}</div>'
+                    f'<div style="color:#ff6644;font-size:18px;font-weight:bold">{_rst:,.0f}</div></div>'
+                    f'<div style="border-left:1px solid #333;padding-left:14px">'
+                    f'<div style="color:#888;font-size:10px">📈+{_up}% / ⚠️-{_risk}% / ⚖️R:R</div>'
+                    f'<div style="color:#{"00cc66" if _rr >= 2 else "ffcc44" if _rr >= 1.5 else "ff6644"};'
+                    f'font-size:16px;font-weight:bold">{_rr:.2f}:1 '
+                    f'{"✅" if _rr >= 2 else "⚠️" if _rr >= 1.5 else "❌"}</div></div>'
+                    f'</div></div>',
+                    unsafe_allow_html=True)
+
+                # ── Existing signal explanation ───────────────────────────
                 c1, c2 = st.columns(2)
                 with c1:
                     st.markdown(f"<div style='border-left:3px solid {color};padding-left:8px'>", unsafe_allow_html=True)
@@ -9166,6 +9718,27 @@ def render_changelog_tab():
     # ENH-V25: Inject v25 at top
     is_vi = st.session_state.lang == "VI"
     st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+    v27_html = """
+<div style='background:#0f172a;border:1px solid #00ff88;border-radius:10px;padding:16px 20px;margin:8px 0'>
+<h3 style='color:#00ff88;margin:0 0 10px'>🆕 v27.0 — Custom Ticker Input + Technical Indicators Panel (ENH-40/41)</h3>
+<p style='color:#cbd5e1;font-size:13px'>
+<b>ENH-40</b> Market Scanner — Custom ticker input (comma-separated) above the scan button. Leave blank to scan the full Watchlist. Invalid entries are silently filtered. Info bar shows Custom N tickers vs Watchlist N tickers, always with SSI-RT pipeline note.<br>
+<b>ENH-41</b> Scanner Expanders — Full Technical Indicators panel inside every BUY/SELL signal expander: SSI-RT live price, Bollinger Band position, RSI colour-coded, ADX trend strength, Stochastic %K, Volume/MA20, EMA9/21 crossover, SMA50/200 Golden/Death Cross, ATR as price derivation basis. Price Derivation table shows the exact formula used to calculate each recommended price level (Buy, TP1, TP2, Stop).
+</p>
+</div>
+"""
+    st.markdown(v27_html, unsafe_allow_html=True)
+    v26_html = """
+<div style='background:#0f172a;border:1px solid #00cc66;border-radius:10px;padding:16px 20px;margin:8px 0'>
+<h3 style='color:#00cc66;margin:0 0 10px'>🆕 v26.0 — Recommended Buy & Sell Prices (ENH-37/38/39)</h3>
+<p style='color:#cbd5e1;font-size:13px'>
+<b>ENH-37</b> Market Scanner — added <b>💰 Mua KN</b> (Recommended Buy) and <b>🎯 Bán TP1/TP2</b> columns derived from real-time SSI/CafeF price + ATR/BB analysis. Visible at a glance in the scan table.<br>
+<b>ENH-38</b> Smart Signals — prominent Recommended Price Card in every BUY/SELL signal expander, showing Entry / TP1 / TP2 / Stop-Loss / Upside% / Risk% / R:R ratio with colour coding.<br>
+<b>ENH-39</b> <code>compute_recommended_prices()</code> — unified price recommendation engine: Live RT price → BB Lower/Upper → ATR cascade. Handles BUY, SELL, and WATCH signals distinctly. Enforces exchange floor/ceiling limits.
+</p>
+</div>
+"""
+    st.markdown(v26_html, unsafe_allow_html=True)
     v25_html = """
 <div style='background:#0f172a;border:1px solid #4e9af1;border-radius:10px;padding:16px 20px;margin:8px 0'>
 <h3 style='color:#4e9af1;margin:0 0 10px'>🚀 v25.0 — Insights, Audit & Explanations</h3>
@@ -9184,6 +9757,39 @@ def render_changelog_tab():
     st.header(f"📝 {L['tab11']}")
     st.markdown("""
 ## 📝 Application Change Log
+
+---
+
+### v27.0 — 2026-03-11 · CUSTOM TICKER INPUT + TECHNICAL INDICATORS PANEL
+
+**🟢 New Features:**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-40 | Custom Ticker Input | Comma-separated ticker box above scan button in Market Scanner. Blank = full Watchlist scan. Auto-deduplicates, uppercases, filters non-alpha. Info bar shows source (Custom vs Watchlist) + SSI-RT pipeline label. |
+| ENH-41 | Technical Indicators Panel | Full per-ticker tech panel inside every BUY/SELL signal expander: SSI-RT live price, BB position%, RSI (colour-coded), ADX trend label, Stochastic %K, Volume/MA20, EMA9/21 crossover, SMA50/200 Golden/Death Cross, ATR basis. Price Derivation table shows exact formula for each price level. |
+
+**📋 Notes:**
+- Custom scan respects all sidebar filters (trend, liquidity, RSI thresholds)
+- Price derivation table uses actual ATR + BB values from the scan, showing VND amounts
+- Scan button dynamically shows count: "🔄 Scan N Tickers"
+
+---
+
+### v26.0 — 2026-03-10 · RECOMMENDED BUY & SELL PRICES
+
+**🟢 New Features:**
+
+| ID | Feature | Details |
+|----|---------|---------|
+| ENH-37 | Market Scanner Rec Prices | 💰 Mua KN + 🎯 Bán TP1/TP2 + 🛑 Cắt Lỗ columns in scan table; real-time price card in BUY/SELL expanders |
+| ENH-38 | Smart Signals Price Cards | Colour-coded entry/exit card in every signal expander: Entry → TP1 → TP2 + R:R badge |
+| ENH-39 | compute_recommended_prices() | Unified engine: live RT price (SSI→CafeF) → BB Lower/Upper → ATR. BUY/SELL/WATCH handled distinctly. Exchange floor/ceiling enforced. |
+
+**📋 Audit Trail:**
+- All recommended prices derived from live SSI-iboard / CafeF PriceRealTimeHeader data
+- Fallback chain: SSI-RT → CafeF-RT → OHLCV close (same as FIX-30 price pipeline)
+- R:R ≥ 2:1 shown in green ✅, 1.5–2 in yellow ⚠️, < 1.5 in red ❌
 
 ---
 
