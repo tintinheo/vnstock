@@ -10117,8 +10117,11 @@ def deep_scan_one_ticker(t: str) -> dict | None:
         max_horizon = 126  # 6 months trading days
         ensemble    = _ds_forecast_ensemble(closes, max_horizon)
         horizons    = {
-            5:   round_price_hose(ensemble[4]),
-            10:  round_price_hose(ensemble[9]),
+            1:   round_price_hose(ensemble[0]),    # 1 day
+            2:   round_price_hose(ensemble[1]),    # 2 days
+            3:   round_price_hose(ensemble[2]),    # 3 days
+            5:   round_price_hose(ensemble[4]),    # 1 week
+            10:  round_price_hose(ensemble[9]),    # 2 weeks
             21:  round_price_hose(ensemble[20]),   # ~1 month
             42:  round_price_hose(ensemble[41]),   # ~2 months
             63:  round_price_hose(ensemble[62]),   # ~3 months
@@ -10175,13 +10178,17 @@ def deep_scan_one_ticker(t: str) -> dict | None:
             "ret3m":        round(tech.get("ret3m", 0) * 100, 2),
             "ret6m":        round(tech.get("ret6m", 0) * 100, 2),
             "volatility":   round(tech.get("volatility", 0.25) * 100, 1),
-            # ── Forecasts
+            # ── Forecasts (% change only — prices stored in fc dict)
             "fc":           horizons,
-            "fc_5d_pct":    round((horizons[5]  - live) / live * 100, 1) if live > 0 else 0,
-            "fc_10d_pct":   round((horizons[10] - live) / live * 100, 1) if live > 0 else 0,
-            "fc_1m_pct":    round((horizons[21] - live) / live * 100, 1) if live > 0 else 0,
-            "fc_3m_pct":    round((horizons[63] - live) / live * 100, 1) if live > 0 else 0,
-            "fc_6m_pct":    round((horizons[126]- live) / live * 100, 1) if live > 0 else 0,
+            "fc_1d_pct":    round((horizons[1]  - live) / live * 100, 2) if live > 0 else 0,
+            "fc_2d_pct":    round((horizons[2]  - live) / live * 100, 2) if live > 0 else 0,
+            "fc_3d_pct":    round((horizons[3]  - live) / live * 100, 2) if live > 0 else 0,
+            "fc_5d_pct":    round((horizons[5]  - live) / live * 100, 2) if live > 0 else 0,
+            "fc_10d_pct":   round((horizons[10] - live) / live * 100, 2) if live > 0 else 0,
+            "fc_1m_pct":    round((horizons[21] - live) / live * 100, 2) if live > 0 else 0,
+            "fc_2m_pct":    round((horizons[42] - live) / live * 100, 2) if live > 0 else 0,
+            "fc_3m_pct":    round((horizons[63] - live) / live * 100, 2) if live > 0 else 0,
+            "fc_6m_pct":    round((horizons[126]- live) / live * 100, 2) if live > 0 else 0,
             # ── Intrinsic value
             "iv":           iv,
             # ── Whale
@@ -10326,29 +10333,68 @@ def _render_deep_scan_card(result: dict, is_vi: bool) -> None:
         )
         st.markdown(iv_html, unsafe_allow_html=True)
 
-    # ── Row 3: Price Forecasts ───────────────────────────────────
-    st.markdown(f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin:10px 0 6px">{"📈 Dự Báo Giá (Ensemble: LinReg+Holt+MonteCarlo)" if is_vi else "📈 Price Forecasts (Ensemble: LinReg+Holt+MonteCarlo)"}</div>',
-                unsafe_allow_html=True)
-    fc_labels = [
-        ("5d",  fc[5],   result["fc_5d_pct"],  "5 ngày"  if is_vi else "5 days"),
-        ("10d", fc[10],  result["fc_10d_pct"], "10 ngày" if is_vi else "10 days"),
-        ("1M",  fc[21],  result["fc_1m_pct"],  "1 tháng" if is_vi else "1 month"),
-        ("2M",  fc[42],  round((fc[42]-live)/live*100,1) if live>0 else 0, "2 tháng" if is_vi else "2 months"),
-        ("3M",  fc[63],  result["fc_3m_pct"],  "3 tháng" if is_vi else "3 months"),
-        ("6M",  fc[126], result["fc_6m_pct"],  "6 tháng" if is_vi else "6 months"),
+    # ── Row 3: Price Forecasts (% change only, colour-coded) ────────
+    st.markdown(
+        f'<div style="color:#cccccc;font-size:12px;font-weight:bold;margin:10px 0 6px">'
+        f'{"📈 Dự Báo Giá — % thay đổi so với giá hiện tại (Ensemble: LinReg+Holt+MonteCarlo)" if is_vi else "📈 Price Forecasts — % change vs live price (Ensemble: LinReg+Holt+MonteCarlo)"}'
+        f'</div>', unsafe_allow_html=True)
+
+    def _fc_tile(horizon_lbl: str, pct: float, full_lbl: str) -> str:
+        """Return HTML for one forecast tile showing only % change with colour."""
+        if pct > 0.05:
+            bg      = "rgba(0,180,80,0.12)"
+            border  = "#00b450"
+            val_col = "#00e676"
+            arrow   = "▲"
+        elif pct < -0.05:
+            bg      = "rgba(220,50,50,0.12)"
+            border  = "#cc3333"
+            val_col = "#ff5252"
+            arrow   = "▼"
+        else:
+            bg      = "rgba(100,100,120,0.12)"
+            border  = "#555577"
+            val_col = "#aaaacc"
+            arrow   = "▬"
+        sign = "+" if pct > 0 else ""
+        return (
+            f'<div style="background:{bg};border:1px solid {border};border-radius:8px;'
+            f'padding:8px 4px;text-align:center;min-width:0">'
+            f'<div style="color:#999;font-size:10px;letter-spacing:0.3px">{full_lbl}</div>'
+            f'<div style="color:{val_col};font-size:17px;font-weight:700;line-height:1.2">'
+            f'{arrow} {sign}{pct:.2f}%</div>'
+            f'</div>'
+        )
+
+    fc_meta = [
+        (result["fc_1d_pct"],  "1d",  "1 ngày"   if is_vi else "1 day"),
+        (result["fc_2d_pct"],  "2d",  "2 ngày"   if is_vi else "2 days"),
+        (result["fc_3d_pct"],  "3d",  "3 ngày"   if is_vi else "3 days"),
+        (result["fc_5d_pct"],  "5d",  "5 ngày"   if is_vi else "5 days"),
+        (result["fc_10d_pct"], "10d", "10 ngày"  if is_vi else "10 days"),
+        (result["fc_1m_pct"],  "1M",  "1 tháng"  if is_vi else "1 month"),
+        (result["fc_2m_pct"],  "2M",  "2 tháng"  if is_vi else "2 months"),
+        (result["fc_3m_pct"],  "3M",  "3 tháng"  if is_vi else "3 months"),
+        (result["fc_6m_pct"],  "6M",  "6 tháng"  if is_vi else "6 months"),
     ]
-    fc_cols = st.columns(6)
-    for col, (lbl, price_fc, pct, full_lbl) in zip(fc_cols, fc_labels):
-        fc_col = "#00cc66" if pct >= 0 else "#ff4444"
-        fc_sign = "+" if pct >= 0 else ""
+    # Split into two rows: short-term (1d–10d) then medium/long (1M–6M)
+    st.markdown(
+        f'<div style="color:#777;font-size:10px;margin-bottom:4px">'
+        f'{"⚡ Ngắn hạn" if is_vi else "⚡ Short-term"}</div>',
+        unsafe_allow_html=True)
+    cols_short = st.columns(5)
+    for col, (pct, lbl, full) in zip(cols_short, fc_meta[:5]):
         with col:
-            st.markdown(
-                f'<div style="background:#0d1525;border:1px solid #2a3555;border-radius:8px;'
-                f'padding:8px;text-align:center">'
-                f'<div style="color:#888;font-size:10px">{full_lbl}</div>'
-                f'<div style="color:#ccc;font-size:14px;font-weight:bold">{price_fc:,.0f}</div>'
-                f'<div style="color:{fc_col};font-size:12px;font-weight:bold">{fc_sign}{pct:.1f}%</div>'
-                f'</div>', unsafe_allow_html=True)
+            st.markdown(_fc_tile(lbl, pct, full), unsafe_allow_html=True)
+
+    st.markdown(
+        f'<div style="color:#777;font-size:10px;margin:8px 0 4px">'
+        f'{"📅 Trung / Dài hạn" if is_vi else "📅 Medium / Long-term"}</div>',
+        unsafe_allow_html=True)
+    cols_long = st.columns(4)
+    for col, (pct, lbl, full) in zip(cols_long, fc_meta[5:]):
+        with col:
+            st.markdown(_fc_tile(lbl, pct, full), unsafe_allow_html=True)
 
     # ── Row 4: Whale signals detail ──────────────────────────────
     if whale["signals"]:
@@ -10544,31 +10590,58 @@ def render_deep_scan_tab():
         whale_vd   = r["whale"]["verdict"]
         risk_lvl   = r["risk"]["level"]
         iv_upside  = r["iv"]["upside_pct"]
-        fc5        = r["fc"][5]
-        fc1m       = r["fc"][21]
-        fc3m       = r["fc"][63]
+        # helper: coloured pct string (plain text for table — Streamlit styled later)
+        def _fp(v): return f"{'+' if v>0 else ''}{v:.2f}%"
         summary_rows.append({
-            ("Mã" if is_vi else "Ticker"):       r["ticker"],
-            ("Ngành" if is_vi else "Sector"):    r["sector"],
-            ("Giá RT" if is_vi else "Live"):     f"{r['live']:,.0f}",
-            ("% Ngày" if is_vi else "Day%"):     f"{r['pct_chg']:+.2f}%",
+            ("Mã" if is_vi else "Ticker"):                r["ticker"],
+            ("Ngành" if is_vi else "Sector"):             r["sector"],
+            ("Giá RT" if is_vi else "Live"):              f"{r['live']:,.0f}",
+            ("% Ngày" if is_vi else "Day%"):              f"{r['pct_chg']:+.2f}%",
             ("Tín hiệu Swing" if is_vi else "Swing Signal"): swing_sig,
-            ("RSI"):                             r["rsi"],
-            ("Tech Score"):                      r["tech_score"],
-            ("🐋 MM"):                            r["whale"]["emoji"] + " " + whale_vd[:10],
-            ("Risk"):                            r["risk"]["emoji"] + " " + risk_lvl,
-            ("IV Upside"):                       f"{iv_upside:+.1f}%",
-            ("Dự báo 5d" if is_vi else "FC 5d"): f"{fc5:,.0f} ({r['fc_5d_pct']:+.1f}%)",
-            ("Dự báo 1M" if is_vi else "FC 1M"): f"{fc1m:,.0f} ({r['fc_1m_pct']:+.1f}%)",
-            ("Dự báo 3M" if is_vi else "FC 3M"): f"{fc3m:,.0f} ({r['fc_3m_pct']:+.1f}%)",
-            ("Vào lệnh" if is_vi else "Entry"):  f"{r['rec']['entry']:,.0f}",
-            ("Cắt lỗ" if is_vi else "Stop"):     f"{r['rec']['stop']:,.0f}",
+            "RSI":                                        r["rsi"],
+            "Tech Score":                                 r["tech_score"],
+            "🐋 MM":                                      r["whale"]["emoji"] + " " + whale_vd[:10],
+            "Risk":                                       r["risk"]["emoji"] + " " + risk_lvl,
+            "IV Upside":                                  _fp(iv_upside),
+            # ── Forecast % columns (pct-only, sortable numerically via raw dict) ──
+            ("FC 1d" if not is_vi else "DK 1ng"):         _fp(r["fc_1d_pct"]),
+            ("FC 2d" if not is_vi else "DK 2ng"):         _fp(r["fc_2d_pct"]),
+            ("FC 3d" if not is_vi else "DK 3ng"):         _fp(r["fc_3d_pct"]),
+            ("FC 5d" if not is_vi else "DK 5ng"):         _fp(r["fc_5d_pct"]),
+            ("FC 10d" if not is_vi else "DK 10ng"):       _fp(r["fc_10d_pct"]),
+            ("FC 1M" if not is_vi else "DK 1T"):          _fp(r["fc_1m_pct"]),
+            ("FC 3M" if not is_vi else "DK 3T"):          _fp(r["fc_3m_pct"]),
+            ("FC 6M" if not is_vi else "DK 6T"):          _fp(r["fc_6m_pct"]),
+            # ──────────────────────────────────────────────────────
+            ("Vào lệnh" if is_vi else "Entry"):           f"{r['rec']['entry']:,.0f}",
+            ("Cắt lỗ" if is_vi else "Stop"):              f"{r['rec']['stop']:,.0f}",
         })
     if summary_rows:
         df_sum = pd.DataFrame(summary_rows)
         sig_col = "Tín hiệu Swing" if is_vi else "Swing Signal"
+
+        # Columns that contain signed-% strings and should be colour-coded
+        _pct_cols_vi  = ["% Ngày","IV Upside","DK 1ng","DK 2ng","DK 3ng",
+                          "DK 5ng","DK 10ng","DK 1T","DK 3T","DK 6T"]
+        _pct_cols_en  = ["Day%","IV Upside","FC 1d","FC 2d","FC 3d",
+                          "FC 5d","FC 10d","FC 1M","FC 3M","FC 6M"]
+        _pct_cols     = _pct_cols_vi if is_vi else _pct_cols_en
+        _pct_cols     = [c for c in _pct_cols if c in df_sum.columns]
+
+        def _style_pct_cell(val):
+            try:
+                v = float(str(val).replace("%","").replace("+",""))
+                if v > 0.05:   return "color:#00e676;font-weight:bold"
+                elif v < -0.05: return "color:#ff5252;font-weight:bold"
+                else:           return "color:#aaaacc"
+            except Exception:
+                return ""
+
         try:
-            show_df(df_sum.style.map(style_action, subset=[sig_col]))
+            styled = df_sum.style.map(style_action, subset=[sig_col])
+            if _pct_cols:
+                styled = styled.map(_style_pct_cell, subset=_pct_cols)
+            show_df(styled)
         except Exception:
             show_df(df_sum)
 
