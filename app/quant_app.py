@@ -139,6 +139,7 @@ _LANG_VI = {
     "tab13": "📈 Lịch Sử Dự Báo",
     "tab14": "🔮 Top Forecast",
     "tab16": "🧭 Deep Scan",
+    "tab17": "📡 Bảng Giá SSI Live",
     # Stock Profiler labels
     "sp_title":         "🧬 Hồ Sơ & Phân Tích Sâu Cổ Phiếu",
     "sp_ticker_input":  "Nhập mã cổ phiếu",
@@ -260,6 +261,7 @@ _LANG_EN = {
     "tab13": "📈 Forecast Log",
     "tab14": "🔮 Top Forecast",
     "tab16": "🧭 Deep Scan",
+    "tab17": "📡 SSI Live Board",
     # Stock Profiler labels
     "sp_title":         "🧬 Stock Profile & Deep Analysis",
     "sp_ticker_input":  "Enter ticker symbol",
@@ -3112,6 +3114,157 @@ def fetch_ssi_news(ticker: str, n: int = 10) -> list:
             "source":  it.get("source", "SSI"),
         })
     return news
+
+
+# ══════════════════════════════════════════════════════════════
+#  SSI LIVE MARKET DATA  (ENH-43 v29.0)
+#  Sources:
+#    /stock/group/{group}    — bulk real-time quote for entire group
+#    /le-table/stock/{sym}   — recent matched order log (intraday)
+#    /system/time            — server timestamp / session check
+# ══════════════════════════════════════════════════════════════
+
+# Supported SSI market groups and their display labels
+SSI_MARKET_GROUPS = {
+    "VN30":    ("VN30",    30),
+    "VN100":   ("VN100",  100),
+    "VNX50":   ("VNX50",   50),
+    "HNX30":   ("HNX30",   30),
+    "HNXIndex":("HNX All", None),
+}
+
+@st.cache_data(ttl=30)   # 30-second cache — near-real-time
+def fetch_ssi_market_group(group: str = "VN30") -> pd.DataFrame:
+    """
+    ENH-43: Fetch all stocks in a named SSI market group in a single API call.
+    Endpoint: iboard-query.ssi.com.vn/stock/group/{group}
+    Returns DataFrame with full real-time OHLCV + order-book top-of-book.
+
+    Fields extracted:
+      stockSymbol, exchange, matchedPrice, priceChange, priceChangePercent,
+      refPrice, openPrice, highest, lowest,
+      nmTotalTradedQty, nmTotalTradedValue,
+      stockBUVol, stockSDVol,
+      buyForeignQtty, sellForeignQtty, remainForeignQtty,
+      best1Bid, best1BidVol, best1Offer, best1OfferVol,
+      ceiling, floor, session, companyNameVi
+    """
+    url = f"https://iboard-query.ssi.com.vn/stock/group/{group}"
+    try:
+        r = requests.get(url, headers=_SSI_HDR, timeout=10)
+        if r.status_code == 403:
+            _log.warning(f"SSI group/{group}: 403 — auth required")
+            return pd.DataFrame()
+        r.raise_for_status()
+        items = r.json().get("data", [])
+        if not isinstance(items, list) or not items:
+            return pd.DataFrame()
+        rows = []
+        for d in items:
+            def _fv(k, fb=0):
+                v = d.get(k, fb)
+                try:    return float(v or 0)
+                except: return float(fb)
+            price = _fv("matchedPrice") or _fv("expectedMatchedPrice")
+            ref   = _fv("refPrice") or _fv("priorClosePrice")
+            pct   = _fv("priceChangePercent")
+            if price <= 0 and ref > 0:
+                price = ref
+            # Normalise: prices returned in VND (already full, not thousands)
+            rows.append({
+                "Mã":           d.get("stockSymbol", ""),
+                "Sàn":          d.get("exchange", "").upper(),
+                "Tên":          d.get("companyNameVi", ""),
+                "Giá":          price,
+                "±":            _fv("priceChange"),
+                "±%":           pct,
+                "TC":           ref,
+                "Mở":           _fv("openPrice"),
+                "Cao":          _fv("highest"),
+                "Thấp":         _fv("lowest"),
+                "KL":           int(_fv("nmTotalTradedQty")),
+                "GT(B)":        round(_fv("nmTotalTradedValue") / 1e9, 1),
+                "KL Mua":       int(_fv("stockBUVol")),
+                "KL Bán":       int(_fv("stockSDVol")),
+                "NN Mua":       int(_fv("buyForeignQtty")),
+                "NN Bán":       int(_fv("sellForeignQtty")),
+                "NN Còn":       int(_fv("remainForeignQtty")),
+                "Bid1":         _fv("best1Bid"),
+                "BidV1":        int(_fv("best1BidVol")),
+                "Ask1":         _fv("best1Offer"),
+                "AskV1":        int(_fv("best1OfferVol")),
+                "Trần":         _fv("ceiling"),
+                "Sàn giá":      _fv("floor"),
+                "Phiên":        d.get("session", ""),
+            })
+        df = pd.DataFrame(rows)
+        df = df[df["Mã"].str.len() > 0]
+        _log.info(f"SSI group/{group}: {len(df)} tickers loaded")
+        return df
+    except Exception as e:
+        _log.warning(f"SSI group/{group} error: {e}")
+        return pd.DataFrame()
+
+
+@st.cache_data(ttl=10)   # 10-second cache for transaction log
+def fetch_ssi_le_table(ticker: str, page_size: int = 30) -> pd.DataFrame:
+    """
+    ENH-43: Fetch recent matched orders for a single ticker.
+    Endpoint: iboard-query.ssi.com.vn/le-table/stock/{ticker}?pageSize=N
+    Returns DataFrame: price, vol, side, time, accumulatedVol, priceChange %.
+    """
+    url = f"https://iboard-query.ssi.com.vn/le-table/stock/{ticker.upper()}?pageSize={page_size}"
+    try:
+        r = requests.get(url, headers=_SSI_HDR, timeout=8)
+        if r.status_code == 403:
+            return pd.DataFrame()
+        r.raise_for_status()
+        inner = r.json().get("data", {})
+        items = inner.get("items", []) if isinstance(inner, dict) else []
+        if not items:
+            return pd.DataFrame()
+        rows = []
+        for it in items:
+            side_raw = it.get("side", "e")
+            side_map = {"bu": "Mua↑", "sd": "Bán↓", "e": "Khớp="}
+            rows.append({
+                "Giờ":       it.get("time", ""),
+                "Giá":       float(it.get("price", 0) or 0),
+                "±%":        round(float(it.get("priceChangePercent", 0) or 0), 2),
+                "KL Khớp":   int(it.get("vol", 0) or 0),
+                "KL Tích Lũy": int(it.get("accumulatedVol", 0) or 0),
+                "GT (tỷ)":   round(float(it.get("accumulatedVal", 0) or 0) / 1e9, 2),
+                "Chiều":    side_map.get(side_raw, side_raw),
+            })
+        return pd.DataFrame(rows)
+    except Exception as e:
+        _log.debug(f"SSI le-table {ticker}: {e}")
+        return pd.DataFrame()
+
+
+def _ssi_session_label(session_code: str, lang: str = "VI") -> str:
+    """Map SSI session code to human-readable label."""
+    _map_vi = {
+        "ATO": "🌅 ATO (Khớp lệnh mở cửa)",
+        "LO":  "🟢 LO (Khớp lệnh liên tục)",
+        "ATC": "🔔 ATC (Khớp lệnh đóng cửa)",
+        "PT":  "🔄 PT (Thoả thuận sau giờ)",
+        "PTR": "✅ PTR (Kết thúc thoả thuận)",
+        "C":   "🔴 C (Đóng cửa)",
+        "":    "⏳ Chờ mở cửa",
+    }
+    _map_en = {
+        "ATO": "🌅 ATO (Opening call auction)",
+        "LO":  "🟢 LO (Continuous trading)",
+        "ATC": "🔔 ATC (Closing call auction)",
+        "PT":  "🔄 PT (Put-through after hours)",
+        "PTR": "✅ PTR (Put-through closed)",
+        "C":   "🔴 C (Market closed)",
+        "":    "⏳ Pre-market",
+    }
+    d = _map_vi if lang == "VI" else _map_en
+    return d.get(session_code, session_code)
+
 
 # ══════════════════════════════════════════════════════════════
 #  DNSE OHLC TECHNICAL ANALYSIS  (ENH-13)
@@ -10698,6 +10851,523 @@ def render_deep_scan_tab():
     )
 
 
+# ══════════════════════════════════════════════════════════════
+#  SSI LIVE MARKET BOARD TAB  (ENH-43 — v29.0)
+# ══════════════════════════════════════════════════════════════
+def render_ssi_realtime_tab():
+    """
+    ENH-43: Real-time SSI iboard market scanner tab.
+    Displays live prices, top movers, order book, and transaction log
+    using SSI iboard-query API (no auth required).
+    """
+    is_vi = st.session_state.lang == "VI"
+    st.markdown(TOOLTIP_CSS, unsafe_allow_html=True)
+
+    if is_vi:
+        st.header("📡 Bảng Giá SSI Live — Thời Gian Thực")
+        st.caption(
+            "Dữ liệu từ SSI iboard-query API · Làm mới tự động theo chu kỳ bạn chọn · "
+            "Bao gồm giá, biến động, khối lượng, thông tin khối ngoại"
+        )
+    else:
+        st.header("📡 SSI Live Market Board — Real-Time")
+        st.caption(
+            "Data from SSI iboard-query API · Auto-refresh at selected interval · "
+            "Includes price, change, volume, foreign investor activity"
+        )
+
+    # ── Controls row ──────────────────────────────────────────
+    col_grp, col_ref, col_sort = st.columns([3, 2, 3])
+    with col_grp:
+        group_options = list(SSI_MARKET_GROUPS.keys())
+        group_labels  = [f"{SSI_MARKET_GROUPS[g][0]} ({SSI_MARKET_GROUPS[g][1] or 'All'})" for g in group_options]
+        sel_group_idx = st.selectbox(
+            "📊 " + ("Nhóm cổ phiếu" if is_vi else "Market group"),
+            options=range(len(group_options)),
+            format_func=lambda i: group_labels[i],
+            index=0,
+            key="ssi_rt_group",
+        )
+        sel_group = group_options[sel_group_idx]
+
+    with col_ref:
+        auto_refresh = st.toggle(
+            "🔄 " + ("Tự làm mới" if is_vi else "Auto-refresh"),
+            value=False,
+            key="ssi_rt_autorefresh",
+        )
+        if auto_refresh:
+            refresh_secs = st.select_slider(
+                ("Chu kỳ (giây)" if is_vi else "Interval (sec)"),
+                options=[10, 15, 30, 60, 120],
+                value=30,
+                key="ssi_rt_interval",
+            )
+
+    with col_sort:
+        sort_col = st.selectbox(
+            "↕️ " + ("Sắp xếp theo" if is_vi else "Sort by"),
+            options=(
+                ["±% (cao→thấp)", "±% (thấp→cao)", "KL giao dịch", "GT (tỷ)", "NN mua ròng", "Mã A-Z"]
+                if is_vi else
+                ["±% (high→low)", "±% (low→high)", "Volume", "Value (B)", "Net foreign buy", "Ticker A-Z"]
+            ),
+            index=0,
+            key="ssi_rt_sort",
+        )
+
+    manual_refresh = st.button(
+        "🔄 " + ("Làm Mới Ngay" if is_vi else "Refresh Now"),
+        type="primary",
+        key="ssi_rt_refresh",
+    )
+
+    # Auto-refresh trigger via session state counter
+    if "ssi_rt_refresh_count" not in st.session_state:
+        st.session_state.ssi_rt_refresh_count = 0
+    if manual_refresh:
+        st.session_state.ssi_rt_refresh_count += 1
+        st.cache_data.clear()
+
+    if auto_refresh:
+        import time as _time
+        _time.sleep(0.1)   # yield to allow UI to render
+        try:
+            tool_search_result = None
+            # Use streamlit-autorefresh if available, otherwise use rerun
+            from streamlit_autorefresh import st_autorefresh
+            st_autorefresh(interval=refresh_secs * 1000, key="ssi_rt_auto_key")
+        except ImportError:
+            st.info(
+                "💡 " + (
+                    f"Cài `pip install streamlit-autorefresh` để bật tự động làm mới. "
+                    f"Hiện tại nhấn nút 🔄 để cập nhật."
+                    if is_vi else
+                    f"Install `pip install streamlit-autorefresh` for auto-refresh. "
+                    f"Use 🔄 Refresh Now to update manually."
+                )
+            )
+
+    # ── Load data ─────────────────────────────────────────────
+    with st.spinner(("Đang tải dữ liệu SSI..." if is_vi else "Loading SSI live data...")):
+        df = fetch_ssi_market_group(sel_group)
+
+    if df.empty:
+        st.error(
+            "❌ " + (
+                "Không thể tải dữ liệu từ SSI. Có thể thị trường đóng cửa hoặc API tạm thời không khả dụng."
+                if is_vi else
+                "Unable to load data from SSI. Market may be closed or API temporarily unavailable."
+            )
+        )
+        return
+
+    # Show server time
+    try:
+        ts_r = requests.get("https://iboard-query.ssi.com.vn/system/time",
+                            headers=_SSI_HDR, timeout=4)
+        if ts_r.ok:
+            server_ms = ts_r.json().get("data", 0)
+            server_dt = datetime.fromtimestamp(server_ms / 1000)
+            st.caption(
+                f"🕐 " + ("Giờ máy chủ SSI" if is_vi else "SSI server time") +
+                f": **{server_dt.strftime('%H:%M:%S %d/%m/%Y')}** · "
+                f"{'Phiên' if is_vi else 'Session'}: "
+                f"**{_ssi_session_label(df['Phiên'].iloc[0] if 'Phiên' in df.columns and len(df) > 0 else '', lang=('VI' if is_vi else 'EN'))}**  ·  "
+                f"{len(df)} {'mã' if is_vi else 'tickers'}"
+            )
+    except Exception:
+        st.caption(f"{'Tải lúc' if is_vi else 'Loaded at'}: {datetime.now().strftime('%H:%M:%S')}  ·  {len(df)} {'mã' if is_vi else 'tickers'}")
+
+    # ── Apply sort ────────────────────────────────────────────
+    sort_lower = sort_col.lower()
+    if "cao" in sort_lower or "high→" in sort_lower or "high->" in sort_lower:
+        df = df.sort_values("±%", ascending=False)
+    elif "thấp" in sort_lower or "low→" in sort_lower or "low->" in sort_lower:
+        df = df.sort_values("±%", ascending=True)
+    elif "kl giao" in sort_lower or "volume" in sort_lower:
+        df = df.sort_values("KL", ascending=False)
+    elif "gt" in sort_lower or "value" in sort_lower:
+        df = df.sort_values("GT(B)", ascending=False)
+    elif "nn" in sort_lower or "foreign" in sort_lower:
+        df["_nn_net"] = df["NN Mua"] - df["NN Bán"]
+        df = df.sort_values("_nn_net", ascending=False)
+        df = df.drop(columns=["_nn_net"])
+    else:
+        df = df.sort_values("Mã")
+
+    # ── Market overview metrics ───────────────────────────────
+    up_cnt   = int((df["±%"] > 0.05).sum())
+    dn_cnt   = int((df["±%"] < -0.05).sum())
+    flat_cnt = int(len(df) - up_cnt - dn_cnt)
+    total_val = df["GT(B)"].sum()
+    total_vol = df["KL"].sum()
+    nn_buy    = df["NN Mua"].sum()
+    nn_sell   = df["NN Bán"].sum()
+    nn_net    = nn_buy - nn_sell
+
+    m1, m2, m3, m4, m5 = st.columns(5)
+    with m1:
+        st.metric("🟢 " + ("Tăng" if is_vi else "Advancing"), up_cnt,
+                  delta=f"+{up_cnt - dn_cnt} {'so bên bán' if is_vi else 'vs decliners'}")
+    with m2:
+        st.metric("🔴 " + ("Giảm" if is_vi else "Declining"), dn_cnt)
+    with m3:
+        st.metric("⚪ " + ("Đi ngang" if is_vi else "Flat"), flat_cnt)
+    with m4:
+        st.metric(
+            "💰 " + ("Tổng GT (tỷ)" if is_vi else "Total Value (B)"),
+            f"{total_val:,.1f}",
+        )
+    with m5:
+        nn_sign = "+" if nn_net >= 0 else ""
+        st.metric(
+            "🌐 " + ("NN mua ròng" if is_vi else "Net Foreign Buy"),
+            f"{nn_sign}{nn_net:,.0f}",
+            delta="buy" if nn_net > 0 else "sell",
+        )
+
+    st.divider()
+
+    # ── Tabs: Full Board | Top Movers | Foreign Activity | Order Book ──
+    sub_labels = (
+        ["📋 Bảng giá", "🏆 Top biến động", "🌐 Khối ngoại", "📖 Sổ lệnh & Lịch sử khớp"]
+        if is_vi else
+        ["📋 Full Board", "🏆 Top Movers", "🌐 Foreign Activity", "📖 Order Book & Trades"]
+    )
+    sub1, sub2, sub3, sub4 = st.tabs(sub_labels)
+
+    # ── Sub1: Full board ──────────────────────────────────────
+    with sub1:
+        # Build display table
+        _disp_cols = ["Mã", "Tên", "Giá", "±", "±%", "TC", "Mở", "Cao", "Thấp",
+                      "KL", "GT(B)", "Bid1", "BidV1", "Ask1", "AskV1"]
+        disp_df = df[[c for c in _disp_cols if c in df.columns]].copy()
+
+        # Format numbers
+        for c in ["Giá", "±", "TC", "Mở", "Cao", "Thấp", "Bid1", "Ask1"]:
+            if c in disp_df.columns:
+                disp_df[c] = disp_df[c].apply(
+                    lambda x: f"{x:,.0f}" if isinstance(x, (int, float)) and x > 0 else ("–" if x == 0 else str(x))
+                )
+        for c in ["KL", "BidV1", "AskV1"]:
+            if c in disp_df.columns:
+                disp_df[c] = disp_df[c].apply(
+                    lambda x: f"{int(x):,}" if isinstance(x, (int, float)) and x > 0 else "–"
+                )
+        if "±%" in disp_df.columns:
+            disp_df["±%"] = disp_df["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+        if "GT(B)" in disp_df.columns:
+            disp_df["GT(B)"] = disp_df["GT(B)"].apply(lambda x: f"{x:,.1f}" if isinstance(x, float) else str(x))
+
+        # Style: colour ±% column
+        def _style_pct(v):
+            try:
+                val = float(str(v).replace("%", "").replace("+", ""))
+                if val > 0.05:   return "color:#00e676;font-weight:bold"
+                elif val < -0.05: return "color:#ff5252;font-weight:bold"
+                else:             return "color:#aaaacc"
+            except Exception:
+                return ""
+
+        def _style_price(v):
+            """No colour for price columns — return empty."""
+            return ""
+
+        try:
+            styled = disp_df.style.map(_style_pct, subset=["±%"])
+            show_df(styled)
+        except Exception:
+            show_df(disp_df)
+
+        # Download CSV
+        try:
+            csv_data = df.to_csv(index=False, encoding="utf-8-sig")
+            st.download_button(
+                "⬇️ " + ("Tải CSV" if is_vi else "Download CSV"),
+                data=csv_data,
+                file_name=f"ssi_{sel_group}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv",
+            )
+        except Exception:
+            pass
+
+    # ── Sub2: Top Movers ─────────────────────────────────────
+    with sub2:
+        n_top = 10
+        gainers = df.nlargest(n_top, "±%")
+        losers  = df.nsmallest(n_top, "±%")
+        most_active_vol = df.nlargest(n_top, "KL")
+        most_active_val = df.nlargest(n_top, "GT(B)")
+
+        col_g, col_l = st.columns(2)
+        with col_g:
+            st.subheader("🟢 " + (f"Top {n_top} Tăng" if is_vi else f"Top {n_top} Gainers"))
+            _cols = ["Mã", "Giá", "±%", "KL"]
+            g_disp = gainers[[c for c in _cols if c in gainers.columns]].copy()
+            if "±%" in g_disp.columns:
+                g_disp["±%"] = g_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+            if "Giá" in g_disp.columns:
+                g_disp["Giá"] = g_disp["Giá"].apply(lambda x: f"{x:,.0f}" if isinstance(x, float) and x > 0 else "–")
+            if "KL" in g_disp.columns:
+                g_disp["KL"] = g_disp["KL"].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) else "–")
+            try:
+                styled_g = g_disp.style.map(_style_pct, subset=["±%"])
+                show_df(styled_g)
+            except Exception:
+                show_df(g_disp)
+
+        with col_l:
+            st.subheader("🔴 " + (f"Top {n_top} Giảm" if is_vi else f"Top {n_top} Losers"))
+            l_disp = losers[[c for c in _cols if c in losers.columns]].copy()
+            if "±%" in l_disp.columns:
+                l_disp["±%"] = l_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+            if "Giá" in l_disp.columns:
+                l_disp["Giá"] = l_disp["Giá"].apply(lambda x: f"{x:,.0f}" if isinstance(x, float) and x > 0 else "–")
+            if "KL" in l_disp.columns:
+                l_disp["KL"] = l_disp["KL"].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) else "–")
+            try:
+                styled_l = l_disp.style.map(_style_pct, subset=["±%"])
+                show_df(styled_l)
+            except Exception:
+                show_df(l_disp)
+
+        st.divider()
+        col_v, col_vv = st.columns(2)
+        with col_v:
+            st.subheader("📊 " + (f"Top {n_top} KL Giao Dịch" if is_vi else f"Top {n_top} by Volume"))
+            v_disp = most_active_vol[["Mã", "Giá", "±%", "KL"]].copy() if all(c in most_active_vol.columns for c in ["Mã", "Giá", "±%", "KL"]) else most_active_vol.head()
+            if "±%" in v_disp.columns:
+                v_disp["±%"] = v_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+            if "Giá" in v_disp.columns:
+                v_disp["Giá"] = v_disp["Giá"].apply(lambda x: f"{x:,.0f}" if isinstance(x, float) and x > 0 else "–")
+            if "KL" in v_disp.columns:
+                v_disp["KL"] = v_disp["KL"].apply(lambda x: f"{int(x):,}" if isinstance(x, (int, float)) else "–")
+            try:
+                styled_v = v_disp.style.map(_style_pct, subset=["±%"])
+                show_df(styled_v)
+            except Exception:
+                show_df(v_disp)
+
+        with col_vv:
+            st.subheader("💰 " + (f"Top {n_top} GT Giao Dịch" if is_vi else f"Top {n_top} by Value"))
+            vv_disp = most_active_val[["Mã", "Giá", "±%", "GT(B)"]].copy() if all(c in most_active_val.columns for c in ["Mã", "Giá", "±%", "GT(B)"]) else most_active_val.head()
+            if "±%" in vv_disp.columns:
+                vv_disp["±%"] = vv_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+            if "Giá" in vv_disp.columns:
+                vv_disp["Giá"] = vv_disp["Giá"].apply(lambda x: f"{x:,.0f}" if isinstance(x, float) and x > 0 else "–")
+            try:
+                styled_vv = vv_disp.style.map(_style_pct, subset=["±%"])
+                show_df(styled_vv)
+            except Exception:
+                show_df(vv_disp)
+
+    # ── Sub3: Foreign Activity ────────────────────────────────
+    with sub3:
+        if is_vi:
+            st.subheader("🌐 Hoạt Động Khối Ngoại")
+        else:
+            st.subheader("🌐 Foreign Investor Activity")
+
+        if "NN Mua" in df.columns and "NN Bán" in df.columns:
+            df_nn = df.copy()
+            df_nn["NN Ròng"] = df_nn["NN Mua"] - df_nn["NN Bán"]
+            net_buy  = df_nn.nlargest(10, "NN Ròng")
+            net_sell = df_nn.nsmallest(10, "NN Ròng")
+
+            # Summary
+            total_nn_buy_bn  = df_nn["NN Mua"].sum() * df_nn["Giá"].astype(float, errors="ignore").mean() / 1e9 if "Giá" in df_nn.columns else 0
+            c_nb, c_ns = st.columns(2)
+            with c_nb:
+                st.metric(
+                    "🟢 " + ("Tổng NN Mua (CP)" if is_vi else "Total Foreign Buy (shares)"),
+                    f"{int(nn_buy):,}",
+                )
+            with c_ns:
+                net_sign = "+" if nn_net >= 0 else ""
+                st.metric(
+                    ("🔴 Tổng NN Bán (CP)" if is_vi else "🔴 Total Foreign Sell (shares)"),
+                    f"{int(nn_sell):,}",
+                    delta=f"{'Ròng mua +' if nn_net >= 0 else 'Ròng bán '}{abs(int(nn_net)):,}",
+                )
+
+            st.divider()
+            col_nbuy, col_nsell = st.columns(2)
+            with col_nbuy:
+                st.markdown("#### 🟢 " + ("NN Mua Ròng Nhiều Nhất" if is_vi else "Top Net Foreign Buy"))
+                nb_disp = net_buy[["Mã", "Giá", "±%", "NN Mua", "NN Bán", "NN Ròng"]].copy()
+                if "±%" in nb_disp.columns:
+                    nb_disp["±%"] = nb_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+                for col_ in ["NN Mua", "NN Bán", "NN Ròng"]:
+                    if col_ in nb_disp.columns:
+                        nb_disp[col_] = nb_disp[col_].apply(
+                            lambda x: f"{int(x):,}" if isinstance(x, (int, float)) else "–")
+                try:
+                    styled_nb = nb_disp.style.map(_style_pct, subset=["±%"])
+                    show_df(styled_nb)
+                except Exception:
+                    show_df(nb_disp)
+
+            with col_nsell:
+                st.markdown("#### 🔴 " + ("NN Bán Ròng Nhiều Nhất" if is_vi else "Top Net Foreign Sell"))
+                ns_disp = net_sell[["Mã", "Giá", "±%", "NN Mua", "NN Bán", "NN Ròng"]].copy()
+                if "±%" in ns_disp.columns:
+                    ns_disp["±%"] = ns_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
+                for col_ in ["NN Mua", "NN Bán", "NN Ròng"]:
+                    if col_ in ns_disp.columns:
+                        ns_disp[col_] = ns_disp[col_].apply(
+                            lambda x: f"{int(x):,}" if isinstance(x, (int, float)) else "–")
+                try:
+                    styled_ns = ns_disp.style.map(_style_pct, subset=["±%"])
+                    show_df(styled_ns)
+                except Exception:
+                    show_df(ns_disp)
+
+            # Room remaining chart
+            st.divider()
+            st.markdown("#### 🔓 " + ("Room Ngoại Còn Lại (Top 15)" if is_vi else "Foreign Room Remaining (Top 15)"))
+            if "NN Còn" in df.columns and "Mã" in df.columns:
+                room_df = df[df["NN Còn"] > 0].nlargest(15, "NN Còn")[["Mã", "NN Còn", "±%"]].copy()
+                if not room_df.empty:
+                    try:
+                        import plotly.graph_objects as _go
+                    except ImportError:
+                        pass
+                    try:
+                        fig_room = _go.Figure(_go.Bar(
+                            x=room_df["Mã"],
+                            y=room_df["NN Còn"],
+                            marker_color=[
+                                "#00e676" if (isinstance(p, float) and p > 0) else
+                                ("#ff5252" if (isinstance(p, float) and p < 0) else "#aaaacc")
+                                for p in room_df["±%"]
+                            ],
+                            text=[f"{int(v):,}" for v in room_df["NN Còn"]],
+                            textposition="outside",
+                        ))
+                        fig_room.update_layout(
+                            height=300, template="plotly_dark",
+                            title=("Số CP ngoại còn được phép mua" if is_vi else "Shares remaining for foreign purchase"),
+                            margin=dict(t=40, b=20, l=10, r=10),
+                            yaxis_title="Số CP",
+                        )
+                        st.plotly_chart(fig_room, width="stretch")
+                    except Exception:
+                        show_df(room_df)
+        else:
+            st.info("No foreign investor data in the loaded group." if not is_vi else "Không có dữ liệu khối ngoại cho nhóm đã chọn.")
+
+    # ── Sub4: Order Book + Transaction Log ───────────────────
+    with sub4:
+        if is_vi:
+            st.subheader("📖 Sổ Lệnh & Lịch Sử Khớp Lệnh")
+        else:
+            st.subheader("📖 Order Book & Trade History")
+
+        # Ticker selector from loaded group
+        available_tickers = sorted(df["Mã"].unique().tolist()) if "Mã" in df.columns else []
+        if not available_tickers:
+            st.info("No tickers available." if not is_vi else "Không có mã nào khả dụng.")
+            return
+
+        col_ob_sel, col_ob_load = st.columns([3, 1])
+        with col_ob_sel:
+            sel_ob_ticker = st.selectbox(
+                "🔍 " + ("Chọn mã để xem" if is_vi else "Select ticker"),
+                options=available_tickers,
+                key="ssi_rt_ob_ticker",
+            )
+        with col_ob_load:
+            st.write("")
+            st.write("")
+            load_ob = st.button(
+                "📥 " + ("Tải sổ lệnh" if is_vi else "Load"),
+                key="ssi_rt_ob_load",
+            )
+
+        if sel_ob_ticker:
+            # Show live quote for this ticker from the group data
+            row_data = df[df["Mã"] == sel_ob_ticker]
+            if not row_data.empty:
+                rr = row_data.iloc[0]
+                q1, q2, q3, q4, q5, q6 = st.columns(6)
+                with q1:
+                    price_val = rr.get("Giá", 0)
+                    pct_val   = rr.get("±%", 0)
+                    pct_sign  = "+" if isinstance(pct_val, float) and pct_val >= 0 else ""
+                    st.metric(
+                        ("Giá Khớp" if is_vi else "Matched"), 
+                        f"{price_val:,.0f}" if isinstance(price_val, (int, float)) and price_val > 0 else "–",
+                        delta=f"{pct_sign}{pct_val:.2f}%" if isinstance(pct_val, float) else None,
+                    )
+                with q2:
+                    ref_val = rr.get("TC", 0)
+                    st.metric("TC", f"{ref_val:,.0f}" if isinstance(ref_val, (int, float)) and ref_val > 0 else "–")
+                with q3:
+                    ceil_val = rr.get("Trần", 0)
+                    st.metric("🔴 " + ("Trần" if is_vi else "Ceil"), f"{ceil_val:,.0f}" if isinstance(ceil_val, (int, float)) and ceil_val > 0 else "–")
+                with q4:
+                    floor_val = rr.get("Sàn giá", 0)
+                    st.metric("💚 " + ("Sàn" if is_vi else "Floor"), f"{floor_val:,.0f}" if isinstance(floor_val, (int, float)) and floor_val > 0 else "–")
+                with q5:
+                    kl_val = rr.get("KL", 0)
+                    st.metric("📊 KL", f"{int(kl_val):,}" if isinstance(kl_val, (int, float)) else "–")
+                with q6:
+                    gt_val = rr.get("GT(B)", 0)
+                    st.metric("💰 GT", f"{gt_val:,.1f}B" if isinstance(gt_val, (int, float)) else "–")
+
+                # Order book top 3 bids/asks
+                st.markdown("##### 📒 " + ("Top 3 Bid / Ask" if not is_vi else "Top 3 Giá Mua / Giá Bán"))
+                ob_rows = []
+                for i in range(1, 4):
+                    bid_p = rr.get(f"Bid{i}" if i == 1 else f"best{i}Bid", 0) if i == 1 else df[df["Mã"] == sel_ob_ticker].iloc[0].get("Bid1", 0) if i == 1 else 0
+                    ask_p = rr.get(f"Ask{i}" if i == 1 else f"best{i}Offer", 0) if i == 1 else 0
+
+                    # Use Bid1/Ask1 from the main df columns (we have best1Bid etc. in the raw data)
+                bid_data = {"Mua 1": (rr.get("Bid1", 0), rr.get("BidV1", 0))}
+                ask_data = {"Bán 1": (rr.get("Ask1", 0), rr.get("AskV1", 0))}
+
+                ob_table = {
+                    ("Giá Mua" if is_vi else "Bid Price"): [f"{bid_data['Mua 1'][0]:,.0f}" if bid_data["Mua 1"][0] > 0 else "–"],
+                    ("KL Mua" if is_vi else "Bid Vol"): [f"{int(bid_data['Mua 1'][1]):,}" if bid_data["Mua 1"][1] > 0 else "–"],
+                    ("Giá Bán" if is_vi else "Ask Price"): [f"{ask_data['Bán 1'][0]:,.0f}" if ask_data["Bán 1"][0] > 0 else "–"],
+                    ("KL Bán" if is_vi else "Ask Vol"): [f"{int(ask_data['Bán 1'][1]):,}" if ask_data["Bán 1"][1] > 0 else "–"],
+                }
+                show_df(pd.DataFrame(ob_table))
+
+            # Transaction log
+            st.markdown("##### 📈 " + ("Lịch Sử Khớp Lệnh Gần Nhất" if is_vi else "Recent Matched Orders"))
+            le_df = fetch_ssi_le_table(sel_ob_ticker, page_size=30)
+            if not le_df.empty:
+                def _style_side(v):
+                    if "Mua" in str(v):  return "color:#00e676;font-weight:bold"
+                    if "Bán" in str(v):  return "color:#ff5252;font-weight:bold"
+                    return "color:#aaaacc"
+                try:
+                    styled_le = le_df.style.map(_style_side, subset=["Chiều"])
+                    show_df(styled_le)
+                except Exception:
+                    show_df(le_df)
+            else:
+                st.info(
+                    "⚠️ " + (
+                        "Không tải được lịch sử khớp lệnh. Có thể thị trường chưa mở hoặc API giới hạn."
+                        if is_vi else
+                        "Could not load trade history. Market may be closed or API limited."
+                    )
+                )
+
+    st.caption(
+        "⚠️ " + (
+            "Dữ liệu từ SSI iBoard API — chỉ mang tính tham khảo, không phải khuyến nghị đầu tư. "
+            "SSI iboard-query không yêu cầu xác thực nhưng có thể bị giới hạn ngoài giờ giao dịch."
+            if is_vi else
+            "Data from SSI iBoard API — for reference only, not investment advice. "
+            "SSI iboard-query requires no auth but may be rate-limited outside trading hours."
+        )
+    )
+
+
 def render_changelog_tab():
     # ENH-V25: Inject v25 at top
     is_vi = st.session_state.lang == "VI"
@@ -11020,7 +11690,7 @@ def main():
     # v24: Reorganized 14-tab menu for better UX
     # Group: [Trading] Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
     # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast
-    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16"]
+    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16","tab17"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
@@ -11055,6 +11725,8 @@ def main():
         render_audit_log_tab()
     with tabs[15]:
         render_deep_scan_tab()
+    with tabs[16]:
+        render_ssi_realtime_tab()
 
 if __name__ == "__main__":
     main()
