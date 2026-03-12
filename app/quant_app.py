@@ -3266,6 +3266,220 @@ def _ssi_session_label(session_code: str, lang: str = "VI") -> str:
     return d.get(session_code, session_code)
 
 
+@st.cache_data(ttl=15)
+def fetch_ssi_ticker_full(ticker: str) -> dict:
+    """
+    ENH-43: Fetch comprehensive real-time data for a single ticker via SSI iboard-query.
+    Endpoint: /stock/{ticker}?boardId=MAIN
+    Returns a flat dict with all price, order-book, volume, and foreign-flow fields.
+    """
+    url = f"https://iboard-query.ssi.com.vn/stock/{ticker.upper()}?boardId=MAIN"
+    try:
+        r = requests.get(url, headers=_SSI_HDR, timeout=8)
+        if r.status_code not in (200, 304):
+            return {}
+        raw = r.json()
+        d = raw.get("data", raw) if isinstance(raw, dict) else {}
+        if not d:
+            return {}
+
+        def _fv(k, fb=0):
+            v = d.get(k, fb)
+            try:    return float(v or 0)
+            except: return float(fb)
+
+        price  = _fv("matchedPrice") or _fv("close") or _fv("lastPrice")
+        ref    = _fv("refPrice") or _fv("referencePrice") or _fv("priorClosePrice")
+        ceil_  = _fv("ceiling") or _fv("ceilingPrice")
+        floor_ = _fv("floor") or _fv("floorPrice")
+
+        # Normalise: SSI sometimes returns prices in thousands
+        for val in [price, ref, ceil_, floor_]:
+            if 0 < val < 500:
+                price  *= 1000; ref   *= 1000
+                ceil_  *= 1000; floor_ *= 1000
+                break
+
+        if price <= 0:
+            return {}
+
+        pct = _fv("priceChangePercent")
+        if pct == 0 and ref > 0:
+            pct = (price - ref) / ref * 100
+
+        return {
+            "ticker":   ticker.upper(),
+            "name":     d.get("companyNameVi", ""),
+            "exchange": d.get("exchange", "").upper(),
+            "price":    price,
+            "ref":      ref,
+            "ceiling":  ceil_,
+            "floor":    floor_,
+            "pct":      round(pct, 2),
+            "change":   _fv("priceChange"),
+            "open":     _fv("openPrice"),
+            "high":     _fv("highest"),
+            "low":      _fv("lowest"),
+            "vol":      int(_fv("nmTotalTradedQty")),
+            "val_b":    round(_fv("nmTotalTradedValue") / 1e9, 2),
+            "bu_vol":   int(_fv("stockBUVol")),
+            "sd_vol":   int(_fv("stockSDVol")),
+            "nn_buy":   int(_fv("buyForeignQtty")),
+            "nn_sell":  int(_fv("sellForeignQtty")),
+            "nn_room":  int(_fv("remainForeignQtty")),
+            "bid1":     _fv("best1Bid"),
+            "bid1_vol": int(_fv("best1BidVol")),
+            "ask1":     _fv("best1Offer"),
+            "ask1_vol": int(_fv("best1OfferVol")),
+            "session":  d.get("session", ""),
+        }
+    except Exception as e:
+        _log.debug(f"SSI ticker_full {ticker}: {e}")
+        return {}
+
+
+def _tick_size(price: float) -> int:
+    """VN stock exchange tick size rules."""
+    if price < 10_000:  return 10
+    if price < 50_000:  return 50
+    return 100
+
+
+def _compute_ssi_recommendation(d: dict) -> dict:
+    """
+    ENH-43: Compute intraday buy/sell price recommendations for a ticker.
+
+    Scoring (0-100, neutral=50):
+      +20  price deeply oversold (pct < -3%)
+      +12  price moderately oversold (pct -1 to -3%)
+      +5   price slightly below reference
+      -20  overbought (pct > +3%)  / -10 moderately overbought
+      +15  strong buy pressure (bu_vol > 60% of flow)
+      +7   mild buy pressure  (bu_vol > 50%)
+      -15  strong sell pressure / -7 mild sell pressure
+      +12  strong foreign buying / +5 mild
+      -12  strong foreign selling / -5 mild
+      -10  near ceiling (room_up < 1%)
+      +10  at floor support (room_down < 1%)
+
+    Prices:
+      buy_limit  — patient limit order just above Bid1; best entry price (max profit)
+      buy_exec   — aggressive order at Ask1; immediate fill (max execution rate)
+      sell_limit — patient limit above Ask1 (capped at ceiling); max profit
+      sell_exec  — aggressive hit Bid1; immediate fill
+      tp         — take-profit target (+1.5%, capped at ceiling)
+      sl         — stop-loss level (-3%, floored at floor price)
+    """
+    price  = d.get("price", 0)
+    ref    = d.get("ref", 0)
+    ceil_  = d.get("ceiling", 0)
+    floor_ = d.get("floor", 0)
+    pct    = d.get("pct", 0)
+    bid1   = d.get("bid1", 0.0)
+    ask1   = d.get("ask1", 0.0)
+    bu_vol = d.get("bu_vol", 0)
+    sd_vol = d.get("sd_vol", 0)
+    nn_buy = d.get("nn_buy", 0)
+    nn_sell= d.get("nn_sell", 0)
+
+    if price <= 0:
+        return {"signal": "N/A", "score": 0, "buy_limit": 0, "buy_exec": 0,
+                "sell_limit": 0, "sell_exec": 0, "tp": 0, "sl": 0, "spread_pct": 0}
+
+    tick = _tick_size(price)
+
+    # ── Score ─────────────────────────────────────────────────
+    score = 50
+
+    # price momentum vs reference
+    if pct < -3:    score += 20
+    elif pct < -1:  score += 12
+    elif pct < 0:   score += 5
+    elif pct > 3:   score -= 20
+    elif pct > 1:   score -= 10
+
+    # buy/sell volume pressure
+    flow = bu_vol + sd_vol
+    if flow > 0:
+        buy_ratio = bu_vol / flow
+        if buy_ratio > 0.60:   score += 15
+        elif buy_ratio > 0.50: score += 7
+        elif buy_ratio < 0.40: score -= 15
+        elif buy_ratio < 0.50: score -= 7
+
+    # foreign flow
+    nn_total = nn_buy + nn_sell
+    if nn_total > 0:
+        if nn_buy > nn_sell * 1.2:   score += 12
+        elif nn_buy > nn_sell:       score += 5
+        elif nn_sell > nn_buy * 1.2: score -= 12
+        elif nn_sell > nn_buy:       score -= 5
+
+    # proximity to ceiling / floor
+    if ceil_ > 0 and price > 0:
+        room_up = (ceil_ - price) / price * 100
+        if room_up < 1: score -= 10
+    if floor_ > 0 and price > 0:
+        room_dn = (price - floor_) / price * 100
+        if room_dn < 1: score += 10
+
+    score = max(0, min(100, score))
+
+    # ── Signal label ─────────────────────────────────────────
+    if score >= 70:   signal = "✅ STRONG BUY"
+    elif score >= 58: signal = "🟢 BUY"
+    elif score >= 45: signal = "⚪ HOLD"
+    elif score >= 33: signal = "🟡 CAUTION"
+    else:             signal = "🔴 SELL"
+
+    # ── Effective bid / ask ───────────────────────────────────
+    eff_bid = bid1 if bid1 > 0 else max(floor_ if floor_ > 0 else price * 0.9, price - tick * 2)
+    eff_ask = ask1 if ask1 > 0 else min(ceil_  if ceil_  > 0 else price * 1.1, price + tick * 2)
+
+    def _snap(val):
+        return int(round(val / tick) * tick)
+
+    # buy_limit: just above Bid1, don't exceed current price
+    buy_limit = _snap(eff_bid + tick)
+    buy_limit = min(buy_limit, int(price))
+    if floor_ > 0: buy_limit = max(buy_limit, int(floor_))
+
+    # buy_exec: at Ask1 (payable ceiling)
+    buy_exec = _snap(eff_ask)
+    if ceil_ > 0: buy_exec = min(buy_exec, int(ceil_))
+
+    # sell_limit: at Ask1 or slightly above (max profit, must be ≤ ceiling)
+    sell_limit = _snap(eff_ask + tick)
+    if ceil_ > 0: sell_limit = min(sell_limit, int(ceil_))
+
+    # sell_exec: at Bid1 (immediate fill, must be ≥ floor)
+    sell_exec = _snap(eff_bid)
+    if floor_ > 0: sell_exec = max(sell_exec, int(floor_))
+
+    # take profit: ~1.5% above price, capped at ceiling
+    tp = _snap(price * 1.015)
+    if ceil_ > 0: tp = min(tp, int(ceil_))
+
+    # stop loss: ~3% below price, floored at floor_price
+    sl = _snap(price * 0.97)
+    if floor_ > 0: sl = max(sl, int(floor_))
+
+    # spread quality
+    spread_pct = round((eff_ask - eff_bid) / price * 100, 2) if price > 0 else 0
+
+    return {
+        "signal":     signal,
+        "score":      score,
+        "buy_limit":  buy_limit,
+        "buy_exec":   buy_exec,
+        "sell_limit": sell_limit,
+        "sell_exec":  sell_exec,
+        "tp":         tp,
+        "sl":         sl,
+        "spread_pct": spread_pct,
+    }
+
+
 # ══════════════════════════════════════════════════════════════
 #  DNSE OHLC TECHNICAL ANALYSIS  (ENH-13)
 #  Used as fundamental proxy when TCBS/VNDirect unavailable
@@ -11029,13 +11243,13 @@ def render_ssi_realtime_tab():
 
     st.divider()
 
-    # ── Tabs: Full Board | Top Movers | Foreign Activity | Order Book ──
+    # ── Tabs: Full Board | Top Movers | Foreign Activity | Order Book | Watchlist Scanner ──
     sub_labels = (
-        ["📋 Bảng giá", "🏆 Top biến động", "🌐 Khối ngoại", "📖 Sổ lệnh & Lịch sử khớp"]
+        ["📋 Bảng giá", "🏆 Top biến động", "🌐 Khối ngoại", "📖 Sổ lệnh & Lịch sử khớp", "🎯 Quét Watchlist"]
         if is_vi else
-        ["📋 Full Board", "🏆 Top Movers", "🌐 Foreign Activity", "📖 Order Book & Trades"]
+        ["📋 Full Board", "🏆 Top Movers", "🌐 Foreign Activity", "📖 Order Book & Trades", "🎯 Watchlist Scanner"]
     )
-    sub1, sub2, sub3, sub4 = st.tabs(sub_labels)
+    sub1, sub2, sub3, sub4, sub5 = st.tabs(sub_labels)
 
     # ── Sub1: Full board ──────────────────────────────────────
     with sub1:
@@ -11356,6 +11570,213 @@ def render_ssi_realtime_tab():
                         "Could not load trade history. Market may be closed or API limited."
                     )
                 )
+
+    # ── Sub5: Watchlist Scanner + Buy/Sell Recommendations ───
+    with sub5:
+        if is_vi:
+            st.subheader("🎯 Quét Watchlist — Khuyến Nghị Mua/Bán Thời Gian Thực")
+            st.caption(
+                "Nhập danh sách mã cổ phiếu (cách nhau bằng dấu phẩy) để quét dữ liệu thời gian thực từ SSI. "
+                "Hệ thống tính toán điểm tín hiệu và khuyến nghị giá mua/bán tối ưu cho từng mã."
+            )
+        else:
+            st.subheader("🎯 Watchlist Scanner — Real-Time Buy/Sell Recommendations")
+            st.caption(
+                "Enter a comma-separated list of ticker symbols to scan in real time via SSI. "
+                "The engine scores each ticker and recommends optimal buy and sell price levels."
+            )
+
+        # ── Input: Custom ticker list ─────────────────────────
+        default_tickers = ", ".join(sorted(df["Mã"].unique().tolist())[:10]) if "Mã" in df.columns else "VIC, VHM, VNM, FPT, MWG"
+        wl_input = st.text_area(
+            "📋 " + ("Danh sách mã (phân cách bằng dấu phẩy)" if is_vi else "Ticker list (comma-separated)"),
+            value=default_tickers,
+            height=80,
+            key="ssi_wl_input",
+            help=("Nhập mã VN (VD: FPT, VCB, ACB). Tối đa 30 mã cho một lần quét." if is_vi else
+                  "Enter VN tickers (e.g. FPT, VCB, ACB). Max 30 tickers per scan."),
+        )
+
+        col_scan, col_opts = st.columns([2, 3])
+        with col_opts:
+            show_all = st.checkbox(
+                ("Hiển thị tất cả tín hiệu (kể cả HOLD/CAUTION)" if is_vi else "Show all signals (incl. HOLD/CAUTION)"),
+                value=True,
+                key="ssi_wl_show_all",
+            )
+            min_score = st.slider(
+                ("Điểm tín hiệu tối thiểu" if is_vi else "Minimum signal score"),
+                min_value=0, max_value=90, value=0, step=5,
+                key="ssi_wl_min_score",
+            )
+        with col_scan:
+            scan_btn = st.button(
+                "🚀 " + ("Quét Ngay" if is_vi else "Scan Now"),
+                type="primary",
+                key="ssi_wl_scan",
+                use_container_width=True,
+            )
+
+        # Parse tickers
+        raw_tickers = [t.strip().upper() for t in wl_input.replace("\n", ",").split(",") if t.strip()]
+        raw_tickers = list(dict.fromkeys(raw_tickers))[:30]   # deduplicate, cap at 30
+
+        if not raw_tickers:
+            st.warning("⚠️ " + ("Vui lòng nhập ít nhất một mã cổ phiếu." if is_vi else "Please enter at least one ticker."))
+        elif scan_btn or ("ssi_wl_results" in st.session_state and st.session_state.ssi_wl_results):
+            # ── Fetch + score ─────────────────────────────────
+            if scan_btn:
+                fetch_ssi_ticker_full.clear()   # invalidate cache for fresh data
+                prog_bar = st.progress(0, text=("Đang quét..." if is_vi else "Scanning..."))
+                results = []
+                for idx, tkr in enumerate(raw_tickers):
+                    prog_bar.progress((idx + 1) / len(raw_tickers),
+                                      text=f"{'Đang tải' if is_vi else 'Fetching'} {tkr}... ({idx+1}/{len(raw_tickers)})")
+                    data = fetch_ssi_ticker_full(tkr)
+                    if data:
+                        rec = _compute_ssi_recommendation(data)
+                        results.append({**data, **rec})
+                    else:
+                        results.append({"ticker": tkr, "signal": "⛔ N/A", "score": 0,
+                                        "price": 0, "pct": 0, "vol": 0, "val_b": 0,
+                                        "buy_limit": 0, "buy_exec": 0,
+                                        "sell_limit": 0, "sell_exec": 0,
+                                        "tp": 0, "sl": 0, "spread_pct": 0,
+                                        "name": "", "session": ""})
+                prog_bar.empty()
+                st.session_state.ssi_wl_results = results
+            else:
+                results = st.session_state.get("ssi_wl_results", [])
+
+            if not results:
+                st.error("❌ " + ("Không lấy được dữ liệu cho bất kỳ mã nào." if is_vi else "No data returned for any ticker."))
+            else:
+                # ── Build results DataFrame ───────────────────
+                rows = []
+                for r in results:
+                    if r.get("score", 0) < min_score:
+                        continue
+                    sig = r.get("signal", "N/A")
+                    if not show_all and sig in ("⚪ HOLD", "🟡 CAUTION"):
+                        continue
+                    price_val = r.get("price", 0)
+                    rows.append({
+                        ("Mã" if is_vi else "Ticker"):             r.get("ticker", ""),
+                        ("Tên" if is_vi else "Name"):              r.get("name", "")[:20],
+                        ("Giá" if is_vi else "Price"):             f"{price_val:,.0f}" if price_val > 0 else "–",
+                        "±%":                                       f"{r.get('pct', 0):+.2f}%",
+                        ("Tín hiệu" if is_vi else "Signal"):       sig,
+                        ("Điểm" if is_vi else "Score"):            r.get("score", 0),
+                        ("Mua Limit\n(Lợi nhuận cao)" if is_vi else "Buy Limit\n(Max Profit)"):
+                            f"{r['buy_limit']:,}" if r.get("buy_limit", 0) > 0 else "–",
+                        ("Mua Tích Cực\n(Khớp nhanh)" if is_vi else "Buy Exec\n(Fast Fill)"):
+                            f"{r['buy_exec']:,}" if r.get("buy_exec", 0) > 0 else "–",
+                        ("Bán Limit\n(Lợi nhuận cao)" if is_vi else "Sell Limit\n(Max Profit)"):
+                            f"{r['sell_limit']:,}" if r.get("sell_limit", 0) > 0 else "–",
+                        ("Bán Tích Cực\n(Khớp nhanh)" if is_vi else "Sell Exec\n(Fast Fill)"):
+                            f"{r['sell_exec']:,}" if r.get("sell_exec", 0) > 0 else "–",
+                        ("Chốt lời (TP)" if is_vi else "Take Profit"):
+                            f"{r['tp']:,}" if r.get("tp", 0) > 0 else "–",
+                        ("Cắt lỗ (SL)" if is_vi else "Stop Loss"):
+                            f"{r['sl']:,}" if r.get("sl", 0) > 0 else "–",
+                        ("KL (nghìn)" if is_vi else "Vol (K)"):
+                            f"{r.get('vol', 0)//1000:,}" if r.get("vol", 0) > 0 else "–",
+                        ("Spread%" if is_vi else "Spread%"):
+                            f"{r.get('spread_pct', 0):.2f}%",
+                        ("Phiên" if is_vi else "Session"):          r.get("session", ""),
+                    })
+
+                if not rows:
+                    st.info("ℹ️ " + ("Không có mã nào đạt điều kiện lọc." if is_vi else "No tickers match the current filter."))
+                else:
+                    res_df = pd.DataFrame(rows)
+
+                    # Summary metrics
+                    sig_col = "Tín hiệu" if is_vi else "Signal"
+                    score_col = "Điểm" if is_vi else "Score"
+                    strong_buy = sum(1 for r in results if "STRONG BUY" in r.get("signal", ""))
+                    buy_cnt    = sum(1 for r in results if r.get("signal", "").startswith("🟢"))
+                    sell_cnt   = sum(1 for r in results if "SELL" in r.get("signal", ""))
+                    avg_score  = round(sum(r.get("score", 50) for r in results) / len(results), 1)
+
+                    sm1, sm2, sm3, sm4 = st.columns(4)
+                    with sm1:
+                        st.metric("✅ Strong Buy",  strong_buy)
+                    with sm2:
+                        st.metric("🟢 " + ("Mua" if is_vi else "Buy"), buy_cnt)
+                    with sm3:
+                        st.metric("🔴 " + ("Bán" if is_vi else "Sell"), sell_cnt)
+                    with sm4:
+                        st.metric("📊 " + ("Điểm TB" if is_vi else "Avg Score"), avg_score)
+
+                    st.divider()
+
+                    # Colour-code signal and ±% columns
+                    def _style_signal(v):
+                        if "STRONG BUY" in str(v): return "background:#004d25;color:#00e676;font-weight:bold"
+                        if "BUY" in str(v):        return "color:#00e676;font-weight:bold"
+                        if "SELL" in str(v):       return "color:#ff5252;font-weight:bold"
+                        if "CAUTION" in str(v):    return "color:#ffb300"
+                        return "color:#aaaacc"
+
+                    def _style_score(v):
+                        try:
+                            val = float(v)
+                            if val >= 70: return "color:#00e676;font-weight:bold"
+                            if val >= 58: return "color:#69f0ae"
+                            if val <= 33: return "color:#ff5252;font-weight:bold"
+                            if val <= 44: return "color:#ffb300"
+                            return "color:#aaaacc"
+                        except Exception:
+                            return ""
+
+                    try:
+                        styled_res = res_df.style\
+                            .map(_style_signal, subset=[sig_col])\
+                            .map(_style_score,  subset=[score_col])\
+                            .map(_style_pct,    subset=["±%"])
+                        show_df(styled_res)
+                    except Exception:
+                        show_df(res_df)
+
+                    # Legend
+                    st.markdown(
+                        "<small style='color:#888'>" +
+                        ("📌 <b>Mua Limit</b>: đặt lệnh giới hạn gần Bid1 — vào giá tốt, chờ khớp. "
+                         "<b>Mua Tích Cực</b>: đặt tại Ask1 — khớp ngay lập tức. "
+                         "<b>TP</b>: mục tiêu chốt lời (~+1.5%). "
+                         "<b>SL</b>: điểm cắt lỗ (~-3% hoặc giá sàn). "
+                         "<b>Spread%</b>: khoảng cách Bid-Ask, thấp = thanh khoản cao."
+                         if is_vi else
+                         "📌 <b>Buy Limit</b>: limit near Bid1 — better entry, waits for fill. "
+                         "<b>Buy Exec</b>: at Ask1 — immediate fill. "
+                         "<b>TP</b>: take-profit target (~+1.5%). "
+                         "<b>SL</b>: stop-loss level (~-3% or floor price). "
+                         "<b>Spread%</b>: Bid-Ask gap — lower = more liquid.") +
+                        "</small>",
+                        unsafe_allow_html=True,
+                    )
+
+                    # Download
+                    try:
+                        csv_wl = res_df.to_csv(index=False, encoding="utf-8-sig")
+                        st.download_button(
+                            "⬇️ " + ("Tải CSV Kết Quả" if is_vi else "Download Results CSV"),
+                            data=csv_wl,
+                            file_name=f"ssi_scan_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                            mime="text/csv",
+                            key="ssi_wl_csv",
+                        )
+                    except Exception:
+                        pass
+        else:
+            st.info(
+                "ℹ️ " + (
+                    "Nhập danh sách mã và nhấn 🚀 Quét Ngay để bắt đầu."
+                    if is_vi else
+                    "Enter tickers above and press 🚀 Scan Now to start."
+                )
+            )
 
     st.caption(
         "⚠️ " + (
