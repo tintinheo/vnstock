@@ -680,7 +680,12 @@ def compute_recommended_prices(
         rec_sell_tp1 = round_price_hose(live + 2.0 * _atr)
         rec_sell_tp2 = round_price_hose(live + 3.5 * _atr)
         rec_stop     = round_price_hose(max(live - 1.5 * _atr, live * 0.90))
-        if ceil_p > 0:
+        # V-3 FIX: clamp all recommended prices within today's trading band
+        if floor_p > 0 and ceil_p > 0:
+            rec_buy      = max(floor_p, min(rec_buy, ceil_p))
+            rec_sell_tp1 = min(rec_sell_tp1, ceil_p)
+            rec_sell_tp2 = min(rec_sell_tp2, ceil_p)
+        elif ceil_p > 0:
             rec_sell_tp2 = min(rec_sell_tp2, ceil_p)
 
     elif signal in ("BÁN", "SELL"):
@@ -799,7 +804,7 @@ def _parse_udf(raw: dict, source: str = "UDF") -> pd.DataFrame:
         df = df.dropna(subset=["Close"]).sort_index()
         df = df[~df.index.duplicated(keep="last")]
         # Normalise price scale (some APIs return x1000 VND)
-        if not df.empty and df["Close"].dropna().median() < 500:
+        if not df.empty and df["Close"].dropna().median() < 1000:
             for col in ["Open","High","Low","Close"]:
                 if col in df.columns:
                     df[col] = df[col] * 1000
@@ -883,7 +888,7 @@ def _parse_ssi_response(raw: dict, symbol: str) -> pd.DataFrame:
         if rows:
             df = pd.DataFrame(rows).set_index("Date").sort_index()
             df = df[~df.index.duplicated(keep="last")]
-            if not df.empty and df["Close"].dropna().median() < 500:
+            if not df.empty and df["Close"].dropna().median() < 1000:
                 for c in ["Open","High","Low","Close"]: df[c] *= 1000
             return df
     # Format A/B: UDF dict with arrays
@@ -977,7 +982,7 @@ def _parse_cafef_table(html_text: str, symbol: str) -> pd.DataFrame:
                 out = out.dropna(subset=["Close"]).sort_index()
                 out = out[~out.index.duplicated(keep="last")]
                 out = out[out["Close"] > 0]
-                if not out.empty and out["Close"].dropna().median() < 500:
+                if not out.empty and out["Close"].dropna().median() < 1000:
                     for c in ["Open","High","Low","Close"]: out[c] *= 1000
                 if not out.empty:
                     _log.info(f"CafeF-HTML ✅ {symbol}: {len(out)} rows, close={out['Close'].iloc[-1]:,.0f}")
@@ -1040,7 +1045,7 @@ def _fetch_cafef(symbol: str, days: int = 730) -> pd.DataFrame:
                     df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
                     df = df[df["Close"] > 0].set_index("Date").sort_index()
                     df = df[~df.index.duplicated(keep="last")]
-                    if not df.empty and df["Close"].dropna().median() < 500:
+                    if not df.empty and df["Close"].dropna().median() < 1000:
                         for c in ["Open","High","Low","Close"]: df[c] *= 1000
                     if len(df) >= 5:
                         _log.info(f"CafeF-historial ✅ {symbol}: {len(df)} rows")
@@ -1076,7 +1081,7 @@ def _fetch_cafef(symbol: str, days: int = 730) -> pd.DataFrame:
                     df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
                     df = df[df["Close"] > 0].set_index("Date").sort_index()
                     df = df[~df.index.duplicated(keep="last")]
-                    if not df.empty and df["Close"].dropna().median() < 500:
+                    if not df.empty and df["Close"].dropna().median() < 1000:
                         for c in ["Open","High","Low","Close"]: df[c] *= 1000
                     if len(df) >= 5:
                         _log.info(f"CafeF-AJAX ✅ {symbol}: {len(df)} rows")
@@ -1108,7 +1113,7 @@ def _fetch_cafef(symbol: str, days: int = 730) -> pd.DataFrame:
                     df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
                     df = df[df["Close"] > 0].set_index("Date").sort_index()
                     df = df[~df.index.duplicated(keep="last")]
-                    if not df.empty and df["Close"].dropna().median() < 500:
+                    if not df.empty and df["Close"].dropna().median() < 1000:
                         for c in ["Open","High","Low","Close"]: df[c] *= 1000
                     if len(df) >= 5:
                         _log.info(f"CafeF-HisDM ✅ {symbol}: {len(df)} rows")
@@ -1163,7 +1168,7 @@ def _fetch_cafef_v2(symbol: str, days: int = 730) -> pd.DataFrame:
         df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
         df = df[df["Close"] > 0].set_index("Date").sort_index()
         df = df[~df.index.duplicated(keep="last")]
-        if not df.empty and df["Close"].dropna().median() < 500:
+        if not df.empty and df["Close"].dropna().median() < 1000:
             for c in ["Open","High","Low","Close"]: df[c] *= 1000
         if len(df) >= 5:
             _log.info(f"CafeF-JSON ✅ {symbol}: {len(df)} rows")
@@ -1231,7 +1236,7 @@ def _fetch_tcbs(symbol: str, days: int = 730) -> pd.DataFrame:
         df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
         df = df[df["Close"] > 0].set_index("Date").sort_index()
         df = df[~df.index.duplicated(keep="last")]
-        if not df.empty and df["Close"].dropna().median() < 500:
+        if not df.empty and df["Close"].dropna().median() < 1000:
             for c in ["Open","High","Low","Close"]: df[c] *= 1000
         if len(df) >= 5:
             _log.info(f"TCBS ✅ {symbol}: {len(df)} rows, close={df['Close'].iloc[-1]:,.0f}")
@@ -1287,7 +1292,7 @@ def _fetch_vndirect_price(symbol: str, days: int = 730) -> pd.DataFrame:
         df = pd.DataFrame(rows).dropna(subset=["Close","Date"])
         df = df[df["Close"] > 0].set_index("Date").sort_index()
         df = df[~df.index.duplicated(keep="last")]
-        if not df.empty and df["Close"].dropna().median() < 500:
+        if not df.empty and df["Close"].dropna().median() < 1000:
             for c in ["Open","High","Low","Close"]: df[c] *= 1000
         if len(df) >= 5:
             _log.info(f"VNDirect-price ✅ {symbol}: {len(df)} rows")
@@ -1324,8 +1329,12 @@ def _fetch_yfinance(symbol: str, days: int = 730) -> pd.DataFrame:
     for ticker_try in [vn_ticker, symbol]:
         try:
             import yfinance as yf
+            # D-5 FIX: auto_adjust=False keeps unadjusted prices consistent with
+            # other VN sources (SSI/DNSE/TCBS return unadjusted); use "Close" not "Adj Close"
             df = yf.download(ticker_try, period=f"{min(days, 730)}d", 
-                             interval="1d", progress=False, auto_adjust=True)
+                             interval="1d", progress=False, auto_adjust=False)
+            if "Adj Close" in df.columns:
+                df = df.drop(columns=["Adj Close"], errors="ignore")
             df = _clean_yf(df)
             if not df.empty and "Close" in df.columns:
                 df = df.dropna(subset=["Close"])
@@ -1353,6 +1362,10 @@ def download_data(symbol: str, days: int = 730, min_rows: int = 40):
     """
     import traceback
     symbol = symbol.strip().upper()
+    # SEC-1 FIX: reject malformed tickers to prevent path traversal and injection
+    import re as _re
+    if not _re.fullmatch(r'[A-Z0-9]{2,10}', symbol):
+        return pd.DataFrame(), "Invalid", f"Invalid ticker '{symbol}': must be 2-10 uppercase letters/digits."
     error_detail = {}
 
     # FIX-20: per-source min rows; FIX-21: skip VNDirect for UPCOM
@@ -1420,15 +1433,11 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
         return pd.DataFrame()
 
     # IQR-based outlier removal for Close price
+    # D-1 FIX: 2.5×IQR (was 3× — too permissive for split-adjusted outliers/API errors)
     Q1 = df['Close'].quantile(0.25)
     Q3 = df['Close'].quantile(0.75)
     IQR = Q3 - Q1
-    lower_bound = Q1 - 1.5 * IQR
-    upper_bound = Q3 + 1.5 * IQR
-    
-    # Filter out extreme outliers, but don't be overly aggressive
-    # Use a wider range (e.g., 3*IQR) to avoid removing valid spikes
-    df = df[(df['Close'] >= (Q1 - 3 * IQR)) & (df['Close'] <= (Q3 + 3 * IQR))]
+    df = df[(df['Close'] >= (Q1 - 2.5 * IQR)) & (df['Close'] <= (Q3 + 2.5 * IQR))]
     
     return df.sort_index()
 
@@ -1700,7 +1709,9 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     avg_gain = gain.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
     avg_loss = loss.ewm(alpha=1/14, min_periods=14, adjust=False).mean()
     rs       = avg_gain / avg_loss.replace(0, np.nan)
-    df["RSI"] = (100 - 100 / (1 + rs)).fillna(50)
+    df["RSI"] = (100 - 100 / (1 + rs))
+    # T-1 FIX: avg_loss=0 (pure uptrend) → RSI should be 100, not 50
+    df["RSI"] = df["RSI"].where(avg_loss != 0, 100.0).fillna(50)
 
     # Bollinger Bands (20-period, ±2σ)
     df["BB_Mid"]   = df["SMA20"]
@@ -1838,7 +1849,15 @@ def compute_composite_score(row, avg_vol, last_vol, trend_ok,
             score += 5; confirms.append("MACD↓")
         if adx and adx > 20 and ndi and pdi and ndi > pdi:
             score += 2; confirms.append(f"ADX={adx:.0f}↓")
-    return round(score,1), confirms
+        # T-3 FIX: volume confirmation for SELL signals (high-volume breakdown is strong)
+        if avg_vol and avg_vol > 0 and last_vol / avg_vol > 1.5:
+            score += 3; confirms.append(f"KL={last_vol/avg_vol:.1f}×↓")
+        if obv and obv_ma and obv < obv_ma:
+            score += 2; confirms.append("OBV↓")
+    elif signal_type in ("THEO DÕI", "WATCH"):
+        score = 0.0  # S-2 FIX: neutral signal, no directional bias
+        confirms = ["Sideway"]
+    return round(score, 1), confirms
 
 # ══════════════════════════════════════════════════════════════
 #  ĐỘI LÁI / SMART MONEY DETECTION (preserved)
@@ -2172,12 +2191,18 @@ def run_backtest(df: pd.DataFrame, initial_capital=INITIAL_CAPITAL,
         eq.append(cap)
     eq=np.array(eq,dtype=float); peak=np.maximum.accumulate(eq)
     dd=(eq-peak)/(peak+1e-9)*100
+    # B-2 FIX: annualised Sharpe from daily equity curve (not per-trade PnL ratio)
+    daily_returns = np.diff(eq) / (eq[:-1] + 1e-9)
+    if len(daily_returns) > 1 and daily_returns.std() > 0:
+        sharpe_annualised = float((daily_returns.mean() / daily_returns.std()) * np.sqrt(252))
+    else:
+        sharpe_annualised = 0.0
     metrics={"final_val":final_val,"profit":final_val-initial_capital,
               "total_ret_pct":(final_val-initial_capital)/initial_capital*100,
               "win_rate":wins/max(len(pnl_list),1)*100,
               "avg_pnl":np.mean(pnl_list) if pnl_list else 0,
               "max_drawdown":dd.min(),"n_trades":len(sell_t),
-              "sharpe":(np.mean(pnl_list)/np.std(pnl_list)) if len(pnl_list)>1 else 0}
+              "sharpe":round(sharpe_annualised, 2)}
     return final_val, trades, metrics, eq
 
 # ══════════════════════════════════════════════════════════════
@@ -2202,26 +2227,45 @@ def forecast_linreg(prices, n_days):
 def forecast_holt(prices, n_days, alpha=0.25, beta=0.10):
     prices=[float(p) for p in prices]
     if len(prices)<2: return np.array([prices[-1]]*n_days)
-    L=prices[0]; T=prices[1]-prices[0]
+    L=prices[0]
+    # M-2 FIX: stable initial trend via regression slope (not just first-step diff)
+    T = (prices[-1] - prices[0]) / (len(prices) - 1)
     for p in prices[1:]:
         Lp,Tp=L,T; L=alpha*p+(1-alpha)*(Lp+Tp); T=beta*(L-Lp)+(1-beta)*Tp
     return np.array([L+i*T for i in range(1,n_days+1)])
 
-def forecast_monte_carlo(prices, n_days, n_sims=1000, seed=42):
+def forecast_monte_carlo(prices, n_days, n_sims=1000, seed=42, band_limit=0.07):
+    """M-5 FIX: clip per-step log-returns to exchange circuit breaker band.
+    HOSE default ±7%; pass band_limit=0.10 for HNX, 0.15 for UPCOM.
+    """
     np.random.seed(seed)
     log_r=np.diff(np.log(np.array(prices,dtype=float)))
     mu=np.mean(log_r); sigma=np.std(log_r)*1.05
     last=float(prices[-1])
-    sims=last*np.exp(np.cumsum(np.random.normal(mu,sigma,(n_sims,n_days)),axis=1))
+    # Clip individual daily returns to exchange band before accumulating
+    raw_sims = np.random.normal(mu, sigma, (n_sims, n_days))
+    clipped_sims = np.clip(raw_sims, -band_limit, band_limit)
+    sims=last*np.exp(np.cumsum(clipped_sims, axis=1))
     return {k:np.percentile(sims,p,axis=0) for k,p in [("p10",10),("p25",25),("p50",50),("p75",75),("p90",90)]}
 
 def forecast_arima(prices, n_days):
     if not ARIMA_AVAILABLE or len(prices)<40: return None, None
+    # M-1 FIX: AIC-based order selection instead of fixed (2,1,2)
+    orders_to_try = [(1,1,1), (2,1,2), (1,1,0), (0,1,1)]
+    log_p = np.log(np.array(prices, dtype=float))
+    best_aic, best_res = np.inf, None
+    for order in orders_to_try:
+        try:
+            m = ARIMA(log_p, order=order).fit()
+            if m.aic < best_aic:
+                best_aic, best_res = m.aic, m
+        except Exception:
+            continue
+    if best_res is None:
+        return None, None
     try:
-        log_p=np.log(np.array(prices,dtype=float))
-        res=ARIMA(log_p,order=(2,1,2)).fit()
-        fc=res.forecast(steps=n_days)
-        ci=res.get_forecast(n_days).conf_int()
+        fc=best_res.forecast(steps=n_days)
+        ci=best_res.get_forecast(n_days).conf_int()
         return np.exp(fc),(np.exp(ci.iloc[:,0].values),np.exp(ci.iloc[:,1].values))
     except Exception: return None, None
 
@@ -2378,7 +2422,8 @@ if "audit_src"   not in st.session_state: st.session_state.audit_src   = "–"
 #  SCAN LOGIC — shared between Tab1 & Tab2
 # ══════════════════════════════════════════════════════════════
 def scan_one_ticker(t: str, min_rows: int = 40):
-    data, src, error_msg = download_data(t, days=365, min_rows=min_rows)
+    # D-2 FIX: 400 calendar days ensures SMA200 coverage (~280 trading days needed)
+    data, src, error_msg = download_data(t, days=400, min_rows=min_rows)
     if data.empty:
         return None, src, error_msg
     data = clean_data(data)
@@ -2414,14 +2459,18 @@ def scan_one_ticker(t: str, min_rows: int = 40):
 
     if st.session_state.lang == "VI":
         hanh_vi = "THEO DÕI"
+        # T-4 FIX: guard SELL against strong breakout uptrends (ADX>30 + trend_ok)
+        is_strong_uptrend = (adx_v is not None and adx_v > 30 and trend_ok)
         if rsi_v < rsi_buy_thresh and c_v < bbl_v and trend_ok: hanh_vi = "MUA"
-        elif rsi_v > rsi_sell_thresh and c_v > bbu_v:            hanh_vi = "BÁN"
+        elif rsi_v > rsi_sell_thresh and c_v > bbu_v and not is_strong_uptrend:  hanh_vi = "BÁN"
     else:
         hanh_vi = "THEO DÕI"
+        is_strong_uptrend = (adx_v is not None and adx_v > 30 and trend_ok)
         if rsi_v < rsi_buy_thresh and c_v < bbl_v and trend_ok: hanh_vi = "MUA"
-        elif rsi_v > rsi_sell_thresh and c_v > bbu_v:            hanh_vi = "BÁN"
+        elif rsi_v > rsi_sell_thresh and c_v > bbu_v and not is_strong_uptrend:  hanh_vi = "BÁN"
 
-    sig_type = "BUY" if hanh_vi == "MUA" else ("BÁN" if hanh_vi == "BÁN" else "BUY")
+    # S-2 FIX: WATCH must not be scored as BUY
+    sig_type = "BUY" if hanh_vi == "MUA" else ("BÁN" if hanh_vi == "BÁN" else "WATCH")
     score, confirms = compute_composite_score(latest.to_dict(), avg_v, last_v, trend_ok,
                                                sig_type, rsi_buy_thresh, rsi_sell_thresh)
     doi_lai = detect_doi_lai(data)
@@ -3948,11 +3997,16 @@ def compute_ddm_valuation(dps: float, roe: float, payout_ratio: float = 0.40,
         return 0.0
     return round(dps / (cost_of_equity - g), 0)
 
-def compute_graham_value(eps_ttm: float, bvps: float) -> float:
-    """Benjamin Graham: sqrt(22.5 × EPS × BVPS)."""
+def compute_graham_value(eps_ttm: float, bvps: float, vn_bond_yield: float = 0.045) -> float:
+    """Benjamin Graham: sqrt(multiplier × EPS × BVPS).
+    F-4 FIX: multiplier calibrated to VN 10-year bond yield (Graham used 4.4% base).
+    Lower VN yield (4-4.5%) justifies a slightly more liberal multiplier vs Graham's 22.5.
+    """
     if eps_ttm <= 0 or bvps <= 0:
         return 0.0
-    return round((22.5 * eps_ttm * bvps) ** 0.5, 0)
+    US_BASE_YIELD = 0.044  # Graham's original calibration rate
+    calibrated_multiplier = 22.5 * (US_BASE_YIELD / max(vn_bond_yield, 0.02))
+    return round((calibrated_multiplier * eps_ttm * bvps) ** 0.5, 0)
 
 def aggregate_fair_value(dcf: float, pe: float, pb: float, graham: float,
                           weights=(0.35, 0.30, 0.20, 0.15)) -> float:
@@ -3969,10 +4023,12 @@ def aggregate_fair_value(dcf: float, pe: float, pb: float, graham: float,
 # ══════════════════════════════════════════════════════════════
 def score_fundamental_risk(ratio_df: pd.DataFrame,
                             income_df: pd.DataFrame,
-                            balance_df: pd.DataFrame) -> dict:
+                            balance_df: pd.DataFrame,
+                            sector: str = "") -> dict:
     """
     Returns risk scores 0-10 (10 = highest risk) for 5 dimensions.
     Also returns a composite fundamental score 0-100 (100 = best).
+    F-5 FIX: banking sector exempted from D/E scoring (deposits = liabilities by design).
     """
     scores = {
         "debt":       5.0,
@@ -3993,18 +4049,24 @@ def score_fundamental_risk(ratio_df: pd.DataFrame,
         return None
 
     # ── Debt risk (0=safe, 10=dangerous)
-    de = _latest(ratio_df, "payableOnEquity") or _latest(ratio_df, "D/E")
-    if de is not None:
-        if de < 0.5:   scores["debt"] = 1.0
-        elif de < 1.0: scores["debt"] = 3.0
-        elif de < 2.0: scores["debt"] = 5.0
-        elif de < 3.0: scores["debt"] = 7.0
-        else:          scores["debt"] = 9.0
+    # F-5 FIX: Banking/Insurance D/E is structurally high (deposits = liabilities)
+    # Using D/E for banks misclassifies every bank as maximum risk — use neutral 5.0
+    is_banking = sector in _BANKING_SECTOR
+    if is_banking:
+        scores["debt"] = 5.0  # neutral; D/E is not meaningful for banks
+    else:
+        de = _latest(ratio_df, "payableOnEquity") or _latest(ratio_df, "D/E")
+        if de is not None:
+            if de < 0.5:   scores["debt"] = 1.0
+            elif de < 1.0: scores["debt"] = 3.0
+            elif de < 2.0: scores["debt"] = 5.0
+            elif de < 3.0: scores["debt"] = 7.0
+            else:          scores["debt"] = 9.0
 
-    icr = _latest(ratio_df, "ebitOnInterest") or _latest(ratio_df, "ICR")
-    if icr is not None:
-        if icr > 5:    scores["debt"] = max(1.0, scores["debt"] - 2)
-        elif icr < 1:  scores["debt"] = min(10.0, scores["debt"] + 2)
+        icr = _latest(ratio_df, "ebitOnInterest") or _latest(ratio_df, "ICR")
+        if icr is not None:
+            if icr > 5:    scores["debt"] = max(1.0, scores["debt"] - 2)
+            elif icr < 1:  scores["debt"] = min(10.0, scores["debt"] + 2)
 
     # ── Liquidity risk
     cr = _latest(ratio_df, "currentPayment") or _latest(ratio_df, "Curr")
@@ -4436,7 +4498,8 @@ def get_scanner_signal_for_profiler(ticker: str) -> dict:
     as the Market Scanner — eliminating any perception of inconsistency.
     """
     try:
-        df, src, err = download_data(ticker, days=365, min_rows=40)
+        # D-2 FIX: 400 calendar days ensures full SMA200 coverage
+        df, src, err = download_data(ticker, days=400, min_rows=40)
         if df is None or df.empty or len(df) < 40:
             return {"error": err or "No price data", "signal": "–", "score": 0}
 
@@ -4465,13 +4528,14 @@ def get_scanner_signal_for_profiler(ticker: str) -> dict:
         sk     = _safe("STOCH_K")
         c_v    = float(latest["Close"])
 
-        # Use SAME signal logic as scan_one_ticker — filters OFF (profiler doesn't apply filters)
-        trend_ok = True  # profiler always shows raw signal without filter bias
+        # T-4 FIX: guard SELL against strong breakout uptrends
+        is_strong_uptrend = (adx_v > 30 and trend_ok) if adx_v else False
         hanh_vi  = "THEO DÕI"
         if rsi_v < rsi_buy_thresh  and c_v < bbl_v:  hanh_vi = "MUA"
-        elif rsi_v > rsi_sell_thresh and c_v > bbu_v: hanh_vi = "BÁN"
+        elif rsi_v > rsi_sell_thresh and c_v > bbu_v and not is_strong_uptrend: hanh_vi = "BÁN"
 
-        sig_type = "BUY" if hanh_vi == "MUA" else ("BÁN" if hanh_vi == "BÁN" else "BUY")
+        # S-2 FIX: WATCH must not be scored as BUY
+        sig_type = "BUY" if hanh_vi == "MUA" else ("BÁN" if hanh_vi == "BÁN" else "WATCH")
         score, confirms = compute_composite_score(
             latest.to_dict(), avg_v, last_v, trend_ok,
             sig_type, rsi_buy_thresh, rsi_sell_thresh)
@@ -5357,7 +5421,7 @@ def render_stock_profiler_tab():
         # Build scoring ratio df from best available source
         scoring_ratio = ratio_raw if tcbs_ok else vnd_ratios
 
-        risk_scores = score_fundamental_risk(scoring_ratio, income_raw, balance_raw)
+        risk_scores = score_fundamental_risk(scoring_ratio, income_raw, balance_raw, sector=sector)
 
         # Override with OHLC-derived risk when fundamentals absent
         if not tcbs_ok and not vnd_ok and ohlc_ok:

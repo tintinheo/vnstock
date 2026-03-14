@@ -9,7 +9,7 @@ from typing import Optional
 import pandas as pd
 import numpy as np
 
-from config import PORTFOLIO_DIR, TRADE_LOG_DIR, SETTLEMENT_DAYS
+from config import PORTFOLIO_DIR, TRADE_LOG_DIR, SETTLEMENT_DAYS, VN_PUBLIC_HOLIDAYS
 
 
 # ─── RISK CLASSIFICATION ─────────────────────────────────────────────────────
@@ -270,7 +270,7 @@ def settlement_date(trade_date: dt.date) -> dt.date:
     d, count = trade_date, 0
     while count < SETTLEMENT_DAYS:
         d += dt.timedelta(days=1)
-        if d.weekday() < 5:
+        if d.weekday() < 5 and d not in VN_PUBLIC_HOLIDAYS:
             count += 1
     return d
 

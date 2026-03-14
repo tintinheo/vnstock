@@ -3,6 +3,7 @@ Captain Seventh Quant Terminal — Configuration
 Edit this file to point to your portfolio folder and set preferences.
 """
 import os
+import datetime as dt
 from pathlib import Path
 
 # ─── PATHS ────────────────────────────────────────────────────────────────────
@@ -60,3 +61,63 @@ ANALYST_SOURCE = "SSI"
 # ─── KELLY CRITERION ──────────────────────────────────────────────────────────
 KELLY_FRACTION = 0.25   # Use 1/4 Kelly for safety (reduces variance)
 MAX_POSITION_PCT = 0.20  # No single position > 20% of portfolio
+
+
+# ─── VN MARKET RULES ─────────────────────────────────────────────────────────
+
+def hose_tick(price_thousands: float) -> float:
+    """Tiered HOSE tick in thousands-VND.  <10→10VND, 10-50→50VND, ≥50→100VND"""
+    if price_thousands < 10.0:
+        return 0.01
+    if price_thousands < 50.0:
+        return 0.05
+    return 0.10
+
+
+PRICE_BAND_BY_EXCHANGE = {"HOSE": 0.07, "HNX": 0.10, "UPCOM": 0.15}
+
+SSI_MIN_BROKERAGE = 17        # thousands-VND (= 17,000 VND minimum per order at SSI)
+SELL_TAX_RATE     = 0.001     # 0.1% withholding tax on gross sell value
+
+
+# VN public holidays 2025–2027 (source: MoLISA official decrees)
+VN_PUBLIC_HOLIDAYS: set = {
+    # 2025 — Tết Ất Tỵ + statutory
+    dt.date(2025, 1, 1),
+    dt.date(2025, 1, 27), dt.date(2025, 1, 28), dt.date(2025, 1, 29),
+    dt.date(2025, 1, 30), dt.date(2025, 1, 31),
+    dt.date(2025, 4, 7),
+    dt.date(2025, 4, 30), dt.date(2025, 5, 1),
+    dt.date(2025, 9, 2),
+    # 2026 — Tết Bính Ngọ + statutory
+    dt.date(2026, 1, 1),
+    dt.date(2026, 2, 16), dt.date(2026, 2, 17), dt.date(2026, 2, 18),
+    dt.date(2026, 2, 19), dt.date(2026, 2, 20),
+    dt.date(2026, 3, 30),
+    dt.date(2026, 4, 30), dt.date(2026, 5, 1),
+    dt.date(2026, 9, 2),
+    # 2027 — Tết Đinh Mùi + statutory
+    dt.date(2027, 1, 1),
+    dt.date(2027, 2, 5), dt.date(2027, 2, 6), dt.date(2027, 2, 7),
+    dt.date(2027, 2, 8), dt.date(2027, 2, 9),
+    dt.date(2027, 4, 19),
+    dt.date(2027, 4, 30), dt.date(2027, 5, 1),
+    dt.date(2027, 9, 2),
+}
+
+
+def compute_price_limits(ref_price: float, exchange: str = "HOSE") -> tuple:
+    """Return (ceiling, floor) for ref_price (thousands-VND) on given exchange."""
+    band    = PRICE_BAND_BY_EXCHANGE.get(exchange.upper(), 0.07)
+    tick    = hose_tick(ref_price)
+    ceil_p  = round(round(ref_price * (1 + band) / tick) * tick, 2)
+    floor_p = round(round(ref_price * (1 - band) / tick) * tick, 2)
+    return ceil_p, floor_p
+
+
+MACRO_EVENTS = [
+    ("18/03/2026", "HPG",     "Công bố KQKD Q4/2025",                    "🔴 Catalyst cao"),
+    ("18/03/2026", "FED",     "FOMC Minutes — định hướng lãi suất",       "🟡 Macro"),
+    ("31/03/2026", "BCTC",    "Deadline nộp BCTC kiểm toán 2025",         "🔵 Toàn thị trường"),
+    ("Hàng ngày",  "Dầu thô", "WTI Crude Oil — ảnh hưởng HVN, POW, PVD", "🟡 Macro"),
+]

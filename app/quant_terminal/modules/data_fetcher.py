@@ -299,6 +299,50 @@ class MarketData:
         # For now, return empty — user can manually set in UI.
         return {"target_price": None, "upside_pct": None, "rating": "N/A"}
 
+    # ── INTRADAY OHLCV ─────────────────────────────────────────────
+
+    def get_history_intraday(
+        self, symbol: str, resolution: str = "15", days: int = 5
+    ) -> pd.DataFrame:
+        """
+        Return intraday OHLCV DataFrame.
+        resolution: '15' = 15-min bars, '60' = 1-hour bars.
+        TTL: 60 s (very fresh for live trading).
+        """
+        if not symbol:
+            return pd.DataFrame()
+        cache_path = _cache_key("intraday", symbol, resolution, days)
+        cached = _read_cache(cache_path, ttl_seconds=60)
+        if cached:
+            try:
+                records = cached.get("records")
+                if records:
+                    df = pd.DataFrame(records)
+                    idx_col = cached.get("index_col", "time")
+                    if idx_col in df.columns:
+                        df[idx_col] = pd.to_datetime(df[idx_col])
+                        df = df.set_index(idx_col)
+                    if not df.empty:
+                        return df
+            except Exception:
+                pass
+
+        if SSI_AVAILABLE:
+            try:
+                df = ssi_fetcher.fetch_intraday(symbol, resolution, days)
+                if df is not None and not df.empty:
+                    cache_records = df.reset_index()
+                    idx_col = df.index.name or "time"
+                    _write_cache(cache_path, {
+                        "records":   cache_records.to_dict(orient="records"),
+                        "index_col": idx_col,
+                    })
+                    return df
+            except Exception as e:
+                print(f"[MarketData] SSI intraday {symbol}: {e}")
+
+        return pd.DataFrame()
+
     # ── VNINDEX ───────────────────────────────────────────────────────────────
 
     def get_index(self, index: str = "VNINDEX") -> dict:
@@ -326,3 +370,6 @@ def get_financials(symbol: str) -> dict:
 
 def get_index_history(index: str = "VNINDEX", days: int = 252) -> pd.DataFrame:
     return _md.get_index_history(index, days)
+
+def get_history_intraday(symbol: str, resolution: str = "15", days: int = 5) -> pd.DataFrame:
+    return _md.get_history_intraday(symbol, resolution, days)

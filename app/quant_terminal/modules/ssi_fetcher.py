@@ -38,8 +38,9 @@ _TIMEOUT = 12
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
 def _unix(d: dt.date) -> int:
-    """Date → Unix timestamp (midnight local time)."""
-    return int(dt.datetime.combine(d, dt.time.min).timestamp())
+    """Date → Unix timestamp at midnight GMT+7 (Vietnam time)."""
+    tz_vn = dt.timezone(dt.timedelta(hours=7))
+    return int(dt.datetime(d.year, d.month, d.day, tzinfo=tz_vn).timestamp())
 
 
 def _normalize_price(df: pd.DataFrame) -> pd.DataFrame:
@@ -189,6 +190,66 @@ def fetch_history(symbol: str, days: int = 252) -> pd.DataFrame:
             _log.error(f"SSI unexpected [{symbol}]: {e}")
 
     _log.warning(f"SSI: all history endpoints failed for {symbol}")
+    return pd.DataFrame()
+
+
+# ─── INTRADAY HISTORY ─────────────────────────────────────────────────────
+
+_INTRADAY_ENDPOINTS = [
+    lambda s, f, t, r: (
+        f"https://iboard-api.ssi.com.vn/statistics/charts/history"
+        f"?resolution={r}&symbol={s}&from={f}&to={t}"
+    ),
+    lambda s, f, t, r: (
+        f"https://iboard-query.ssi.com.vn/stock/ohlc"
+        f"?symbol={s}&resolution={r}&from={f}&to={t}"
+    ),
+    lambda s, f, t, r: (
+        f"https://fc-data.ssi.com.vn/api/v2/stock/ohlc"
+        f"?symbol={s}&resolution={r}&from={f}&to={t}"
+    ),
+]
+
+
+def fetch_intraday(symbol: str, resolution: str = "15", days: int = 5) -> pd.DataFrame:
+    """
+    Fetch intraday OHLCV for `symbol` from SSI iBoard.
+
+    Parameters
+    ----------
+    resolution : "15" (15-min), "60" (1-hour)
+    days       : calendar days of history to fetch (request window)
+
+    Returns pd.DataFrame indexed by DatetimeIndex, prices in thousands-VND.
+    Returns empty DataFrame on failure.
+    """
+    end   = dt.date.today()
+    start = end - dt.timedelta(days=days + 2)   # +2 buffer for weekends
+    from_ts, to_ts = _unix(start), _unix(end)
+
+    for url_fn in _INTRADAY_ENDPOINTS:
+        url = url_fn(symbol, from_ts, to_ts, resolution)
+        try:
+            r = _SESSION.get(url, timeout=_TIMEOUT)
+            r.raise_for_status()
+            raw = r.json()
+            df  = _parse_udf(raw, symbol)
+            if not df.empty and len(df) >= 5:
+                _log.info(f"SSI intraday ✅ {symbol} {resolution}m: {len(df)} rows")
+                return df
+            _log.debug(f"SSI intraday {symbol}: empty/short from {url[:60]}")
+        except requests.HTTPError as e:
+            _log.warning(f"SSI intraday HTTP [{symbol}] {url[:55]}: {e}")
+        except requests.Timeout:
+            _log.warning(f"SSI intraday timeout [{symbol}] {url[:55]}")
+        except requests.ConnectionError as e:
+            _log.warning(f"SSI intraday conn [{symbol}]: {e}")
+        except ValueError as e:
+            _log.warning(f"SSI intraday JSON [{symbol}]: {e}")
+        except Exception as e:
+            _log.error(f"SSI intraday unexpected [{symbol}]: {e}")
+
+    _log.warning(f"SSI: all intraday endpoints failed for {symbol}")
     return pd.DataFrame()
 
 

@@ -8,15 +8,18 @@ from typing import Optional
 
 from config import (
     HOSE_TICK, MAX_RISK_PER_TRADE, KELLY_FRACTION,
-    MAX_POSITION_PCT, SCENARIO_PROBABILITIES
+    MAX_POSITION_PCT, SCENARIO_PROBABILITIES,
+    hose_tick, SSI_MIN_BROKERAGE, SELL_TAX_RATE, compute_price_limits,
 )
 from modules.analysis import compute_signal_score, find_support_resistance
 
 
 # ─── HELPERS ─────────────────────────────────────────────────────────────────
 
-def round_to_tick(price: float, tick: float = HOSE_TICK) -> float:
-    """Round price to nearest HOSE price tick (prices in thousands-VND)."""
+def round_to_tick(price: float, tick: float = None) -> float:
+    """Round price to nearest HOSE price tick (prices in thousands-VND). Tick auto-detected if not given."""
+    if tick is None:
+        tick = hose_tick(price)
     return round(round(price / tick) * tick, 2)
 
 
@@ -233,6 +236,76 @@ def current_session() -> tuple[str, str]:
     return "Ngoài giờ", "Lệnh đặt sẽ có hiệu lực từ phiên ATO ngày hôm sau"
 
 
+# ─── BUY SCENARIO BUILDER ────────────────────────────────────────────────────
+
+def generate_buy_scenarios(
+    symbol: str,
+    market_price: float,
+    hist_df,
+    portfolio_value: float = 10_000_000,   # raw VND
+    exchange: str = "HOSE",
+) -> dict:
+    """
+    Analyse a potential new BUY position.
+    portfolio_value: raw VND (e.g. 38_000_000).
+    Prices returned in thousands-VND.
+    """
+    sig  = compute_signal_score(hist_df)
+    sr   = find_support_resistance(hist_df)
+
+    close = market_price or sig.get("close", 15.0)
+    atr   = sig.get("atr14", close * 0.02)
+
+    entry = round_to_tick(close)
+    ceil_p, floor_p = compute_price_limits(close, exchange)
+
+    resist  = sr.get("resistance", [])
+    support = sr.get("support", [])
+
+    target1 = round_to_tick(resist[0]) if resist else round_to_tick(close * 1.08)
+    target2 = round_to_tick(resist[1]) if len(resist) > 1 else round_to_tick(close * 1.15)
+    stop    = round_to_tick(
+        min(support[-1], close * 0.95) if support else close - 2.5 * atr
+    )
+    stop = min(stop, close * 0.93)
+
+    risk_per_share = max(entry - stop, close * 0.01)   # guard against zero
+
+    # Position sizing — risk 2% of portfolio, capped at 20% by weight
+    pf_val_k      = portfolio_value / 1000.0            # raw VND → thousands-VND
+    max_risk_k    = pf_val_k * MAX_RISK_PER_TRADE        # thousands-VND risk budget
+    raw_qty       = int(max_risk_k / risk_per_share)
+    recommended_qty = max(100, (raw_qty // 100) * 100)
+    max_by_weight   = max(100, int(pf_val_k * MAX_POSITION_PCT / entry / 100) * 100)
+    recommended_qty = min(recommended_qty, max_by_weight)
+
+    value      = entry * recommended_qty
+    brokerage  = max(SSI_MIN_BROKERAGE, round(value * 0.0015))
+    total_cost = value + brokerage
+
+    rr = (target1 - entry) / risk_per_share if risk_per_share > 0 else 0
+
+    return {
+        "symbol":          symbol,
+        "entry_price":     entry,
+        "target1":         target1,
+        "target2":         target2,
+        "stop_loss":       stop,
+        "ceiling":         ceil_p,
+        "floor":           floor_p,
+        "risk_per_share":  round(risk_per_share, 2),
+        "recommended_qty": recommended_qty,
+        "value":           value,
+        "brokerage_est":   brokerage,
+        "total_cost":      total_cost,
+        "rr":              round(rr, 2),
+        "signal_score":    sig.get("score", 0),
+        "signal_label":    sig.get("label", "N/A"),
+        "signal_color":    sig.get("color", "#6B7280"),
+        "rsi":             sig.get("rsi", 50),
+    }
+
+
 def build_lo_instruction(
     symbol: str,
     side: str,           # "Mua" | "Bán"
@@ -248,10 +321,29 @@ def build_lo_instruction(
     value = price * qty
     session, session_desc = current_session()
 
-    # Slippage estimate: assume 0.3% for LO on liquid stocks
+    # Tick display for instruction (thousands-VND → raw VND for display)
+    tick_vnd = int(hose_tick(price) * 1000)   # e.g. 0.05 thousands → 50 VND
+
+    # Costs
     slippage_est = round(price * 0.003 * qty)
-    brokerage    = round(value * 0.0015)   # typical 0.15% SSI fee
-    net_proceeds = value - brokerage if side == "Bán" else value + brokerage + slippage_est
+    brokerage    = max(SSI_MIN_BROKERAGE, round(value * 0.0015))   # SSI min 17,000 VND
+    sell_tax     = round(value * SELL_TAX_RATE) if side == "Bán" else 0  # 0.1% thuế TNCN
+    net_proceeds = (
+        value - brokerage - sell_tax
+        if side == "Bán"
+        else value + brokerage + slippage_est
+    )
+
+    important = [
+        f"LO chỉ khớp khi giá thị trường {'≤' if side == 'Mua' else '≥'} {price:,.0f}đ",
+        "Lệnh hết hiệu lực cuối phiên — cần đặt lại ngày hôm sau nếu chưa khớp",
+        "Phiên ATC (14:30–15:00): LO không khớp trong ATC — tránh đặt mới lúc này",
+        f"Phí dự kiến: {brokerage:,.0f}đ (0.15%, tối thiểu 17,000đ SSI)",
+    ]
+    if side == "Bán":
+        important.append(
+            f"Thuế 0.1% trên giá bán: {sell_tax:,.0f}đ — tự động khấu trừ qua CTCK"
+        )
 
     return {
         "symbol":        symbol,
@@ -264,6 +356,7 @@ def build_lo_instruction(
         "session_desc":  session_desc,
         "slippage_est":  slippage_est,
         "brokerage_est": brokerage,
+        "sell_tax":      sell_tax,
         "net_proceeds":  net_proceeds,
         "note":          note,
         "steps": [
@@ -272,13 +365,8 @@ def build_lo_instruction(
             "Loại lệnh: LO (Limit Order)",
             f"Chiều: {side}",
             f"Khối lượng: {qty:,} CP",
-            f"Giá: {price:,.0f} đ (bước giá 100đ ✓)",
+            f"Giá: {price:,.0f}đ (bước giá {tick_vnd}đ ✓)",
             "Xác nhận PIN/OTP → Trạng thái: Chờ khớp",
         ],
-        "important": [
-            f"LO chỉ khớp khi giá thị trường {'≤' if side == 'Mua' else '≥'} {price:,.0f}đ",
-            "Lệnh hết hiệu lực cuối phiên — cần đặt lại ngày hôm sau nếu chưa khớp",
-            "Phiên ATC (14:30–15:00): LO không khớp trong ATC — tránh đặt mới lúc này",
-            f"Phí dự kiến: {brokerage:,.0f}đ (0.15%)",
-        ]
+        "important": important,
     }

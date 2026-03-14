@@ -18,15 +18,15 @@ import streamlit as st
 
 from config import (
     APP_TITLE, APP_ICON, PORTFOLIO_DIR, TRADE_LOG_DIR,
-    PRICE_REFRESH_SECONDS
+    PRICE_REFRESH_SECONDS, MACRO_EVENTS, compute_price_limits, SELL_TAX_RATE
 )
 from modules.portfolio import (
     Portfolio,
     list_portfolio_files
 )
-from modules.data_fetcher import get_quote, get_quotes_batch, get_history, get_financials
+from modules.data_fetcher import get_quote, get_quotes_batch, get_history, get_financials, get_history_intraday
 from modules.analysis import compute_indicators, compute_signal_score, compute_beta, find_support_resistance, compute_var
-from modules.scenarios import generate_scenarios, build_lo_instruction, current_session
+from modules.scenarios import generate_scenarios, build_lo_instruction, current_session, generate_buy_scenarios
 
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -107,6 +107,10 @@ def cached_history(symbol: str, days: int = 252):
 @st.cache_data(ttl=PRICE_REFRESH_SECONDS, show_spinner=False)
 def cached_quote(symbol: str):
     return get_quote(symbol)
+
+@st.cache_data(ttl=60, show_spinner=False)
+def cached_intraday(symbol: str, resolution: str = "15", days: int = 5):
+    return get_history_intraday(symbol, resolution, days)
 
 
 def refresh_quotes():
@@ -271,14 +275,21 @@ with tab_dashboard:
     pf = st.session_state.portfolio
 
     if pf.df.empty:
-        st.info("Upload file Excel SSI iBoard ở sidebar để bắt đầu.")
         st.markdown("""
-        **Hướng dẫn xuất file từ SSI iBoard:**
-        1. Đăng nhập iboard.ssi.com.vn hoặc app SSI iBoard
-        2. Vào **Tài sản** → **Danh mục chứng khoán**
-        3. Nhấn **Export** → chọn Excel (.xlsx)
-        4. Upload file vừa tải về vào sidebar bên trái
-        """)
+        <div style="background:#EFF6FF;border:2px solid #3B82F6;border-radius:12px;padding:20px 24px;margin:12px 0;">
+          <div style="font-size:18px;font-weight:700;color:#1E40AF;margin-bottom:8px;">👋 Chào mừng đến với Quant Terminal!</div>
+          <div style="font-size:14px;color:#1D4ED8;margin-bottom:12px;">Bắt đầu bằng cách upload file danh mục từ SSI iBoard:</div>
+          <ol style="color:#374151;font-size:13px;margin:0;padding-left:18px;line-height:1.8;">
+            <li>Đăng nhập <b>iboard.ssi.com.vn</b> hoặc app SSI iBoard</li>
+            <li>Vào <b>Tài sản → Danh mục chứng khoán</b></li>
+            <li>Nhấn <b>Export → Excel (.xlsx)</b></li>
+            <li>Upload file vào sidebar <b>bên trái ⬅</b></li>
+          </ol>
+          <div style="font-size:12px;color:#6B7280;margin-top:10px;">
+            💡 Chưa có danh mục? Nhập mã CK ở sidebar → tab <b>Phân Tích Cổ Phiếu</b> để phân tích bất kỳ mã nào.
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 
     # ── KPI row ──────────────────────────────────────────────────────────────
@@ -661,8 +672,21 @@ with tab_stock:
 
     with col_chart:
         st.markdown('<div class="section-hdr">Biểu đồ giá + Kỹ thuật</div>', unsafe_allow_html=True)
-        if not hist.empty:
-            df_ind = compute_indicators(hist.copy())
+        _res_c1, _res_c2 = st.columns([4, 1])
+        with _res_c2:
+            chart_res = st.selectbox(
+                "", ["1D", "1H", "15m"], key="chart_res",
+                label_visibility="collapsed",
+                help="Khung thời gian biểu đồ"
+            )
+        _res_map  = {"1H": "60", "15m": "15"}
+        _use_hist = hist
+        if chart_res != "1D" and symbol:
+            _intra = cached_intraday(symbol, _res_map[chart_res], 5)
+            if not _intra.empty:
+                _use_hist = _intra
+        if not _use_hist.empty:
+            df_ind = compute_indicators(_use_hist.copy())
             fig = make_subplots(
                 rows=3, cols=1,
                 shared_xaxes=True,
@@ -726,7 +750,7 @@ with tab_stock:
             fig.update_yaxes(showgrid=True, gridcolor="#F3F4F6")
             st.plotly_chart(fig, use_container_width=True)
         else:
-            st.warning("Không có dữ liệu lịch sử để vẽ biểu đồ.")
+            st.warning("Không có dữ liệu lịch sử để vẽ biểu đồ." if _use_hist.empty else "Không có dữ liệu lịch sử để vẽ biểu đồ.")
 
     # ── Scenario Analysis ──────────────────────────────────────────────────────
     st.markdown("---")
@@ -818,6 +842,16 @@ with tab_stock:
             border_color = "#DC2626" if "Stop" in order["name"] else (
                 "#F59E0B" if "50%" in order["name"] else "#16A34A"
             )
+            # Sell tax line — shown for all Bán orders
+            _tax_info = ""
+            if order.get("side") == "Bán":
+                _ord_tax = round(price_ord * qty_ord * SELL_TAX_RATE)
+                _net_pnl = pnl_est - _ord_tax
+                _tax_info = (
+                    f' &nbsp;|&nbsp; <span style="color:#B45309;">'
+                    f'Thuế 0.1%: -{_ord_tax:,.0f}đ</span>'
+                    f' → net: <span style="color:{pnl_color(_net_pnl)};font-weight:500;">{_net_pnl:+,.0f}đ</span>'
+                )
             st.markdown(f"""
             <div class="order-card" style="border-left:4px solid {border_color};">
               <div style="display:flex;justify-content:space-between;align-items:flex-start;">
@@ -834,7 +868,7 @@ with tab_stock:
               <div style="font-size:12px;color:#374151;margin-top:6px;">{order['note']}</div>
               <div style="font-size:11px;color:#6B7280;margin-top:4px;">
                 Trigger: {order['trigger']} &nbsp;|&nbsp;
-                P&L ước: <span style="color:{pnl_color(pnl_est)};font-weight:500;">{pnl_est:+,.0f}đ</span>
+                P&L ước: <span style="color:{pnl_color(pnl_est)};font-weight:500;">{pnl_est:+,.0f}đ</span>{_tax_info}
               </div>
             </div>""", unsafe_allow_html=True)
 
@@ -867,20 +901,111 @@ with tab_stock:
         with lo_c4:
             lo_note  = st.text_input("Ghi chú", "")
 
+        # Ceiling / floor warning
+        if market_price > 0:
+            _lo_ceil, _lo_floor = compute_price_limits(market_price)
+            _band_html = (
+                f'<div class="alert-ok" style="margin:6px 0;font-size:12px;">'
+                f'📊 Tham chiếu: <b>{market_price:,.2f}đ</b> &nbsp;|&nbsp; '
+                f'<span style="color:#16A34A;font-weight:600;">Trần: {_lo_ceil:,.2f}đ</span> &nbsp;|&nbsp; '
+                f'<span style="color:#DC2626;font-weight:600;">Sàn: {_lo_floor:,.2f}đ</span>'
+                f'</div>'
+            )
+            st.markdown(_band_html, unsafe_allow_html=True)
+            if lo_price > _lo_ceil + 0.001:
+                st.markdown(
+                    f'<div class="alert-danger">⚠️ Giá đặt <b>{lo_price:,.0f}đ</b> vượt giá trần'
+                    f' <b>{_lo_ceil:,.2f}đ</b> — lệnh sẽ bị từ chối bởi HoSE!</div>',
+                    unsafe_allow_html=True,
+                )
+            elif lo_price > 0 and lo_price < _lo_floor - 0.001:
+                st.markdown(
+                    f'<div class="alert-danger">⚠️ Giá đặt <b>{lo_price:,.0f}đ</b> dưới giá sàn'
+                    f' <b>{_lo_floor:,.2f}đ</b> — lệnh sẽ bị từ chối bởi HoSE!</div>',
+                    unsafe_allow_html=True,
+                )
+
         if st.button("Tạo hướng dẫn lệnh LO", type="primary"):
             lo = build_lo_instruction(symbol, lo_side, int(lo_qty), lo_price, lo_note)
             st.markdown("**Hướng dẫn đặt lệnh trên SSI iBoard:**")
             for i, step in enumerate(lo["steps"], 1):
                 st.markdown(f"{i}. {step}")
+            _lo_tax_str = (
+                f" &nbsp;|&nbsp; <b>Thuế bán 0.1%:</b> {lo['sell_tax']:,.0f}đ"
+                if lo.get("sell_tax", 0) > 0 else ""
+            )
             st.markdown(f"""
             <div style="background:#DBEAFE;border-radius:8px;padding:12px;margin-top:10px;">
               <b>Giá trị lệnh:</b> {lo['value']:,.0f}đ &nbsp;|&nbsp;
-              <b>Phí ước tính:</b> {lo['brokerage_est']:,.0f}đ &nbsp;|&nbsp;
+              <b>Phí ước tính:</b> {lo['brokerage_est']:,.0f}đ{_lo_tax_str} &nbsp;|&nbsp;
               <b>Phiên hiện tại:</b> {lo['session']}
             </div>""", unsafe_allow_html=True)
             st.markdown("**Lưu ý quan trọng:**")
             for note in lo["important"]:
                 st.markdown(f"• {note}")
+
+    # ── Buy Scenario ──────────────────────────────────────────────────────────
+    if symbol and not hist.empty:
+        st.markdown("---")
+        with st.expander("🛒 Xem xét mua mới / tích lũy thêm"):
+            pf_val = float(st.session_state.portfolio.total_market or 10_000_000)
+            bs_pf_val = st.number_input(
+                "Giá trị tài khoản (VND)",
+                min_value=1_000_000.0, value=pf_val, step=1_000_000.0, format="%.0f",
+                key="bs_pf_val",
+                help="Tổng giá trị danh mục để tính khối lượng đề xuất theo 2% risk rule",
+            )
+            bs = generate_buy_scenarios(symbol, market_price, hist, bs_pf_val)
+
+            # Ceiling / floor warning
+            _bc, _bf = bs["ceiling"], bs["floor"]
+            _entry  = bs["entry_price"]
+            if _entry > _bc:
+                st.warning(
+                    f"⚠️ Giá tham chiếu {_entry:,.2f}đ đang trên giá trần {_bc:,.2f}đ — "
+                    "thị trường đang điều chỉnh. Cân nhắc chờ phiên hôm sau."
+                )
+
+            bs_c1, bs_c2, bs_c3, bs_c4 = st.columns(4)
+            with bs_c1:
+                st.metric("Giá vào (TT)", f"{_entry:,.2f}đ")
+            with bs_c2:
+                _t1_pct = (_bs_t1 := bs['target1']) / _entry - 1
+                st.metric("Target 1", f"{_bs_t1:,.2f}đ", f"+{_t1_pct*100:.1f}%")
+            with bs_c3:
+                _sl_pct = bs['stop_loss'] / _entry - 1
+                st.metric("Stop Loss", f"{bs['stop_loss']:,.2f}đ", f"{_sl_pct*100:.1f}%")
+            with bs_c4:
+                st.metric("R:R", f"{bs['rr']:.1f}x",
+                          "✅ Tốt" if bs["rr"] >= 1.5 else "⚠️ Cân nhắc")
+
+            st.markdown(
+                f'<div class="alert-ok" style="margin:8px 0;font-size:12px;">'
+                f'Biên độ ngày: '
+                f'<span style="color:#16A34A;font-weight:600;">Trần {_bc:,.2f}đ</span>'
+                f' &nbsp;|&nbsp; '
+                f'<span style="color:#DC2626;font-weight:600;">Sàn {_bf:,.2f}đ</span>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+            st.markdown(f"""
+            <div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;
+                        padding:12px;margin:8px 0;">
+              <b>Đề xuất KL:</b>
+              <span style="font-size:18px;font-weight:700;color:#15803D;">
+                {bs['recommended_qty']:,} CP
+              </span>
+              &nbsp;|&nbsp; <b>Giá trị:</b> {bs['value']:,.0f}đ
+              &nbsp;|&nbsp; <b>Phí:</b> {bs['brokerage_est']:,.0f}đ
+              &nbsp;|&nbsp; <b>Tổng CF:</b> {bs['total_cost']:,.0f}đ
+            </div>""", unsafe_allow_html=True)
+
+            st.caption(
+                f"⚡ Tín hiệu: {bs['signal_label']} (score {bs['signal_score']:+d}) "
+                f"| RSI: {bs['rsi']:.1f} "
+                f"| Target 2: {bs['target2']:,.2f}đ"
+            )
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -962,13 +1087,7 @@ with tab_market:
     # Macro watchlist
     st.markdown("---")
     st.markdown('<div class="section-hdr">Macro & Catalyst tracking</div>', unsafe_allow_html=True)
-    macro_events = [
-        ("18/03/2026", "HPG", "Công bố kết quả kinh doanh Q4/2025", "🔴 Catalyst cao"),
-        ("18/03/2026", "FED", "FOMC Minutes — định hướng lãi suất", "🟡 Macro"),
-        ("31/03/2026", "BCTC", "Deadline nộp BCTC kiểm toán 2025", "🔵 Toàn thị trường"),
-        ("Hàng ngày", "Dầu thô", "WTI Crude Oil — ảnh hưởng HVN, POW, PVD", "🟡 Macro"),
-    ]
-    macro_df = pd.DataFrame(macro_events, columns=["Ngày", "Mã/Chủ đề", "Nội dung", "Mức độ"])
+    macro_df = pd.DataFrame(MACRO_EVENTS, columns=["Ngày", "Mã/Chủ đề", "Nội dung", "Mức độ"])
     st.dataframe(macro_df, use_container_width=True, hide_index=True)
 
 
