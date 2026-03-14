@@ -1,6 +1,6 @@
 """
 ╔══════════════════════════════════════════════════════════════════╗
-║   Captain Seventh QUANT TERMINAL  v28.0                         ║
+║   Captain Seventh QUANT TERMINAL  v30.0                         ║
 ║   Vietnam Stock Market Analysis & AI Forecasting Platform       ║
 ╠══════════════════════════════════════════════════════════════════╣
 ║  CHANGELOG v27 → v28:                                           ║
@@ -65,7 +65,7 @@ except ImportError:
 #  PAGE CONFIG (must be first Streamlit call)
 # ══════════════════════════════════════════════════════════════
 st.set_page_config(
-    page_title="Captain Seventh QUANT TERMINAL v28.0",
+    page_title="Captain Seventh QUANT TERMINAL v30.0",
     layout="wide", page_icon="🏛️"
 )
 st.markdown("""<style>
@@ -112,7 +112,7 @@ st.markdown("""<style>
 #  D. BILINGUAL LANGUAGE SYSTEM
 # ══════════════════════════════════════════════════════════════
 _LANG_VI = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v28.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v30.0",
     "sidebar_hdr":     "⚙️ Tùy Chỉnh Chiến Lược",
     "lang_label":      "🌐 Ngôn ngữ / Language",
     "trend_filter":    "Lọc Xu hướng (Giá > SMA50)",
@@ -234,7 +234,7 @@ _LANG_VI = {
 }
 
 _LANG_EN = {
-    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v28.0",
+    "app_title":       "🏛️ Captain Seventh QUANT TERMINAL v30.0",
     "sidebar_hdr":     "⚙️ Strategy Settings",
     "lang_label":      "🌐 Language / Ngôn ngữ",
     "trend_filter":    "Trend Filter (Price > SMA50)",
@@ -434,7 +434,101 @@ TOOLTIPS = {
         "VI": "ATR: Biên độ biến động bình quân 14 ngày.<br>• Dùng để tính Stop-Loss (SL = Giá - 1.5×ATR)<br>• ATR lớn: Biến động cao — tăng khoảng cách SL",
         "EN": "ATR: 14-day average true range (volatility).<br>• Used for Stop-Loss (SL = Price - 1.5×ATR)<br>• High ATR: High volatility — widen SL distance",
     },
+    # ─── ENH-45: 30 new tooltip entries (v29) ─────────────────
+    "SMA5":{"VI":"Trung bình 5 phiên — xu hướng rất ngắn hạn. Giao cắt lên SMA20 = tín hiệu nhanh.<br>Dùng cho giao dịch T+0/T+1.","EN":"5-day SMA — very short-term trend. Cross above SMA20 = quick bullish signal. Used for T+0/T+1 trades."},
+    "SMA10":{"VI":"Trung bình 10 phiên — cầu nối giữa SMA5 và SMA20. Lọc nhiễu ngắn hạn.","EN":"10-day SMA — bridge between SMA5 and SMA20. Filters short-term noise."},
+    "SMA20":{"VI":"Trung bình 20 phiên (~1 tháng). Trục giữa Bollinger Bands. Giá trên SMA20 = bullish.","EN":"20-day SMA (~1 month). Bollinger midline. Price above SMA20 = bullish."},
+    "SMA200":{"VI":"Trung bình 200 phiên (~10 tháng). Trên = bull market, dưới = bear market. Đường phân chia dài hạn quan trọng nhất.","EN":"200-day SMA. Above = bull market. Below = bear market. Most important long-term dividing line."},
+    "EMA9":{"VI":"EMA 9 phiên — phản ứng rất nhanh. Dùng cho T+0/T+1. Cắt lên EMA21 = tín hiệu mua nhanh.","EN":"9-day EMA — very fast response. Used for intraday. Cross above EMA21 = quick buy signal."},
+    "EMA21":{"VI":"EMA 21 phiên — lọc nhiễu, phối hợp EMA9 để bắt điểm swing. Bền hơn SMA20.","EN":"21-day EMA — noise filter. Pairs with EMA9 for swing entry. More stable than SMA20."},
+    "EMA50":{"VI":"EMA 50 phiên — xu hướng trung hạn. Phản ứng nhanh hơn SMA50, phù hợp theo dõi xu hướng.","EN":"50-day EMA — medium-term trend. Faster response than SMA50, better for trend-following."},
+    "MACD_Hist":{"VI":"Histogram MACD = MACD − Signal.<br>• Tăng dần = động lực mạnh dần<br>• Đổi từ âm sang dương = cảnh báo đảo chiều tăng sớm","EN":"MACD Histogram = MACD − Signal.<br>• Growing = strengthening momentum<br>• Negative to positive flip = early bullish reversal signal"},
+    "Stoch_K":{"VI":"Stochastic %K — vị trí giá trong vùng 14 phiên.<br>• &lt;20: Quá bán — tìm tín hiệu mua<br>• &gt;80: Quá mua — thận trọng","EN":"Stochastic %K — price position in 14-session range.<br>• &lt;20: Oversold — look for buy signal<br>• &gt;80: Overbought — caution"},
+    "OBV":{"VI":"On-Balance Volume — KL tích lũy theo hướng giá.<br>• OBV tăng trước giá = tổ chức đang vào<br>• OBV giảm khi giá tăng = phân phối","EN":"On-Balance Volume — cumulative volume by price direction.<br>• OBV rising before price = early institutional accumulation<br>• OBV falling during price rise = distribution"},
+    "BB_Lower":{"VI":"Dải dưới Bollinger = SMA20 − 2σ. Vùng quá bán thống kê.<br>• Chạm dải = xác suất hồi về BB_Mid cao (cần xác nhận KL)","EN":"BB Lower = SMA20 − 2σ. Statistical oversold zone.<br>• Touch = high probability of mean reversion toward BB_Mid (volume confirmation needed)"},
+    "BB_Upper":{"VI":"Dải trên Bollinger = SMA20 + 2σ. Kháng cự thống kê.<br>• Breakout với KL lớn = xu hướng mạnh<br>• Không có KL = thường điều chỉnh","EN":"BB Upper = SMA20 + 2σ. Statistical resistance.<br>• Breakout on high volume = strong trend<br>• Without volume = likely pullback"},
+    "BB_Squeeze":{"VI":"Bollinger thu hẹp = thị trường tích lũy năng lượng. Thường dẫn đến đột phá mạnh (hướng chưa rõ).","EN":"BB contracting = coiling energy. Usually precedes strong breakout (direction not yet clear)."},
+    "Golden_Cross":{"VI":"SMA50 cắt lên SMA200. Tín hiệu bull market dài hạn rất đáng tin.<br>Hiếm gặp — khi xuất hiện thường báo hiệu xu hướng tăng dài 6–18 tháng.","EN":"SMA50 crosses above SMA200. Rare but reliable long-term bull signal.<br>When it appears, typically indicates a 6–18 month uptrend."},
+    "Death_Cross":{"VI":"SMA50 cắt xuống SMA200. Tín hiệu bear market dài hạn.<br>Thường xác nhận đỉnh và báo hiệu xu hướng giảm kéo dài.","EN":"SMA50 crosses below SMA200. Confirms long-term downtrend.<br>Typically confirms a top and signals a prolonged decline."},
+    "EPS":{"VI":"Thu nhập trên mỗi cổ phiếu (VNĐ/CP). EPS cao = kiếm tiền hiệu quả. Dùng để tính P/E và DCF.<br>• EPS tăng liên tiếp = công ty tăng trưởng","EN":"Earnings per share (VND/share). Higher EPS = more profitable. Used in P/E and DCF.<br>• Consecutive EPS growth = growing company"},
+    "BVPS":{"VI":"Giá trị sổ sách trên mỗi cổ phiếu = Vốn chủ sở hữu / Số CP.<br>• P/B &lt; 1 = giá thị trường dưới giá trị sổ sách (tiềm năng)<br>• P/B &gt; 3 = kỳ vọng tăng trưởng cao hoặc đắt","EN":"Book value per share = Equity / Shares.<br>• P/B &lt; 1 = price below book value (potential value play)<br>• P/B &gt; 3 = high growth priced in or expensive"},
+    "ROA":{"VI":"Tỷ suất sinh lời tổng tài sản. Quan trọng hơn ROE với ngân hàng.<br>• &gt;1.5%: Tốt (NH)<br>• &lt;0.5%: Yếu","EN":"Return on assets. More relevant than ROE for banks.<br>• &gt;1.5%: Good (banks)<br>• &lt;0.5%: Weak"},
+    "PB":{"VI":"P/B = Giá / BVPS. Dùng chính cho Ngân hàng & BĐS.<br>• NH tốt: 1.2–2.5×<br>• &lt;1×: Có thể rẻ (hoặc công ty có vấn đề)","EN":"P/B = Price / BVPS. Primary metric for banks & real estate.<br>• Good bank range: 1.2–2.5×<br>• &lt;1×: May be cheap (or underlying issues)"},
+    "DCF":{"VI":"Định giá dòng tiền chiết khấu. Giá trị hiện tại của dòng tiền tương lai.<br>• Nhạy với giả định tỷ lệ tăng trưởng — thay đổi nhỏ = kết quả thay đổi lớn","EN":"DCF: present value of future cash flows.<br>• Highly sensitive to growth rate assumptions — small changes = large value changes"},
+    "Graham":{"VI":"Công thức Graham (hiệu chỉnh VN): √(22.5 × EPS × BVPS). Ước tính giá trị sàn an toàn.<br>Hệ số 22.5 ≈ P/E_avg(13) × P/B_avg(1.75) của thị trường VN 2024–2026.<br>Chỉ hợp lệ khi có EPS và BVPS thực từ báo cáo tài chính.","EN":"Vietnam-calibrated Graham Number: √(22.5×EPS×BVPS). Conservative value floor.<br>Multiplier 22.5 ≈ VN market avg P/E(13)×P/B(1.75) 2024–2026.<br>Valid ONLY with real EPS/BVPS from financial statements."},
+    "IV_Blended":{"VI":"Giá trị nội tại hỗn hợp = P/E ngành (45%) + DCF (35%) + Graham (20%).<br>Chỉ hiển thị khi có dữ liệu tài chính thực. Khi không có, hiển thị Mục tiêu Kỹ thuật.","EN":"Blended IV = Sector P/E(45%) + DCF(35%) + Graham(20%).<br>Shown only when real financial data available. Without data, displays Technical Price Target."},
+    "Upside":{"VI":"Tiềm năng tăng = (Mục tiêu − Giá hiện tại) / Giá × 100%.<br>• &gt;20%: Hấp dẫn<br>• 0–20%: Hợp lý<br>• &lt;0%: Thận trọng — giá đang trên mục tiêu","EN":"Upside % = (Target − Current Price) / Price × 100%.<br>• &gt;20%: Attractive<br>• 0–20%: Fair<br>• &lt;0%: Caution — price above target"},
+    "NPL":{"VI":"Tỷ lệ nợ xấu (Ngân hàng): nợ nhóm 3–5 / tổng dư nợ.<br>• &lt;2%: Tốt<br>• 2–5%: Theo dõi chặt<br>• &gt;5%: Rủi ro cao","EN":"NPL ratio (banks). Non-performing loans / total loans.<br>• &lt;2%: Good<br>• 2–5%: Watch closely<br>• &gt;5%: High risk"},
+    "NIM":{"VI":"Biên lãi thuần (Ngân hàng) = lãi suất cho vay − huy động.<br>• NIM cao = kiếm tiền hiệu quả hơn<br>• NIM tốt VN: &gt;3.5%","EN":"Net Interest Margin (banks) = lending rate − funding rate.<br>• Higher NIM = more efficient earnings<br>• Good VN NIM: &gt;3.5%"},
+    "Stop_Loss":{"VI":"Giá cắt lỗ — mức thoát bảo vệ vốn. Quy tắc số 1 của giao dịch.<br>⚠️ Việt Nam KHÔNG có lệnh stop tự động — phải đặt lệnh LO tại giá sàn hoặc gọi SSI.<br>Không đặt giá cắt lỗ thấp hơn giá sàn hôm nay — sẽ bị từ chối.","EN":"Stop-Loss exit level to protect capital. Trading Rule #1.<br>⚠️ Vietnam has NO automatic stop orders — place LO at floor price or call broker.<br>Do not place SL below today's floor price — order will be rejected."},
+    "TP1":{"VI":"Chốt lời 1: chốt 40–50% vị thế tại TP1 để đảm bảo lợi nhuận. Giữ phần còn lại chờ TP2.","EN":"Take-Profit 1: close 40–50% of position at TP1 to lock in gains. Hold remainder for TP2."},
+    "TP2":{"VI":"Chốt lời 2: mục tiêu xa hơn cho phần còn lại sau khi đã chốt TP1.","EN":"Take-Profit 2: extended target for remainder after TP1. Higher reward, accepts more risk."},
+    "RR":{"VI":"Risk/Reward = Lợi nhuận kỳ vọng / Rủi ro.<br>• R:R ≥ 2:1: Đáng giao dịch<br>• 1.5–2:1: Biên giới<br>• &lt;1.5:1: Không hấp dẫn — bỏ lệnh","EN":"Risk/Reward ratio.<br>• R:R ≥ 2:1: Worth trading<br>• 1.5–2:1: Borderline<br>• &lt;1.5:1: Unattractive — skip the trade"},
+    "Swing_Trade":{"VI":"Giao dịch swing: giữ 1–10 ngày qua đêm để bắt sóng giá.<br>⚠️ Lưu ý T+2 VN: bán trước T+2 cần margin/cầm cố. Hiểu rõ T+2 trước khi swing.","EN":"Swing trade: hold 1–10 days overnight to capture price swings.<br>⚠️ Vietnam T+2 note: selling before T+2 settlement requires margin. Know your T+2 dates."},
+    "T2":{"VI":"<b>Hai khái niệm T+2 quan trọng:</b><br>1. <b>Thanh toán T+2</b>: Cổ phiếu mua hôm nay (T) thanh toán xong vào T+2 (2 ngày làm việc sau). Ngày T+1: cổ phiếu chưa giao dịch được.<br>2. <b>Chiến lược T+2</b>: Giữ 2–5 phiên để bắt sóng ngắn hạn.","EN":"<b>Two T+2 concepts:</b><br>1. <b>T+2 Settlement</b>: Shares bought today settle on T+2 (2 business days). On T+1: shares in your account but not tradeable.<br>2. <b>T+2 Strategy</b>: Hold 2–5 sessions to capture short-term swings."},
+    "Doi_Lai":{"VI":"Đội lái / Market Maker: tổ chức lớn điều phối dòng tiền.<br>• Tích lũy = mua âm thầm trước khi đẩy giá<br>• Xả = bán ồ ạt sau khi đẩy giá lên đỉnh<br>⚠️ Phát hiện này dựa trên mô hình thống kê — không phải bằng chứng vi phạm. Hành vi làm giá (Điều 211, Luật CK 2019) là tội hình sự do UBCKNN điều tra.","EN":"Whale/Market Maker: large institutional coordinating money flows.<br>• Accumulation = quiet buying before pumping<br>• Distribution = aggressive selling after pushing price up<br>⚠️ This detection is statistical — NOT evidence of illegal conduct. Market manipulation (Article 211, Securities Law 2019) is a criminal offense investigated by SSC/UBCKNN."},
+    "Vol_Spike":{"VI":"KL đột biến: KL &gt; 3× bình quân 20 phiên = dòng tiền lớn vào/ra.<br>Luôn xác nhận với hướng giá — KL lớn + giá đi ngang = thận trọng.","EN":"Volume spike &gt; 3× 20-session average = large money flow signal.<br>Always confirm with price direction — high volume + flat price = caution."},
+    "Tech_Score":{"VI":"Điểm Kỹ thuật (0–100): tổng hợp 8–9 tín hiệu kỹ thuật.<br>• &gt;70: Mạnh<br>• 50–70: Trung bình (đa số VN cluster vùng này)<br>• &lt;50: Yếu<br>Không phải điểm tuyệt đối — so sánh với watchlist cùng ngày.","EN":"Tech Score (0–100): composite of 8–9 technical signals.<br>• &gt;70: Strong<br>• 50–70: Moderate (most VN stocks cluster here)<br>• &lt;50: Weak<br>Relative measure — compare within same-day watchlist scan."},
+    "CGT":{"VI":"Thuế TNCN khi bán CP = 0.1% × Giá trị bán (bất kể lãi/lỗ).<br>SSI khấu trừ tự động tại nguồn.<br>Ví dụ: Bán 200 CP × 26,650đ = 5,330,000đ → Thuế = 5,330đ<br>ℹ️ Nhà đầu tư vẫn có nghĩa vụ kê khai quyết toán thuế TNCN hàng năm dù SSI đã khấu trừ.","EN":"Vietnam CGT = 0.1% of sale value regardless of P&L.<br>SSI auto-deducts at source.<br>Example: Sell 200×26,650 = 5,330,000 → Tax = 5,330đ<br>ℹ️ Investors still have annual PIT filing obligation even though SSI withholds at source."},
 }
+
+# ─── ENH-46: Global CSS design system (v29) ───────────────────
+GLOBAL_CSS = """
+<style>
+/* Captain Seventh QUANT TERMINAL — Design System v29 */
+.badge-buy   { background:rgba(0,230,118,.15); color:#00e676;
+               border:1px solid #00e676; border-radius:4px;
+               padding:2px 8px; font-weight:700; font-size:12px; display:inline-block; }
+.badge-sell  { background:rgba(255,82,82,.15);  color:#ff5252;
+               border:1px solid #ff5252; border-radius:4px;
+               padding:2px 8px; font-weight:700; font-size:12px; display:inline-block; }
+.badge-watch { background:rgba(102,170,255,.1); color:#66aaff;
+               border:1px solid #66aaff; border-radius:4px;
+               padding:2px 8px; font-size:12px; display:inline-block; }
+.badge-hold  { background:rgba(170,170,204,.1); color:#aaaacc;
+               border:1px solid #555577; border-radius:4px;
+               padding:2px 8px; font-size:12px; display:inline-block; }
+.f0-card { background:#0f1e2e; border-left:4px solid #3b82f6;
+           border-radius:8px; padding:14px 18px; margin:10px 0;
+           font-size:13px; color:#94a3b8; line-height:1.65; }
+.f0-card strong { color:#e2e8f0; }
+.metric-tile { background:#111827; border:1px solid #1e293b;
+               border-radius:10px; padding:12px 16px; text-align:center; }
+.metric-tile .label { color:#64748b; font-size:11px; letter-spacing:.5px; }
+.metric-tile .value { color:#e2e8f0; font-size:20px; font-weight:700; }
+.section-header { color:#7eb8ff; font-size:14px; font-weight:600;
+                  padding:4px 0 8px; border-bottom:1px solid #1e293b;
+                  margin-bottom:12px; }
+</style>
+"""
+
+def signal_badge(action: str) -> str:
+    """Return HTML badge for a signal action (ENH-46)."""
+    a = action.upper()
+    if any(k in a for k in ("MUA","BUY","ACCUM","TÍCH")):
+        return f'<span class="badge-buy">{action}</span>'
+    if any(k in a for k in ("BÁN","SELL","DIST","XẢ","THOÁT")):
+        return f'<span class="badge-sell">{action}</span>'
+    if any(k in a for k in ("THEO DÕI","WATCH")):
+        return f'<span class="badge-watch">{action}</span>'
+    return f'<span class="badge-hold">{action}</span>'
+
+
+def f0_explain(title: str, body: str) -> str:
+    """Return HTML F0 explanation card (ENH-46)."""
+    return f'<div class="f0-card"><strong>{title}</strong><br>{body}</div>'
+
+
+def f0_tab_banner(tab_key: str, title_vi: str, title_en: str,
+                  body_vi: str, body_en: str, is_vi: bool) -> None:
+    """Render collapsible F0 help banner (ENH-44), gated on f0_mode."""
+    if not st.session_state.get("f0_mode", True):
+        return
+    title = title_vi if is_vi else title_en
+    body  = body_vi  if is_vi else body_en
+    with st.expander(f"💡 {title}", expanded=False):
+        st.markdown(f0_explain(title, body), unsafe_allow_html=True)
+
 
 def tip(label: str, key: str, lang: str = "VI") -> str:
     tt = TOOLTIPS.get(key, {})
@@ -507,8 +601,168 @@ JSON_STORAGE_PATH   = os.path.join(DATA_DIR, "vnstock")
 ML_AUDIT_PATH       = os.path.join(DATA_DIR, "ml_forecast")
 LOG_FILE            = os.path.join(DATA_DIR, "error_log.txt")
 WATCHLIST_FILE_PATH = os.path.join(BASE_DIR, "watchlist.txt")
-for _d in [JSON_STORAGE_PATH, ML_AUDIT_PATH]:
+DEEP_SCAN_AUDIT_PATH = os.path.join(DATA_DIR, "deep_scan_audit")
+PORTFOLIO_AUDIT_PATH = os.path.join(DATA_DIR, "portfolio_audit")
+for _d in [JSON_STORAGE_PATH, ML_AUDIT_PATH, DEEP_SCAN_AUDIT_PATH, PORTFOLIO_AUDIT_PATH]:
     os.makedirs(_d, exist_ok=True)
+
+# ─── v29: Legal disclaimer (C-07) ────────────────────────────
+LEGAL_DISCLAIMER_VI = (
+    "⚠️ **TUYÊN BỐ MIỄN TRÁCH NHIỆM PHÁP LÝ**: "
+    "Ứng dụng này là CÔNG CỤ PHÂN TÍCH KỸ THUẬT tự động, "
+    "KHÔNG PHẢI dịch vụ tư vấn đầu tư được cấp phép theo Luật Chứng khoán 2019 "
+    "và Thông tư 09/2023/TT-BTC. Mọi tín hiệu và dự báo chỉ mang tính tham khảo kỹ thuật. "
+    "Nhà đầu tư tự chịu hoàn toàn trách nhiệm quyết định đầu tư của mình."
+)
+LEGAL_DISCLAIMER_EN = (
+    "⚠️ **LEGAL DISCLAIMER**: "
+    "This application is an automated TECHNICAL ANALYSIS TOOL, "
+    "NOT a licensed investment advisory service under Vietnam Securities Law 2019 "
+    "and Circular 09/2023/TT-BTC. All signals and forecasts are for technical reference only. "
+    "Investors bear full responsibility for their own investment decisions."
+)
+
+# ─── v30: Settlement lock status (C-02) ──────────────────────
+LOCKED_STATUS_VI = "Chờ thanh toán T+2 (mua hôm qua — giao dịch được từ ngày mai)"
+LOCKED_STATUS_EN = "Pending T+2 settlement (bought yesterday — tradeable from tomorrow)"
+
+# ─── v29/v30: Forecast confidence disclosure (C-06) ──────────
+FORECAST_CONFIDENCE = {
+    1:   {"reliability": "LOW",      "note_vi": "Dự báo 1 ngày: độ tin cậy thấp (~55% đúng hướng)"},
+    2:   {"reliability": "LOW",      "note_vi": "Dự báo 2 ngày: độ tin cậy thấp"},
+    3:   {"reliability": "LOW",      "note_vi": "Dự báo 3 ngày: độ tin cậy thấp"},
+    5:   {"reliability": "MEDIUM",   "note_vi": "Dự báo 5 ngày: độ tin cậy trung bình"},
+    10:  {"reliability": "MEDIUM",   "note_vi": "Dự báo 10 ngày: độ tin cậy trung bình"},
+    21:  {"reliability": "LOW",      "note_vi": "Dự báo 1 tháng: chỉ mang tính định hướng xu hướng"},
+    42:  {"reliability": "VERY_LOW", "note_vi": "Dự báo 2 tháng: ước tính xu hướng, không dự báo giá chính xác"},
+    63:  {"reliability": "VERY_LOW", "note_vi": "Dự báo 3 tháng: ước tính xu hướng, không dự báo giá chính xác"},
+    126: {"reliability": "VERY_LOW", "note_vi": "Dự báo 6 tháng: chỉ dùng để định hướng chiến lược"},
+}
+
+# ─── v30: Recovery time estimates (C-06 — replaces forecast-based) ──
+RECOVERY_TIME_ESTIMATE = {
+    "lt3":   {"label_vi": "Thường hồi phục trong 1–3 tuần",      "label_en": "Typically recovers in 1–3 weeks"},
+    "3to7":  {"label_vi": "Thường hồi phục trong 1–3 tháng",     "label_en": "Typically recovers in 1–3 months"},
+    "7to15": {"label_vi": "Có thể mất 3–9 tháng để hồi phục",    "label_en": "May take 3–9 months to recover"},
+    "gt15":  {"label_vi": "Cần 6–12+ tháng hoặc không hồi phục", "label_en": "Needs 6–12+ months or may not recover"},
+}
+
+def _get_recovery_estimate(loss_pct: float, is_vi: bool = True) -> str:
+    """Return plain-text recovery estimate for a given loss %."""
+    key = ("lt3" if abs(loss_pct) < 3 else
+           "3to7" if abs(loss_pct) < 7 else
+           "7to15" if abs(loss_pct) < 15 else "gt15")
+    return RECOVERY_TIME_ESTIMATE[key]["label_vi" if is_vi else "label_en"]
+
+# ─── v30: Graham multiplier calibrated for Vietnam (C-05) ────
+VN_GRAHAM_MULTIPLIER = 22.5  # P/E avg(~13) × P/B avg(~1.75) for VN market 2024–2026
+
+# ─── v30: Known Foreign Ownership Limit restrictions (H-04) ──
+KNOWN_FOL_RESTRICTIONS = {
+    "HVN": 0.00,  # State enterprise — no foreign ownership
+    "VCB": 0.15,
+    "CTG": 0.30,
+    "BID": 0.30,
+}
+
+def get_fol_status(ticker: str, foreign_pct: float = 0.0) -> dict:
+    """Return FOL status for informational display."""
+    cap = KNOWN_FOL_RESTRICTIONS.get(ticker, 0.49)
+    room = max(0.0, cap - (foreign_pct or 0.0) / 100.0)
+    near_cap = room < 0.05
+    return {
+        "fol_cap_pct":    round(cap * 100, 1),
+        "foreign_held_pct": foreign_pct,
+        "foreign_room_pct": round(room * 100, 1),
+        "near_cap": near_cap,
+        "whale_caveat": near_cap,
+    }
+
+# ─── v30: Exchange bands for circuit-breaker-aware TP/SL (C-04) ──
+EXCHANGE_BANDS = {"HOSE": 0.07, "HNX": 0.10, "UPCOM": 0.15}
+
+# ─── v30: Sector overrides for accurate classification (H-08) ──
+SECTOR_OVERRIDE = {
+    "PGC": "Dầu khí",
+    "TCH": "Bất động sản",
+    "VGC": "Vật liệu xây dựng",
+    "CII": "Xây dựng",
+    "SCR": "Bất động sản",
+    "DTA": "Bất động sản",
+    "ABS": "Bất động sản",
+    "HVN": "Hàng không",
+    "SSB": "Ngân hàng",
+    "APH": "Dược",
+    "HAX": "Bán lẻ",
+}
+
+# ─── v30: Empirically-calibrated sector beta (C-03) ──────────
+SECTOR_BETA_DISCLAIMER = {
+    "VI": ("⚠️ Beta ngành được ước tính từ dữ liệu thị trường Việt Nam 2018–2025 "
+           "và là các giá trị trung bình. Beta thực tế từng cổ phiếu có thể khác biệt đáng kể. "
+           "Kịch bản bi quan dùng beta phi tuyến phản ánh hành vi thị trường trong giai đoạn hoảng loạn."),
+    "EN": ("⚠️ Sector betas are estimated from Vietnam market data 2018–2025 "
+           "and represent averages. Individual stock beta may differ materially. "
+           "Pessimistic scenario uses non-linear betas reflecting panic-period behavior."),
+}
+
+SECTOR_BETA = {
+    "optimistic": {
+        "Ngân hàng": 1.15, "Bất động sản": 1.45, "Chứng khoán": 1.75,
+        "Dầu khí":   0.90, "Công nghệ":    1.05, "Thép":        1.25,
+        "Bán lẻ":    0.95, "Thực phẩm":    0.75, "Dược":        0.55,
+        "Điện":      0.65, "Hàng không":   1.15, "Xây dựng":    1.10,
+        "Logistics": 0.95, "Bảo hiểm":     0.85, "Vật liệu xây dựng": 1.00, "Khác": 1.00,
+    },
+    "neutral": {
+        "Ngân hàng": 0.90, "Bất động sản": 0.75, "Chứng khoán": 1.05,
+        "Dầu khí":   0.85, "Công nghệ":    1.00, "Thép":        0.95,
+        "Bán lẻ":    0.90, "Thực phẩm":    0.80, "Dược":        0.70,
+        "Điện":      0.75, "Hàng không":   0.90, "Xây dựng":    0.85,
+        "Logistics": 0.85, "Bảo hiểm":     0.80, "Vật liệu xây dựng": 0.85, "Khác": 0.90,
+    },
+    "pessimistic": {
+        "Ngân hàng": 1.35, "Bất động sản": 1.75, "Chứng khoán": 2.20,
+        "Dầu khí":   0.85, "Công nghệ":    1.25, "Thép":        1.55,
+        "Bán lẻ":    1.15, "Thực phẩm":    0.75, "Dược":        0.45,
+        "Điện":      0.55, "Hàng không":   1.65, "Xây dựng":    1.45,
+        "Logistics": 1.05, "Bảo hiểm":     0.85, "Vật liệu xây dựng": 1.30, "Khác": 1.15,
+    },
+}
+
+# ─── v30: Scenario definitions (ENH-51 + M-08 ranges) ────────
+SCENARIO_DEFINITIONS = [
+    {"id": "S1", "color": "#00cc66", "name_vi": "🟢 Lạc Quan", "name_en": "🟢 Optimistic",
+     "vni_pct": 10.0, "beta_key": "optimistic",
+     "vni_range_vi": "VNI +8% đến +15%", "vni_range_en": "VNI +8% to +15%",
+     "probability_vi": "Xác suất ước tính: 30% trong 3 tháng tới"},
+    {"id": "S2", "color": "#ffaa00", "name_vi": "🟡 Trung Tính", "name_en": "🟡 Neutral",
+     "vni_pct": 0.5, "beta_key": "neutral",
+     "vni_range_vi": "VNI −3% đến +5%", "vni_range_en": "VNI −3% to +5%",
+     "probability_vi": "Xác suất ước tính: 45% trong 3 tháng tới"},
+    {"id": "S3", "color": "#ff4444", "name_vi": "🔴 Bi Quan", "name_en": "🔴 Pessimistic",
+     "vni_pct": -18.0, "beta_key": "pessimistic",
+     "vni_range_vi": "VNI −15% đến −25%", "vni_range_en": "VNI −15% to −25%",
+     "probability_vi": "Xác suất ước tính: 25% trong 3 tháng tới"},
+]
+
+# ─── v30: TP allocation rules (ENH-52) ───────────────────────
+TP_ALLOCATION_RULES = {
+    "VERY HIGH":  (0.50, 0.35, 0.15),
+    "HIGH":       (0.40, 0.40, 0.20),
+    "MEDIUM":     (0.35, 0.40, 0.25),
+    "LOW":        (0.30, 0.40, 0.30),
+    "LOW_ACCUM":  (0.30, 0.40, 0.30),
+}
+
+# ─── v30: Portfolio DataFrame columns ────────────────────────
+PORTFOLIO_COLUMNS = [
+    "ticker", "qty_total", "qty_tradeable", "is_locked",
+    "avg_cost", "mkt_price", "cost_value", "mkt_value",
+    "pnl_vnd", "pnl_pct", "bonus_shares", "frozen_shares",
+    "mortgage_shares", "pending_shares", "weight_pct", "sector", "exchange",
+    "rt_price", "rt_pnl_vnd", "rt_pnl_pct",
+]
 
 _log = logging.getLogger("QuantApp")
 _log.setLevel(logging.INFO)
@@ -633,6 +887,9 @@ def get_price_limits(ticker: str, ref_price: float) -> dict:
 
 
 def get_sector(ticker: str) -> str:
+    # H-08: Check manual overrides first to fix known misclassifications
+    if ticker in SECTOR_OVERRIDE:
+        return SECTOR_OVERRIDE[ticker]
     for sector, tickers in SECTOR_MAP.items():
         if ticker in tickers: return sector
     return "Khác"
@@ -732,7 +989,50 @@ lang_choice = sb.radio(
 )
 st.session_state.lang = "VI" if "Việt" in lang_choice else "EN"
 L = _LANG_VI if st.session_state.lang == "VI" else _LANG_EN
+is_vi_global = st.session_state.lang == "VI"
 
+# ─── ENH-43: Section Navigation ────────────────────────────
+if "nav_section" not in st.session_state:
+    st.session_state.nav_section = "start"
+
+_section_opts_vi = ["🏠 Bắt Đầu", "📊 Thị Trường", "🧬 Cổ Phiếu",
+                    "💼 Danh Mục", "🔬 Nâng Cao", "📖 Tài Liệu"]
+_section_opts_en = ["🏠 Start Here", "📊 Market", "🧬 Stock",
+                    "💼 Portfolio", "🔬 Advanced", "📖 Docs"]
+_section_keys    = ["start", "market", "stock", "portfolio", "advanced", "docs"]
+_section_opts    = _section_opts_vi if is_vi_global else _section_opts_en
+
+_nav_idx = _section_keys.index(st.session_state.nav_section) if st.session_state.nav_section in _section_keys else 0
+_nav_choice = sb.radio(
+    ("🗺️ Chọn Phần" if is_vi_global else "🗺️ Navigate"),
+    _section_opts,
+    index=_nav_idx,
+    key="nav_section_radio",
+)
+st.session_state.nav_section = _section_keys[_section_opts.index(_nav_choice)]
+
+# ─── ENH-44: F0 mode toggle ──────────────────────────────────
+if "f0_mode" not in st.session_state:
+    st.session_state.f0_mode = True
+f0_mode = sb.toggle(
+    ("🟢 Chế độ F0 — Giải thích đầy đủ" if is_vi_global else "🟢 F0 Mode — Full explanations"),
+    value=st.session_state.f0_mode,
+    key="f0_mode_toggle",
+)
+st.session_state.f0_mode = f0_mode
+
+# ─── URL persistence (nice-to-have, Q3) ──────────────────────
+try:
+    if "section" in st.query_params and not st.session_state.get("_nav_loaded"):
+        _qp_sec = st.query_params["section"]
+        if _qp_sec in _section_keys:
+            st.session_state.nav_section = _qp_sec
+        st.session_state._nav_loaded = True
+    st.query_params["section"] = st.session_state.nav_section
+except Exception:
+    pass
+
+sb.divider()
 sb.header(L["sidebar_hdr"])
 use_trend_filter     = sb.toggle(L["trend_filter"], value=True)
 use_liquidity_filter = sb.toggle(L["liq_filter"],   value=True)
@@ -766,6 +1066,8 @@ sb.caption(L["disclaimer"])
 st.title(L["app_title"])
 if st.session_state.lang == "EN":
     st.caption("🇦🇺 English AU mode | Vietnam Stock Exchange (HOSE / HNX / UPCOM)")
+# Legal disclaimer on every load (C-07)
+st.caption(LEGAL_DISCLAIMER_VI if is_vi_global else LEGAL_DISCLAIMER_EN)
 
 # ══════════════════════════════════════════════════════════════
 #  A. DATA PIPELINE v13: DNSE → SSI → CafeF (NO yFinance)
@@ -2139,6 +2441,16 @@ def round_price_hose(price):
     if p < 10_000: return round(p/10)*10
     if p < 50_000: return round(p/50)*50
     return round(p/100)*100
+
+
+def round_price_exchange(price: float, exchange: str = "HOSE") -> float:
+    """Round price to minimum tick for given exchange (H-02)."""
+    if pd.isna(price) or price <= 0:
+        return 0
+    p = float(price)
+    if exchange in ("HNX", "UPCOM"):
+        return round(p / 100) * 100
+    return round_price_hose(p)
 
 # ══════════════════════════════════════════════════════════════
 #  B. BACKTEST T+2 (exact session counting — unchanged v12)
@@ -10226,6 +10538,10 @@ def _ds_intrinsic_value(ticker: str, live_price: float, tech_analysis: dict) -> 
     iv_blend = round_price_hose(iv_blend)
     upside   = round((iv_blend - live_price) / live_price * 100, 1) if live_price > 0 else 0
 
+    # C-01: Label as technical_proxy since we use implied EPS (not real TCBS data)
+    # When real EPS/BVPS from TCBS is available, this would be "fundamental"
+    iv_source = "technical_proxy"  # circular when using implied EPS — disclose this
+
     return {
         "iv_pe":       round_price_hose(iv_pe),
         "iv_dcf":      round_price_hose(iv_dcf),
@@ -10233,6 +10549,10 @@ def _ds_intrinsic_value(ticker: str, live_price: float, tech_analysis: dict) -> 
         "iv_blended":  iv_blend,
         "upside_pct":  upside,
         "method_used": "Sector P/E (45%) + DCF implied (35%) + Graham (20%)",
+        "iv_source":   iv_source,
+        "label_vi":    "🎯 Mục Tiêu Giá Kỹ Thuật" if iv_source == "technical_proxy" else "💎 Giá Trị Nội Tại (Cơ Bản)",
+        "label_en":    "🎯 Technical Price Target" if iv_source == "technical_proxy" else "💎 Intrinsic Value (Fundamental)",
+        "note_vi":     "Ước tính từ P/E ngành + momentum — không phải giá trị cơ bản thực sự khi thiếu dữ liệu EPS/BVPS",
     }
 
 
@@ -12207,6 +12527,1049 @@ session_state fix, scan 3-tuple, SSI 404, DNSE multi, stooq fallback, Change Log
 """)
 
 
+# ══════════════════════════════════════════════════════════════
+#  v29 · ENH-44 — F0 Landing Page (render_start_tab)
+# ══════════════════════════════════════════════════════════════
+def render_start_tab():
+    """Render the 🏠 Bắt Đầu / Start Here landing page (ENH-44)."""
+    is_vi = st.session_state.get("lang", "VI") == "VI"
+    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+    st.markdown(
+        '<h2 style="color:#7eb8ff">🏛️ ' + ("Chào mừng đến QUANT TERMINAL" if is_vi
+            else "Welcome to QUANT TERMINAL") + '</h2>',
+        unsafe_allow_html=True
+    )
+    st.caption(LEGAL_DISCLAIMER_VI if is_vi else LEGAL_DISCLAIMER_EN)
+
+    # ── Quick-action buttons ──────────────────────────────────
+    st.subheader("🎯 " + ("Bạn muốn làm gì hôm nay?" if is_vi else "What would you like to do today?"))
+    c1, c2, c3, c4 = st.columns(4)
+    if c1.button("🔍 " + ("Tìm mã để MUA" if is_vi else "Find Buy Signals"), use_container_width=True,
+                 key="start_goto_scanner"):
+        st.session_state.nav_section = "market"
+        st.session_state.market_subtab = "scanner"
+        st.rerun()
+    if c2.button("📊 " + ("Thị trường hôm nay" if is_vi else "Market Today"), use_container_width=True,
+                 key="start_goto_market"):
+        st.session_state.nav_section = "market"
+        st.rerun()
+    if c3.button("🧬 " + ("Tra cứu 1 mã" if is_vi else "Analyse a Stock"), use_container_width=True,
+                 key="start_goto_stock"):
+        st.session_state.nav_section = "stock"
+        st.rerun()
+    if c4.button("💼 " + ("Phân tích danh mục" if is_vi else "My Portfolio"), use_container_width=True,
+                 key="start_goto_portfolio"):
+        st.session_state.nav_section = "portfolio"
+        st.rerun()
+
+    st.divider()
+
+    # ── F0 help card ─────────────────────────────────────────
+    if st.session_state.get("f0_mode", True):
+        body_vi = (
+            "Ứng dụng này có 5 phần chính ở thanh bên trái:<br>"
+            "• <b>📊 Thị Trường</b>: Quét toàn bộ watchlist, tìm tín hiệu MUA/BÁN<br>"
+            "• <b>🧬 Cổ Phiếu</b>: Phân tích sâu từng mã (báo cáo tài chính, định giá)<br>"
+            "• <b>💼 Danh Mục</b>: Upload file SSI → phân tích lãi/lỗ RT + kế hoạch hành động<br>"
+            "• <b>🔬 Nâng Cao</b>: Backtest, ML forecast<br>"
+            "• <b>📖 Tài Liệu</b>: Hướng dẫn sử dụng, changelog"
+        )
+        body_en = (
+            "This app has 5 main sections in the left sidebar:<br>"
+            "• <b>📊 Market</b>: Scan full watchlist for BUY/SELL signals<br>"
+            "• <b>🧬 Stock</b>: Deep analysis per ticker (financials, valuation)<br>"
+            "• <b>💼 Portfolio</b>: Upload SSI file → RT P&L + action plan<br>"
+            "• <b>🔬 Advanced</b>: Backtest, ML forecast<br>"
+            "• <b>📖 Docs</b>: User guide, changelog"
+        )
+        st.markdown(f0_explain(
+            "📖 Hướng dẫn nhanh" if is_vi else "📖 Quick Guide",
+            body_vi if is_vi else body_en
+        ), unsafe_allow_html=True)
+
+    # ── Last scan highlights ──────────────────────────────────
+    scan_df = st.session_state.get("scan_results", pd.DataFrame())
+    if not scan_df.empty:
+        st.subheader("🔥 " + ("Tín hiệu nổi bật (lần quét gần nhất)" if is_vi else "Latest Scan Highlights"))
+        col_map = {"ticker": "Mã", "signal": "Hành vi", "score": "Điểm"}
+        _disp = scan_df.head(5).rename(columns=col_map) if all(c in scan_df.columns for c in col_map) else scan_df.head(5)
+        st.dataframe(_disp, use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-48 — SSI XLSX Parser
+# ══════════════════════════════════════════════════════════════
+def _clean_num(v) -> float:
+    """Robust numeric cleaner for openpyxl cells (M-05)."""
+    if v is None:
+        return 0.0
+    if isinstance(v, (int, float)):
+        return float(v)
+    s = str(v).strip()
+    if s in ("-", "–", "—", "", "N/A"):
+        return 0.0
+    s = s.replace(",", "").replace("%", "").strip()
+    try:
+        return float(s)
+    except ValueError:
+        return 0.0
+
+
+def parse_ssi_portfolio_xlsx(file_bytes: bytes) -> dict:
+    """
+    Parse SSI iBoard Portfolio XLSX export (ENH-48).
+    Real format: 15 columns A–O, data from row 4, stops at non-int col A.
+    Returns dict with account_number, export_time, positions DataFrame, totals.
+    """
+    try:
+        import openpyxl
+    except ImportError:
+        return {"error": "openpyxl not installed. Run: pip install openpyxl", "positions": pd.DataFrame()}
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+        ws = wb.active
+    except Exception as e:
+        return {"error": f"Cannot open XLSX: {e}", "positions": pd.DataFrame()}
+
+    rows = list(ws.iter_rows(values_only=True))
+
+    # Extract account number from row 2 (index 1), column E (index 4)
+    account_number = ""
+    try:
+        r2 = rows[1] if len(rows) > 1 else ()
+        if len(r2) > 4 and r2[4]:
+            account_number = str(r2[4]).strip()
+    except Exception:
+        pass
+
+    # Extract export time from last few rows
+    export_time = ""
+    for row in reversed(rows[-5:]):
+        for cell in row:
+            if cell and "Export time" in str(cell):
+                try:
+                    import re as _re
+                    m = _re.search(r"\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2}", str(cell))
+                    if m:
+                        export_time = m.group()
+                except Exception:
+                    pass
+                break
+        if export_time:
+            break
+
+    # Parse data rows starting from row 4 (index 3)
+    positions = []
+    for row in rows[3:]:
+        if not row or len(row) < 15:
+            continue
+        # Stop at non-integer stt (total row or footer)
+        try:
+            stt = row[0]
+            if not isinstance(stt, int) and not str(stt).strip().isdigit():
+                break
+        except Exception:
+            break
+
+        ticker = str(row[1]).strip().upper() if row[1] else ""
+        if not ticker:
+            continue
+
+        qty_total_raw     = _clean_num(row[2])
+        qty_tradeable_raw = _clean_num(row[3])
+        is_locked         = (str(row[3]).strip() in ("-", "–", "—", "") or qty_tradeable_raw == 0)
+
+        exchange = TICKER_EXCHANGE.get(ticker, "HOSE")
+        sector   = get_sector(ticker)
+
+        pos = {
+            "ticker":          ticker,
+            "qty_total":       int(qty_total_raw),
+            "qty_tradeable":   int(qty_tradeable_raw),
+            "is_locked":       is_locked,
+            "avg_cost":        _clean_num(row[4]),
+            "mkt_price":       _clean_num(row[5]),
+            "cost_value":      _clean_num(row[6]),
+            "mkt_value":       _clean_num(row[7]),
+            "pnl_vnd":         _clean_num(row[8]),
+            "pnl_pct":         _clean_num(row[9]),
+            "bonus_shares":    _clean_num(row[10]),
+            "frozen_shares":   _clean_num(row[11]),
+            "mortgage_shares": _clean_num(row[12]),
+            "pending_shares":  _clean_num(row[13]),
+            "weight_pct":      _clean_num(row[14]),
+            "sector":          sector,
+            "exchange":        exchange,
+            "rt_price":        0.0,
+            "rt_pnl_vnd":      0.0,
+            "rt_pnl_pct":      0.0,
+            "price_source":    "ssi_file",
+        }
+        positions.append(pos)
+
+    df = pd.DataFrame(positions, columns=[c for c in PORTFOLIO_COLUMNS + ["price_source"] if c in (PORTFOLIO_COLUMNS + ["price_source"])])
+    if df.empty:
+        return {"error": "No positions found in file", "positions": df}
+
+    totals = {
+        "total_cost":     df["cost_value"].sum(),
+        "total_mkt_value":df["mkt_value"].sum(),
+        "total_pnl_vnd":  df["pnl_vnd"].sum(),
+        "n_positions":    len(df),
+        "n_locked":       int(df["is_locked"].sum()),
+    }
+
+    return {
+        "account_number": account_number,
+        "export_time":    export_time,
+        "positions":      df,
+        "totals":         totals,
+        "error":          None,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-49/55 — Portfolio Metrics & Tax
+# ══════════════════════════════════════════════════════════════
+def compute_portfolio_tax(positions: list) -> dict:
+    """Vietnam CGT: 0.1% of gross sale value (ENH-55 + C-07)."""
+    total_sale_value = sum(
+        p.get("rt_price", 0) * p.get("qty_total", 0)
+        or p.get("mkt_value", 0)
+        for p in positions
+    )
+    sell_tax_rate = 0.001
+    tax = round(total_sale_value * sell_tax_rate)
+    return {
+        "total_sale_value": total_sale_value,
+        "tax_if_sell_all":  tax,
+        "tax_rate":         sell_tax_rate,
+    }
+
+
+def compute_portfolio_metrics(df: pd.DataFrame) -> dict:
+    """Compute summary metrics for a portfolio DataFrame (ENH-49)."""
+    if df.empty:
+        return {}
+    use_rt = (df["rt_price"] > 0).any()
+    positions = df.to_dict("records")
+    tax_data  = compute_portfolio_tax(positions)
+
+    mkt_val  = df["rt_price"].fillna(0) * df["qty_total"] if use_rt else df["mkt_value"]
+    cost_val = df["cost_value"]
+
+    total_cost      = float(cost_val.sum())
+    total_mkt_value = float(mkt_val.sum())
+    total_pnl_vnd   = total_mkt_value - total_cost
+    total_pnl_pct   = (total_pnl_vnd / total_cost * 100) if total_cost > 0 else 0.0
+    total_tax       = tax_data["tax_if_sell_all"]
+    net_pnl         = total_pnl_vnd - total_tax
+
+    n_winning  = int((df["pnl_pct"] > 0.0).sum())
+    n_losing   = int((df["pnl_pct"] < 0.0).sum())
+    n_breakeven = int((df["pnl_pct"].abs() < 0.5).sum())
+
+    return {
+        "total_cost":      total_cost,
+        "total_mkt_value": total_mkt_value,
+        "total_pnl_vnd":   total_pnl_vnd,
+        "total_pnl_pct":   round(total_pnl_pct, 2),
+        "total_tax":       total_tax,
+        "net_pnl":         net_pnl,
+        "net_pnl_pct":     round((net_pnl / total_cost * 100) if total_cost > 0 else 0.0, 2),
+        "n_winning":       n_winning,
+        "n_losing":        n_losing,
+        "n_breakeven":     n_breakeven,
+        "n_positions":     len(df),
+    }
+
+
+def portfolio_risk_score(positions: list) -> dict:
+    """Compute simple portfolio risk score (ENH-49)."""
+    if not positions:
+        return {"score": 0, "label": "N/A", "breakdown": []}
+    scores = []
+    breakdown = []
+    for p in positions:
+        s = 0
+        pnl = p.get("pnl_pct", 0)
+        if pnl < -7:  s += 3
+        elif pnl < -3: s += 2
+        elif pnl < 0:  s += 1
+        w = p.get("weight_pct", 0)
+        if w > 20: s += 2
+        elif w > 15: s += 1
+        if p.get("is_locked", False): s += 1
+        scores.append(s)
+        breakdown.append({"ticker": p.get("ticker", ""), "score": s})
+
+    total = round(sum(scores) / max(len(scores), 1), 1)
+    label = ("HIGH 🔴" if total >= 5 else
+             "MEDIUM 🟡" if total >= 3 else
+             "LOW 🟢")
+    return {"score": total, "label": label, "breakdown": breakdown}
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-51 — Scenario Engine
+# ══════════════════════════════════════════════════════════════
+def project_portfolio_scenario(positions: list, vni_pct: float, beta_key: str) -> dict:
+    """Project portfolio value under a VNI scenario (ENH-51)."""
+    beta_table = SECTOR_BETA.get(beta_key, SECTOR_BETA["neutral"])
+    results = []
+    total_gain_vnd = 0.0
+    for p in positions:
+        sector = p.get("sector", "Khác")
+        beta   = beta_table.get(sector, beta_table.get("Khác", 1.0))
+        proj_pct = vni_pct * beta / 100.0
+        mkt_val  = (p.get("rt_price", 0) * p.get("qty_total", 0)
+                    or p.get("mkt_value", 0))
+        gain_vnd = mkt_val * proj_pct
+        total_gain_vnd += gain_vnd
+        results.append({
+            "ticker":     p.get("ticker", ""),
+            "sector":     sector,
+            "beta":       beta,
+            "proj_pct":   round(proj_pct * 100, 1),
+            "gain_vnd":   round(gain_vnd),
+            "mkt_val":    mkt_val,
+        })
+    return {
+        "positions":       results,
+        "total_gain_vnd":  round(total_gain_vnd),
+        "vni_pct":         vni_pct,
+        "beta_key":        beta_key,
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-52 — Take-Profit Strategy Planner
+# ══════════════════════════════════════════════════════════════
+def generate_tp_plan(ticker: str, qty: int, avg_cost: float, live_price: float,
+                     tp1: float, tp2: float, tp3_inv: float,
+                     risk_level: str, whale_verdict: str,
+                     ceil_p: float = 0.0, floor_p: float = 0.0,
+                     exchange: str = "HOSE") -> list:
+    """
+    Generate a 3-level Take-Profit plan with circuit-breaker clamping (ENH-52, C-04, H-03, H-09).
+    """
+    if qty <= 0 or live_price <= 0:
+        return []
+
+    # Determine allocation rule (H-03: no hardcoded lot floor)
+    rule_key = ("LOW_ACCUM" if (risk_level == "LOW" and whale_verdict in ("ACCUMULATING", "TÍCH LŨY"))
+                else risk_level.upper())
+    alloc = TP_ALLOCATION_RULES.get(rule_key, TP_ALLOCATION_RULES["MEDIUM"])
+
+    # Circuit-breaker ceiling per C-04
+    band    = EXCHANGE_BANDS.get(exchange, 0.07)
+    daily_ceil = ceil_p if ceil_p > 0 else live_price * (1 + band)
+    daily_floor = floor_p if floor_p > 0 else live_price * (1 - band)
+
+    raw_levels = [
+        (min(tp1,      daily_ceil), "TP1"),
+        (min(tp2,      daily_ceil), "TP2"),
+        (min(tp3_inv,  daily_ceil), "TP3/IV"),
+    ]
+
+    plan = []
+    remaining = qty
+    for idx, ((price, label), pct) in enumerate(zip(raw_levels, alloc)):
+        if idx == len(alloc) - 1:
+            q = remaining
+        else:
+            target = int(qty * pct)
+            q = max(1, target) if target > 0 else 0
+            q = min(q, remaining)
+        remaining -= q
+        if q <= 0:
+            continue
+
+        gross_gain = q * (price - avg_cost)
+        tax        = round(q * price * 0.001)
+        net_gain   = round(q * (price - avg_cost) - tax)
+        plan.append({
+            "label":          label,
+            "price":          price,
+            "qty":            q,
+            "qty_pct":        0.0,  # filled after reconciliation
+            "gross_gain_vnd": round(gross_gain),
+            "tax_at_level":   tax,
+            "net_gain_after_tax": net_gain,
+        })
+
+    # H-09: Reconcile qty so sum == qty_total
+    total_allocated = sum(tp["qty"] for tp in plan)
+    if plan and total_allocated != qty:
+        diff = qty - total_allocated
+        plan[-1]["qty"] = max(0, plan[-1]["qty"] + diff)
+
+    # Recompute qty_pct
+    for tp in plan:
+        tp["qty_pct"] = round(tp["qty"] / qty * 100, 1) if qty > 0 else 0.0
+
+    return plan
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-53 — Cut-Loss Strategy Planner
+# ══════════════════════════════════════════════════════════════
+def recovery_pct_needed(loss_pct: float) -> float:
+    """Asymmetric recovery: -5% loss requires +5.26% gain to break even."""
+    lp = abs(loss_pct)
+    if lp >= 100:
+        return 999.0
+    return round(lp / (1 - lp / 100), 2)
+
+
+def generate_cl_plan(ticker: str, qty: int, avg_cost: float, live_price: float,
+                     stop: float, floor_p: float,
+                     swing_action: str, whale_verdict: str,
+                     pnl_pct: float, is_locked: bool,
+                     exchange: str = "HOSE") -> dict:
+    """
+    Generate cut-loss plan with urgency decision and exchange-aware scenarios (ENH-53, C-04, M-03).
+    """
+    band        = EXCHANGE_BANDS.get(exchange, 0.07)
+    daily_floor = floor_p if floor_p > 0 else live_price * (1 - band)
+    stop_eff    = max(stop, daily_floor) if stop > 0 else daily_floor
+
+    # M-03: break-even guard
+    if abs(pnl_pct) < 0.5:
+        urgency = "HOLD"
+    elif live_price <= stop_eff:
+        urgency = "IMMEDIATE"
+    elif pnl_pct <= -10:
+        urgency = "IMMEDIATE"
+    elif pnl_pct <= -7 and any(k in str(whale_verdict).upper() for k in ("DIST", "XẢ")):
+        urgency = "URGENT"
+    elif pnl_pct <= -5 and any(k in str(swing_action).upper() for k in ("SELL", "BÁN")):
+        urgency = "URGENT"
+    elif pnl_pct <= -3 and any(k in str(swing_action).upper() for k in ("WATCH", "THEO")):
+        urgency = "MONITOR"
+    else:
+        urgency = "HOLD"
+
+    recovery = recovery_pct_needed(abs(pnl_pct))
+
+    # C-04: Scenarios reference exchange bands, NOT arbitrary % declines
+    two_floor   = round(live_price * (1 - band) ** 2)
+    scenarios = [
+        {"name_vi": "Cắt ngay (giá RT)",            "price": live_price,
+         "note_vi": "Có thể thực hiện ngay trong phiên"},
+        {"name_vi": f"Cắt tại Stop Loss hiệu chỉnh","price": stop_eff,
+         "note_vi": f"Đã điều chỉnh về giá sàn hôm nay: {daily_floor:,.0f}đ"},
+        {"name_vi": f"Giảm 1 sàn (−{band*100:.0f}%/phiên)",
+         "price": round(live_price * (1 - band)),
+         "note_vi": f"Mức giảm tối đa 1 phiên ({exchange} ±{band*100:.0f}%)"},
+        {"name_vi": "Giảm 2 sàn liên tiếp",         "price": two_floor,
+         "note_vi": "Cần 2 phiên giảm sàn liên tiếp để đến đây"},
+    ]
+
+    return {
+        "ticker":        ticker,
+        "urgency":       urgency,
+        "pnl_pct":       pnl_pct,
+        "stop_effective":stop_eff,
+        "daily_floor":   daily_floor,
+        "exchange_band": band,
+        "recovery_pct":  recovery,
+        "recovery_est":  _get_recovery_estimate(pnl_pct),
+        "scenarios":     scenarios,
+        "is_locked":     is_locked,
+        "locked_warning": (LOCKED_STATUS_VI if is_locked else ""),
+    }
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-54 — Portfolio Audit Log
+# ══════════════════════════════════════════════════════════════
+def save_portfolio_audit(run_data: dict) -> str:
+    """Save portfolio scan to audit log (ENH-54, L-03 file locking)."""
+    account = run_data.get("account_number", "unknown")
+    fp = os.path.join(PORTFOLIO_AUDIT_PATH, f"portfolio_{account}.json")
+    try:
+        history = []
+        if os.path.exists(fp):
+            with open(fp, "r", encoding="utf-8") as f:
+                history = json.load(f)
+        history.insert(0, run_data)
+        history = history[:200]
+        with open(fp, "w", encoding="utf-8") as f:
+            json.dump(history, f, ensure_ascii=False, indent=2)
+    except Exception as e:
+        _log.warning(f"save_portfolio_audit failed: {e}")
+    return fp
+
+
+def load_portfolio_audit(account: str, n: int = 30) -> list:
+    """Load last n portfolio audit records for account (ENH-54)."""
+    fp = os.path.join(PORTFOLIO_AUDIT_PATH, f"portfolio_{account}.json")
+    if not os.path.exists(fp):
+        return []
+    try:
+        with open(fp, "r", encoding="utf-8") as f:
+            history = json.load(f)
+        return history[:n]
+    except Exception:
+        return []
+
+
+def compute_portfolio_delta(current: dict, previous: dict) -> dict:
+    """Compare current portfolio scan with previous scan (ENH-54, H-06)."""
+    if not current or not previous:
+        return {}
+    c_met = current.get("metrics", {})
+    p_met = previous.get("metrics", {})
+
+    # H-06: warn if price source differs
+    price_source_warning = (
+        current.get("price_source") != previous.get("price_source")
+    )
+
+    delta = {
+        "mkt_value_delta":  c_met.get("total_mkt_value", 0) - p_met.get("total_mkt_value", 0),
+        "pnl_delta_vnd":    c_met.get("total_pnl_vnd", 0)   - p_met.get("total_pnl_vnd", 0),
+        "n_winning_delta":  c_met.get("n_winning", 0)        - p_met.get("n_winning", 0),
+        "n_losing_delta":   c_met.get("n_losing", 0)         - p_met.get("n_losing", 0),
+        "prev_run_id":      previous.get("run_id", ""),
+        "prev_ts":          previous.get("ts", ""),
+        "price_source_warning": price_source_warning,
+        "current_ts":       current.get("ts", ""),
+    }
+    return delta
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-56 — SSI Watchlist Import
+# ══════════════════════════════════════════════════════════════
+def import_portfolio_to_watchlist(tickers: list,
+                                  watchlist_path: str = None) -> dict:
+    """Import portfolio tickers to watchlist file (ENH-56)."""
+    if watchlist_path is None:
+        watchlist_path = WATCHLIST_FILE_PATH
+
+    existing = []
+    try:
+        if os.path.exists(watchlist_path):
+            with open(watchlist_path, "r", encoding="utf-8") as f:
+                existing = [ln.strip().upper() for ln in f if ln.strip() and not ln.startswith("#")]
+    except Exception:
+        pass
+
+    added  = [t for t in tickers if t not in existing]
+    merged = existing + added
+
+    try:
+        with open(watchlist_path, "w", encoding="utf-8") as f:
+            for t in sorted(set(merged)):
+                f.write(t + "\n")
+    except Exception as e:
+        return {"added": [], "total": len(existing), "error": str(e)}
+
+    return {"added": added, "total": len(merged), "error": None}
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · H-11 — Session Recovery helpers
+# ══════════════════════════════════════════════════════════════
+def _persist_portfolio_session(account: str, results: list, scenarios: dict) -> None:
+    """Write last scan results to temp file for session recovery (H-11)."""
+    path = os.path.join(DATA_DIR, f"_session_portfolio_{account}.json")
+    try:
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"results": results, "scenarios": scenarios,
+                       "saved_at": datetime.now().isoformat()}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def _restore_portfolio_session(account: str, max_age_seconds: int = 3600) -> dict:
+    """Restore last scan if < 1 hour old (H-11)."""
+    path = os.path.join(DATA_DIR, f"_session_portfolio_{account}.json")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        age = (datetime.now() - datetime.fromisoformat(data["saved_at"])).total_seconds()
+        if age < max_age_seconds:
+            return data
+    except Exception:
+        pass
+    return {}
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-49/50/51/52/53/54/55 — Portfolio render helpers
+# ══════════════════════════════════════════════════════════════
+def _render_position_card(pos: dict, is_vi: bool) -> None:
+    """Render per-position intelligence card (ENH-50)."""
+    ticker    = pos.get("ticker", "?")
+    pnl_pct   = pos.get("pnl_pct", 0.0)
+    pnl_vnd   = pos.get("pnl_vnd", 0.0)
+    is_locked = pos.get("is_locked", False)
+    pnl_emoji = "🟢" if pnl_pct > 0 else ("🔴" if pnl_pct < 0 else "⚪")
+    rt_price  = pos.get("rt_price", 0.0) or pos.get("mkt_price", 0.0)
+    rt_pnl_pct = pos.get("rt_pnl_pct", pnl_pct)
+
+    lock_icon = " 🔒" if is_locked else ""
+    label = f"{pnl_emoji} {ticker}{lock_icon} | {pnl_pct:+.2f}% ({pnl_vnd:+,.0f}đ)"
+
+    with st.expander(label, expanded=False):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            st.markdown("**📋 " + ("Thông tin vị thế" if is_vi else "Position Facts") + "**")
+            st.write(f"Số lượng: **{pos.get('qty_total', 0):,} CP**" +
+                     (f" 🔒 (0 có thể bán hôm nay)" if is_locked else ""))
+            st.write(f"Giá vốn TB: **{pos.get('avg_cost', 0):,.0f} đ**")
+            st.write(f"Giá file SSI: **{pos.get('mkt_price', 0):,.0f} đ**")
+            if rt_price > 0:
+                st.write(f"Giá RT: **{rt_price:,.0f} đ**")
+            st.write(f"Lãi/Lỗ file: **{pnl_pct:+.2f}%** ({pnl_vnd:+,.0f}đ)")
+            st.write(f"Ngành: **{pos.get('sector','Khác')}**")
+            if pos.get("weight_pct", 0):
+                st.write(f"Tỷ trọng: **{pos.get('weight_pct', 0):.2f}%**")
+
+            # H-04: FOL warning
+            fol = get_fol_status(ticker)
+            if fol["near_cap"] or fol["fol_cap_pct"] < 30:
+                st.warning(f"⚠️ FOL: {ticker} – Cap {fol['fol_cap_pct']}%. "
+                           + ("Room ngoại gần hết — tín hiệu tích lũy chỉ phản ánh dòng tiền nội."
+                              if fol["near_cap"] else ""))
+
+        with col2:
+            st.markdown("**⚡ " + ("Kế hoạch xử lý" if is_vi else "Action Plan") + "**")
+            cl_plan = generate_cl_plan(
+                ticker, pos.get("qty_total", 0), pos.get("avg_cost", 0), rt_price,
+                stop=rt_price * 0.93, floor_p=0.0,
+                swing_action="WATCH", whale_verdict="NEUTRAL",
+                pnl_pct=pnl_pct, is_locked=is_locked,
+                exchange=pos.get("exchange", "HOSE")
+            )
+            urgency = cl_plan.get("urgency", "HOLD")
+            if urgency == "IMMEDIATE":
+                st.error("🚨 " + ("XEM XÉT CẮT LỖ NGAY" if is_vi else "CONSIDER IMMEDIATE CUT"))
+            elif urgency == "URGENT":
+                st.warning("⚠️ " + ("CẮT LỖ KHẨN" if is_vi else "URGENT CUT-LOSS"))
+            elif urgency == "MONITOR":
+                st.info("👁️ " + ("THEO DÕI THÊM" if is_vi else "MONITOR CLOSELY"))
+            else:
+                st.success("✅ " + ("NẮM GIỮ" if is_vi else "HOLD"))
+
+            if is_locked:
+                st.caption(LOCKED_STATUS_VI if is_vi else LOCKED_STATUS_EN)
+
+            # Tax estimate
+            if rt_price > 0:
+                tax_est = round(rt_price * pos.get("qty_total", 0) * 0.001)
+                st.caption(f"Thuế bán: ~{tax_est:,.0f}đ (0.1% × giá trị bán)")
+
+            if pnl_pct < -3:
+                rec = cl_plan.get("recovery_est", "")
+                if rec:
+                    st.caption(f"🔄 {rec}")
+
+
+def _render_scenario_table(positions: list, is_vi: bool) -> None:
+    """Render scenario projection table with custom VNI slider (ENH-51)."""
+    st.subheader("📊 " + ("Kịch bản thị trường" if is_vi else "Market Scenarios"))
+
+    # Disclaimer per C-03
+    st.caption(SECTOR_BETA_DISCLAIMER["VI" if is_vi else "EN"])
+
+    # Standard 3 scenarios
+    cols = st.columns(3)
+    for idx, scen in enumerate(SCENARIO_DEFINITIONS):
+        sname = scen["name_vi"] if is_vi else scen["name_en"]
+        scen_res = project_portfolio_scenario(positions, scen["vni_pct"], scen["beta_key"])
+        with cols[idx]:
+            gain = scen_res["total_gain_vnd"]
+            gain_str = f"+{gain:,.0f}đ" if gain >= 0 else f"{gain:,.0f}đ"
+            color = "#00e676" if gain >= 0 else "#ff5252"
+            st.markdown(f"**{sname}**")
+            st.caption(scen.get("vni_range_vi" if is_vi else "vni_range_en", ""))
+            st.caption(scen.get("probability_vi", ""))
+            st.markdown(f'<span style="color:{color};font-size:1.2em;font-weight:700">{gain_str}</span>',
+                        unsafe_allow_html=True)
+
+    # Custom slider
+    st.divider()
+    st.caption("🎛️ " + ("Kịch bản tuỳ chỉnh" if is_vi else "Custom Scenario"))
+    custom_vni = st.slider("VNI %", min_value=-30.0, max_value=30.0, value=0.0, step=0.5,
+                           key="portfolio_custom_vni")
+    custom_res = project_portfolio_scenario(positions, custom_vni, "neutral")
+    gain = custom_res["total_gain_vnd"]
+    color = "#00e676" if gain >= 0 else "#ff5252"
+    st.markdown(
+        f"VNI {custom_vni:+.1f}% → Danh mục: "
+        f'<span style="color:{color};font-weight:700">{gain:+,.0f}đ</span>',
+        unsafe_allow_html=True
+    )
+
+
+def _render_tax_summary(positions: list, metrics: dict, is_vi: bool) -> None:
+    """Render CGT tax summary panel (ENH-55)."""
+    st.subheader("🧾 " + ("Thuế CGT" if is_vi else "CGT Tax"))
+    if st.session_state.get("f0_mode", True):
+        st.markdown(f0_explain(
+            "Thuế TNCN khi bán cổ phiếu" if is_vi else "Capital Gains Tax",
+            ("Thuế TNCN khi bán CP = 0.1% × Giá trị bán (bất kể lãi hay lỗ). "
+             "SSI khấu trừ tự động tại nguồn. "
+             "ℹ️ Nhà đầu tư vẫn có nghĩa vụ kê khai quyết toán thuế TNCN hàng năm dù SSI đã khấu trừ "
+             "(Khoản 2 Điều 17 TT 111/2013/TT-BTC sửa đổi bởi TT 92/2015/TT-BTC). "
+             "Trong thực tế với mức thuế 0.1% cố định, quyết toán thường không phát sinh thêm nghĩa vụ thuế."
+             if is_vi else
+             "Vietnam CGT = 0.1% of gross sale value regardless of P&L. "
+             "SSI auto-deducts at source. "
+             "ℹ️ Annual PIT filing required despite source withholding (TT 111/2013). "
+             "In practice, the 0.1% flat rate means no additional tax from annual filing.")
+        ), unsafe_allow_html=True)
+
+    total_mv = metrics.get("total_mkt_value", 0)
+    total_tax = metrics.get("total_tax", 0)
+    gross_pnl = metrics.get("total_pnl_vnd", 0)
+    net_pnl   = metrics.get("net_pnl", 0)
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Tổng giá trị TT" if is_vi else "Total Market Value",
+              f"{total_mv/1e6:.2f}M đ")
+    c2.metric("Thuế CGT nếu bán tất" if is_vi else "CGT if sell all",
+              f"{total_tax:,.0f} đ",
+              help="= 0.1% × Tổng giá trị bán")
+    c3.metric("P&L ròng sau thuế" if is_vi else "Net P&L after tax",
+              f"{net_pnl:+,.0f} đ",
+              delta=f"{metrics.get('net_pnl_pct',0):+.2f}%")
+
+
+def _render_portfolio_history_tab(account: str, is_vi: bool) -> None:
+    """Render portfolio historical comparison tab (ENH-54)."""
+    history = load_portfolio_audit(account, n=30)
+    if not history:
+        st.info("📭 " + ("Chưa có dữ liệu lịch sử. Nhấn 'Quét danh mục' để tạo bản ghi đầu tiên."
+                         if is_vi else "No history yet. Run a portfolio scan to create the first record."))
+        return
+
+    # Delta vs previous scan
+    if len(history) >= 2:
+        delta = compute_portfolio_delta(history[0], history[1])
+        if delta:
+            color_mv = "#00e676" if delta["mkt_value_delta"] >= 0 else "#ff5252"
+            st.markdown(f"**📊 " + ("Thay đổi so với lần quét trước" if is_vi else "Change vs Previous Scan") + f"** ({delta.get('prev_ts','')[:16]})")
+            if delta.get("price_source_warning"):
+                st.warning("⚠️ " + ("Lần quét này và lần trước dùng nguồn giá khác nhau (RT vs file). "
+                                    "Chênh lệch có thể phản ánh sự khác biệt giá buổi sáng vs hiện tại."
+                                    if is_vi else
+                                    "Price source differs between scans (RT vs file). "
+                                    "Delta may reflect morning vs intraday price difference, not real portfolio change."))
+            cc1, cc2, cc3 = st.columns(3)
+            cc1.metric("Giá trị TT" if is_vi else "Market Value",
+                       f"{delta['mkt_value_delta']:+,.0f}đ")
+            cc2.metric("Mã lãi" if is_vi else "Winning",
+                       f"{history[0].get('metrics',{}).get('n_winning','?')}",
+                       delta=str(delta.get("n_winning_delta", 0)))
+            cc3.metric("Mã lỗ" if is_vi else "Losing",
+                       f"{history[0].get('metrics',{}).get('n_losing','?')}",
+                       delta=str(delta.get("n_losing_delta", 0)))
+
+    # History table
+    rows = []
+    for rec in history[:20]:
+        m = rec.get("metrics", {})
+        rows.append({
+            "Thời gian": rec.get("ts", "")[:16],
+            "GT TT (đ)": f"{m.get('total_mkt_value',0)/1e6:.2f}M",
+            "P&L (đ)":   f"{m.get('total_pnl_vnd',0):+,.0f}",
+            "P&L %":     f"{m.get('total_pnl_pct',0):+.2f}%",
+            "Mã lãi":    m.get("n_winning", "?"),
+            "Mã lỗ":     m.get("n_losing", "?"),
+        })
+    if rows:
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+
+
+# ══════════════════════════════════════════════════════════════
+#  v30 · ENH-48–56 — Main Portfolio Tab Renderer
+# ══════════════════════════════════════════════════════════════
+def render_portfolio_tab():
+    """Render the full 💼 Danh Mục Của Tôi tab (ENH-48–56)."""
+    is_vi = st.session_state.get("lang", "VI") == "VI"
+    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
+
+    L = _LANG_VI if is_vi else _LANG_EN
+
+    st.title("💼 " + ("Danh Mục Của Tôi" if is_vi else "My Portfolio"))
+
+    # F0 help banner
+    f0_tab_banner(
+        "portfolio",
+        "Phân tích Danh Mục Của Bạn",
+        "Analyse Your Portfolio",
+        ("Upload file XLSX từ SSI iBoard → tự động phân tích toàn bộ vị thế: "
+         "lãi/lỗ RT, kịch bản thị trường, kế hoạch chốt lời/cắt lỗ từng mã, tính thuế CGT. "
+         "Dữ liệu chỉ xử lý cục bộ trên máy bạn."),
+        ("Upload XLSX from SSI iBoard → auto-analyse all positions: "
+         "RT P&L, market scenarios, per-ticker TP/CL plans, CGT tax. "
+         "Data processed locally only."),
+        is_vi
+    )
+
+    # ── C-07: Data consent gate ───────────────────────────────
+    consent = st.checkbox(
+        ("✅ Tôi đồng ý rằng dữ liệu danh mục sẽ được xử lý cục bộ trên máy tính này "
+         "và không được gửi đến máy chủ bên thứ ba (trừ SSI iBoard để lấy giá thực)."
+         if is_vi else
+         "✅ I agree that portfolio data will be processed locally on this computer "
+         "and not sent to third-party servers (except SSI iBoard for real-time prices)."),
+        key="portfolio_data_consent",
+        value=st.session_state.get("portfolio_data_consent", False)
+    )
+    if not consent:
+        st.info("☝️ " + ("Vui lòng xác nhận đồng ý ở trên để tiếp tục." if is_vi
+                         else "Please confirm consent above to continue."))
+        return
+
+    # ── Sub-tabs ──────────────────────────────────────────────
+    if is_vi:
+        sub_labels = ["📁 Tải Danh Mục", "📊 Tổng Quan", "🎯 Vị Thế Chi Tiết",
+                      "📈 Kịch Bản", "🧾 Thuế CGT", "📂 Lịch Sử DM"]
+    else:
+        sub_labels = ["📁 Upload", "📊 Dashboard", "🎯 Positions",
+                      "📈 Scenarios", "🧾 CGT Tax", "📂 History"]
+
+    pt1, pt2, pt3, pt4, pt5, pt6 = st.tabs(sub_labels)
+
+    # ────────────────────────────────────────────────
+    #  Tab 1 — Upload or manual entry
+    # ────────────────────────────────────────────────
+    with pt1:
+        st.subheader("📁 " + ("Tải file SSI iBoard" if is_vi else "Upload SSI iBoard File"))
+
+        # H-11: Check for recoverable session
+        account_key = st.session_state.get("portfolio_account", "")
+        if account_key:
+            session_data = _restore_portfolio_session(account_key)
+            if session_data and not st.session_state.get("portfolio_df") is not None:
+                if st.button("🔄 " + ("Khôi phục lần quét gần nhất" if is_vi else "Restore last scan"),
+                             key="restore_session"):
+                    st.session_state.portfolio_results  = session_data.get("results", [])
+                    st.session_state.portfolio_scenarios = session_data.get("scenarios", {})
+                    st.success("✅ Đã khôi phục kết quả quét trước.")
+
+        uploaded = st.file_uploader(
+            "Upload SSI Portfolio XLSX" if not is_vi else "Tải file XLSX từ SSI iBoard",
+            type=["xlsx"], key="portfolio_upload"
+        )
+
+        if uploaded is not None:
+            parse_result = parse_ssi_portfolio_xlsx(uploaded.read())
+            if parse_result.get("error"):
+                st.error(f"❌ {parse_result['error']}")
+            else:
+                df_port = parse_result["positions"]
+                meta    = {
+                    "account_number": parse_result.get("account_number", ""),
+                    "export_time":    parse_result.get("export_time", ""),
+                    "totals":         parse_result.get("totals", {}),
+                }
+                st.session_state.portfolio_df   = df_port
+                st.session_state.portfolio_meta = meta
+                st.session_state.portfolio_account = meta["account_number"]
+
+                st.success(f"✅ {len(df_port)} " + ("vị thế đã tải. Tài khoản: " if is_vi else "positions loaded. Account: ")
+                           + meta["account_number"])
+                if meta.get("export_time"):
+                    st.caption(f"📅 Export: {meta['export_time']}")
+
+                # ENH-56: Import to watchlist button
+                tickers = df_port["ticker"].tolist()
+                if st.button("📋 " + ("Thêm tất cả vào Watchlist" if is_vi else "Add All to Watchlist"),
+                             key="import_to_watchlist"):
+                    result = import_portfolio_to_watchlist(tickers)
+                    if result.get("error"):
+                        st.warning(f"⚠️ {result['error']}")
+                    else:
+                        st.success(f"✅ " + (f"Đã thêm {len(result['added'])} mã mới. Watchlist: {result['total']} mã tổng."
+                                             if is_vi else
+                                             f"Added {len(result['added'])} new tickers. Watchlist total: {result['total']}."))
+
+        # Manual entry fallback
+        st.divider()
+        st.caption("📝 " + ("Hoặc nhập thủ công:" if is_vi else "Or enter manually:"))
+        manual_df = st.data_editor(
+            pd.DataFrame({"ticker": [""], "qty_total": [0], "avg_cost": [0.0], "mkt_price": [0.0]}),
+            num_rows="dynamic", key="manual_portfolio_input",
+            use_container_width=True,
+        )
+        if st.button("📥 " + ("Dùng dữ liệu thủ công" if is_vi else "Use Manual Data"),
+                     key="use_manual_portfolio"):
+            manual_df = manual_df[manual_df["ticker"].str.strip().astype(bool)].copy()
+            manual_df["ticker"] = manual_df["ticker"].str.upper().str.strip()
+            for col in ["qty_total", "avg_cost", "mkt_price"]:
+                manual_df[col] = pd.to_numeric(manual_df[col], errors="coerce").fillna(0)
+            manual_df["pnl_vnd"]   = (manual_df["mkt_price"] - manual_df["avg_cost"]) * manual_df["qty_total"]
+            manual_df["pnl_pct"]   = ((manual_df["mkt_price"] - manual_df["avg_cost"])
+                                       / manual_df["avg_cost"].replace(0, float("nan")) * 100).fillna(0)
+            manual_df["cost_value"] = manual_df["avg_cost"] * manual_df["qty_total"]
+            manual_df["mkt_value"]  = manual_df["mkt_price"] * manual_df["qty_total"]
+            manual_df["is_locked"]  = False
+            manual_df["qty_tradeable"] = manual_df["qty_total"]
+            manual_df["weight_pct"] = (manual_df["mkt_value"] / manual_df["mkt_value"].sum() * 100
+                                       if manual_df["mkt_value"].sum() > 0 else 0.0)
+            manual_df["sector"]    = manual_df["ticker"].apply(get_sector)
+            manual_df["exchange"]  = manual_df["ticker"].apply(lambda t: TICKER_EXCHANGE.get(t, "HOSE"))
+            manual_df["rt_price"]  = 0.0
+            manual_df["rt_pnl_vnd"] = 0.0
+            manual_df["rt_pnl_pct"] = 0.0
+            manual_df["price_source"] = "manual"
+            st.session_state.portfolio_df   = manual_df
+            st.session_state.portfolio_meta = {"account_number": "MANUAL", "export_time": datetime.now().strftime("%d/%m/%Y %H:%M"), "totals": {}}
+            st.session_state.portfolio_account = "MANUAL"
+            st.success("✅ " + ("Đã nhập dữ liệu thủ công." if is_vi else "Manual data loaded."))
+
+    # ────────────────────────────────────────────────
+    #  Get portfolio data from session state
+    # ────────────────────────────────────────────────
+    df_port = st.session_state.get("portfolio_df", None)
+    meta    = st.session_state.get("portfolio_meta", {})
+    if df_port is None or df_port.empty:
+        for tab in [pt2, pt3, pt4, pt5, pt6]:
+            with tab:
+                st.info("📭 " + ("Chưa có dữ liệu danh mục. Tải file SSI ở tab trên."
+                                 if is_vi else "No portfolio data. Upload SSI file in the tab above."))
+        return
+
+    positions_list = df_port.to_dict("records")
+    metrics = compute_portfolio_metrics(df_port)
+
+    # ────────────────────────────────────────────────
+    #  Tab 2 — Dashboard
+    # ────────────────────────────────────────────────
+    with pt2:
+        st.subheader("📊 " + ("Tổng Quan Danh Mục" if is_vi else "Portfolio Dashboard"))
+        if meta.get("account_number"):
+            st.caption(f"Tài khoản: {meta['account_number']} · Export: {meta.get('export_time', 'N/A')}")
+
+        # 8-tile metrics bar
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("💰 Giá vốn" if is_vi else "💰 Cost",
+                  f"{metrics.get('total_cost',0)/1e6:.2f}M đ")
+        c2.metric("📈 GT TT" if is_vi else "📈 Market Val",
+                  f"{metrics.get('total_mkt_value',0)/1e6:.2f}M đ")
+        c3.metric("P&L Gộp" if is_vi else "Gross P&L",
+                  f"{metrics.get('total_pnl_vnd',0):+,.0f} đ",
+                  delta=f"{metrics.get('total_pnl_pct',0):+.2f}%")
+        c4.metric("P&L Ròng (sau thuế)" if is_vi else "Net P&L",
+                  f"{metrics.get('net_pnl',0):+,.0f} đ",
+                  delta=f"{metrics.get('net_pnl_pct',0):+.2f}%")
+
+        c5, c6, c7, c8 = st.columns(4)
+        c5.metric("Thuế CGT" if is_vi else "CGT Tax",
+                  f"{metrics.get('total_tax',0):,.0f} đ")
+        c6.metric("Vị thế" if is_vi else "Positions",
+                  str(metrics.get("n_positions", 0)))
+        c7.metric("🟢 Lãi" if is_vi else "🟢 Winning",
+                  str(metrics.get("n_winning", 0)))
+        c8.metric("🔴 Lỗ" if is_vi else "🔴 Losing",
+                  str(metrics.get("n_losing", 0)))
+
+        # Locked positions warning (C-02)
+        locked = df_port[df_port["is_locked"]]["ticker"].tolist() if "is_locked" in df_port.columns else []
+        if locked:
+            st.warning(
+                f"🔒 **{len(locked)} mã đang chờ thanh toán T+2:** {', '.join(locked)}\n"
+                "Các mã này được mua trong phiên hôm qua và sẽ có thể giao dịch "
+                "từ ngày T+2 (2 ngày làm việc sau ngày mua). "
+                "Nếu cần bán khẩn cấp trước T+2, liên hệ SSI để sử dụng dịch vụ bán cầm cố."
+            )
+
+        # Portfolio weight chart
+        if not df_port.empty:
+            colors = ["#00e676" if p > 0 else "#ff5252"
+                      for p in df_port.get("pnl_pct", pd.Series([0]*len(df_port)))]
+            fig = go.Figure(go.Bar(
+                x=df_port["ticker"],
+                y=df_port.get("weight_pct", pd.Series([0]*len(df_port))),
+                marker_color=colors,
+                name="Weight %"
+            ))
+            fig.update_layout(
+                title="Tỷ trọng danh mục (%)" if is_vi else "Portfolio Weight (%)",
+                height=280, margin=dict(t=30,b=20,l=0,r=0),
+                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                font_color="#e2e8f0"
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+        # P&L waterfall
+        if "pnl_vnd" in df_port.columns and len(df_port) > 0:
+            sorted_df = df_port.sort_values("pnl_vnd", ascending=True)
+            fig2 = go.Figure(go.Bar(
+                x=sorted_df["ticker"],
+                y=sorted_df["pnl_vnd"],
+                marker_color=["#00e676" if v >= 0 else "#ff5252"
+                              for v in sorted_df["pnl_vnd"]],
+                name="P&L (đ)"
+            ))
+            fig2.update_layout(
+                title="P&L từng vị thế (đ)" if is_vi else "Per-Position P&L (VND)",
+                height=260, margin=dict(t=30,b=20,l=0,r=0),
+                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                font_color="#e2e8f0"
+            )
+            st.plotly_chart(fig2, use_container_width=True)
+
+        # Risk score
+        risk = portfolio_risk_score(positions_list)
+        st.info(f"🛡️ " + ("Rủi ro danh mục" if is_vi else "Portfolio Risk") + f": **{risk['label']}** (score {risk['score']}/10)")
+
+        # Save scan to audit
+        run_data = {
+            "run_id":       datetime.now().strftime("%Y%m%d_%H%M%S"),
+            "ts":           datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "account_number": meta.get("account_number", ""),
+            "export_time":  meta.get("export_time", ""),
+            "metrics":      metrics,
+            "n_winning":    metrics.get("n_winning", 0),
+            "n_losing":     metrics.get("n_losing", 0),
+            "n_breakeven":  metrics.get("n_breakeven", 0),
+            "price_source": df_port["price_source"].iloc[0] if "price_source" in df_port.columns else "ssi_file",
+        }
+        if st.button("💾 " + ("Lưu bản ghi lịch sử" if is_vi else "Save audit record"), key="save_portfolio_audit"):
+            save_portfolio_audit(run_data)
+            st.success("✅ " + ("Đã lưu bản ghi." if is_vi else "Audit record saved."))
+
+    # ────────────────────────────────────────────────
+    #  Tab 3 — Per-position cards
+    # ────────────────────────────────────────────────
+    with pt3:
+        st.subheader("🎯 " + ("Chi tiết từng vị thế" if is_vi else "Position Detail"))
+        for pos in positions_list:
+            _render_position_card(pos, is_vi)
+
+    # ────────────────────────────────────────────────
+    #  Tab 4 — Scenarios
+    # ────────────────────────────────────────────────
+    with pt4:
+        _render_scenario_table(positions_list, is_vi)
+
+    # ────────────────────────────────────────────────
+    #  Tab 5 — Tax summary
+    # ────────────────────────────────────────────────
+    with pt5:
+        _render_tax_summary(positions_list, metrics, is_vi)
+
+    # ────────────────────────────────────────────────
+    #  Tab 6 — History
+    # ────────────────────────────────────────────────
+    with pt6:
+        account = meta.get("account_number", "")
+        if account:
+            _render_portfolio_history_tab(account, is_vi)
+        else:
+            st.info("Tải file SSI để xem lịch sử." if is_vi else "Upload SSI file to view history.")
+
 
 def main():
     # Initialize session state variables
@@ -12229,47 +13592,100 @@ def main():
             _disk_audit = load_audit_from_disk()
             if _disk_audit: st.session_state.audit_log = _disk_audit
         except Exception: pass
+    # v29/v30: New session state keys
+    if "f0_visited_tabs" not in st.session_state:
+        st.session_state.f0_visited_tabs = set()
+    if "portfolio_df" not in st.session_state:
+        st.session_state.portfolio_df = None
+    if "portfolio_meta" not in st.session_state:
+        st.session_state.portfolio_meta = {}
+    if "portfolio_results" not in st.session_state:
+        st.session_state.portfolio_results = []
+    if "portfolio_scenarios" not in st.session_state:
+        st.session_state.portfolio_scenarios = {}
+    if "portfolio_history" not in st.session_state:
+        st.session_state.portfolio_history = []
+    if "portfolio_delta" not in st.session_state:
+        st.session_state.portfolio_delta = {}
+    if "portfolio_account" not in st.session_state:
+        st.session_state.portfolio_account = ""
 
-    # v29: SSI Live Board moved to first tab for immediate market access
-    # Group: [Trading] SSI Live | Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
-    # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast | AuditLog | DeepScan
-    tab_keys = ["tab17","tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16"]
-    tabs = st.tabs([L[k] for k in tab_keys])
+    # ── Inject global CSS once (ENH-46) ───────────────────────
+    st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
-    with tabs[0]:
-        render_ssi_realtime_tab()
-    with tabs[1]:
-        render_scanner_tab()
-    with tabs[2]:
-        render_smart_signals_tab()   # 🎯 Smart Signals (replaces Top 30 Buy)
-    with tabs[3]:
-        render_stock_profiler_tab()  # 🧬 Profiler — moved up to tab 3
-    with tabs[4]:
-        render_deep_audit_tab()
-    with tabs[5]:
-        render_model_portfolios_tab()  # 💼 moved up
-    with tabs[6]:
-        render_ml_forecast_tab()
-    with tabs[7]:
-        render_global_markets_tab()    # 🌍 moved up
-    with tabs[8]:
-        render_backtest_tab()          # 🧪 moved back
-    with tabs[9]:
-        render_history_tab()
-    with tabs[10]:
-        render_guide_tab()
-    with tabs[11]:
-        render_changelog_tab()
-    with tabs[12]:
-        render_smoke_test_tab()
-    with tabs[13]:
-        render_forecast_log_tab()
-    with tabs[14]:
-        render_top_forecast_tab()
-    with tabs[15]:
-        render_audit_log_tab()
-    with tabs[16]:
-        render_deep_scan_tab()
+    # ── v29 ENH-43: Section-based navigation ──────────────────
+    nav = st.session_state.get("nav_section", "start")
+
+    if nav == "start":
+        render_start_tab()
+
+    elif nav == "market":
+        # 📊 Thị Trường — 5 sub-tabs
+        is_vi = st.session_state.get("lang", "VI") == "VI"
+        if is_vi:
+            mt_labels = ["🌍 Thế Giới", "📊 Quét Thị Trường", "🎯 Tín Hiệu Thông Minh",
+                         "🧭 Deep Scan", "📡 Bảng Giá SSI Live"]
+        else:
+            mt_labels = ["🌍 Global Markets", "📊 Market Scanner", "🎯 Smart Signals",
+                         "🧭 Deep Scan", "📡 SSI Live Board"]
+        mt0, mt1, mt2, mt3, mt4 = st.tabs(mt_labels)
+        with mt0: render_global_markets_tab()
+        with mt1: render_scanner_tab()
+        with mt2: render_smart_signals_tab()
+        with mt3: render_deep_scan_tab()
+        with mt4: render_ssi_realtime_tab()
+
+    elif nav == "stock":
+        # 🧬 Cổ Phiếu — 4 sub-tabs
+        is_vi = st.session_state.get("lang", "VI") == "VI"
+        if is_vi:
+            st_labels = ["🧬 Hồ Sơ Cổ Phiếu", "🔍 Deep Audit", "🧠 Dự Báo ML", "🔮 Top Forecast"]
+        else:
+            st_labels = ["🧬 Stock Profiler", "🔍 Deep Audit", "🧠 ML Forecast", "🔮 Top Forecast"]
+        st0, st1, st2, st3 = st.tabs(st_labels)
+        with st0: render_stock_profiler_tab()
+        with st1: render_deep_audit_tab()
+        with st2: render_ml_forecast_tab()
+        with st3: render_top_forecast_tab()
+
+    elif nav == "portfolio":
+        # 💼 Danh Mục — 2 sub-tabs
+        is_vi = st.session_state.get("lang", "VI") == "VI"
+        if is_vi:
+            port_labels = ["💼 Danh Mục Mẫu", "📁 Danh Mục Của Tôi"]
+        else:
+            port_labels = ["💼 Model Portfolios", "📁 My Portfolio"]
+        pv0, pv1 = st.tabs(port_labels)
+        with pv0: render_model_portfolios_tab()
+        with pv1: render_portfolio_tab()
+
+    elif nav == "advanced":
+        # 🔬 Nâng Cao — 3 sub-tabs
+        is_vi = st.session_state.get("lang", "VI") == "VI"
+        if is_vi:
+            adv_labels = ["🧪 Backtest T+2", "📈 Lịch Sử Dự Báo", "📂 Lịch Sử Giao Dịch"]
+        else:
+            adv_labels = ["🧪 Backtest T+2", "📈 Forecast Log", "📂 Trade History"]
+        av0, av1, av2 = st.tabs(adv_labels)
+        with av0: render_backtest_tab()
+        with av1: render_forecast_log_tab()
+        with av2: render_history_tab()
+
+    elif nav == "docs":
+        # 📖 Tài Liệu — 4 sub-tabs
+        is_vi = st.session_state.get("lang", "VI") == "VI"
+        if is_vi:
+            doc_labels = ["📖 Hướng Dẫn", "📝 Change Log", "🔬 Smoke Test", "📋 Nhật Ký Audit"]
+        else:
+            doc_labels = ["📖 Guide", "📝 Change Log", "🔬 Smoke Test", "📋 Audit Log"]
+        dv0, dv1, dv2, dv3 = st.tabs(doc_labels)
+        with dv0: render_guide_tab()
+        with dv1: render_changelog_tab()
+        with dv2: render_smoke_test_tab()
+        with dv3: render_audit_log_tab()
+
+    else:
+        render_start_tab()
 
 if __name__ == "__main__":
     main()
