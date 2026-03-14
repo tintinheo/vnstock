@@ -3347,7 +3347,7 @@ def _tick_size(price: float) -> int:
 
 def _compute_ssi_recommendation(d: dict) -> dict:
     """
-    ENH-43: Compute intraday buy/sell price recommendations for a ticker.
+    ENH-43 (v29): Compute intraday buy/sell price recommendations for a ticker.
 
     Scoring (0-100, neutral=50):
       +20  price deeply oversold (pct < -3%)
@@ -3357,18 +3357,20 @@ def _compute_ssi_recommendation(d: dict) -> dict:
       +15  strong buy pressure (bu_vol > 60% of flow)
       +7   mild buy pressure  (bu_vol > 50%)
       -15  strong sell pressure / -7 mild sell pressure
-      +12  strong foreign buying / +5 mild
+      +12  strong foreign buying (+20% more buy) / +5 mild
       -12  strong foreign selling / -5 mild
       -10  near ceiling (room_up < 1%)
       +10  at floor support (room_down < 1%)
+      -5   wide spread (spread_pct > 1%) — illiquid, avoid market order
 
     Prices:
-      buy_limit  — patient limit order just above Bid1; best entry price (max profit)
-      buy_exec   — aggressive order at Ask1; immediate fill (max execution rate)
-      sell_limit — patient limit above Ask1 (capped at ceiling); max profit
-      sell_exec  — aggressive hit Bid1; immediate fill
-      tp         — take-profit target (+1.5%, capped at ceiling)
-      sl         — stop-loss level (-3%, floored at floor price)
+      buy_limit  — patient limit just above Bid1 (best entry price)
+      buy_exec   — aggressive order at Ask1 (immediate fill)
+      sell_limit — patient limit above Ask1 (capped at ceiling)
+      sell_exec  — aggressive hit Bid1 (immediate fill)
+      tp         — TP1: T+2/T+3 target (+2.5%, capped at ceiling)
+      tp2        — TP2: swing target (+5.0%, capped at ceiling)
+      sl         — stop-loss level (-5%, aligned to VN ±7% band, floored at floor price)
     """
     price  = d.get("price", 0)
     ref    = d.get("ref", 0)
@@ -3384,7 +3386,7 @@ def _compute_ssi_recommendation(d: dict) -> dict:
 
     if price <= 0:
         return {"signal": "N/A", "score": 0, "buy_limit": 0, "buy_exec": 0,
-                "sell_limit": 0, "sell_exec": 0, "tp": 0, "sl": 0, "spread_pct": 0}
+                "sell_limit": 0, "sell_exec": 0, "tp": 0, "tp2": 0, "sl": 0, "spread_pct": 0}
 
     tick = _tick_size(price)
 
@@ -3423,6 +3425,13 @@ def _compute_ssi_recommendation(d: dict) -> dict:
         room_dn = (price - floor_) / price * 100
         if room_dn < 1: score += 10
 
+    # spread quality penalty (wide spread = illiquid)
+    eff_bid_pre = bid1 if bid1 > 0 else max(floor_ if floor_ > 0 else price * 0.9, price - tick * 2)
+    eff_ask_pre = ask1 if ask1 > 0 else min(ceil_  if ceil_  > 0 else price * 1.1, price + tick * 2)
+    spread_pct  = round((eff_ask_pre - eff_bid_pre) / price * 100, 2) if price > 0 else 0
+    if spread_pct > 1.0:
+        score -= 5
+
     score = max(0, min(100, score))
 
     # ── Signal label ─────────────────────────────────────────
@@ -3433,8 +3442,8 @@ def _compute_ssi_recommendation(d: dict) -> dict:
     else:             signal = "🔴 SELL"
 
     # ── Effective bid / ask ───────────────────────────────────
-    eff_bid = bid1 if bid1 > 0 else max(floor_ if floor_ > 0 else price * 0.9, price - tick * 2)
-    eff_ask = ask1 if ask1 > 0 else min(ceil_  if ceil_  > 0 else price * 1.1, price + tick * 2)
+    eff_bid = eff_bid_pre
+    eff_ask = eff_ask_pre
 
     def _snap(val):
         return int(round(val / tick) * tick)
@@ -3456,16 +3465,17 @@ def _compute_ssi_recommendation(d: dict) -> dict:
     sell_exec = _snap(eff_bid)
     if floor_ > 0: sell_exec = max(sell_exec, int(floor_))
 
-    # take profit: ~1.5% above price, capped at ceiling
-    tp = _snap(price * 1.015)
+    # TP1: T+2/T+3 short-term target ~+2.5%, capped at ceiling
+    tp = _snap(price * 1.025)
     if ceil_ > 0: tp = min(tp, int(ceil_))
 
-    # stop loss: ~3% below price, floored at floor_price
-    sl = _snap(price * 0.97)
-    if floor_ > 0: sl = max(sl, int(floor_))
+    # TP2: swing target ~+5.0%, capped at ceiling
+    tp2 = _snap(price * 1.05)
+    if ceil_ > 0: tp2 = min(tp2, int(ceil_))
 
-    # spread quality
-    spread_pct = round((eff_ask - eff_bid) / price * 100, 2) if price > 0 else 0
+    # stop loss: ~5% below price (VN ±7% band), floored at floor_price
+    sl = _snap(price * 0.95)
+    if floor_ > 0: sl = max(sl, int(floor_))
 
     return {
         "signal":     signal,
@@ -3475,6 +3485,7 @@ def _compute_ssi_recommendation(d: dict) -> dict:
         "sell_limit": sell_limit,
         "sell_exec":  sell_exec,
         "tp":         tp,
+        "tp2":        tp2,
         "sl":         sl,
         "spread_pct": spread_pct,
     }
@@ -11245,18 +11256,40 @@ def render_ssi_realtime_tab():
 
     # ── Tabs: Full Board | Top Movers | Foreign Activity | Order Book | Watchlist Scanner ──
     sub_labels = (
-        ["📋 Bảng giá", "🏆 Top biến động", "🌐 Khối ngoại", "📖 Sổ lệnh & Lịch sử khớp", "🎯 Quét Watchlist"]
+        ["🎯 Quét Watchlist", "📋 Bảng giá", "🏆 Top biến động", "🌐 Khối ngoại", "📖 Sổ lệnh & Lịch sử khớp"]
         if is_vi else
-        ["📋 Full Board", "🏆 Top Movers", "🌐 Foreign Activity", "📖 Order Book & Trades", "🎯 Watchlist Scanner"]
+        ["🎯 Watchlist Scanner", "📋 Full Board", "🏆 Top Movers", "🌐 Foreign Activity", "📖 Order Book & Trades"]
     )
-    sub1, sub2, sub3, sub4, sub5 = st.tabs(sub_labels)
+    sub_scanner, sub_board, sub_movers, sub_foreign, sub_ob = st.tabs(sub_labels)
 
-    # ── Sub1: Full board ──────────────────────────────────────
-    with sub1:
+    # ── Sub: Full board ──────────────────────────────────────
+    with sub_board:
         # Build display table
         _disp_cols = ["Mã", "Tên", "Giá", "±", "±%", "TC", "Mở", "Cao", "Thấp",
                       "KL", "GT(B)", "Bid1", "BidV1", "Ask1", "AskV1"]
         disp_df = df[[c for c in _disp_cols if c in df.columns]].copy()
+
+        # ── Compute Buy/TP/SL recommendations from real-time data ──
+        def _board_rec(row):
+            return _compute_ssi_recommendation({
+                "price":   row.get("Giá", 0),    "ref":    row.get("TC", 0),
+                "ceiling": row.get("Trần", 0),   "floor":  row.get("Sàn giá", 0),
+                "pct":     row.get("±%", 0),      "bid1":   row.get("Bid1", 0),
+                "ask1":    row.get("Ask1", 0),    "bu_vol": row.get("KL Mua", 0),
+                "sd_vol":  row.get("KL Bán", 0), "nn_buy": row.get("NN Mua", 0),
+                "nn_sell": row.get("NN Bán", 0),
+            })
+        try:
+            _rec_series = df.apply(_board_rec, axis=1)
+            _sig_lbl  = "Tín hiệu" if is_vi else "Signal"
+            _ml_lbl   = "Mua Limit" if is_vi else "Buy Limit"
+            disp_df[_sig_lbl] = _rec_series.apply(lambda r: r.get("signal", "–"))
+            disp_df[_ml_lbl]  = _rec_series.apply(lambda r: f"{r['buy_limit']:,}" if r.get("buy_limit", 0) > 0 else "–")
+            disp_df["TP1 (+2.5%)"] = _rec_series.apply(lambda r: f"{r.get('tp', 0):,}" if r.get("tp", 0) > 0 else "–")
+            disp_df["TP2 (+5%)"]   = _rec_series.apply(lambda r: f"{r.get('tp2', 0):,}" if r.get("tp2", 0) > 0 else "–")
+            disp_df["SL (-5%)"]    = _rec_series.apply(lambda r: f"{r.get('sl', 0):,}" if r.get("sl", 0) > 0 else "–")
+        except Exception:
+            pass
 
         # Format numbers
         for c in ["Giá", "±", "TC", "Mở", "Cao", "Thấp", "Bid1", "Ask1"]:
@@ -11306,8 +11339,8 @@ def render_ssi_realtime_tab():
         except Exception:
             pass
 
-    # ── Sub2: Top Movers ─────────────────────────────────────
-    with sub2:
+    # ── Sub: Top Movers ─────────────────────────────────────
+    with sub_movers:
         n_top = 10
         gainers = df.nlargest(n_top, "±%")
         losers  = df.nsmallest(n_top, "±%")
@@ -11319,6 +11352,13 @@ def render_ssi_realtime_tab():
             st.subheader("🟢 " + (f"Top {n_top} Tăng" if is_vi else f"Top {n_top} Gainers"))
             _cols = ["Mã", "Giá", "±%", "KL"]
             g_disp = gainers[[c for c in _cols if c in gainers.columns]].copy()
+            try:
+                _grec = gainers.apply(_board_rec, axis=1)
+                g_disp["Mua Limit" if is_vi else "Buy Limit"] = _grec.apply(lambda r: f"{r['buy_limit']:,}" if r.get("buy_limit",0)>0 else "–")
+                g_disp["TP1 (+2.5%)"] = _grec.apply(lambda r: f"{r.get('tp',0):,}" if r.get("tp",0)>0 else "–")
+                g_disp["SL (-5%)"]   = _grec.apply(lambda r: f"{r.get('sl',0):,}" if r.get("sl",0)>0 else "–")
+            except Exception:
+                pass
             if "±%" in g_disp.columns:
                 g_disp["±%"] = g_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
             if "Giá" in g_disp.columns:
@@ -11334,6 +11374,13 @@ def render_ssi_realtime_tab():
         with col_l:
             st.subheader("🔴 " + (f"Top {n_top} Giảm" if is_vi else f"Top {n_top} Losers"))
             l_disp = losers[[c for c in _cols if c in losers.columns]].copy()
+            try:
+                _lrec = losers.apply(_board_rec, axis=1)
+                l_disp["Mua Limit" if is_vi else "Buy Limit"] = _lrec.apply(lambda r: f"{r['buy_limit']:,}" if r.get("buy_limit",0)>0 else "–")
+                l_disp["TP1 (+2.5%)"] = _lrec.apply(lambda r: f"{r.get('tp',0):,}" if r.get("tp",0)>0 else "–")
+                l_disp["SL (-5%)"]   = _lrec.apply(lambda r: f"{r.get('sl',0):,}" if r.get("sl",0)>0 else "–")
+            except Exception:
+                pass
             if "±%" in l_disp.columns:
                 l_disp["±%"] = l_disp["±%"].apply(lambda x: f"{x:+.2f}%" if isinstance(x, float) else str(x))
             if "Giá" in l_disp.columns:
@@ -11376,8 +11423,8 @@ def render_ssi_realtime_tab():
             except Exception:
                 show_df(vv_disp)
 
-    # ── Sub3: Foreign Activity ────────────────────────────────
-    with sub3:
+    # ── Sub: Foreign Activity ────────────────────────────────
+    with sub_foreign:
         if is_vi:
             st.subheader("🌐 Hoạt Động Khối Ngoại")
         else:
@@ -11471,8 +11518,8 @@ def render_ssi_realtime_tab():
         else:
             st.info("No foreign investor data in the loaded group." if not is_vi else "Không có dữ liệu khối ngoại cho nhóm đã chọn.")
 
-    # ── Sub4: Order Book + Transaction Log ───────────────────
-    with sub4:
+    # ── Sub: Order Book + Transaction Log ───────────────────
+    with sub_ob:
         if is_vi:
             st.subheader("📖 Sổ Lệnh & Lịch Sử Khớp Lệnh")
         else:
@@ -11572,7 +11619,7 @@ def render_ssi_realtime_tab():
                 )
 
     # ── Sub5: Watchlist Scanner + Buy/Sell Recommendations ───
-    with sub5:
+    with sub_scanner:
         if is_vi:
             st.subheader("🎯 Quét Watchlist — Khuyến Nghị Mua/Bán Thời Gian Thực")
             st.caption(
@@ -11587,14 +11634,13 @@ def render_ssi_realtime_tab():
             )
 
         # ── Input: Custom ticker list ─────────────────────────
-        default_tickers = ", ".join(sorted(df["Mã"].unique().tolist())[:10]) if "Mã" in df.columns else "VIC, VHM, VNM, FPT, MWG"
         wl_input = st.text_area(
             "📋 " + ("Danh sách mã (phân cách bằng dấu phẩy)" if is_vi else "Ticker list (comma-separated)"),
-            value=default_tickers,
+            value="",
             height=80,
             key="ssi_wl_input",
-            help=("Nhập mã VN (VD: FPT, VCB, ACB). Tối đa 30 mã cho một lần quét." if is_vi else
-                  "Enter VN tickers (e.g. FPT, VCB, ACB). Max 30 tickers per scan."),
+            help=("Để trống để tự động quét từ watchlist.txt. Hoặc nhập mã VN, phân cách bằng dấu phẩy (VD: FPT, VCB, ACB)." if is_vi else
+                  "Leave blank to auto-scan from watchlist.txt. Or enter VN tickers comma-separated (e.g. FPT, VCB, ACB)."),
         )
 
         col_scan, col_opts = st.columns([2, 3])
@@ -11617,12 +11663,20 @@ def render_ssi_realtime_tab():
                 use_container_width=True,
             )
 
-        # Parse tickers
+        # Parse tickers — fallback to watchlist.txt if input is blank
         raw_tickers = [t.strip().upper() for t in wl_input.replace("\n", ",").split(",") if t.strip()]
-        raw_tickers = list(dict.fromkeys(raw_tickers))[:30]   # deduplicate, cap at 30
+        raw_tickers = list(dict.fromkeys(raw_tickers))   # deduplicate, no cap
+        if not raw_tickers:
+            raw_tickers = load_watchlist_from_file(WATCHLIST_FILE_PATH)
+            if raw_tickers and not scan_btn:
+                st.caption("📂 " + (
+                    f"Đang dùng {len(raw_tickers)} mã từ watchlist.txt — nhập danh sách riêng để tuỳ chỉnh."
+                    if is_vi else
+                    f"Using {len(raw_tickers)} tickers from watchlist.txt — enter a custom list to override."
+                ))
 
         if not raw_tickers:
-            st.warning("⚠️ " + ("Vui lòng nhập ít nhất một mã cổ phiếu." if is_vi else "Please enter at least one ticker."))
+            st.warning("⚠️ " + ("Watchlist.txt trống. Vui lòng nhập ít nhất một mã cổ phiếu." if is_vi else "watchlist.txt is empty. Please enter at least one ticker."))
         elif scan_btn or ("ssi_wl_results" in st.session_state and st.session_state.ssi_wl_results):
             # ── Fetch + score ─────────────────────────────────
             if scan_btn:
@@ -11641,7 +11695,7 @@ def render_ssi_realtime_tab():
                                         "price": 0, "pct": 0, "vol": 0, "val_b": 0,
                                         "buy_limit": 0, "buy_exec": 0,
                                         "sell_limit": 0, "sell_exec": 0,
-                                        "tp": 0, "sl": 0, "spread_pct": 0,
+                                        "tp": 0, "tp2": 0, "sl": 0, "spread_pct": 0,
                                         "name": "", "session": ""})
                 prog_bar.empty()
                 st.session_state.ssi_wl_results = results
@@ -11675,9 +11729,11 @@ def render_ssi_realtime_tab():
                             f"{r['sell_limit']:,}" if r.get("sell_limit", 0) > 0 else "–",
                         ("Bán Tích Cực\n(Khớp nhanh)" if is_vi else "Sell Exec\n(Fast Fill)"):
                             f"{r['sell_exec']:,}" if r.get("sell_exec", 0) > 0 else "–",
-                        ("Chốt lời (TP)" if is_vi else "Take Profit"):
+                        ("Chốt lời TP1\n(+2.5%)" if is_vi else "Take Profit 1\n(+2.5%)"):
                             f"{r['tp']:,}" if r.get("tp", 0) > 0 else "–",
-                        ("Cắt lỗ (SL)" if is_vi else "Stop Loss"):
+                        ("Chốt lời TP2\n(+5%, Swing)" if is_vi else "Take Profit 2\n(+5%, Swing)"):
+                            f"{r.get('tp2', 0):,}" if r.get("tp2", 0) > 0 else "–",
+                        ("Cắt lỗ SL\n(-5%)" if is_vi else "Stop Loss\n(-5%)"):
                             f"{r['sl']:,}" if r.get("sl", 0) > 0 else "–",
                         ("KL (nghìn)" if is_vi else "Vol (K)"):
                             f"{r.get('vol', 0)//1000:,}" if r.get("vol", 0) > 0 else "–",
@@ -11744,14 +11800,16 @@ def render_ssi_realtime_tab():
                         "<small style='color:#888'>" +
                         ("📌 <b>Mua Limit</b>: đặt lệnh giới hạn gần Bid1 — vào giá tốt, chờ khớp. "
                          "<b>Mua Tích Cực</b>: đặt tại Ask1 — khớp ngay lập tức. "
-                         "<b>TP</b>: mục tiêu chốt lời (~+1.5%). "
-                         "<b>SL</b>: điểm cắt lỗ (~-3% hoặc giá sàn). "
+                         "<b>TP1 (+2.5%)</b>: mục tiêu chốt lời ngắn hạn T+2/T+3. "
+                         "<b>TP2 (+5%)</b>: mục tiêu swing trade. "
+                         "<b>SL (-5%)</b>: điểm cắt lỗ (theo biên độ ±7% VN). "
                          "<b>Spread%</b>: khoảng cách Bid-Ask, thấp = thanh khoản cao."
                          if is_vi else
                          "📌 <b>Buy Limit</b>: limit near Bid1 — better entry, waits for fill. "
                          "<b>Buy Exec</b>: at Ask1 — immediate fill. "
-                         "<b>TP</b>: take-profit target (~+1.5%). "
-                         "<b>SL</b>: stop-loss level (~-3% or floor price). "
+                         "<b>TP1 (+2.5%)</b>: short-term T+2/T+3 target. "
+                         "<b>TP2 (+5%)</b>: swing trade target. "
+                         "<b>SL (-5%)</b>: stop-loss (aligned to VN ±7% band). "
                          "<b>Spread%</b>: Bid-Ask gap — lower = more liquid.") +
                         "</small>",
                         unsafe_allow_html=True,
@@ -12108,46 +12166,46 @@ def main():
             if _disk_audit: st.session_state.audit_log = _disk_audit
         except Exception: pass
 
-    # v24: Reorganized 14-tab menu for better UX
-    # Group: [Trading] Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
-    # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast
-    tab_keys = ["tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16","tab17"]
+    # v29: SSI Live Board moved to first tab for immediate market access
+    # Group: [Trading] SSI Live | Scanner | Smart Signals | Profiler | Deep Audit | Portfolios | ML | Global
+    # Group: [Tools] Backtest | History | Guide | Changelog | Smoke | ForecastLog | TopForecast | AuditLog | DeepScan
+    tab_keys = ["tab17","tab1","tab2","tab3","tab4","tab5","tab6","tab7","tab8","tab9","tab10","tab11","tab12","tab13","tab14","tab15","tab16"]
     tabs = st.tabs([L[k] for k in tab_keys])
 
     with tabs[0]:
-        render_scanner_tab()
-    with tabs[1]:
-        render_smart_signals_tab()   # 🎯 Smart Signals (replaces Top 30 Buy)
-    with tabs[2]:
-        render_stock_profiler_tab()  # 🧬 Profiler — moved up to tab 3
-    with tabs[3]:
-        render_deep_audit_tab()
-    with tabs[4]:
-        render_model_portfolios_tab()  # 💼 moved up
-    with tabs[5]:
-        render_ml_forecast_tab()
-    with tabs[6]:
-        render_global_markets_tab()    # 🌍 moved up
-    with tabs[7]:
-        render_backtest_tab()          # 🧪 moved back
-    with tabs[8]:
-        render_history_tab()
-    with tabs[9]:
-        render_guide_tab()
-    with tabs[10]:
-        render_changelog_tab()
-    with tabs[11]:
-        render_smoke_test_tab()
-    with tabs[12]:
-        render_forecast_log_tab()
-    with tabs[13]:
-        render_top_forecast_tab()
-    with tabs[14]:
-        render_audit_log_tab()
-    with tabs[15]:
-        render_deep_scan_tab()
-    with tabs[16]:
         render_ssi_realtime_tab()
+    with tabs[1]:
+        render_scanner_tab()
+    with tabs[2]:
+        render_smart_signals_tab()   # 🎯 Smart Signals (replaces Top 30 Buy)
+    with tabs[3]:
+        render_stock_profiler_tab()  # 🧬 Profiler — moved up to tab 3
+    with tabs[4]:
+        render_deep_audit_tab()
+    with tabs[5]:
+        render_model_portfolios_tab()  # 💼 moved up
+    with tabs[6]:
+        render_ml_forecast_tab()
+    with tabs[7]:
+        render_global_markets_tab()    # 🌍 moved up
+    with tabs[8]:
+        render_backtest_tab()          # 🧪 moved back
+    with tabs[9]:
+        render_history_tab()
+    with tabs[10]:
+        render_guide_tab()
+    with tabs[11]:
+        render_changelog_tab()
+    with tabs[12]:
+        render_smoke_test_tab()
+    with tabs[13]:
+        render_forecast_log_tab()
+    with tabs[14]:
+        render_top_forecast_tab()
+    with tabs[15]:
+        render_audit_log_tab()
+    with tabs[16]:
+        render_deep_scan_tab()
 
 if __name__ == "__main__":
     main()
