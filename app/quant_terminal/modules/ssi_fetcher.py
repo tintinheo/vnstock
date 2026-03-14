@@ -28,9 +28,10 @@ _SESSION.headers.update({
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                        "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
     "Accept":          "application/json, text/plain, */*",
-    "Accept-Language": "vi-VN,vi;q=0.9,en-US;q=0.8",
+    "Accept-Language": "vi",
     "Referer":         "https://iboard.ssi.com.vn/",
     "Origin":          "https://iboard.ssi.com.vn",
+    "device-id":       "0116B7B1-976D-437A-AA2C-C72FC3E6F956",
 })
 _TIMEOUT = 12
 
@@ -342,6 +343,250 @@ def fetch_quote(symbol: str) -> dict:
     }
 
 
+# ─── IBOARD-API HELPER ───────────────────────────────────────────────────────
+
+_IBOARD_API_BASE = "https://iboard-api.ssi.com.vn"
+
+
+def _iboard_api_get(path: str, params: dict) -> dict:
+    """
+    GET from iboard-api.ssi.com.vn with device-id header.
+    Returns parsed JSON dict (possibly empty on any error).
+    """
+    url = f"{_IBOARD_API_BASE}{path}"
+    try:
+        r = _SESSION.get(url, params=params, timeout=_TIMEOUT)
+        r.raise_for_status()
+        return r.json()
+    except requests.HTTPError as e:
+        _log.warning("iboard-api HTTP %s %s: %s", path, params, e)
+    except requests.Timeout:
+        _log.warning("iboard-api timeout %s", path)
+    except requests.ConnectionError as e:
+        _log.warning("iboard-api conn %s: %s", path, e)
+    except ValueError as e:
+        _log.warning("iboard-api JSON %s: %s", path, e)
+    except Exception as e:
+        _log.error("iboard-api unexpected %s: %s", path, e)
+    return {}
+
+
+# ─── FINANCIALS ──────────────────────────────────────────────────────────────
+
+def fetch_financials(symbol: str) -> dict:
+    """
+    Fetch latest financial ratios for `symbol` from SSI iboard-api.
+    Returns dict: {pe, pb, roe, roa, eps, period, source} or {} on failure.
+    """
+    raw = _iboard_api_get(
+        "/statistics/company/ssmi/finance-indicator",
+        {"symbol": symbol, "page": 1, "pageSize": 10},
+    )
+    items = raw.get("data", [])
+    if not isinstance(items, list) or not items:
+        return {}
+    try:
+        item = items[0]
+        def _f(v) -> float:
+            try:
+                return float(v) if v not in (None, "", "-") else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+        return {
+            "pe":     _f(item.get("priceToEarning", item.get("pe", 0))),
+            "pb":     _f(item.get("priceToBook",    item.get("pb", 0))),
+            "roe":    _f(item.get("roe", 0)),
+            "roa":    _f(item.get("roa", 0)),
+            "eps":    _f(item.get("eps", item.get("earningPerShare", 0))),
+            "period": str(item.get("yearReport", item.get("period", ""))),
+            "source": "SSI-iboard",
+        }
+    except Exception as e:
+        _log.warning("fetch_financials [%s]: %s", symbol, e)
+        return {}
+
+
+# ─── CORPORATE ACTIONS ───────────────────────────────────────────────────────
+
+def fetch_corporate_actions(symbol: str, look_ahead_months: int = 12) -> list:
+    """
+    Fetch upcoming corporate actions (dividends, AGM, rights) for `symbol`.
+    Returns list of dicts: {date, event_type, value, source}; [] on failure.
+    """
+    today = dt.date.today()
+    end   = today + dt.timedelta(days=look_ahead_months * 30)
+    from_str = today.strftime("%d%%2F%m%%2F%Y")
+    to_str   = end.strftime("%d%%2F%m%%2F%Y")
+    raw = _iboard_api_get(
+        "/statistics/company/ssmi/corporate-actions",
+        {
+            "symbol":   symbol,
+            "page":     1,
+            "pageSize": 20,
+            "language": "vn",
+            "fromDate": from_str,
+            "toDate":   to_str,
+        },
+    )
+    items = raw.get("data", [])
+    if not isinstance(items, list):
+        return []
+    results = []
+    for item in items:
+        try:
+            results.append({
+                "date":       str(item.get("exRightDate", item.get("eventDate", item.get("date", "")))),
+                "event_type": str(item.get("eventTitle",  item.get("event", ""))),
+                "value":      str(item.get("value",        item.get("ratio", ""))),
+                "source":     "SSI-iboard",
+            })
+        except Exception:
+            continue
+    return results
+
+
+# ─── COMPANY NEWS ─────────────────────────────────────────────────────────────
+
+def fetch_company_news(symbol: str, days: int = 30) -> list:
+    """
+    Fetch recent company news for `symbol`.
+    Window capped at 30 days to avoid HTTP 400.
+    Returns list of dicts: {date, title, source}; [] on failure.
+    """
+    days = min(days, 30)  # SSI enforces ≤1 month
+    today    = dt.date.today()
+    from_d   = today - dt.timedelta(days=days)
+    from_str = from_d.strftime("%d%%2F%m%%2F%Y")
+    to_str   = today.strftime("%d%%2F%m%%2F%Y")
+    raw = _iboard_api_get(
+        "/statistics/company/ssmi/company-news",
+        {
+            "symbol":   symbol,
+            "pageSize": 10,
+            "page":     1,
+            "fromDate": from_str,
+            "toDate":   to_str,
+            "language": "vn",
+        },
+    )
+    items = raw.get("data", [])
+    if not isinstance(items, list):
+        return []
+    results = []
+    for item in items:
+        try:
+            results.append({
+                "date":   str(item.get("publishDate", item.get("date", ""))),
+                "title":  str(item.get("title", item.get("subject", ""))),
+                "source": "SSI-iboard",
+            })
+        except Exception:
+            continue
+    return results
+
+
+# ─── VN30 BATCH QUOTE ─────────────────────────────────────────────────────────
+
+_VN30_SYMBOLS = {
+    "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "MBB", "MSN", "MWG", "PLX", "POW", "SAB", "SHB", "SSB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+}
+
+
+def fetch_vn30_batch() -> dict:
+    """
+    Fetch real-time quotes for all VN30 stocks in one HTTP call.
+    Returns dict[symbol → quote_dict] (same shape as fetch_quote());
+    returns {} on failure.
+    """
+    try:
+        url = "https://iboard-query.ssi.com.vn/stock/group/VN30"
+        r   = _SESSION.get(url, timeout=_TIMEOUT)
+        r.raise_for_status()
+        raw   = r.json()
+        items = raw.get("data", raw) if isinstance(raw, dict) else raw
+        if isinstance(items, dict):
+            items = list(items.values())
+        if not isinstance(items, list) or not items:
+            return {}
+
+        def _n(v, dflt: float = 0.0) -> float:
+            try:
+                return float(v) if v not in (None, "", "-", "0", 0) else dflt
+            except (ValueError, TypeError):
+                return dflt
+
+        result = {}
+        now = dt.datetime.now().isoformat()
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            sym = str(item.get("symbol", item.get("ticker", ""))).upper()
+            if not sym:
+                continue
+            price = _n(item.get("matchedPrice", item.get("close", item.get("lastPrice", 0))))
+            ref   = _n(item.get("refPrice", item.get("refClose", 0)))
+            chg   = _n(item.get("priceChange",        price - ref))
+            pct   = _n(item.get("percentPriceChange", (chg / ref * 100) if ref else 0))
+            vol   = _n(item.get("totalMatchVol",       item.get("volume", 0)))
+            op    = _n(item.get("openPrice",           item.get("open",   price)))
+            hi    = _n(item.get("highPrice",           item.get("high",   price)))
+            lo    = _n(item.get("lowPrice",            item.get("low",    price)))
+            if price > 1000:
+                price /= 1000; op /= 1000; hi /= 1000; lo /= 1000; chg /= 1000; ref /= 1000
+            if price > 0:
+                result[sym] = {
+                    "symbol":     sym,
+                    "price":      price,
+                    "open":       op,
+                    "high":       hi,
+                    "low":        lo,
+                    "volume":     vol,
+                    "change":     chg,
+                    "pct_change": pct,
+                    "time":       now,
+                    "source":     "SSI-VN30-batch",
+                }
+        if result:
+            _log.info("SSI VN30 batch: %d quotes", len(result))
+        return result
+    except Exception as e:
+        _log.warning("fetch_vn30_batch: %s", e)
+        return {}
+
+
+# ─── COMPANY PROFILE ──────────────────────────────────────────────────────────
+
+def fetch_company_profile(symbol: str) -> dict:
+    """
+    Fetch company profile for `symbol`.
+    Returns dict: {name, industry, charter_capital, website, description, source};
+    returns {} on failure.
+    """
+    raw = _iboard_api_get(
+        "/statistics/company/ssmi/company-profile",
+        {"symbol": symbol, "language": "vn"},
+    )
+    data = raw.get("data", {})
+    if isinstance(data, list):
+        data = data[0] if data else {}
+    if not isinstance(data, dict) or not data:
+        return {}
+    try:
+        return {
+            "name":            str(data.get("companyName",     data.get("name",        ""))),
+            "industry":        str(data.get("industryName",   data.get("industry",    ""))),
+            "charter_capital": str(data.get("charterCapital", data.get("capital",     ""))),
+            "website":         str(data.get("website",        data.get("websiteUrl",  ""))),
+            "description":     str(data.get("businessActivities", data.get("description", ""))),
+            "source":          "SSI-iboard",
+        }
+    except Exception as e:
+        _log.warning("fetch_company_profile [%s]: %s", symbol, e)
+        return {}
+
+
 # ─── CONNECTIVITY CHECK ───────────────────────────────────────────────────────
 
 def check_connectivity() -> dict:
@@ -366,3 +611,57 @@ def check_connectivity() -> dict:
             "endpoint":   "iboard-api.ssi.com.vn",
             "error":      str(e),
         }
+
+
+# ─── FOREIGN FLOW ─────────────────────────────────────────────────────────────
+
+def fetch_foreign_flow(symbol: str) -> dict:
+    """
+    Fetch foreign investor net buy/sell volumes for one symbol.
+    Uses the iboard-query real-time quote endpoint which includes foreign fields.
+
+    Returns dict: {symbol, foreign_buy_vol, foreign_sell_vol, foreign_net_vol,
+                   foreign_buy_val, foreign_sell_val, foreign_net_val, source}
+    All val fields are in thousands-VND. Returns empty dict on failure.
+    """
+    try:
+        url  = f"https://iboard-query.ssi.com.vn/stock/{symbol}?boardId=MAIN"
+        r    = _SESSION.get(url, timeout=_TIMEOUT)
+        r.raise_for_status()
+        d    = r.json()
+        data = d.get("data", d) if isinstance(d, dict) else d
+        if isinstance(data, list):
+            data = data[0] if data else {}
+        if not isinstance(data, dict):
+            data = {}
+
+        def _n(v) -> float:
+            try:
+                return float(v) if v not in (None, "", 0, "0", "-") else 0.0
+            except (ValueError, TypeError):
+                return 0.0
+
+        f_buy_vol  = _n(data.get("foreignBuyVol",  data.get("fBuyVol",  0)))
+        f_sell_vol = _n(data.get("foreignSellVol", data.get("fSellVol", 0)))
+        price      = _n(data.get("matchedPrice",   data.get("close",    0)))
+        if price > 1000:
+            price /= 1000.0
+
+        f_net_vol  = f_buy_vol - f_sell_vol
+        f_buy_val  = round(f_buy_vol  * price, 1)
+        f_sell_val = round(f_sell_vol * price, 1)
+        f_net_val  = round(f_net_vol  * price, 1)
+
+        return {
+            "symbol":           symbol,
+            "foreign_buy_vol":  f_buy_vol,
+            "foreign_sell_vol": f_sell_vol,
+            "foreign_net_vol":  f_net_vol,
+            "foreign_buy_val":  f_buy_val,
+            "foreign_sell_val": f_sell_val,
+            "foreign_net_val":  f_net_val,
+            "source":           "SSI-iboard",
+        }
+    except Exception as e:
+        _log.debug(f"SSI foreign_flow [{symbol}]: {e}")
+        return {}

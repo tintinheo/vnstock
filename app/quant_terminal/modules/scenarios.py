@@ -3,8 +3,11 @@ Scenario planner + trade recommendation engine.
 Mirrors the advisory logic we applied manually to TCH, CII, HPG, etc.
 """
 import math
+import logging
 import datetime as dt
 from typing import Optional
+
+_log = logging.getLogger("scenarios")
 
 from config import (
     HOSE_TICK, MAX_RISK_PER_TRADE, KELLY_FRACTION,
@@ -310,16 +313,113 @@ def build_lo_instruction(
     symbol: str,
     side: str,           # "Mua" | "Bán"
     qty: int,
-    target_price: float,
+    target_price: float = 0.0,
     note: str = "",
+    order_type: str = "LO",   # "LO" | "ATO" | "ATC"
 ) -> dict:
     """
-    Build a complete LO (Limit Order) instruction with all HOSE-specific details.
+    Build a complete order instruction for SSI iBoard.
+    order_type : "LO" — limit order (requires target_price)
+                 "ATO" — at-the-open (08:30–09:00, no price)
+                 "ATC" — at-the-close (14:30–15:00, no price)
     Returns a dict ready for display in the Trade Planner UI.
     """
+    session, session_desc = current_session()
+    order_type = order_type.upper()
+
+    # ── ATO / ATC path ────────────────────────────────────────────────────────
+    if order_type in ("ATO", "ATC"):
+        est_price    = float(target_price) if target_price and target_price > 0 else 0.0
+        est_value    = est_price * qty
+        brokerage    = max(SSI_MIN_BROKERAGE, round(est_value * 0.0015)) if est_value > 0 else SSI_MIN_BROKERAGE
+        sell_tax     = round(est_value * SELL_TAX_RATE) if side == "Bán" and est_value > 0 else 0
+        net_proceeds = est_value - brokerage - sell_tax if side == "Bán" and est_value > 0 else 0
+        price_label  = "ATO — Khớp giá mở cửa" if order_type == "ATO" else "ATC — Khớp giá đóng cửa"
+        timing_guard = {
+            "ATO": "⏰ Lệnh ATO chỉ hiệu lực 08:30–09:00 — phải đặt TRƯỚC khi thị trường mở",
+            "ATC": "⏰ Lệnh ATC chỉ hiệu lực 14:30–15:00 — phải đặt TRƯỚC khi kết phiên",
+        }[order_type]
+        important = [
+            timing_guard,
+            f"Lệnh {order_type} KHÔNG được hủy hoặc sửa sau khi đặt",
+            f"Phí dự kiến: {brokerage:,.0f}đ (0.15%, tối thiểu 17,000đ SSI)",
+        ]
+        if side == "Bán" and sell_tax > 0:
+            important.append(f"Thuế 0.1% ước tính: {sell_tax:,.0f}đ (tính trên giá tham chiếu)")
+        return {
+            "symbol":        symbol,
+            "order_type":    order_type,
+            "side":          side,
+            "qty":           qty,
+            "price":         0.0,       # market-determined
+            "value":         est_value,
+            "session":       session,
+            "session_desc":  session_desc,
+            "slippage_est":  0,
+            "brokerage_est": brokerage,
+            "sell_tax":      sell_tax,
+            "net_proceeds":  net_proceeds,
+            "note":          note,
+            "steps": [
+                "Đăng nhập SSI iBoard → tab 'Đặt lệnh'",
+                f"Mã CK: {symbol}",
+                f"Loại lệnh: {price_label}",
+                f"Chiều: {side}",
+                f"Khối lượng: {qty:,} CP",
+                "Giá: KHÔNG nhập (hệ thống tự khớp theo phiên)",
+                "Xác nhận PIN/OTP → Trạng thái: Chờ khớp",
+            ],
+            "important": important,
+        }
+
+    # ── LO path ───────────────────────────────────────────────────────────────
     price = round_to_tick(target_price)
     value = price * qty
-    session, session_desc = current_session()
+    tick_vnd = int(hose_tick(price) * 1000)   # e.g. 0.05 thousands → 50 VND
+
+    slippage_est = round(price * 0.003 * qty)
+    brokerage    = max(SSI_MIN_BROKERAGE, round(value * 0.0015))
+    sell_tax     = round(value * SELL_TAX_RATE) if side == "Bán" else 0
+    net_proceeds = (
+        value - brokerage - sell_tax
+        if side == "Bán"
+        else value + brokerage + slippage_est
+    )
+    important = [
+        f"LO chỉ khớp khi giá thị trường {'≤' if side == 'Mua' else '≥'} {price:,.0f}đ",
+        "Lệnh hết hiệu lực cuối phiên — cần đặt lại ngày hôm sau nếu chưa khớp",
+        "Phiên ATC (14:30–15:00): LO không khớp trong ATC — tránh đặt mới lúc này",
+        f"Phí dự kiến: {brokerage:,.0f}đ (0.15%, tối thiểu 17,000đ SSI)",
+    ]
+    if side == "Bán":
+        important.append(
+            f"Thuế 0.1% trên giá bán: {sell_tax:,.0f}đ — tự động khấu trừ qua CTCK"
+        )
+    return {
+        "symbol":        symbol,
+        "order_type":    "LO",
+        "side":          side,
+        "qty":           qty,
+        "price":         price,
+        "value":         value,
+        "session":       session,
+        "session_desc":  session_desc,
+        "slippage_est":  slippage_est,
+        "brokerage_est": brokerage,
+        "sell_tax":      sell_tax,
+        "net_proceeds":  net_proceeds,
+        "note":          note,
+        "steps": [
+            "Đăng nhập SSI iBoard → tab 'Đặt lệnh'",
+            f"Mã CK: {symbol}",
+            "Loại lệnh: LO (Limit Order)",
+            f"Chiều: {side}",
+            f"Khối lượng: {qty:,} CP",
+            f"Giá: {price:,.0f}đ (bước giá {tick_vnd}đ ✓)",
+            "Xác nhận PIN/OTP → Trạng thái: Chờ khớp",
+        ],
+        "important": important,
+    }
 
     # Tick display for instruction (thousands-VND → raw VND for display)
     tick_vnd = int(hose_tick(price) * 1000)   # e.g. 0.05 thousands → 50 VND

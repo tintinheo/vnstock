@@ -18,15 +18,26 @@ import streamlit as st
 
 from config import (
     APP_TITLE, APP_ICON, PORTFOLIO_DIR, TRADE_LOG_DIR,
-    PRICE_REFRESH_SECONDS, MACRO_EVENTS, compute_price_limits, SELL_TAX_RATE
+    PRICE_REFRESH_SECONDS, MACRO_EVENTS, compute_price_limits, SELL_TAX_RATE,
+    APP_VERSION, WATCHLIST_DEFAULT
 )
 from modules.portfolio import (
     Portfolio,
     list_portfolio_files
 )
-from modules.data_fetcher import get_quote, get_quotes_batch, get_history, get_financials, get_history_intraday
+from modules.data_fetcher import (
+    get_quote, get_quotes_batch, get_history, get_financials, get_history_intraday,
+    get_catalyst_calendar, get_foreign_flow_batch,
+    get_corporate_actions, get_company_news, get_company_profile,
+)
 from modules.analysis import compute_indicators, compute_signal_score, compute_beta, find_support_resistance, compute_var
 from modules.scenarios import generate_scenarios, build_lo_instruction, current_session, generate_buy_scenarios
+from modules.performance import compute_sharpe, compute_sortino, compute_max_drawdown, compute_trade_stats, build_monthly_pnl
+from modules.market_intel import VN30_SECTORS, compute_sector_returns, compute_market_breadth
+from modules.error_logger import setup_file_logging
+
+# Activate file error logging immediately (idempotent on Streamlit re-runs)
+setup_file_logging()
 
 # ─── PAGE CONFIG ──────────────────────────────────────────────────────────────
 st.set_page_config(
@@ -253,7 +264,18 @@ with st.sidebar:
     st.caption(f"Giờ HCM: {dt.datetime.now().strftime('%H:%M:%S %d/%m/%Y')}")
 
     st.markdown("---")
-    st.caption("Captain Seventh Quant Terminal v1.0")
+    with st.expander("⚙️ Cấu hình"):
+        st.selectbox("Nguồn dữ liệu", ["VCI", "TCBS", "KBS", "MSN"],
+                     key="cfg_source",
+                     help="Nguồn fallback khi SSI không khả dụng")
+        st.selectbox("Chu kỳ refresh (s)", [15, 30, 60, 120, 300],
+                     index=1, key="cfg_refresh",
+                     help="Khoảng cách giữa các lần tự động cập nhật giá")
+        st.caption("Thay đổi nhận thức tức thời — không cần khởi động lại app.")
+
+    st.markdown("---")
+    st.caption(f"Captain Seventh Quant Terminal v{APP_VERSION}")
+    st.caption(f"Released: {__import__('config').RELEASE_DATE}")
 
 
 # ─── MAIN TABS ────────────────────────────────────────────────────────────────
@@ -888,30 +910,41 @@ with tab_stock:
                     downside = (s - market_price) / market_price * 100 if market_price else 0
                     st.markdown(f"🟢 {fmt_price(s)} &nbsp; <span style='color:#6B7280;font-size:11px;'>{downside:.1f}% từ TT</span>", unsafe_allow_html=True)
 
-    # ── LO Builder ────────────────────────────────────────────────────────────
+    # ── LO / ATO / ATC Builder ────────────────────────────────────────────────
     st.markdown("---")
-    with st.expander("Bộ xây dựng lệnh LO chi tiết"):
-        lo_c1, lo_c2, lo_c3, lo_c4 = st.columns(4)
+    with st.expander("📋 Bộ xây dựng lệnh LO / ATO / ATC"):
+        lo_c0, lo_c1, lo_c2, lo_c3, lo_c4 = st.columns(5)
+        with lo_c0:
+            lo_order_type = st.selectbox("Loại lệnh", ["LO", "ATO", "ATC"], key="lo_order_type")
         with lo_c1:
             lo_side  = st.selectbox("Chiều", ["Bán", "Mua"])
         with lo_c2:
             lo_qty   = st.number_input("Khối lượng (CP)", min_value=10, value=qty//2, step=10)
         with lo_c3:
-            lo_price = st.number_input("Giá đặt (đ)", min_value=0.0, value=float(market_price or cost_price or 15000.0), step=100.0)
+            if lo_order_type == "LO":
+                lo_price = st.number_input(
+                    "Giá đặt (đ)", min_value=0.0,
+                    value=float(market_price or cost_price or 15000.0), step=100.0
+                )
+            else:
+                lo_price = float(market_price or cost_price or 0)
+                _timing = "08:30–09:00" if lo_order_type == "ATO" else "14:30–15:00"
+                st.metric("Giá", f"{lo_price:,.2f}đ",
+                          f"{lo_order_type} · khớp tự động · {_timing}")
         with lo_c4:
             lo_note  = st.text_input("Ghi chú", "")
 
-        # Ceiling / floor warning
-        if market_price > 0:
+        # Ceiling / floor warning (LO only)
+        if lo_order_type == "LO" and market_price > 0:
             _lo_ceil, _lo_floor = compute_price_limits(market_price)
-            _band_html = (
+            st.markdown(
                 f'<div class="alert-ok" style="margin:6px 0;font-size:12px;">'
                 f'📊 Tham chiếu: <b>{market_price:,.2f}đ</b> &nbsp;|&nbsp; '
                 f'<span style="color:#16A34A;font-weight:600;">Trần: {_lo_ceil:,.2f}đ</span> &nbsp;|&nbsp; '
                 f'<span style="color:#DC2626;font-weight:600;">Sàn: {_lo_floor:,.2f}đ</span>'
-                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
             )
-            st.markdown(_band_html, unsafe_allow_html=True)
             if lo_price > _lo_ceil + 0.001:
                 st.markdown(
                     f'<div class="alert-danger">⚠️ Giá đặt <b>{lo_price:,.0f}đ</b> vượt giá trần'
@@ -925,8 +958,8 @@ with tab_stock:
                     unsafe_allow_html=True,
                 )
 
-        if st.button("Tạo hướng dẫn lệnh LO", type="primary"):
-            lo = build_lo_instruction(symbol, lo_side, int(lo_qty), lo_price, lo_note)
+        if st.button("Tạo hướng dẫn lệnh", type="primary"):
+            lo = build_lo_instruction(symbol, lo_side, int(lo_qty), lo_price, lo_note, lo_order_type)
             st.markdown("**Hướng dẫn đặt lệnh trên SSI iBoard:**")
             for i, step in enumerate(lo["steps"], 1):
                 st.markdown(f"{i}. {step}")
@@ -936,7 +969,8 @@ with tab_stock:
             )
             st.markdown(f"""
             <div style="background:#DBEAFE;border-radius:8px;padding:12px;margin-top:10px;">
-              <b>Giá trị lệnh:</b> {lo['value']:,.0f}đ &nbsp;|&nbsp;
+              <b>Loại lệnh:</b> {lo['order_type']} &nbsp;|&nbsp;
+              <b>Giá trị ước:</b> {lo['value']:,.0f}đ &nbsp;|&nbsp;
               <b>Phí ước tính:</b> {lo['brokerage_est']:,.0f}đ{_lo_tax_str} &nbsp;|&nbsp;
               <b>Phiên hiện tại:</b> {lo['session']}
             </div>""", unsafe_allow_html=True)
@@ -944,11 +978,71 @@ with tab_stock:
             for note in lo["important"]:
                 st.markdown(f"• {note}")
 
+    # ── Catalyst & Events ─────────────────────────────────────────────────────
+    if symbol:
+        with st.expander("📅 Catalyst & Sự kiện sắp tới"):
+            with st.spinner("Loading corporate actions..."):
+                corp_events = get_corporate_actions(symbol)
+            if not corp_events:
+                # Fallback to static config
+                corp_events = [
+                    {"date": e.get("date", ""), "event_type": e.get("type", ""),
+                     "value": e.get("value", ""), "source": "config"}
+                    for e in get_catalyst_calendar(symbol)
+                ]
+            if corp_events:
+                ev_df = pd.DataFrame(corp_events)
+                show_cols = [c for c in ["date", "event_type", "value", "source"] if c in ev_df.columns]
+                ev_df = ev_df[show_cols]
+                ev_df.columns = [c.replace("_", " ").title() for c in show_cols]
+                st.dataframe(ev_df, use_container_width=True, hide_index=True)
+            else:
+                st.info(f"Chưa có sự kiện nào cho {symbol} trong 12 tháng tới.")
+
+    # ── Company Profile ───────────────────────────────────────────────────────
+    if symbol:
+        with st.expander("🏢 Hồ sơ công ty"):
+            with st.spinner("Loading company profile..."):
+                profile = get_company_profile(symbol)
+            if profile:
+                _pc1, _pc2 = st.columns(2)
+                with _pc1:
+                    st.markdown(f"**Tên công ty:** {profile.get('name', 'N/A')}")
+                    st.markdown(f"**Ngành:** {profile.get('industry', 'N/A')}")
+                    st.markdown(f"**Vốn điều lệ:** {profile.get('charter_capital', 'N/A')}")
+                with _pc2:
+                    ws = profile.get('website', '')
+                    if ws:
+                        st.markdown(f"**Website:** [{ws}]({ws})")
+                    else:
+                        st.markdown("**Website:** N/A")
+                desc = profile.get('description', '')
+                if desc:
+                    st.markdown("**Hoạt động KD:**")
+                    st.caption(desc[:600] + ("..." if len(desc) > 600 else ""))
+            else:
+                st.info(f"Không tải được hồ sơ công ty cho {symbol}.")
+
+    # ── Company News ──────────────────────────────────────────────────────────
+    if symbol:
+        with st.expander("📰 Tin tức gần nhất (30 ngày)"):
+            with st.spinner("Loading news..."):
+                news_items = get_company_news(symbol, days=30)
+            if news_items:
+                for item in news_items[:10]:
+                    date_str = item.get('date', '')[:10]
+                    title    = item.get('title', '')
+                    st.markdown(f"**{date_str}** — {title}")
+                    st.divider()
+            else:
+                st.info(f"Không có tin tức nào cho {symbol} trong 30 ngày gần nhất.")
+
     # ── Buy Scenario ──────────────────────────────────────────────────────────
     if symbol and not hist.empty:
         st.markdown("---")
         with st.expander("🛒 Xem xét mua mới / tích lũy thêm"):
-            pf_val = float(st.session_state.portfolio.total_market or 10_000_000)
+            pf_val = float(st.session_state.portfolio.total_market or 0) * 1000
+            pf_val = max(pf_val, 1_000_000.0)  # total_market is thousands-VND → raw VND
             bs_pf_val = st.number_input(
                 "Giá trị tài khoản (VND)",
                 min_value=1_000_000.0, value=pf_val, step=1_000_000.0, format="%.0f",
@@ -1084,6 +1178,109 @@ with tab_market:
             st.metric("Alpha", fmt_pct(alpha),
                        "Outperform" if alpha > 0 else "Underperform")
 
+    # ── Market Breadth ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-hdr">Breadth thị trường — VN Watchlist</div>',
+                unsafe_allow_html=True)
+    with st.spinner("Đang tính breadth..."):
+        _breadth_syms = [s for s in WATCHLIST_DEFAULT if s not in ("VNINDEX", "VN30")]
+        # Use VN30 batch if all breadth symbols are in VN30 — 1 call vs N calls
+        _breadth_quotes = get_quotes_batch(_breadth_syms)
+        _breadth = compute_market_breadth(_breadth_syms, _breadth_quotes)
+
+    _bc1, _bc2, _bc3, _bc4, _bc5 = st.columns(5)
+    with _bc1:
+        st.metric("Tăng (Advance)", _breadth["advance"],
+                  help="Số mã tăng > 0.05% trong phiên")
+    with _bc2:
+        st.metric("Giảm (Decline)", _breadth["decline"],
+                  help="Số mã giảm > 0.05%")
+    with _bc3:
+        st.metric("Không đổi", _breadth["unchanged"])
+    with _bc4:
+        _adr = _breadth["ad_ratio"]
+        _adr_str = f"{_adr:.2f}" if _adr != float("inf") else "∞"
+        _adr_label = "🟢 Bullish" if _adr > 1.5 else ("🔴 Bearish" if _adr < 0.7 else "🟡 Neutral")
+        st.metric("A/D Ratio", _adr_str, _adr_label)
+    with _bc5:
+        st.metric("Breadth %", f"{_breadth['breadth_pct']:.1f}%",
+                  help="% mã tăng trong watchlist")
+
+    # ── Sector Heatmap ────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-hdr">Hiệu suất ngành — VN30 (Sector Heatmap)</div>',
+                unsafe_allow_html=True)
+    with st.spinner("Đang tải sector data..."):
+        _vn30_syms  = list(VN30_SECTORS.keys())
+        # Use batch endpoint for VN30 sector quotes — 1 HTTP call
+        _vn30_quotes = get_quotes_batch(_vn30_syms)
+        _sector_rets = compute_sector_returns(_vn30_quotes)
+
+    if _sector_rets:
+        _sec_df = (
+            pd.DataFrame(list(_sector_rets.items()), columns=["Ngành", "Return (%)"])
+            .sort_values("Return (%)", ascending=True)
+        )
+        _bar_colors = [
+            "#16A34A" if v > 0 else ("#DC2626" if v < -0.3 else "#F59E0B")
+            for v in _sec_df["Return (%)"]
+        ]
+        _fig_sec = go.Figure(go.Bar(
+            x=_sec_df["Return (%)"],
+            y=_sec_df["Ngành"],
+            orientation="h",
+            marker_color=_bar_colors,
+            text=[f"{v:+.2f}%" for v in _sec_df["Return (%)"]],
+            textposition="outside",
+        ))
+        _fig_sec.update_layout(
+            height=max(200, len(_sec_df) * 42),
+            margin=dict(l=0, r=80, t=10, b=0),
+            xaxis_title="Return trung bình ngành (%)",
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11),
+        )
+        _fig_sec.update_xaxes(showgrid=True, gridcolor="#F3F4F6")
+        st.plotly_chart(_fig_sec, use_container_width=True)
+    else:
+        st.info("Chưa có dữ liệu ngành. Thực hiện Refresh giá ở sidebar trước.")
+
+    # ── Foreign Flow (VN30 top liquidity) ─────────────────────────────────────
+    st.markdown("---")
+    st.markdown('<div class="section-hdr">Foreign Flow — Top VN30 (phiên hôm nay)</div>',
+                unsafe_allow_html=True)
+    _flow_syms = ["HPG", "VCB", "FPT", "TCB", "MBB", "MSN", "GAS", "VHM"]
+    with st.spinner("Đang lấy dữ liệu khối ngoại..."):
+        _flows = get_foreign_flow_batch(_flow_syms)
+
+    if _flows:
+        _flow_df = pd.DataFrame(_flows)
+        _flow_df = _flow_df[["symbol", "foreign_buy_val", "foreign_sell_val",
+                              "foreign_net_val"]].copy()
+        _flow_df.columns = ["Mã CK", "NNN Mua (k.đ)", "NNN Bán (k.đ)", "Net (k.đ)"]
+        _flow_df = _flow_df.sort_values("Net (k.đ)", ascending=False)
+
+        def _flow_color(val):
+            try:
+                v = float(val)
+                if v > 0:   return "color:#16A34A;font-weight:600"
+                if v < 0:   return "color:#DC2626;font-weight:600"
+            except Exception:
+                pass
+            return ""
+
+        _total_net = _flow_df["Net (k.đ)"].sum()
+        _styled_flow = (
+            _flow_df.style
+            .map(_flow_color, subset=["Net (k.đ)"])
+            .format({"NNN Mua (k.đ)": "{:,.0f}", "NNN Bán (k.đ)": "{:,.0f}", "Net (k.đ)": "{:+,.0f}"})
+        )
+        st.dataframe(_styled_flow, use_container_width=True, hide_index=True)
+        _net_label = f"Net toàn bộ: {'🟢 +' if _total_net >= 0 else '🔴 '}{_total_net:,.0f} k.đ"
+        st.caption(_net_label)
+    else:
+        st.info("Dữ liệu khối ngoại chưa khả dụng. SSI endpoint có thể chưa trả dữ liệu phiên này.")
+
     # Macro watchlist
     st.markdown("---")
     st.markdown('<div class="section-hdr">Macro & Catalyst tracking</div>', unsafe_allow_html=True)
@@ -1146,23 +1343,158 @@ with tab_trade_log:
     else:
         st.info("Chưa có giao dịch nào. Thêm giao dịch thủ công ở trên hoặc snapshot sẽ auto-detect.")
 
-    # Performance stats (placeholder for tracked portfolio)
+    # ── Performance Analytics ─────────────────────────────────────────────────
     st.markdown("---")
-    st.markdown('<div class="section-hdr">Thống kê hiệu suất (từ snapshot)</div>', unsafe_allow_html=True)
-    snapshots = sorted(TRADE_LOG_DIR.glob("snapshot_*.json"), reverse=True)
-    if len(snapshots) >= 2:
-        def load_snap(f):
-            with open(f) as fp:
-                return pd.DataFrame(json.load(fp))
-        latest = load_snap(snapshots[0])
-        oldest = load_snap(snapshots[-1])
-        mv_latest = pd.to_numeric(latest.get("market_value", pd.Series(0)), errors="coerce").sum()
-        mv_oldest = pd.to_numeric(oldest.get("market_value", pd.Series(0)), errors="coerce").sum()
-        total_return = (mv_latest / mv_oldest - 1) * 100 if mv_oldest > 0 else 0
-        st.metric("Return (snapshot to snapshot)", fmt_pct(total_return))
+    st.markdown('<div class="section-hdr">Hiệu Suất Danh Mục</div>', unsafe_allow_html=True)
+
+    # ── Build equity curve from snapshot chain ────────────────────────────────
+    _snapshots = sorted(TRADE_LOG_DIR.glob("snapshot_*.json"), reverse=False)
+    _equity_series = None
+    if len(_snapshots) >= 2:
+        _eq_rows = []
+        for _sf in _snapshots:
+            try:
+                with open(_sf) as _fp:
+                    _snap_df = pd.DataFrame(json.load(_fp))
+                _mv = pd.to_numeric(_snap_df.get("market_value", pd.Series(0)), errors="coerce").sum()
+                _date_str = _sf.stem.replace("snapshot_", "")
+                _eq_rows.append({"date": _date_str, "value": _mv})
+            except Exception:
+                continue
+        if len(_eq_rows) >= 2:
+            _eq_df = pd.DataFrame(_eq_rows)
+            _eq_df["date"] = pd.to_datetime(_eq_df["date"], errors="coerce")
+            _eq_df = _eq_df.dropna(subset=["date"]).sort_values("date").set_index("date")
+            _equity_series = _eq_df["value"]
+
+    # ── Compute returns for Sharpe/Sortino/MaxDD ──────────────────────────────
+    _perf_returns = None
+    if _equity_series is not None and len(_equity_series) >= 10:
+        _perf_returns = _equity_series.pct_change().dropna()
+    elif not st.session_state.portfolio.df.empty:
+        _pf_syms = list(st.session_state.portfolio.df["symbol"].unique())
+        _pf_wts  = pd.to_numeric(
+            st.session_state.portfolio.df.get("weight_pct", pd.Series()), errors="coerce"
+        ).fillna(0).values / 100
+        _rm = cached_returns_matrix(tuple(_pf_syms), 120)
+        if not _rm.empty:
+            _valid = [s for s in _pf_syms if s in _rm.columns]
+            if _valid:
+                _w = _pf_wts[:len(_valid)]
+                _w = _w / _w.sum() if _w.sum() > 0 else _w
+                _perf_returns = _rm[_valid].fillna(0).dot(_w)
+                _equity_series = (1 + _perf_returns).cumprod()
+
+    # ── Compute metrics ───────────────────────────────────────────────────────
+    _sharpe  = compute_sharpe(_perf_returns)   if _perf_returns is not None else float("nan")
+    _sortino = compute_sortino(_perf_returns)  if _perf_returns is not None else float("nan")
+    _max_dd  = compute_max_drawdown(_equity_series) if _equity_series is not None else 0.0
+
+    # ── Load trade log for trade stats & monthly P&L ──────────────────────────
+    _log_file = TRADE_LOG_DIR / "trade_log.json"
+    _trade_df = pd.DataFrame()
+    if _log_file.exists():
+        try:
+            with open(_log_file) as _f:
+                _trades = json.load(_f)
+            _trade_df = pd.DataFrame(_trades) if _trades else pd.DataFrame()
+        except Exception:
+            pass
+
+    _stats = compute_trade_stats(_trade_df) if not _trade_df.empty else None
+
+    # ── KPI Row ───────────────────────────────────────────────────────────────
+    kp1, kp2, kp3, kp4, kp5 = st.columns(5)
+    def _fmt_ratio(v):
+        return f"{v:.2f}" if v == v else "N/A"   # NaN check
+
+    with kp1:
+        st.metric("Sharpe Ratio",   _fmt_ratio(_sharpe),
+                  help="Lợi nhuận vượt trội / độ biến động. >1.5 xuất sắc, >1.0 tốt")
+    with kp2:
+        st.metric("Sortino Ratio",  _fmt_ratio(_sortino),
+                  help="Như Sharpe nhưng chỉ tính biến động xuống — chính xác hơn cho F0")
+    with kp3:
+        st.metric("Max Drawdown",   f"{_max_dd:.1f}%",
+                  help="Mức giảm tối đa từ đỉnh → đáy. <-15% là cảnh báo")
+    with kp4:
+        st.metric("Win Rate",       f"{_stats['win_rate']:.1f}%" if _stats else "N/A",
+                  help="% giao dịch có lãi")
+    with kp5:
+        st.metric("Profit Factor",  f"{_stats['profit_factor']:.2f}" if _stats else "N/A",
+                  help="Tổng lãi / tổng lỗ. >1.5 tốt, >2.0 xuất sắc")
+
+    # ── Equity curve ──────────────────────────────────────────────────────────
+    if _equity_series is not None and len(_equity_series) >= 2:
+        st.markdown("---")
+        st.markdown('<div class="section-hdr">Đường vốn (Equity Curve)</div>',
+                    unsafe_allow_html=True)
+        _fig_eq = go.Figure(go.Scatter(
+            x=_equity_series.index, y=_equity_series.values,
+            fill="tozeroy", fillcolor="rgba(37,99,235,0.08)",
+            line=dict(color="#2563EB", width=2), name="Portfolio"
+        ))
+        _fig_eq.update_layout(
+            height=280, margin=dict(l=0, r=0, t=10, b=0),
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            font=dict(size=11),
+        )
+        _fig_eq.update_xaxes(showgrid=True, gridcolor="#F3F4F6")
+        _fig_eq.update_yaxes(showgrid=True, gridcolor="#F3F4F6")
+        st.plotly_chart(_fig_eq, use_container_width=True)
     else:
-        st.info(f"Cần ít nhất 2 snapshot để tính hiệu suất. Hiện có {len(snapshots)} snapshot.")
-        st.caption("Nhấn '↓ Lưu snapshot danh mục' trong tab Danh Mục sau mỗi ngày giao dịch.")
+        st.info(
+            f"Cần ít nhất 2 snapshot để vẽ đường vốn. "
+            f"Hiện có {len(_snapshots)} snapshot — nhấn '↓ Lưu snapshot' mỗi ngày giao dịch."
+        )
+
+    # ── Trade stats breakdown ─────────────────────────────────────────────────
+    if _stats and _stats["total"] > 0:
+        st.markdown("---")
+        st.markdown('<div class="section-hdr">Thống kê giao dịch</div>', unsafe_allow_html=True)
+        ts1, ts2, ts3, ts4 = st.columns(4)
+        with ts1: st.metric("Tổng GD",     _stats["total"])
+        with ts2: st.metric("Lãi / Lỗ",   f"{_stats['wins']} / {_stats['losses']}")
+        with ts3: st.metric("Avg Win %",   f"+{_stats['avg_win_pct']:.2f}%")
+        with ts4: st.metric("Avg R:R",     f"{_stats['avg_rr']:.2f}x")
+
+    # ── Monthly P&L calendar ──────────────────────────────────────────────────
+    if not _trade_df.empty:
+        _monthly = build_monthly_pnl(_trade_df)
+        if not _monthly.empty:
+            st.markdown("---")
+            st.markdown('<div class="section-hdr">P&L Hàng Tháng (từ trade log)</div>',
+                        unsafe_allow_html=True)
+            _mpnl = _monthly.pivot_table(
+                index="month", columns="year", values="pnl_vnd", aggfunc="sum"
+            ).fillna(0)
+            _month_names = {
+                1:"T1",2:"T2",3:"T3",4:"T4",5:"T5",6:"T6",
+                7:"T7",8:"T8",9:"T9",10:"T10",11:"T11",12:"T12",
+            }
+            _mpnl.index = [_month_names.get(m, str(m)) for m in _mpnl.index]
+            _fig_cal = go.Figure(go.Heatmap(
+                z=_mpnl.values,
+                x=[str(c) for c in _mpnl.columns],
+                y=_mpnl.index.tolist(),
+                colorscale=[
+                    [0.00, "#7F1D1D"], [0.40, "#DC2626"],
+                    [0.50, "#F8FAFC"],
+                    [0.60, "#16A34A"], [1.00, "#14532D"],
+                ],
+                zmid=0,
+                text=[[f"{v:+,.0f}đ" for v in row] for row in _mpnl.values],
+                texttemplate="%{text}",
+                textfont=dict(size=10),
+                colorbar=dict(title="P&L (đ)", thickness=12),
+            ))
+            _fig_cal.update_layout(
+                height=max(200, len(_mpnl) * 35 + 80),
+                margin=dict(l=0, r=0, t=10, b=0),
+                paper_bgcolor="rgba(0,0,0,0)",
+                font=dict(size=11),
+            )
+            st.plotly_chart(_fig_cal, use_container_width=True)
 
 
 # ══════════════════════════════════════════════════════════════════════════════

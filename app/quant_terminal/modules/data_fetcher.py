@@ -5,12 +5,15 @@ All market data calls go through this module.
 import time
 import json
 import hashlib
+import logging
 import datetime as dt
 from pathlib import Path
 from typing import Optional
 
 import pandas as pd
 import numpy as np
+
+_log = logging.getLogger("data_fetcher")
 
 try:
     from vnstock import Vnstock
@@ -81,6 +84,20 @@ class MarketData:
 
     def get_quotes_batch(self, symbols: list[str]) -> dict[str, dict]:
         """Fetch quotes for multiple symbols. Returns {symbol: quote_dict}"""
+        if SSI_AVAILABLE and symbols:
+            sym_set = {s.upper() for s in symbols}
+            if sym_set.issubset(ssi_fetcher._VN30_SYMBOLS):
+                try:
+                    batch = ssi_fetcher.fetch_vn30_batch()
+                    if batch and len(batch) >= 5:
+                        results = {s: batch.get(s.upper(), self._empty_quote(s)) for s in symbols}
+                        # Cache individual quotes
+                        for sym, q in results.items():
+                            cp = _cache_key("quote", sym)
+                            _write_cache(cp, q)
+                        return results
+                except Exception as e:
+                    _log.warning("[quotes_batch] VN30 batch failed: %s", e)
         results = {}
         for sym in symbols:
             results[sym] = self.get_quote(sym)
@@ -94,7 +111,7 @@ class MarketData:
                 if q and q.get("price", 0) > 0:
                     return q
             except Exception as e:
-                print(f"[MarketData] SSI quote {symbol}: {e}")
+                _log.warning("[quote] SSI iBoard %s: %s", symbol, e)
 
         if not VNSTOCK_AVAILABLE:
             return self._empty_quote(symbol)
@@ -144,7 +161,7 @@ class MarketData:
                     "source":     source,
                 }
             except Exception as e:
-                print(f"[MarketData] quote {symbol} source={source}: {e}")
+                _log.warning("[quote] source=%s %s: %s", source, symbol, e)
                 continue
         return self._empty_quote(symbol)
 
@@ -195,7 +212,7 @@ class MarketData:
                 if df is not None and not df.empty and len(df) >= 5:
                     return df
             except Exception as e:
-                print(f"[MarketData] SSI history {symbol}: {e}")
+                _log.warning("[history] SSI iBoard %s: %s", symbol, e)
 
         if not VNSTOCK_AVAILABLE:
             return self._generate_mock_history(symbol, days)
@@ -230,7 +247,7 @@ class MarketData:
                 df.index = pd.to_datetime(df.index)
                 return df.tail(days)
             except Exception as e:
-                print(f"[MarketData] history {symbol} source={source}: {e}")
+                _log.warning("[history] source=%s %s: %s", source, symbol, e)
                 continue
         return self._generate_mock_history(symbol, days)
 
@@ -269,8 +286,18 @@ class MarketData:
         return result or {}
 
     def _fetch_financials(self, symbol: str) -> dict:
+        # ── Primary: SSI iBoard direct ────────────────────────────────────────
+        if SSI_AVAILABLE:
+            try:
+                result = ssi_fetcher.fetch_financials(symbol)
+                if result and result.get("pe", 0) + result.get("pb", 0) + result.get("roe", 0) > 0:
+                    return result
+            except Exception as e:
+                _log.warning("[financials] SSI iBoard %s: %s", symbol, e)
+
         if not VNSTOCK_AVAILABLE:
             return {}
+        # ── Fallback: vnstock ─────────────────────────────────────────────────
         try:
             stk = self._get_stock(symbol)
             ratios = stk.finance.ratio(period="year", lang="en", dropna=True)
@@ -278,16 +305,17 @@ class MarketData:
                 return {}
             last = ratios.iloc[-1]
             return {
-                "pe":         float(last.get("priceToEarning", 0) or 0),
-                "pb":         float(last.get("priceToBook", 0) or 0),
-                "roe":        float(last.get("roe", 0) or 0),
-                "roa":        float(last.get("roa", 0) or 0),
+                "pe":          float(last.get("priceToEarning", 0) or 0),
+                "pb":          float(last.get("priceToBook", 0) or 0),
+                "roe":         float(last.get("roe", 0) or 0),
+                "roa":         float(last.get("roa", 0) or 0),
+                "eps":         0.0,
                 "debt_equity": float(last.get("debtOnEquity", 0) or 0),
-                "ev_ebitda":  float(last.get("ev_ebitda", 0) or 0),
-                "period":     str(last.name) if hasattr(last, "name") else "",
+                "ev_ebitda":   float(last.get("ev_ebitda", 0) or 0),
+                "period":      str(last.name) if hasattr(last, "name") else "",
             }
         except Exception as e:
-            print(f"[MarketData] financials error {symbol}: {e}")
+            _log.error("[financials] %s: %s", symbol, e)
             return {}
 
     # ── ANALYST TARGET ────────────────────────────────────────────────────────
@@ -339,7 +367,7 @@ class MarketData:
                     })
                     return df
             except Exception as e:
-                print(f"[MarketData] SSI intraday {symbol}: {e}")
+                _log.warning("[intraday] SSI iBoard %s: %s", symbol, e)
 
         return pd.DataFrame()
 
@@ -373,3 +401,81 @@ def get_index_history(index: str = "VNINDEX", days: int = 252) -> pd.DataFrame:
 
 def get_history_intraday(symbol: str, resolution: str = "15", days: int = 5) -> pd.DataFrame:
     return _md.get_history_intraday(symbol, resolution, days)
+
+def get_catalyst_calendar(symbol: str) -> list:
+    """Return catalyst events for symbol from config.CATALYST_CALENDAR (static)."""
+    from config import CATALYST_CALENDAR
+    return CATALYST_CALENDAR.get(symbol.upper(), [])
+
+def get_foreign_flow(symbol: str) -> dict:
+    """Fetch foreign buy/sell for one symbol via SSI; empty dict on failure."""
+    if SSI_AVAILABLE:
+        try:
+            return ssi_fetcher.fetch_foreign_flow(symbol)
+        except Exception as e:
+            _log.error("[foreign_flow] %s: %s", symbol, e)
+    return {}
+
+def get_foreign_flow_batch(symbols: list) -> list:
+    """Fetch foreign flow for a list of symbols; returns list of non-empty dicts."""
+    results = []
+    for sym in symbols:
+        flow = get_foreign_flow(sym)
+        if flow:
+            results.append(flow)
+    return results
+
+
+def get_corporate_actions(symbol: str, months: int = 12) -> list:
+    """Return upcoming corporate actions (dividends, AGM, rights) for symbol. 4h TTL cache."""
+    if not symbol:
+        return []
+    cache_path = _cache_key("corporate_actions", symbol, months)
+    cached = _read_cache(cache_path, ttl_seconds=4 * 3600)
+    if cached and isinstance(cached.get("items"), list):
+        return cached["items"]
+    if SSI_AVAILABLE:
+        try:
+            result = ssi_fetcher.fetch_corporate_actions(symbol, look_ahead_months=months)
+            _write_cache(cache_path, {"items": result})
+            return result
+        except Exception as e:
+            _log.error("[corporate_actions] %s: %s", symbol, e)
+    return []
+
+
+def get_company_news(symbol: str, days: int = 30) -> list:
+    """Return recent company news for symbol. 15-min TTL cache."""
+    if not symbol:
+        return []
+    cache_path = _cache_key("company_news", symbol, days)
+    cached = _read_cache(cache_path, ttl_seconds=900)
+    if cached and isinstance(cached.get("items"), list):
+        return cached["items"]
+    if SSI_AVAILABLE:
+        try:
+            result = ssi_fetcher.fetch_company_news(symbol, days=days)
+            _write_cache(cache_path, {"items": result})
+            return result
+        except Exception as e:
+            _log.error("[company_news] %s: %s", symbol, e)
+    return []
+
+
+def get_company_profile(symbol: str) -> dict:
+    """Return company profile for symbol. 24h TTL cache."""
+    if not symbol:
+        return {}
+    cache_path = _cache_key("company_profile", symbol)
+    cached = _read_cache(cache_path, ttl_seconds=86400)
+    if cached and cached.get("name"):
+        return cached
+    if SSI_AVAILABLE:
+        try:
+            result = ssi_fetcher.fetch_company_profile(symbol)
+            if result:
+                _write_cache(cache_path, result)
+            return result
+        except Exception as e:
+            _log.error("[company_profile] %s: %s", symbol, e)
+    return {}

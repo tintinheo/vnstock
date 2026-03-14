@@ -11,7 +11,8 @@ from pathlib import Path
 # The app auto-detects the latest SSI iBoard export in this folder.
 PORTFOLIO_DIR = Path.home() / "Documents" / "quant_terminal" / "portfolio"
 TRADE_LOG_DIR = Path.home() / "Documents" / "quant_terminal" / "trade_log"
-CACHE_DIR     = Path.home() / "Documents" / "quant_terminal" / ".cache"
+CACHE_DIR      = Path.home() / "Documents" / "quant_terminal" / ".cache"
+ERROR_LOG_FILE = Path.home() / "Documents" / "quant_terminal" / "ERROR_LOG.txt"
 
 # Create dirs if they don't exist
 for d in [PORTFOLIO_DIR, TRADE_LOG_DIR, CACHE_DIR]:
@@ -61,6 +62,33 @@ ANALYST_SOURCE = "SSI"
 # ─── KELLY CRITERION ──────────────────────────────────────────────────────────
 KELLY_FRACTION = 0.25   # Use 1/4 Kelly for safety (reduces variance)
 MAX_POSITION_PCT = 0.20  # No single position > 20% of portfolio
+
+# ─── VERSION ──────────────────────────────────────────────────────────────────
+APP_VERSION  = "2.0.2"
+RELEASE_DATE = "2026-03-14"
+
+# ─── CATALYST CALENDAR ───────────────────────────────────────────────────────
+# Static per-symbol upcoming events — edit here to update the UI.
+# Format: {SYMBOL: [{"date":"DD/MM/YYYY", "event":str, "type":str}]}
+CATALYST_CALENDAR: dict = {
+    "HPG": [
+        {"date": "01/04/2026", "event": "Công bố KQKD Q1/2026",      "type": "Earnings"},
+        {"date": "25/04/2026", "event": "ĐHCĐ thường niên 2026",       "type": "AGM"},
+    ],
+    "FPT": [
+        {"date": "10/04/2026", "event": "KQKD Q1/2026 dự kiến",        "type": "Earnings"},
+        {"date": "22/04/2026", "event": "ĐHCĐ thường niên 2026",        "type": "AGM"},
+    ],
+    "VCB": [
+        {"date": "20/04/2026", "event": "KQKD Q1 & cổ tức dự kiến",     "type": "Dividend"},
+    ],
+    "TCB": [
+        {"date": "15/04/2026", "event": "Công bố KQKD Q1/2026",         "type": "Earnings"},
+    ],
+    "MBB": [
+        {"date": "18/04/2026", "event": "KQKD Q1/2026",                  "type": "Earnings"},
+    ],
+}
 
 
 # ─── VN MARKET RULES ─────────────────────────────────────────────────────────

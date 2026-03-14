@@ -3,6 +3,7 @@ Portfolio manager — loads SSI iBoard Excel exports, enriches with live prices,
 saves snapshots, and tracks changes (trade detection).
 """
 import datetime as dt
+import logging
 from pathlib import Path
 from typing import Optional
 
@@ -10,6 +11,8 @@ import pandas as pd
 import numpy as np
 
 from config import PORTFOLIO_DIR, TRADE_LOG_DIR, SETTLEMENT_DAYS, VN_PUBLIC_HOLIDAYS
+
+_log = logging.getLogger("portfolio")
 
 
 # ─── RISK CLASSIFICATION ─────────────────────────────────────────────────────
@@ -72,6 +75,7 @@ def parse_ssi_excel(filepath) -> pd.DataFrame:
             break
 
     if header_row is None:
+        _log.error("parse_ssi_excel: header row not found in %s", filepath.name)
         raise ValueError(f"Cannot find header row in {filepath.name}")
 
     # Re-read with correct header, keep as string to avoid type ambiguity
@@ -111,6 +115,7 @@ def parse_ssi_excel(filepath) -> pd.DataFrame:
 
     # ── Filter valid stock rows ───────────────────────────────────────────────
     if "symbol" not in df.columns:
+        _log.error("parse_ssi_excel: 'symbol' column not found after mapping in %s", filepath.name)
         raise ValueError("Column 'symbol' not found after mapping.")
 
     # Convert symbol to string cleanly
@@ -119,6 +124,7 @@ def parse_ssi_excel(filepath) -> pd.DataFrame:
     df = df.reset_index(drop=True)
 
     if df.empty:
+        _log.error("parse_ssi_excel: no valid stock rows found in %s", filepath.name)
         raise ValueError("No valid stock rows found in the file.")
 
     # ── Clean numeric columns (vectorized, no apply) ──────────────────────────
@@ -126,6 +132,14 @@ def parse_ssi_excel(filepath) -> pd.DataFrame:
                 "cost_value", "market_value", "pnl"]:
         if col in df.columns:
             df[col] = _clean_series(df[col])
+
+    # ── Normalize to thousands-VND (app-internal unit) ─────────────────────────
+    # SSI Excel stores prices in raw VND (e.g. 26650); all other app code
+    # uses thousands-VND (e.g. 26.65).  Dividing here makes every downstream
+    # calculation (enrich_with_live_prices, pnl_pct, scenarios, etc.) correct.
+    for _vcol in ["cost_price", "market_price", "cost_value", "market_value", "pnl"]:
+        if _vcol in df.columns:
+            df[_vcol] = df[_vcol] / 1000.0
 
     # ── Tradeable qty: "-" means 0 (already handled by _clean_series) ────────
     # But also handle the case where it might have been read as NaN
@@ -176,18 +190,23 @@ class Portfolio:
         if self.df.empty:
             return self
         for idx, row in self.df.iterrows():
-            sym = row["symbol"]
-            if sym in quotes and quotes[sym].get("price", 0) > 0:
-                live = quotes[sym]["price"]
-                self.df.at[idx, "market_price"] = live
-                mv = live * row["total_qty"]
-                self.df.at[idx, "market_value"] = mv
-                cv = row.get("cost_value") or row.get("cost_price", 0) * row["total_qty"]
-                self.df.at[idx, "cost_value"] = cv
-                pnl = mv - cv
-                self.df.at[idx, "pnl"] = pnl
-                self.df.at[idx, "pnl_pct"] = (pnl / cv * 100) if cv > 0 else 0
-                self.df.at[idx, "live_change_pct"] = quotes[sym].get("pct_change", 0)
+            try:
+                sym = row["symbol"]
+                if sym in quotes and quotes[sym].get("price", 0) > 0:
+                    live = quotes[sym]["price"]   # thousands-VND
+                    self.df.at[idx, "market_price"] = live
+                    mv = live * row["total_qty"]   # thousands-VND × shares
+                    self.df.at[idx, "market_value"] = mv
+                    # cost_value already in thousands-VND after parse_ssi_excel ÷1000
+                    cv = row.get("cost_value") or row.get("cost_price", 0) * row["total_qty"]
+                    cv = float(cv) if cv else 0.0
+                    self.df.at[idx, "cost_value"] = cv
+                    pnl = mv - cv
+                    self.df.at[idx, "pnl"] = pnl
+                    self.df.at[idx, "pnl_pct"] = (pnl / cv * 100) if cv > 0 else 0.0
+                    self.df.at[idx, "live_change_pct"] = quotes[sym].get("pct_change", 0)
+            except Exception as exc:
+                _log.error("enrich_with_live_prices [%s]: %s", row.get("symbol", "?"), exc)
 
         total_mv = self.df["market_value"].sum()
         if total_mv > 0:
