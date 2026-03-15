@@ -10,6 +10,7 @@ Run:
 
 import os
 import sys
+import json
 import pandas as pd
 import numpy as np
 import streamlit as st
@@ -959,6 +960,448 @@ def render_summary_table(results: list) -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  AUDIT HELPERS  (reads data/Profiler/*.json JSONL files)
+# ═══════════════════════════════════════════════════════════════════════════════
+_AUDIT_DIR = os.path.join(_DIR, "data", "Profiler")
+
+
+def _list_audit_tickers() -> list:
+    """Return sorted list of tickers that have audit JSONL files."""
+    if not os.path.isdir(_AUDIT_DIR):
+        return []
+    return sorted(
+        f[:-5].upper()
+        for f in os.listdir(_AUDIT_DIR)
+        if f.lower().endswith(".json")
+    )
+
+
+def _load_audit_history(ticker: str) -> list:
+    """Load all audit runs for a ticker, newest first."""
+    path = os.path.join(_AUDIT_DIR, f"{ticker.upper()}.json")
+    if not os.path.isfile(path):
+        return []
+    rows = []
+    try:
+        with open(path, encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if line:
+                    try:
+                        rows.append(json.loads(line))
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+    rows.sort(key=lambda x: x.get("run_ts", ""), reverse=True)
+    return rows
+
+
+def _audit_signal_color(sig: str) -> str:
+    return {
+        "MUA":            "#22c55e",
+        "THEO DÕI–TĂNG": "#3b82f6",
+        "TRUNG LẬP":    "#94a3b8",
+        "THEO DÕI–GIẢM": "#f97316",
+        "BÁN / TRÁNH":   "#ef4444",
+    }.get(sig, "#94a3b8")
+
+
+def _build_audit_trend_chart(history_asc: list) -> go.Figure:
+    """Plotly dual-axis chart: bull% bars + price line over scan timestamps."""
+    ts   = [r.get("run_ts", "") for r in history_asc]
+    bp   = [r.get("bull_pct", 50) for r in history_asc]
+    px_  = [r.get("price") or 0  for r in history_asc]
+    sigs = [r.get("signal", "")   for r in history_asc]
+    bar_colors = [_audit_signal_color(s) for s in sigs]
+
+    fig = make_subplots(specs=[[{"secondary_y": True}]])
+
+    # Bull% bars
+    fig.add_trace(
+        go.Bar(
+            x=ts, y=bp,
+            name="Bull %",
+            marker_color=bar_colors, opacity=0.75,
+            hovertemplate="%{x}<br>Bull: %{y:.1f}%<extra></extra>",
+        ),
+        secondary_y=False,
+    )
+    # Price line
+    fig.add_trace(
+        go.Scatter(
+            x=ts, y=px_,
+            name="Giá",
+            mode="lines+markers",
+            line=dict(color="#f59e0b", width=2),
+            marker=dict(size=6),
+            hovertemplate="%{x}<br>Giá: %{y:,.0f}<extra></extra>",
+        ),
+        secondary_y=True,
+    )
+    # 50% reference line on bull% axis
+    fig.add_hline(y=50, line_dash="dash", line_color="rgba(148,163,184,0.35)",
+                  secondary_y=False)
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor="#0e1117", plot_bgcolor="#0d1117",
+        height=260, margin=dict(l=10, r=60, t=20, b=40),
+        font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#94a3b8"),
+        legend=dict(orientation="h", y=1.1, x=0, bgcolor="rgba(0,0,0,0)"),
+        hovermode="x unified",
+        bargap=0.25,
+    )
+    fig.update_yaxes(title_text="Bull %", range=[0, 100],
+                     gridcolor="#1a2030", secondary_y=False)
+    fig.update_yaxes(title_text="Giá", gridcolor="#1a2030", secondary_y=True)
+    fig.update_xaxes(gridcolor="#1a2030", tickangle=-30, tickfont=dict(size=9))
+    return fig
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  AUDIT PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+def _audit_snapshot_row_html(r: dict, runs: int) -> str:
+    """Build one <tr> for the snapshot table."""
+    sig   = r.get("signal", "")
+    scol  = _audit_signal_color(sig)
+    pct   = r.get("pct_change", 0) or 0
+    bp    = r.get("bull_pct", 50) or 50
+    ts    = (r.get("run_ts") or "")[:16].replace("T", " ")
+    rl    = r.get("regime_label") or r.get("regime") or "–"
+    vsa   = r.get("vsa_state", "NEUTRAL") or "NEUTRAL"
+    conf  = "✓" if r.get("signal_confirmed", True) else "⚡"
+    cc    = "#22c55e" if r.get("signal_confirmed", True) else "#f97316"
+    pc    = "#22c55e" if pct > 0 else "#ef4444" if pct < 0 else "#94a3b8"
+    bc    = _audit_signal_color(sig)
+    return (
+        f'<tr>'
+        f'<td style="font-weight:700;font-size:14px;">{r["ticker"]}</td>'
+        f'<td style="font-family:var(--mono);">{_f(r.get("price"))}</td>'
+        f'<td style="color:{pc};font-family:var(--mono);">{"+" if pct>=0 else ""}{pct:.1f}%</td>'
+        f'<td style="color:{scol};font-weight:700;">{sig}</td>'
+        f'<td>'
+        f'<div style="background:#1a1f2e;border-radius:4px;height:14px;width:80px;overflow:hidden;">'
+        f'<div style="background:{bc};height:100%;width:{int(bp)}%;opacity:.7;"></div></div>'
+        f'<span style="font-size:11px;color:#94a3b8;">{bp:.0f}%</span></td>'
+        f'<td style="font-size:12px;color:#94a3b8;">{rl}</td>'
+        f'<td style="font-size:12px;color:#64748b;">{vsa}</td>'
+        f'<td style="text-align:center;color:{cc};font-weight:700;">{conf}</td>'
+        f'<td style="font-size:11px;color:#475569;">{ts}</td>'
+        f'<td style="text-align:center;color:#475569;">{runs}</td>'
+        f'</tr>'
+    )
+
+
+def _audit_detail_expander(row: dict, idx: int, prev_row: dict | None) -> None:
+    """Render one collapsible expander with full indicator details for a single audit run."""
+    sig_   = row.get("signal", "")
+    scol_  = _audit_signal_color(sig_)
+    ts_    = (row.get("run_ts") or "")[:16].replace("T", " ")
+    bp_    = row.get("bull_pct", 50) or 50
+    changed = (prev_row is not None and sig_ != prev_row.get("signal"))
+    label  = f"{'⚡ ' if changed else ''}#{idx+1}  {ts_}  ·  {sig_}  ·  Bull {bp_:.0f}%  ·  {_f(row.get('price'))}"
+    with st.expander(label, expanded=(idx == 0)):
+        # ── Row A: key metrics ────────────────────────────────────────────
+        ca1,ca2,ca3,ca4,ca5,ca6 = st.columns(6)
+        ca1.metric("Giá",           _f(row.get("price")))
+        ca2.metric("Thay đổi",      f'{row.get("pct_change",0) or 0:+.2f}%')
+        ca3.metric("Bull %",        f'{bp_:.0f}%')
+        ca4.metric("Bear %",        f'{100-bp_:.0f}%')
+        ca5.metric("Tín hiệu",      sig_)
+        ca6.metric("Xác nhận",      "✓ Có" if row.get("signal_confirmed", True) else "⚡ Chưa")
+
+        # ── Row B: regime + VSA ───────────────────────────────────────────
+        cb1,cb2,cb3,cb4,cb5 = st.columns(5)
+        cb1.metric("Regime",        row.get("regime_label") or row.get("regime", "–"))
+        cb2.metric("Regime Score",  row.get("regime_score", 0))
+        cb3.metric("SMA200 Slope",  f'{row.get("sma200_slope", 0) or 0:+.2f}%')
+        cb4.metric("VSA State",     row.get("vsa_state", "–") or "–")
+        cb5.metric("VSA Score",     f'{row.get("vsa_score", 0) or 0:+.1f}')
+
+        st.markdown("<div style='height:4px'></div>", unsafe_allow_html=True)
+
+        # ── MA table ─────────────────────────────────────────────────────
+        price_ = row.get("price") or 0
+        ma_rows = ""
+        for lbl, key in [
+            ("SMA 20","sma20"),("SMA 50","sma50"),("SMA 200","sma200"),
+            ("EMA 9","ema9"),("EMA 21","ema21"),("EMA 50","ema50"),("EMA 200","ema200"),
+            ("BB Upper","bb_upper"),("BB Mid","bb_mid"),("BB Lower","bb_lower"),
+        ]:
+            v = row.get(key)
+            if v is None: continue
+            pct_v = (v - price_) / price_ * 100 if price_ else 0
+            pos   = "↑ Trên" if price_ > v else "↓ Dưới"
+            pcls  = "#22c55e" if price_ > v else "#ef4444"
+            ma_rows += (f'<tr><td style="color:#94a3b8;">{lbl}</td>'
+                        f'<td style="font-family:var(--mono);">{v:,.0f}</td>'
+                        f'<td style="color:{pcls};">{pct_v:+.2f}%</td>'
+                        f'<td style="color:{pcls};">{pos}</td></tr>')
+
+        # ── Oscillator table ──────────────────────────────────────────────
+        osc_rows = ""
+        for lbl, key, dp in [
+            ("RSI (14)","rsi",1),("Stoch %K","stoch_k",1),("Stoch %D","stoch_d",1),
+            ("ADX (14)","adx",1),("+DI","pdi",1),("-DI","ndi",1),
+            ("MACD","macd",0),("MACD Signal","macd_signal",0),("MACD Hist","macd_hist",0),
+            ("ATR (14)","atr",0),("Williams %R","williams_r",1),("CCI (20)","cci",0),
+            ("OBV","obv",0),("OBV MA20","obv_ma",0),
+            ("Vol Ratio","kl_ratio",2),
+        ]:
+            v = row.get(key)
+            if v is None: continue
+            fmt = f"{v:,.{dp}f}"
+            osc_rows += (f'<tr><td style="color:#94a3b8;">{lbl}</td>'
+                         f'<td style="font-family:var(--mono);">{fmt}</td></tr>')
+
+        # ── Trade plan table ──────────────────────────────────────────────
+        tp_rows = ""
+        for lbl, key, cls in [
+            ("Entry","entry","#f59e0b"),("SL","sl","#ef4444"),
+            ("TP1","tp1","#06b6d4"),("TP2","tp2","#22c55e"),
+        ]:
+            v = row.get(key)
+            if v: tp_rows += (f'<tr><td style="color:#94a3b8;">{lbl}</td>'
+                              f'<td style="color:{cls};font-family:var(--mono);">{v:,.0f}</td></tr>')
+        if row.get("rr1"):
+            tp_rows += (f'<tr><td style="color:#94a3b8;">R:R</td>'
+                        f'<td style="color:#06b6d4;">{row["rr1"]:.2f}:1</td></tr>')
+
+        t1, t2, t3 = st.columns(3)
+        with t1:
+            st.markdown("**Moving Averages**")
+            st.markdown(f'<table class="sum-table"><thead><tr>'
+                        f'<th>MA</th><th>Giá trị</th><th>vs Giá</th><th>Vị trí</th>'
+                        f'</tr></thead><tbody>{ma_rows}</tbody></table>',
+                        unsafe_allow_html=True)
+        with t2:
+            st.markdown("**Oscillators & Indicators**")
+            st.markdown(f'<table class="sum-table"><thead><tr>'
+                        f'<th>Indicator</th><th>Giá trị</th>'
+                        f'</tr></thead><tbody>{osc_rows}</tbody></table>',
+                        unsafe_allow_html=True)
+        with t3:
+            st.markdown("**Trade Plan & Backtest**")
+            st.markdown(f'<table class="sum-table"><thead><tr>'
+                        f'<th>Mục</th><th>Giá trị</th>'
+                        f'</tr></thead><tbody>{tp_rows}</tbody></table>',
+                        unsafe_allow_html=True)
+            # backtest stats
+            if row.get("bt_signals"):
+                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+                bt_rows = ""
+                for lbl, key, fmt in [
+                    ("Tín hiệu BUY","bt_signals","d"),
+                    ("Win Rate","bt_win_rate",".1f%"),
+                    ("Avg Return","bt_avg_return","+.2f%"),
+                    ("Avg Win","bt_avg_win","+.2f%"),
+                    ("Avg Loss","bt_avg_loss","+.2f%"),
+                    ("Max Loss Streak","bt_max_loss_streak","d"),
+                    ("Fwd Days","bt_forward_days","d"),
+                ]:
+                    v = row.get(key)
+                    if v is None: continue
+                    if fmt == "d": s = str(int(v))
+                    elif fmt.endswith("%"): s = f'{float(v):{fmt[:-1]}}'
+                    else: s = str(v)
+                    bt_rows += (f'<tr><td style="color:#94a3b8;">{lbl}</td>'
+                                f'<td style="font-family:var(--mono);">{s}</td></tr>')
+                st.markdown(f'<table class="sum-table"><thead><tr>'
+                            f'<th>Backtest</th><th>Kết quả</th>'
+                            f'</tr></thead><tbody>{bt_rows}</tbody></table>',
+                            unsafe_allow_html=True)
+
+        # ── Confirmations + Commentary ────────────────────────────────────
+        confirms = row.get("confirmations") or []
+        if confirms:
+            conf_html = "".join(f'<span class="conf-badge">{c}</span>' for c in confirms)
+            st.markdown(f'<div style="margin-top:8px;">{conf_html}</div>',
+                        unsafe_allow_html=True)
+        commentary = row.get("commentary", "")
+        if commentary:
+            body = "<br>".join(commentary.split("\n"))
+            st.markdown(f'<div class="commentary" style="margin-top:6px;">{body}</div>',
+                        unsafe_allow_html=True)
+
+        # ── Meta ──────────────────────────────────────────────────────────
+        st.caption(
+            f"Nguồn: {row.get('ohlcv_src','–')}  ·  "
+            f"{row.get('bars',0)} nến  ·  "
+            f"Ngày cuối: {row.get('last_date','–')}  ·  "
+            f"Quét lúc: {ts_}"
+        )
+
+
+def render_audit_page() -> None:
+    """Full audit history page — reads data/Profiler/*.json JSONL files."""
+    all_tickers = _list_audit_tickers()
+
+    if not all_tickers:
+        st.info("📂 Chưa có dữ liệu audit. Hãy chạy phân tích ít nhất một lần.")
+        return
+
+    # ― Load latest entry per ticker ――――――――――――――――――――――――――――――――――――――
+    latest_by_ticker: dict = {}
+    all_runs_count = 0
+    signal_changes = []
+    last_scan_ts   = ""
+    runs_count: dict = {}
+
+    for t in all_tickers:
+        h = _load_audit_history(t)
+        if not h:
+            continue
+        all_runs_count  += len(h)
+        runs_count[t]    = len(h)
+        latest_by_ticker[t] = h[0]
+        if h[0].get("run_ts", "") > last_scan_ts:
+            last_scan_ts = h[0].get("run_ts", "")
+        if len(h) >= 2 and h[0].get("signal") != h[1].get("signal"):
+            signal_changes.append({
+                "ticker": t,
+                "prev":   h[1].get("signal", ""),
+                "curr":   h[0].get("signal", ""),
+                "ts":     h[0].get("run_ts", ""),
+            })
+
+    # ― Overview metrics ――――――――――――――――――――――――――――――――――――――――――――――――
+    st.markdown("### 🗂️ Audit Log — Lịch sử phân tích")
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("📁 Mã đang theo dõi",  len(latest_by_ticker))
+    m2.metric("🔄 Tổng lần quét",     all_runs_count)
+    m3.metric("⚠️ Thay đổi tín hiệu", len(signal_changes))
+    m4.metric("⏱ Lần quét cuối",      last_scan_ts[:16].replace("T", " ") if last_scan_ts else "–")
+
+    # ― Signal changes alert ――――――――――――――――――――――――――――――――――――――――――――
+    if signal_changes:
+        chips = ""
+        for ch in signal_changes:
+            prev_c = _audit_signal_color(ch["prev"])
+            curr_c = _audit_signal_color(ch["curr"])
+            chips += (
+                f'<span style="display:inline-flex;align-items:center;gap:5px;'
+                f'background:#1a1f2e;border:1px solid #2d3347;border-radius:6px;'
+                f'padding:4px 10px;margin:3px;font-size:12px;font-weight:700;">'
+                f'<b>{ch["ticker"]}</b> '
+                f'<span style="color:{prev_c};">{ch["prev"]}</span>'
+                f' → <span style="color:{curr_c};">{ch["curr"]}</span>'
+                f'</span>'
+            )
+        st.markdown(
+            f'<div style="margin:6px 0 10px;"><span style="font-size:12px;color:#f97316;font-weight:600;">'
+            f'⚡ Tín hiệu thay đổi kể từ lần quét trước:</span><br>{chips}</div>',
+            unsafe_allow_html=True,
+        )
+
+    # ═══ FILTER BAR ══════════════════════════════════════════════════════
+    st.markdown("---")
+    fc1, fc2, fc3 = st.columns([2, 2, 1])
+    with fc1:
+        _SIG_ALL = "— Tất cả tín hiệu —"
+        _SIG_OPTIONS = [_SIG_ALL, "MUA", "THEO DÕI–TĂNG", "TRUNG LẬP", "THEO DÕI–GIẢM", "BÁN / TRÁNH"]
+        sig_filter = st.selectbox("🔔 Lọc theo tín hiệu", _SIG_OPTIONS,
+                                  key="audit_sig_filter")
+    with fc2:
+        ticker_filter_raw = st.text_input("🔍 Lọc theo mã (phân cách bằng dấu phẩy)",
+                                          placeholder="VD: HPG, TCH, CII",
+                                          key="audit_ticker_filter")
+        ticker_filter = {t.strip().upper() for t in ticker_filter_raw.split(",") if t.strip()}
+    with fc3:
+        sort_by = st.selectbox("📶 Sắp xếp", ["Tín hiệu", "Bull %↓", "Giá↓", "Thay đổi↓", "Mã A→Z"],
+                               key="audit_sort")
+
+    # ― Apply filters ―――――――――――――――――――――――――――――――――――――――――――――――――――
+    filtered = [
+        r for r in latest_by_ticker.values()
+        if "error" not in r
+        and (not ticker_filter or r["ticker"] in ticker_filter)
+        and (sig_filter == _SIG_ALL or r.get("signal", "") == sig_filter)
+    ]
+
+    _SIG_ORDER = ["MUA", "THEO DÕI–TĂNG", "TRUNG LẬP", "THEO DÕI–GIẢM", "BÁN / TRÁNH", ""]
+    def _sig_rank(r): return _SIG_ORDER.index(r.get("signal","")) if r.get("signal","") in _SIG_ORDER else 99
+    if sort_by == "Tín hiệu":
+        filtered.sort(key=_sig_rank)
+    elif sort_by == "Bull %↓":
+        filtered.sort(key=lambda r: r.get("bull_pct", 0) or 0, reverse=True)
+    elif sort_by == "Giá↓":
+        filtered.sort(key=lambda r: r.get("price") or 0, reverse=True)
+    elif sort_by == "Thay đổi↓":
+        filtered.sort(key=lambda r: r.get("pct_change") or 0, reverse=True)
+    else:
+        filtered.sort(key=lambda r: r["ticker"])
+
+    st.markdown(f"<span style='font-size:12px;color:#64748b;'>Hiển thị {len(filtered)} / {len(latest_by_ticker)} mã</span>",
+                unsafe_allow_html=True)
+
+    # ― Snapshot table (filtered) ――――――――――――――――――――――――――――――――――――――――
+    st.markdown("##### 📊 Snapshot các mã đang theo dõi (lần quét mới nhất)")
+    if not filtered:
+        st.info("Không có mã nào khớp với bộ lọc.")
+    else:
+        rows_html = "".join(
+            _audit_snapshot_row_html(r, runs_count.get(r["ticker"], 0))
+            for r in filtered
+        )
+        st.markdown(f"""
+<table class="sum-table">
+  <thead>
+    <tr>
+      <th>Mã</th><th>Giá</th><th>%Δ</th>
+      <th>Tín hiệu</th><th>Bull %</th>
+      <th>Regime</th><th>VSA</th><th>Xác nhận</th>
+      <th>Lần quét cuối</th><th>Số lần</th>
+    </tr>
+  </thead>
+  <tbody>{rows_html}</tbody>
+</table>
+""", unsafe_allow_html=True)
+
+    # ― Per-ticker drilldown ――――――――――――――――――――――――――――――――――――――――――――――――
+    st.markdown("---")
+    st.markdown("##### 🔍 Lịch sử chi tiết theo mã")
+
+    drilldown_options = [r["ticker"] for r in filtered] or all_tickers
+    sel = st.selectbox(
+        "Chọn mã cổ phiếu để xem chi tiết",
+        options=drilldown_options,
+        format_func=lambda t: f"{t}  —  {(latest_by_ticker.get(t) or {}).get('signal', '')}",
+        key="audit_sel_ticker",
+    )
+
+    if sel:
+        hist = _load_audit_history(sel)
+        if not hist:
+            st.warning(f"Không tìm thấy dữ liệu cho {sel}.")
+        else:
+            hist_asc   = list(reversed(hist))
+            latest_run = hist[0]
+
+            # ── Summary metrics ───────────────────────────────────────────
+            lc1,lc2,lc3,lc4,lc5 = st.columns(5)
+            lc1.metric("Giá mới nhất",  _f(latest_run.get("price")))
+            lc2.metric("Tín hiệu",      latest_run.get("signal", "–"))
+            lc3.metric("Bull %",        f'{latest_run.get("bull_pct", 0):.0f}%')
+            lc4.metric("Regime",        latest_run.get("regime_label") or latest_run.get("regime", "–"))
+            lc5.metric("Số lần quét",   len(hist))
+
+            # ── Trend chart ───────────────────────────────────────────────
+            if len(hist_asc) >= 2:
+                st.plotly_chart(
+                    _build_audit_trend_chart(hist_asc),
+                    use_container_width=True,
+                    config={"displayModeBar": False},
+                )
+
+            # ── Per-run detail expanders ──────────────────────────────────
+            st.markdown(f"**{len(hist)} lần quét** — nhấn vào từng dòng để xem đầy đủ chi tiết:")
+            for i, row in enumerate(hist):
+                prev = hist[i + 1] if i < len(hist) - 1 else None
+                _audit_detail_expander(row, i, prev)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  SIDEBAR
 # ═══════════════════════════════════════════════════════════════════════════════
 def render_sidebar():
@@ -1001,6 +1444,14 @@ def render_sidebar():
             st.toast("Cache đã xoá.", icon="✅")
 
         st.markdown("---")
+        page = st.radio(
+            "Trang",
+            ["📊 Phân tích", "🗂 Audit Log"],
+            horizontal=False,
+            label_visibility="collapsed",
+            key="nav_page",
+        )
+        st.markdown("---")
         st.markdown("""
 <div style="font-size:11.5px;color:#475569;line-height:2;">
 <b style="color:#64748b;letter-spacing:.5px;">PIPELINE DATA</b><br>
@@ -1016,7 +1467,7 @@ OBV · Williams %R · CCI
 </div>
 """, unsafe_allow_html=True)
 
-    return ticker_input, days, show_bb, show_ema, show_levels, analyse_btn
+    return ticker_input, days, show_bb, show_ema, show_levels, analyse_btn, page
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1146,7 +1597,11 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 def main() -> None:
-    ticker_input, days, show_bb, show_ema, show_levels, analyse_btn = render_sidebar()
+    ticker_input, days, show_bb, show_ema, show_levels, analyse_btn, page = render_sidebar()
+
+    if page == "🗂 Audit Log":
+        render_audit_page()
+        return
 
     # Session state init
     if "results" not in st.session_state:
