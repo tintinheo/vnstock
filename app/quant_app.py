@@ -1727,8 +1727,8 @@ def clean_data(df: pd.DataFrame) -> pd.DataFrame:
 
     df = df[required_cols] # Ensure column order and drop extras
     df = df.apply(pd.to_numeric, errors="coerce")
-    df["Volume"].fillna(0, inplace=True)
-    df.dropna(subset=["Close"], inplace=True)
+    df["Volume"] = df["Volume"].fillna(0)  # BUG-03 FIX: inplace on chained assignment is unsafe in pandas 2.x
+    df = df.dropna(subset=["Close"])
     
     df = df[df["Close"] > 0]
     if df.empty:
@@ -2013,7 +2013,9 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     rs       = avg_gain / avg_loss.replace(0, np.nan)
     df["RSI"] = (100 - 100 / (1 + rs))
     # T-1 FIX: avg_loss=0 (pure uptrend) → RSI should be 100, not 50
-    df["RSI"] = df["RSI"].where(avg_loss != 0, 100.0).fillna(50)
+    # ISSUE-10 FIX: preserve NaN for warmup bars (first 14) — fillna(50) was masking
+    # them as neutral which corrupted short-dataset scans. extract_latest() handles NaN.
+    df["RSI"] = df["RSI"].where(avg_loss != 0, 100.0)
 
     # Bollinger Bands (20-period, ±2σ)
     df["BB_Mid"]   = df["SMA20"]
@@ -2029,58 +2031,54 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     df["MACD_Hist"]   = df["MACD"] - df["MACD_Signal"]
     df["Vol_MA20"]    = df["Volume"].rolling(20).mean()
 
-    # Stochastic %K/%D (14,3)
-    sk = np.full(n, np.nan)
-    for i in range(13, n):
-        hh = np.nanmax(hgh[i-13:i+1]); ll = np.nanmin(low[i-13:i+1])
-        sk[i] = 100*(cls[i]-ll)/(hh-ll) if hh != ll else 50
-    df["STOCH_K"] = sk
+    # Stochastic %K/%D (14,3) — ISSUE-11 FIX: vectorised rolling max/min
+    # Python loops over 400+ rows were 10-100× slower than pandas rolling ops.
+    _roll_high14 = df["High"].rolling(14).max()
+    _roll_low14  = df["Low"].rolling(14).min()
+    _hh_ll       = (_roll_high14 - _roll_low14).replace(0, np.nan)
+    df["STOCH_K"] = ((df["Close"] - _roll_low14) / _hh_ll * 100).fillna(50)
     df["STOCH_D"] = df["STOCH_K"].rolling(3).mean()
 
-    # ATR (Wilder 14)
-    tr = np.full(n, np.nan)
-    for i in range(1, n):
-        tr[i] = max(hgh[i]-low[i], abs(hgh[i]-cls[i-1]), abs(low[i]-cls[i-1]))
-    df["TR"]  = tr
-    df["ATR"] = df["TR"].ewm(alpha=1/14, min_periods=14, adjust=False).mean()
+    # ATR (Wilder 14) — ISSUE-11 FIX: vectorised True Range
+    _prev_close = df["Close"].shift(1)
+    _hl         = df["High"] - df["Low"]
+    _hc         = (df["High"] - _prev_close).abs()
+    _lc         = (df["Low"]  - _prev_close).abs()
+    df["TR"]    = pd.concat([_hl, _hc, _lc], axis=1).max(axis=1)
+    df["ATR"]   = df["TR"].ewm(alpha=1/14, min_periods=14, adjust=False).mean()
 
-    # OBV
-    obv = np.zeros(n)
-    for i in range(1, n):
-        obv[i] = obv[i-1] + (vol[i] if cls[i]>cls[i-1] else (-vol[i] if cls[i]<cls[i-1] else 0))
-    df["OBV"]      = obv
-    df["OBV_MA20"] = df["OBV"].rolling(20).mean()
+    # OBV — ISSUE-11 FIX: vectorised cumulative signed volume
+    _price_dir    = np.sign(df["Close"].diff())
+    df["OBV"]     = (df["Volume"] * _price_dir).fillna(0).cumsum()
+    df["OBV_MA20"]= df["OBV"].rolling(20).mean()
 
-    # ADX/+DI/-DI (14)
-    pdm = np.full(n, np.nan); ndm = np.full(n, np.nan)
-    for i in range(1, n):
-        up   = hgh[i]-hgh[i-1]; down = low[i-1]-low[i]
-        pdm[i] = up   if (up > down and up > 0)   else 0.0
-        ndm[i] = down if (down > up and down > 0) else 0.0
-    df["_PDM"] = pdm; df["_NDM"] = ndm
+    # ADX/+DI/-DI (14) — ISSUE-11 FIX: vectorised directional movement
+    _up_move   = df["High"].diff()
+    _down_move = -(df["Low"].diff())   # drop in Low is positive down-move
+    df["_PDM"] = np.where((_up_move   > _down_move) & (_up_move   > 0), _up_move,   0.0)
+    df["_NDM"] = np.where((_down_move > _up_move)   & (_down_move > 0), _down_move, 0.0)
     atr14 = df["TR"].ewm(alpha=1/14, min_periods=14, adjust=False).mean() * 14
-    pdm14 = df["_PDM"].ewm(alpha=1/14, min_periods=14, adjust=False).mean() * 14
-    ndm14 = df["_NDM"].ewm(alpha=1/14, min_periods=14, adjust=False).mean() * 14
+    pdm14 = pd.Series(df["_PDM"], index=df.index).ewm(alpha=1/14, min_periods=14, adjust=False).mean() * 14
+    ndm14 = pd.Series(df["_NDM"], index=df.index).ewm(alpha=1/14, min_periods=14, adjust=False).mean() * 14
     df["+DI"] = 100 * pdm14 / (atr14 + 1e-9)
     df["-DI"] = 100 * ndm14 / (atr14 + 1e-9)
     df["DX"]  = 100 * abs(df["+DI"]-df["-DI"]) / (df["+DI"]+df["-DI"]+1e-9)
     df["ADX"] = df["DX"].ewm(alpha=1/14, min_periods=14, adjust=False).mean()
     df.drop(columns=["_PDM","_NDM","DX","TR"], inplace=True)
 
-    # Williams %R (14)
-    wr = np.full(n, np.nan)
-    for i in range(13, n):
-        hh = np.nanmax(hgh[i-13:i+1]); ll = np.nanmin(low[i-13:i+1])
-        wr[i] = -100*(hh-cls[i])/(hh-ll) if hh != ll else -50
-    df["WILLIAMS_R"] = wr
+    # Williams %R (14) — ISSUE-11 FIX: vectorised rolling max/min
+    _wh14 = df["High"].rolling(14).max()
+    _wl14 = df["Low"].rolling(14).min()
+    _wdenom = (_wh14 - _wl14).replace(0, np.nan)
+    df["WILLIAMS_R"] = (-100 * (_wh14 - df["Close"]) / _wdenom).fillna(-50)
 
-    # CCI (20)
-    tp  = (df["High"]+df["Low"]+df["Close"])/3
-    cci = np.full(n, np.nan)
-    for i in range(19, n):
-        w = tp.values[i-19:i+1]; sma = np.mean(w); mad = np.mean(np.abs(w-sma))
-        cci[i] = (tp.values[i]-sma)/(0.015*mad+1e-9)
-    df["CCI"] = cci
+    # CCI (20) — ISSUE-11 FIX: vectorised rolling mean and MAD
+    # rolling.apply(..., raw=True) uses NumPy arrays internally — far faster than
+    # the pure-Python loop over individual windows.
+    _tp      = (df["High"] + df["Low"] + df["Close"]) / 3
+    _tp_mean = _tp.rolling(20).mean()
+    _tp_mad  = _tp.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    df["CCI"] = (_tp - _tp_mean) / (0.015 * _tp_mad.replace(0, np.nan))
     return df
 
 
@@ -2444,11 +2442,20 @@ def round_price_hose(price):
 
 
 def round_price_exchange(price: float, exchange: str = "HOSE") -> float:
-    """Round price to minimum tick for given exchange (H-02)."""
+    """Round price to minimum tick for given exchange (H-02).
+
+    BUG-06 FIX: HNX and UPCOM use 100 VND tick only for prices >= 10,000 VND.
+    Stocks below 10,000 VND use 10 VND tick (same as HOSE low-price tier).
+    Using a flat 100 VND tick for all HNX/UPCOM prices would generate invalid
+    order prices for cheap stocks (e.g., rounding 8,450 → 8,400 instead of 8,450).
+    """
     if pd.isna(price) or price <= 0:
         return 0
     p = float(price)
     if exchange in ("HNX", "UPCOM"):
+        # HNX/UPCOM: same tiered tick logic as HOSE for prices < 10,000 VND
+        if p < 10_000:
+            return round(p / 10) * 10
         return round(p / 100) * 100
     return round_price_hose(p)
 
@@ -2504,9 +2511,14 @@ def run_backtest(df: pd.DataFrame, initial_capital=INITIAL_CAPITAL,
     eq=np.array(eq,dtype=float); peak=np.maximum.accumulate(eq)
     dd=(eq-peak)/(peak+1e-9)*100
     # B-2 FIX: annualised Sharpe from daily equity curve (not per-trade PnL ratio)
-    daily_returns = np.diff(eq) / (eq[:-1] + 1e-9)
-    if len(daily_returns) > 1 and daily_returns.std() > 0:
-        sharpe_annualised = float((daily_returns.mean() / daily_returns.std()) * np.sqrt(252))
+    # BUG-07 FIX: exclude flat-equity periods (no open position) from Sharpe calculation.
+    # Including zero-return periods between trades artificially lowers std dev and
+    # inflates the Sharpe ratio — sometimes by 3-5× for low-frequency strategies.
+    daily_returns_raw = np.diff(eq) / (eq[:-1] + 1e-9)
+    # Only keep non-zero returns (active trading periods)
+    active_returns = daily_returns_raw[daily_returns_raw != 0.0]
+    if len(active_returns) > 1 and active_returns.std() > 0:
+        sharpe_annualised = float((active_returns.mean() / active_returns.std()) * np.sqrt(252))
     else:
         sharpe_annualised = 0.0
     metrics={"final_val":final_val,"profit":final_val-initial_capital,
@@ -2533,8 +2545,17 @@ MODEL_META = {
 }
 
 def forecast_linreg(prices, n_days):
-    x=np.arange(len(prices)); sl,ic,r,_,_=stats.linregress(x,prices)
-    fx=np.arange(len(prices),len(prices)+n_days); return sl*fx+ic, sl, r**2
+    # BUG-05 FIX: Regress on log-prices to avoid non-stationarity bias.
+    # Linear regression on raw price levels produces spuriously high R² for any
+    # trending series (classic time-series regression fallacy). Using log-prices
+    # makes the model estimate a compounding growth rate, which is financially
+    # meaningful. We then exponentiate to return forecast in VND.
+    log_p = np.log(np.array(prices, dtype=float))
+    x = np.arange(len(log_p))
+    sl, ic, r, _, _ = stats.linregress(x, log_p)
+    fx = np.arange(len(log_p), len(log_p) + n_days)
+    log_fc = sl * fx + ic
+    return np.exp(log_fc), sl, r**2
 
 def forecast_holt(prices, n_days, alpha=0.25, beta=0.10):
     prices=[float(p) for p in prices]
@@ -2548,20 +2569,50 @@ def forecast_holt(prices, n_days, alpha=0.25, beta=0.10):
 
 def forecast_monte_carlo(prices, n_days, n_sims=1000, seed=42, band_limit=0.07):
     """M-5 FIX: clip per-step log-returns to exchange circuit breaker band.
+    ISSUE-15 FIX: correct drift mu for truncated-normal censoring bias.
+    When draws from N(mu, sigma) are clipped to [-b, +b], the expected value
+    of the clipped draws differs from mu. In uptrending markets the bias is
+    negative (downward), causing the simulation to underestimate expected return.
+    We apply a one-step analytical correction using the censored-normal mean formula.
     HOSE default ±7%; pass band_limit=0.10 for HNX, 0.15 for UPCOM.
     """
     np.random.seed(seed)
-    log_r=np.diff(np.log(np.array(prices,dtype=float)))
-    mu=np.mean(log_r); sigma=np.std(log_r)*1.05
-    last=float(prices[-1])
-    # Clip individual daily returns to exchange band before accumulating
-    raw_sims = np.random.normal(mu, sigma, (n_sims, n_days))
+    log_r = np.diff(np.log(np.array(prices, dtype=float)))
+    mu    = np.mean(log_r)
+    sigma = np.std(log_r) * 1.05
+    last  = float(prices[-1])
+
+    # ISSUE-15 FIX: compute E[clip(X, -b, b)] where X ~ N(mu, sigma^2)
+    # using the censored-normal mean formula, then shift mu to compensate.
+    # E[clip(X,a,b)] = a*Φ(α) + [mu*(Φ(β)-Φ(α)) + sigma*(φ(α)-φ(β))] + b*(1-Φ(β))
+    # where α = (a-mu)/sigma, β = (b-mu)/sigma
+    if sigma > 1e-9:
+        a, b = -band_limit, band_limit
+        alpha = (a - mu) / sigma
+        beta  = (b - mu) / sigma
+        phi_a, phi_b = stats.norm.pdf(alpha), stats.norm.pdf(beta)
+        cdf_a, cdf_b = stats.norm.cdf(alpha), stats.norm.cdf(beta)
+        mu_clipped = (a * cdf_a
+                      + mu * (cdf_b - cdf_a) + sigma * (phi_a - phi_b)
+                      + b * (1 - cdf_b))
+        # Shift input mu so that post-clip drift matches historical drift
+        mu_adj = mu + (mu - mu_clipped)
+    else:
+        mu_adj = mu
+
+    raw_sims     = np.random.normal(mu_adj, sigma, (n_sims, n_days))
     clipped_sims = np.clip(raw_sims, -band_limit, band_limit)
-    sims=last*np.exp(np.cumsum(clipped_sims, axis=1))
-    return {k:np.percentile(sims,p,axis=0) for k,p in [("p10",10),("p25",25),("p50",50),("p75",75),("p90",90)]}
+    sims         = last * np.exp(np.cumsum(clipped_sims, axis=1))
+    return {k: np.percentile(sims, p, axis=0)
+            for k, p in [("p10", 10), ("p25", 25), ("p50", 50), ("p75", 75), ("p90", 90)]}
 
 def forecast_arima(prices, n_days):
     if not ARIMA_AVAILABLE or len(prices)<40: return None, None
+    # ISSUE-12 FIX: Limit training to last 252 bars (~1 trading year).
+    # VN market has structural breaks (COVID-2020, credit crash Q3-2022).
+    # Fitting a single ARIMA across 730 days spanning both breaks is mis-specified
+    # and produces wider, less reliable confidence intervals.
+    prices = prices[-252:] if len(prices) > 252 else prices
     # M-1 FIX: AIC-based order selection instead of fixed (2,1,2)
     orders_to_try = [(1,1,1), (2,1,2), (1,1,0), (0,1,1)]
     log_p = np.log(np.array(prices, dtype=float))
@@ -2706,7 +2757,8 @@ def show_df(df_or_styled, key=None):
                     )
         df_or_styled = df
     try:
-        st.dataframe(df_or_styled, width='stretch', key=key)
+        # ISSUE-09 FIX: width='stretch' was removed in Streamlit 1.x+; use use_container_width=True
+        st.dataframe(df_or_styled, use_container_width=True, key=key)
     except TypeError:
         st.dataframe(df_or_styled, key=key)
 
@@ -2812,7 +2864,7 @@ def scan_one_ticker(t: str, min_rows: int = 40):
 
     # ENH-32: Foreign investor room (from CafeF)
     try:
-        _sh_d = fetch_cafef_shareholder_structure(t)
+        _sh_d = fetch_cafef_shareholders(t)  # BUG-01 FIX: was fetch_cafef_shareholder_structure (undefined)
         _foreign_pct = _sh_d.get("foreign_pct", 0)
     except Exception:
         _foreign_pct = 0
@@ -3435,14 +3487,14 @@ def fetch_ssi_realtime_price(ticker: str) -> dict:
         floor   = _f("floorPrice")
         vol     = _f("matchedVolume") or _f("totalVolume")
         pct     = ((price - ref) / ref * 100) if ref > 0 and price > 0 else 0
-        # Normalise: SSI sometimes returns prices in thousands VND
-        for val in [price, ref, ceiling, floor]:
-            if 0 < val < 500:
-                price    *= 1000
-                ref      *= 1000
-                ceiling  *= 1000
-                floor    *= 1000
-                break
+        # BUG-04 FIX: Only check `price` for the thousands-VND normalisation trigger.
+        # Old code checked any of [price, ref, ceiling, floor] which could incorrectly
+        # scale a legitimately-priced 400 VND UPCOM stock by ×1000.
+        if 0 < price < 500:
+            price   *= 1000
+            ref     *= 1000
+            ceiling *= 1000
+            floor   *= 1000
         if price <= 0: return {}
         _log.info(f"SSI iboard-query ✅ {ticker}: price={price:,.0f} ref={ref:,.0f} ceil={ceiling:,.0f} floor={floor:,.0f}")
         return {"price": price, "reference": ref, "ceiling": ceiling, "floor": floor,
@@ -3654,12 +3706,11 @@ def fetch_ssi_ticker_full(ticker: str) -> dict:
         ceil_  = _fv("ceiling") or _fv("ceilingPrice")
         floor_ = _fv("floor") or _fv("floorPrice")
 
-        # Normalise: SSI sometimes returns prices in thousands
-        for val in [price, ref, ceil_, floor_]:
-            if 0 < val < 500:
-                price  *= 1000; ref   *= 1000
-                ceil_  *= 1000; floor_ *= 1000
-                break
+        # BUG-04 FIX: check price alone; do not iterate all fields (cheap UPCOM stocks
+        # legitimately priced < 500 VND would be scaled incorrectly otherwise)
+        if 0 < price < 500:
+            price  *= 1000; ref   *= 1000
+            ceil_  *= 1000; floor_ *= 1000
 
         if price <= 0:
             return {}
@@ -3865,7 +3916,10 @@ def fetch_dnse_ohlc_analysis(ticker: str) -> dict:
     Returns a structured dict with technicals, price levels, risk scores.
     """
     df, src, err = download_data(ticker, days=730, min_rows=40)
-    if df is None or df.empty or "Close" in df.columns is False:
+    # BUG-02 FIX: '"Close" in df.columns is False' is a Python chained-comparison bug
+    # — it evaluates as '("Close" in df.columns) AND (df.columns is False)' which is
+    # always False. Correct form is '"Close" not in df.columns'.
+    if df is None or df.empty or "Close" not in df.columns:
         return {"error": "No OHLC data available"}
 
     # Ensure indicators are computed
@@ -3951,7 +4005,15 @@ def fetch_dnse_ohlc_analysis(ticker: str) -> dict:
     implied_eps= price / sector_pe   # rough EPS from current price / sector PE
     implied_bvps = price * 0.6       # rough BVPS estimate (conservative)
 
-    # Technical-implied fair value (sector PE applied to implied EPS, adjusted for momentum)
+    # BUG-08 NOTE: 'tech_fair_value' below is NOT a true fundamental valuation.
+    # It is a momentum-anchored price adjustment:
+    #   implied_eps = price / sector_pe
+    #   tech_fair_value = implied_eps * adj_pe
+    #                   = (price / sector_pe) * (sector_pe * clamp(1+ret3m*0.3))
+    #                   = price * clamp(1 + ret3m*0.3, 0.7, 1.3)
+    # This is a circular tautology — the result is always near current price.
+    # It is ONLY used as a directional technical signal (upside/downside %).
+    # Real intrinsic value requires EPS and BVPS from financial statements (TCBS/VNDirect).
     momentum_adj = 1.0 + (ret3m * 0.3)  # if momentum positive, PE expands slightly
     adj_pe = sector_pe * max(0.7, min(1.3, momentum_adj))
     tech_fair_value = implied_eps * adj_pe
@@ -3998,6 +4060,10 @@ def fetch_dnse_ohlc_analysis(ticker: str) -> dict:
         "implied_eps":     implied_eps,
         "implied_bvps":    implied_bvps,
         "tech_fair_value": tech_fair_value,
+        # BUG-08 DISCLOSURE: tech_fair_value is a momentum-adjusted technical target,
+        # NOT an intrinsic valuation. Formula: price*(1+ret3m*0.3) — price-anchored.
+        # Real IV requires EPS/BVPS from TCBS/VNDirect financial statements.
+        "tech_fair_value_note": "⚠️ Mục tiêu kỹ thuật (không phải giá trị cơ bản). Cần EPS/BVPS thực để định giá.",
         "sector_pe":       sector_pe,
         "sector":          sector,
         "source":          src,

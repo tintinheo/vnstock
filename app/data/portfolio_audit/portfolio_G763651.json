@@ -1,0 +1,25 @@
+[
+  {
+    "run_id": "20260315_161630",
+    "ts": "2026-03-15 16:16:30",
+    "account_number": "G763651",
+    "export_time": "14/03/2026 04:09:38",
+    "metrics": {
+      "total_cost": 37728000.0,
+      "total_mkt_value": 38021000.0,
+      "total_pnl_vnd": 293000.0,
+      "total_pnl_pct": 0.78,
+      "total_tax": 38021,
+      "net_pnl": 254979.0,
+      "net_pnl_pct": 0.68,
+      "n_winning": 11,
+      "n_losing": 6,
+      "n_breakeven": 1,
+      "n_positions": 18
+    },
+    "n_winning": 11,
+    "n_losing": 6,
+    "n_breakeven": 1,
+    "price_source": "ssi_file"
+  }
+]
