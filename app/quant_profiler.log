@@ -6,3 +6,12 @@
 2026-03-15 20:15:15 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
 2026-03-15 20:15:28 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
 2026-03-15 20:16:26 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
+2026-03-15 20:41:38 INFO     quant_profiler │ CEO  price=15200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=1  bear=15  confirmed=True
+2026-03-15 20:42:52 INFO     quant_profiler │ TCH  price=15100  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=BEAR_TREND  bull=8  bear=13  confirmed=True
+2026-03-15 20:42:54 INFO     quant_profiler │ CII  price=16650  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=BEAR_TREND  bull=7  bear=12  confirmed=True
+2026-03-15 20:42:55 INFO     quant_profiler │ HHV  price=12500  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=12  bear=10  confirmed=False
+2026-03-15 20:42:56 INFO     quant_profiler │ POW  price=13300  signal=THEO DÕI–GIẢM  VSA=DISTRIB  regime=HIGH_VOL  bull=8  bear=14  confirmed=True
+2026-03-15 20:43:30 WARNING  quant_profiler │ fetch_ohlcv: all sources failed for CEP
+2026-03-15 20:43:55 INFO     quant_profiler │ CEO  price=15200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=1  bear=15  confirmed=True
+2026-03-15 20:45:34 INFO     quant_profiler │ HUT  price=16300  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=9  bear=4  confirmed=False
+2026-03-15 20:47:43 INFO     quant_profiler │ SHS  price=16400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=15  confirmed=True
