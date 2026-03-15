@@ -1,0 +1,8 @@
+2026-03-15 19:59:55 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  bull=3  bear=10
+2026-03-15 20:00:08 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  bull=3  bear=10
+2026-03-15 20:00:17 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  bull=3  bear=10
+2026-03-15 20:00:25 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  bull=3  bear=10
+2026-03-15 20:02:33 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  bull=3  bear=10
+2026-03-15 20:15:15 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
+2026-03-15 20:15:28 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
+2026-03-15 20:16:26 INFO     quant_profiler │ HPG  price=26650  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=3  bear=10  confirmed=True
