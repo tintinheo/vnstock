@@ -897,27 +897,62 @@ def render_commentary(r: dict) -> None:
 
 
 def render_backtest(r: dict) -> None:
-    """Walk-forward historical accuracy stats in a collapsible expander."""
-    bt_n = r.get("bt_signals", 0)
-    if not bt_n:
+    """Walk-forward backtest stats for 3 / 5 / 7 / 10-day timeframes."""
+    _TIMEFRAMES = [
+        ("bt3",  "3 ngày"),
+        ("bt5",  "5 ngày"),
+        ("bt7",  "7 ngày"),
+        ("bt10", "10 ngày"),
+    ]
+    # Collect available timeframes
+    available = [(pfx, lbl) for pfx, lbl in _TIMEFRAMES if r.get(f"{pfx}_signals")]
+    if not available:
         return
-    win = r.get("bt_win_rate",        0)
-    avg = r.get("bt_avg_return",      0)
-    fwd = r.get("bt_forward_days",   10)
-    aw  = r.get("bt_avg_win",         0)
-    al  = r.get("bt_avg_loss",        0)
-    ml  = r.get("bt_max_loss_streak", 0)
-    win_cls = "col-green" if win >= 55 else "col-orange" if win >= 45 else "col-red"
-    with st.expander(f"📊 Walk-Forward Backtest  ·  {bt_n} tín hiệu BUY  ·  {fwd} ngày"):
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Win Rate",              f"{win:.1f}%")
-        c2.metric(f"Avg Return ({fwd}d)",  f"{avg:+.2f}%")
-        c3.metric("Avg Win / Loss",        f"{aw:+.1f}% / {al:+.1f}%")
-        c4.metric("Max Loss Streak",       f"{ml} lần")
+
+    total_signals = r.get(f"{available[0][0]}_signals", 0)
+    with st.expander(f"📊 Walk-Forward Backtest  ·  {total_signals} tín hiệu BUY  ·  {len(available)} khung thời gian"):
+        # Header row of metric columns
+        cols = st.columns(len(available))
+        for col, (pfx, lbl) in zip(cols, available):
+            win = r.get(f"{pfx}_win_rate", 0)
+            avg = r.get(f"{pfx}_avg_return", 0)
+            col.metric(
+                f"Win% — {lbl}",
+                f"{win:.1f}%",
+                delta=f"avg {avg:+.2f}%",
+                delta_color="normal",
+            )
+
+        # Detail table
+        rows_html = ""
+        for pfx, lbl in available:
+            n   = r.get(f"{pfx}_signals",         0)
+            win = r.get(f"{pfx}_win_rate",         0)
+            avg = r.get(f"{pfx}_avg_return",       0)
+            aw  = r.get(f"{pfx}_avg_win",          0)
+            al  = r.get(f"{pfx}_avg_loss",         0)
+            ml  = r.get(f"{pfx}_max_loss_streak",  0)
+            w_c = "color:#22c55e" if win >= 55 else "color:#f97316" if win >= 45 else "color:#ef4444"
+            a_c = "color:#22c55e" if avg >= 0 else "color:#ef4444"
+            rows_html += (
+                f'<tr><td><b>{lbl}</b></td>'
+                f'<td>{n}</td>'
+                f'<td style="{w_c};font-weight:600">{win:.1f}%</td>'
+                f'<td style="{a_c}">{avg:+.2f}%</td>'
+                f'<td style="color:#22c55e">{aw:+.2f}%</td>'
+                f'<td style="color:#ef4444">{al:+.2f}%</td>'
+                f'<td>{ml}</td></tr>'
+            )
+        st.markdown(
+            f'<table class="sum-table"><thead><tr>'
+            f'<th>Khung</th><th>Tín hiệu</th><th>Win%</th>'
+            f'<th>Avg%</th><th>Avg Thắng</th><th>Avg Thua</th><th>Thua liên tiếp tối đa</th>'
+            f'</tr></thead><tbody>{rows_html}</tbody></table>',
+            unsafe_allow_html=True,
+        )
         st.caption(
-            f"Phương pháp: tín hiệu MUA (bull% ≥ 65) → mua tại close → giữ {fwd} ngày. "
-            f"Chỉ dùng MA + RSI + MACD trên dữ liệu lịch sử đã có. "
-            f"Không tính phí, slippage, thanh khoản. Dùng để tham khảo độ tin cậy lịch sử."
+            "Phương pháp: tín hiệu MUA (bull% ≥ 65) → mua tại close → đo sau N ngày. "
+            "Chỉ dùng MA + RSI + MACD. Không tính phí, slippage, thanh khoản."
         )
 
 
@@ -1187,30 +1222,34 @@ def _audit_detail_expander(row: dict, idx: int, prev_row: dict | None) -> None:
                         f'<th>Mục</th><th>Giá trị</th>'
                         f'</tr></thead><tbody>{tp_rows}</tbody></table>',
                         unsafe_allow_html=True)
-            # backtest stats
-            if row.get("bt_signals"):
+            # backtest stats — multi-timeframe (bt3 / bt5 / bt7 / bt10)
+            _bt_pfxs = [("bt3","3d"),("bt5","5d"),("bt7","7d"),("bt10","10d")]
+            _bt_avail = [(p, l) for p, l in _bt_pfxs if row.get(f"{p}_signals")]
+            if _bt_avail:
                 st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
                 bt_rows = ""
-                for lbl, key, fmt in [
-                    ("Tín hiệu BUY","bt_signals","d"),
-                    ("Win Rate","bt_win_rate",".1f%"),
-                    ("Avg Return","bt_avg_return","+.2f%"),
-                    ("Avg Win","bt_avg_win","+.2f%"),
-                    ("Avg Loss","bt_avg_loss","+.2f%"),
-                    ("Max Loss Streak","bt_max_loss_streak","d"),
-                    ("Fwd Days","bt_forward_days","d"),
-                ]:
-                    v = row.get(key)
-                    if v is None: continue
-                    if fmt == "d": s = str(int(v))
-                    elif fmt.endswith("%"): s = f'{float(v):{fmt[:-1]}}'
-                    else: s = str(v)
-                    bt_rows += (f'<tr><td style="color:#94a3b8;">{lbl}</td>'
-                                f'<td style="font-family:var(--mono);">{s}</td></tr>')
-                st.markdown(f'<table class="sum-table"><thead><tr>'
-                            f'<th>Backtest</th><th>Kết quả</th>'
-                            f'</tr></thead><tbody>{bt_rows}</tbody></table>',
-                            unsafe_allow_html=True)
+                # header sub-row
+                for pfx, lbl in _bt_avail:
+                    n   = row.get(f"{pfx}_signals", 0)
+                    win = row.get(f"{pfx}_win_rate", 0)
+                    avg = row.get(f"{pfx}_avg_return", 0)
+                    ml  = row.get(f"{pfx}_max_loss_streak", 0)
+                    w_c = "#22c55e" if win >= 55 else "#f97316" if win >= 45 else "#ef4444"
+                    a_c = "#22c55e" if avg >= 0 else "#ef4444"
+                    bt_rows += (
+                        f'<tr>'
+                        f'<td style="color:#94a3b8;">{lbl} ({n}✓)</td>'
+                        f'<td style="font-family:var(--mono);color:{w_c}">{win:.1f}%</td>'
+                        f'<td style="font-family:var(--mono);color:{a_c}">{avg:+.2f}%</td>'
+                        f'<td style="font-family:var(--mono);color:#94a3b8">↓max {ml}</td>'
+                        f'</tr>'
+                    )
+                st.markdown(
+                    f'<table class="sum-table"><thead><tr>'
+                    f'<th>Backtest</th><th>Win%</th><th>Avg%</th><th>Streak</th>'
+                    f'</tr></thead><tbody>{bt_rows}</tbody></table>',
+                    unsafe_allow_html=True,
+                )
 
         # ── Confirmations + Commentary ────────────────────────────────────
         confirms = row.get("confirmations") or []

@@ -701,14 +701,15 @@ def classify_regime(df: pd.DataFrame) -> dict:
         return _EMPTY
 
 
-def backtest_ticker(df: pd.DataFrame, forward_days: int = 10) -> dict:
+def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = "bt") -> dict:
     """
     Walk-forward accuracy test on BUY signals over available history.
     Scans bars [200 .. end-forward_days], computes a simplified bull/bear
     score (SMA structure + RSI + MACD) at each bar, then measures the
     forward_days-ahead return to evaluate historical signal reliability.
     Uses only MA + RSI + MACD to avoid look-ahead bias from live RT data.
-    Returns bt_* metrics dict, or {} when fewer than 5 signals are found.
+    key_prefix: key namespace in returned dict (e.g. 'bt3', 'bt5', 'bt7', 'bt10').
+    Returns prefixed metrics dict, or {} when fewer than 5 signals are found.
     """
     if df is None or len(df) < 220:
         return {}
@@ -763,14 +764,15 @@ def backtest_ticker(df: pd.DataFrame, forward_days: int = 10) -> dict:
                 streak += 1; max_streak = max(max_streak, streak)
             else:
                 streak = 0
+        p = key_prefix
         return {
-            "bt_signals":         int(len(arr)),
-            "bt_win_rate":        round(float(len(wins) / len(arr) * 100), 1),
-            "bt_avg_return":      round(float(arr.mean()), 2),
-            "bt_avg_win":         round(float(wins.mean()),   2) if len(wins)   else 0.0,
-            "bt_avg_loss":        round(float(losses.mean()), 2) if len(losses) else 0.0,
-            "bt_max_loss_streak": int(max_streak),
-            "bt_forward_days":    forward_days,
+            f"{p}_signals":         int(len(arr)),
+            f"{p}_win_rate":        round(float(len(wins) / len(arr) * 100), 1),
+            f"{p}_avg_return":      round(float(arr.mean()), 2),
+            f"{p}_avg_win":         round(float(wins.mean()),   2) if len(wins)   else 0.0,
+            f"{p}_avg_loss":        round(float(losses.mean()), 2) if len(losses) else 0.0,
+            f"{p}_max_loss_streak": int(max_streak),
+            f"{p}_forward_days":    forward_days,
         }
     except Exception as e:
         _log.debug("backtest_ticker error: %s", e)
@@ -824,7 +826,10 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
 
     # ③b Regime classification + walk-forward backtest (vectorised, no I/O) ──
     _regime = classify_regime(df)
-    _bt     = backtest_ticker(df)
+    _bt3    = backtest_ticker(df, forward_days=3,  key_prefix="bt3")
+    _bt5    = backtest_ticker(df, forward_days=5,  key_prefix="bt5")
+    _bt7    = backtest_ticker(df, forward_days=7,  key_prefix="bt7")
+    _bt10   = backtest_ticker(df, forward_days=10, key_prefix="bt10")
 
     # ④ Extract latest values ─────────────────────────────────────────────────
     price    = rt.get("price")    or _last(df, "Close")
@@ -1106,7 +1111,10 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         "sma200_slope":        _regime.get("sma200_slope", 0.0),
         "signal_confirmed":    signal_confirmed,
         "signal_confirm_bars": _confirm_bars,
-        **_bt,
+        **_bt3,
+        **_bt5,
+        **_bt7,
+        **_bt10,
         "commentary":   commentary,
         "ohlcv_src":    ohlcv_src,
         "bars":         len(df),
@@ -1296,6 +1304,30 @@ def print_report(r: dict) -> None:
         print(f"  {'Mục tiêu TP2 (ATR×3.5)':<20}  {_fp(r['tp2']):>10}")
         if r["rr1"]:
             print(f"  {'R:R':<20}  {r['rr1']:>9.1f}:1")
+        print(sep2)
+
+    # Multi-timeframe backtest summary
+    _bt_rows = []
+    for _pfx, _lbl in [("bt3", "3 ngày"), ("bt5", "5 ngày"), ("bt7", "7 ngày"), ("bt10", "10 ngày")]:
+        if r.get(f"{_pfx}_signals"):
+            _wr  = r[f"{_pfx}_win_rate"]
+            _ar  = r[f"{_pfx}_avg_return"]
+            _aw  = r[f"{_pfx}_avg_win"]
+            _al  = r[f"{_pfx}_avg_loss"]
+            _mls = r[f"{_pfx}_max_loss_streak"]
+            _sig = r[f"{_pfx}_signals"]
+            _bt_rows.append(
+                f"  {_lbl:<8}  tín hiệu={_sig:>3}  win={_wr:>5.1f}%  "
+                f"avg={_ar:>+6.2f}%  thắng={_aw:>+6.2f}%  thua={_al:>+6.2f}%  "
+                f"thua liên tiếp tối đa={_mls}"
+            )
+    if _bt_rows:
+        print(f"\n  📊 Backtest walk-forward (SMA+RSI+MACD):\n")
+        print(f"  {'Khung':<8}  {'Tín hiệu':>9}  {'Win%':>6}  "
+              f"{'Avg%':>7}  {'Thắng%':>8}  {'Thua%':>8}  {'Thua liên tiếp tối đa'}")
+        print(f"  {'─'*80}")
+        for _row in _bt_rows:
+            print(_row)
         print(sep2)
 
     # Commentary
