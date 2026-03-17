@@ -67,7 +67,7 @@ except Exception:
 TIMEOUT      = 12
 RT_TIMEOUT   = 8
 HISTORY_DAYS = 400
-ASYNC_WORKERS = 8    # max parallel workers for async_fetch_many()
+ASYNC_WORKERS = 4    # reduced from 8 to avoid 403 rate-limiting from DNSE/SSI
 
 # ─── PROFILER AUDIT DIR ──────────────────────────────────────────────────────
 import json as _json
@@ -414,6 +414,7 @@ def async_fetch_many(
     total = len(symbols)
 
     def _worker(sym: str):
+        time.sleep(0.05 + 0.15 * float(np.random.rand()))  # jitter 50–200 ms
         try:
             res, df = analyse_ticker(sym, days=days, verbose=False, return_df=True)
             _log.info("async_fetch_many ✓ %s", sym)
@@ -545,7 +546,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     _rh14     = df["High"].rolling(14).max()
     _rl14     = df["Low"].rolling(14).min()
     _hh_ll    = (_rh14 - _rl14).replace(0, np.nan)
-    df["STOCH_K"] = ((df["Close"] - _rl14) / _hh_ll * 100).fillna(50)
+    df["STOCH_K"] = (df["Close"] - _rl14) / _hh_ll * 100   # retain NaN for insufficient data
     df["STOCH_D"] = df["STOCH_K"].rolling(3).mean()
 
     # ── ATR (Wilder 14) — vectorised True Range ───────────────────────────────
@@ -583,7 +584,7 @@ def calculate_indicators(df: pd.DataFrame) -> pd.DataFrame:
     # ── CCI (20) — vectorised via rolling.apply(raw=True) ────────────────────
     _tp      = (df["High"] + df["Low"] + df["Close"]) / 3
     _tp_mean = _tp.rolling(20).mean()
-    _tp_mad  = _tp.rolling(20).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    _tp_mad  = (_tp - _tp.rolling(20).mean()).abs().rolling(20).mean()
     df["CCI"]= (_tp - _tp_mean) / (0.015 * _tp_mad.replace(0, np.nan))
 
     # ── VSA — Volume Spread Analysis (Wyckoff-based) ──────────────────────────
@@ -646,6 +647,53 @@ def _last_str(df: pd.DataFrame, col: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  D0a. PIVOT & FIBONACCI LEVELS
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def calc_monthly_pivots(df: pd.DataFrame) -> dict:
+    """
+    Monthly pivot points derived from last 20 bars (proxy for ~1 calendar month).
+    Returns {pp, r1, r2, s1, s2} or {} if insufficient data.
+    """
+    if df is None or len(df) < 20:
+        return {}
+    last20 = df.iloc[-20:]
+    H  = float(last20["High"].max())
+    L  = float(last20["Low"].min())
+    C  = float(df["Close"].iloc[-1])
+    PP = (H + L + C) / 3
+    return {
+        "monthly_pp": round(PP, 0),
+        "monthly_r1": round(2 * PP - L, 0),
+        "monthly_r2": round(PP + (H - L), 0),
+        "monthly_s1": round(2 * PP - H, 0),
+        "monthly_s2": round(PP - (H - L), 0),
+    }
+
+
+def calc_fibonacci_levels(df: pd.DataFrame, lookback: int = 20) -> dict:
+    """
+    Fibonacci retracement levels from highest high / lowest low over `lookback` bars.
+    Returns {swing_high, swing_low, fib_382, fib_500, fib_618} or {} if insufficient.
+    """
+    if df is None or len(df) < lookback:
+        return {}
+    window = df.iloc[-lookback:]
+    sh = float(window["High"].max())
+    sl = float(window["Low"].min())
+    rng = sh - sl
+    if rng <= 0:
+        return {}
+    return {
+        "fib_swing_high": round(sh, 0),
+        "fib_swing_low":  round(sl, 0),
+        "fib_382":        round(sh - 0.382 * rng, 0),
+        "fib_500":        round(sh - 0.500 * rng, 0),
+        "fib_618":        round(sh - 0.618 * rng, 0),
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  D0. REGIME CLASSIFIER  (multi-factor market-state detection)
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -701,7 +749,8 @@ def classify_regime(df: pd.DataFrame) -> dict:
         return _EMPTY
 
 
-def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = "bt") -> dict:
+def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = "bt",
+                    threshold: float = 65.0) -> dict:
     """
     Walk-forward accuracy test on BUY signals over available history.
     Scans bars [200 .. end-forward_days], computes a simplified bull/bear
@@ -709,6 +758,7 @@ def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = 
     forward_days-ahead return to evaluate historical signal reliability.
     Uses only MA + RSI + MACD to avoid look-ahead bias from live RT data.
     key_prefix: key namespace in returned dict (e.g. 'bt3', 'bt5', 'bt7', 'bt10').
+    threshold: minimum bull% to fire a BUY signal (matches live signal logic).
     Returns prefixed metrics dict, or {} when fewer than 5 signals are found.
     """
     if df is None or len(df) < 220:
@@ -749,7 +799,7 @@ def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = 
             total = bull + bear
             if total == 0:
                 continue
-            if bull / total * 100 >= 65:                # BUY signal fired
+            if bull / total * 100 >= threshold:     # BUY signal fired
                 fp = close[i + forward_days]
                 if fp > 0 and not np.isnan(fp):
                     returns.append((fp - p) / p * 100)
@@ -773,6 +823,7 @@ def backtest_ticker(df: pd.DataFrame, forward_days: int = 10, key_prefix: str = 
             f"{p}_avg_loss":        round(float(losses.mean()), 2) if len(losses) else 0.0,
             f"{p}_max_loss_streak": int(max_streak),
             f"{p}_forward_days":    forward_days,
+            f"{p}_threshold":       threshold,
         }
     except Exception as e:
         _log.debug("backtest_ticker error: %s", e)
@@ -825,7 +876,9 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     _log.debug("%s indicators computed — %d rows", symbol, len(df))
 
     # ③b Regime classification + walk-forward backtest (vectorised, no I/O) ──
-    _regime = classify_regime(df)
+    _regime  = classify_regime(df)
+    _pivots  = calc_monthly_pivots(df)
+    _fib     = calc_fibonacci_levels(df)
     _bt3    = backtest_ticker(df, forward_days=3,  key_prefix="bt3")
     _bt5    = backtest_ticker(df, forward_days=5,  key_prefix="bt5")
     _bt7    = backtest_ticker(df, forward_days=7,  key_prefix="bt7")
@@ -1111,6 +1164,8 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         "sma200_slope":        _regime.get("sma200_slope", 0.0),
         "signal_confirmed":    signal_confirmed,
         "signal_confirm_bars": _confirm_bars,
+        **_pivots,
+        **_fib,
         **_bt3,
         **_bt5,
         **_bt7,

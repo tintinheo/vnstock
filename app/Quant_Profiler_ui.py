@@ -28,9 +28,21 @@ from Quant_Profiler import (
     fetch_ssi_realtime,
     calculate_indicators,
     analyse_ticker,
+    async_fetch_many,
     save_profiler_audit,
     HISTORY_DAYS,
     _last,
+)
+from portfolio_engine import (
+    parse_portfolio_csv,
+    classify_settlement_status,
+    calculate_performance,
+    build_portfolio_summary,
+)
+from forecast_engine import (
+    promethee_ii_ranking,
+    monte_carlo_projection,
+    multi_horizon_forecast,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -456,6 +468,11 @@ def _adx_cls(adx, pdi, ndi) -> str:
     return "col-orange"
 
 
+def _safe(s: str) -> str:
+    """Sanitize a string for safe insertion into unsafe_allow_html HTML blocks."""
+    return str(s).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CHART
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -669,7 +686,7 @@ def render_price_header(r: dict) -> None:
   <div>
     <div class="ph-label">Mã · Tín hiệu</div>
     <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-top:3px;">
-      <span style="font-size:26px;font-weight:800;">{r['ticker']}</span>
+      <span style="font-size:26px;font-weight:800;">{_safe(r['ticker'])}</span>
       {_badge(sig)} {regime_html} {conf_flag} {ceil_flag}{flr_flag}
     </div>
   </div>
@@ -817,6 +834,25 @@ def render_indicator_cards(r: dict) -> None:
             f'<span class="{vsa_score_cls}">{vsa_score:+.1f}</span>',
             "−1 (distrib) → +1 (accum)"),
             unsafe_allow_html=True)
+    with r3c3:
+        _rk   = r.get("regime", "UNKNOWN")
+        _rl   = r.get("regime_label") or "–"
+        _rs   = r.get("regime_score", 0) or 0
+        _reg_css = {"BULL_TREND": "col-green", "BEAR_TREND": "col-red",
+                    "HIGH_VOL": "col-orange", "SIDEWAYS": "col-white"
+                    }.get(_rk, "col-white")
+        st.markdown(_card("🌍 Xu hưới thị trường",
+            f'<span class="{_reg_css}" style="font-size:16px;">{_rl}</span>',
+            f"Score: {_rs:+d} (−2 BEAR → +2 BULL)"),
+            unsafe_allow_html=True)
+    with r3c4:
+        _slope = r.get("sma200_slope", 0.0) or 0.0
+        _scls  = "col-green" if _slope > 0.3 else "col-red" if _slope < -0.3 else "col-orange"
+        _snote = "↑ Tăng" if _slope > 0.3 else "↓ Giảm" if _slope < -0.3 else "→ Đi ngang"
+        st.markdown(_card("SMA200 Slope",
+            f'<span class="{_scls}">{_slope:+.2f}%</span>',
+            f"{_snote} (20 phiên)"),
+            unsafe_allow_html=True)
 
 
 def render_ma_table(r: dict) -> None:
@@ -896,6 +932,253 @@ def render_commentary(r: dict) -> None:
 """, unsafe_allow_html=True)
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MONTE CARLO FAN CHART
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+def render_monte_carlo(r: dict, df: pd.DataFrame) -> None:
+    """Monte Carlo 10 000-path fan chart for the next 5 trading days."""
+    price = r.get("price") or 0
+    atr   = r.get("atr")   or 0
+    if price <= 0 or atr <= 0:
+        return
+
+    mc = monte_carlo_projection(price, atr, days=5, sims=10_000)
+    pp = mc.get("percentile_paths", {})
+    if not pp:
+        return
+
+    days_x = [f"T+{d+1}" for d in range(5)]
+    p5  = [price] + pp["p5"]
+    p50 = [price] + pp["p50"]
+    p95 = [price] + pp["p95"]
+    x_axis = ["T+0"] + days_x
+
+    fig = go.Figure()
+    # P5-P95 band
+    fig.add_trace(go.Scatter(
+        x=x_axis + x_axis[::-1],
+        y=p95 + p5[::-1],
+        fill="toself",
+        fillcolor="rgba(59,130,246,0.12)",
+        line=dict(color="rgba(0,0,0,0)"),
+        showlegend=True,
+        name="Dải P5–P95",
+    ))
+    # P5 line
+    fig.add_trace(go.Scatter(
+        x=x_axis, y=p5,
+        line=dict(color="#ef4444", width=1.5, dash="dot"),
+        name=f"P5 (xấu nhất): {mc['p5_downside']:,.0f}",
+    ))
+    # P50 median
+    fig.add_trace(go.Scatter(
+        x=x_axis, y=p50,
+        line=dict(color="#60a5fa", width=2),
+        name=f"P50 (kỳ vọng): {mc['expected_price']:,.0f}",
+    ))
+    # P95 line
+    fig.add_trace(go.Scatter(
+        x=x_axis, y=p95,
+        line=dict(color="#22c55e", width=1.5, dash="dot"),
+        name=f"P95 (tốt nhất): {mc['p95_upside']:,.0f}",
+    ))
+    # Current price reference
+    fig.add_hline(
+        y=price,
+        line=dict(color="#94a3b8", width=1, dash="dash"),
+        annotation_text=f"Hiện tại: {price:,.0f}",
+        annotation_position="bottom left",
+    )
+    fig.update_layout(
+        title=dict(
+            text=f"🎲 Monte Carlo — 10,000 kịch bản  ·  {r['ticker']}  ·  MDD P5: {mc['max_drawdown_p5']:+.1f}%",
+            font=dict(size=13),
+        ),
+        height=280,
+        margin=dict(t=40, b=30, l=10, r=10),
+        plot_bgcolor="#0e1117",
+        paper_bgcolor="#0e1117",
+        font=dict(color="#e2e8f0", size=11),
+        legend=dict(orientation="h", y=-0.15),
+        xaxis=dict(gridcolor="#1e2535"),
+        yaxis=dict(gridcolor="#1e2535", tickformat=",.0f"),
+    )
+    with st.expander(
+        f"🎲 Monte Carlo Projection  ·  P5={mc['p5_downside']:,.0f}  P50={mc['expected_price']:,.0f}  P95={mc['p95_upside']:,.0f}  ·  Vol={mc['vol_used']:.2f}%/ngày",
+        expanded=False,
+    ):
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.caption(
+            "⚠️ Phương pháp: Geometric Brownian Motion (GBM). "
+            "Vol = ATR/Giá (độ biến động ngày). Không tính drift (giả định trung lập). "
+            "P5 dùng làm ngưỡng cắt lỗ xác suất cao nhất. Bố tế bào: 10.000 đường giá."
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  MULTI-HORIZON FORECAST PANEL
+# ═══════════════════════════════════════════════════════════════════════════════
+
+_HORIZON_CSS = """
+<style>
+.horizon-card {
+  background: #141824;
+  border: 1px solid #2d3347;
+  border-radius: 10px;
+  padding: 16px;
+  height: 100%;
+}
+.horizon-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: #94a3b8;
+  margin-bottom: 10px;
+}
+.horizon-vote {
+  font-size: 17px;
+  font-weight: 800;
+  margin-bottom: 6px;
+}
+.horizon-conf-bar {
+  height: 6px;
+  border-radius: 3px;
+  background: #2d3347;
+  margin-bottom: 10px;
+}
+.horizon-conf-fill {
+  height: 6px;
+  border-radius: 3px;
+}
+.horizon-reason {
+  font-size: 11.5px;
+  color: #94a3b8;
+  line-height: 1.7;
+  margin-bottom: 3px;
+}
+.lstm-box {
+  background: #0e1117;
+  border: 1px solid #2d3347;
+  border-radius: 6px;
+  padding: 8px 12px;
+  margin-top: 10px;
+  font-size: 12px;
+}
+</style>
+"""
+
+
+def _conf_color(conf: float) -> str:
+    if conf >= 65:
+        return "#22c55e"
+    if conf >= 50:
+        return "#3b82f6"
+    if conf >= 35:
+        return "#f97316"
+    return "#ef4444"
+
+
+def render_forecast_horizons(r: dict, df: pd.DataFrame) -> None:
+    """3-column multi-horizon forecast panel with vote + confidence bars."""
+    fc = multi_horizon_forecast(r, df)
+    with st.expander(
+        f"🔭 Dự báo Đa Khung Thời gian  ·  Tổng hợp: {fc['overall_vote']}  ({fc['overall_conf']:.0f}%)",
+        expanded=False,
+    ):
+        st.markdown(_HORIZON_CSS, unsafe_allow_html=True)
+
+        # Overall summary banner
+        ov_color = _conf_color(fc["overall_conf"])
+        lstm_txt = ""
+        if fc["lstm_pred_pct"] is not None:
+            src_lbl = "LSTM" if fc["lstm_source"] == "lstm" else "Ridge ML"
+            lstm_txt = (
+                f'<div class="lstm-box">'
+                f'🧠 {src_lbl} 5 ngày: '
+                f'<b style="color:{"#22c55e" if fc["lstm_pred_pct"] >= 0 else "#ef4444"};font-size:15px;">'
+                f'{fc["lstm_pred_pct"]:+.2f}%</b>'
+                f'&nbsp;&nbsp;<span style="color:#64748b;font-size:10px;">({src_lbl})</span>'
+                f'</div>'
+            )
+        st.markdown(
+            f'<div style="background:#141824;border:1px solid {ov_color};border-radius:8px;'
+            f'padding:12px 18px;margin-bottom:14px;">'
+            f'<span style="font-size:11px;color:#94a3b8;text-transform:uppercase;letter-spacing:1px;">Kết luận tổng hợp</span><br>'
+            f'<span style="font-size:18px;font-weight:800;color:{ov_color};">{fc["overall_vote"]}</span>'
+            f'&nbsp;&nbsp;<span style="color:#64748b;font-size:12px;">({fc["overall_conf"]:.0f}% xác tín)</span>'
+            f'{lstm_txt}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+
+        cols = st.columns(3)
+        horizons = [
+            ("⏱ Ngắn hạn (3–5 ngày)", fc["short_vote"], fc["short_conf"], fc["short_reasons"]),
+            ("📅 Trung hạn (1 tháng)",   fc["mid_vote"],   fc["mid_conf"],   fc["mid_reasons"]),
+            ("📈 Dài hạn (3–6 tháng)",     fc["long_vote"],  fc["long_conf"],  fc["long_reasons"]),
+        ]
+        for col, (title, vote, conf, reasons) in zip(cols, horizons):
+            with col:
+                color     = _conf_color(conf)
+                fill_pct  = max(0, min(100, conf))
+                reasons_html = "".join(
+                    f'<div class="horizon-reason">• {rr}</div>'
+                    for rr in reasons
+                )
+                st.markdown(
+                    f'<div class="horizon-card">'
+                    f'<div class="horizon-title">{title}</div>'
+                    f'<div class="horizon-vote" style="color:{color};">{vote}</div>'
+                    f'<div class="horizon-conf-bar">'
+                    f'  <div class="horizon-conf-fill" style="width:{fill_pct}%;background:{color};"></div>'
+                    f'</div>'
+                    f'<div style="font-size:11px;color:#64748b;margin-bottom:10px;">{conf:.0f}% xác tín</div>'
+                    f'{reasons_html}'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+        # Pivot + Fibonacci details
+        pivots = fc.get("mid_pivots", {})
+        fib    = fc.get("mid_fib", {})
+        if pivots or fib:
+            st.markdown("---")
+            pc1, pc2 = st.columns(2)
+            if pivots:
+                with pc1:
+                    st.markdown("··· **Pivot Points (20 phiên gần nhất)**")
+                    piv_html = "".join(
+                        f'<tr><td>{k.replace("monthly_","").upper()}</td>'
+                        f'<td style="font-family:monospace;text-align:right;">{v:,.0f}</td></tr>'
+                        for k, v in pivots.items()
+                    )
+                    st.markdown(
+                        f'<table class="ma-table"><thead><tr><th>Mức</th><th>Giá</th></tr></thead>'
+                        f'<tbody>{piv_html}</tbody></table>',
+                        unsafe_allow_html=True,
+                    )
+            if fib:
+                with pc2:
+                    st.markdown("··· **Fibonacci Retracement**")
+                    fib_html = "".join(
+                        f'<tr><td>{k.replace("fib_","").upper().replace("SWING_HIGH","Swing High").replace("SWING_LOW","Swing Low")}</td>'
+                        f'<td style="font-family:monospace;text-align:right;">{v:,.0f}</td></tr>'
+                        for k, v in fib.items()
+                    )
+                    st.markdown(
+                        f'<table class="ma-table"><thead><tr><th>Mức Fib</th><th>Giá</th></tr></thead>'
+                        f'<tbody>{fib_html}</tbody></table>',
+                        unsafe_allow_html=True,
+                    )
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  BACKTEST
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
 def render_backtest(r: dict) -> None:
     """Walk-forward backtest stats for 3 / 5 / 7 / 10-day timeframes."""
     _TIMEFRAMES = [
@@ -910,6 +1193,9 @@ def render_backtest(r: dict) -> None:
         return
 
     total_signals = r.get(f"{available[0][0]}_signals", 0)
+    # Read threshold from first available backtest result (all share same threshold)
+    bt_thr = r.get(f"{available[0][0]}_threshold", 65.0)
+    is_bear_adj = bt_thr > 65.0
     with st.expander(f"📊 Walk-Forward Backtest  ·  {total_signals} tín hiệu BUY  ·  {len(available)} khung thời gian"):
         # Header row of metric columns
         cols = st.columns(len(available))
@@ -951,26 +1237,39 @@ def render_backtest(r: dict) -> None:
             unsafe_allow_html=True,
         )
         st.caption(
-            "Phương pháp: tín hiệu MUA (bull% ≥ 65) → mua tại close → đo sau N ngày. "
-            "Chỉ dùng MA + RSI + MACD. Không tính phí, slippage, thanh khoản."
+            f"🎯 Ngưỡng BUY: bull% ≥ {bt_thr:.0f}%"
+            + (" (nâng lên do BEAR_TREND — khớp với tín hiệu live)" if is_bear_adj else " (tiêu chuẩn)")
+            + "  —  Chỉ dùng MA + RSI + MACD. Không tính phí, slippage, thanh khoản."
         )
 
 
 def render_summary_table(results: list) -> None:
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 📋 Bảng Tổng Kết")
+
+    # Compute PROMETHEE ranking for valid results
+    valid_results = [r for r in results if "error" not in r and r.get("price")]
+    rank_df = promethee_ii_ranking(valid_results) if len(valid_results) >= 2 else pd.DataFrame()
+    rank_map = {row["ticker"]: row for _, row in rank_df.iterrows()} if not rank_df.empty else {}
+
     rows = ""
     for r in results:
         if "error" in r:
-            rows += (f'<tr><td><b>{r["ticker"]}</b></td>'
-                     f'<td colspan="8" class="col-red">❌ {r["error"]}</td></tr>')
+            rows += (f'<tr><td><b>{_safe(r["ticker"])}</b></td>'
+                     f'<td colspan="9" class="col-red">❌ {_safe(r["error"])}</td></tr>')
             continue
         pct_v  = r.get("pct_change", 0) or 0
         p_cls  = "col-pos" if pct_v > 0 else "col-neg" if pct_v < 0 else "col-flat"
         c_flag = " ⚠️" if r.get("at_ceiling") else ""
         f_flag = " ✅" if r.get("at_floor")   else ""
+        rk = rank_map.get(r["ticker"])
+        rank_html = (
+            f'<b style="color:#fbbf24;">#{rk["rank"]}</b>'
+            f'<span style="font-size:10px;color:#64748b;"> ({rk["net_flow"]:+.3f})</span>'
+            if rk is not None else "–"
+        )
         rows += f"""<tr>
-  <td><b style="font-size:15px;">{r['ticker']}</b></td>
+  <td><b style="font-size:15px;">{_safe(r['ticker'])}</b></td>
   <td>{_f(r.get('price'))}</td>
   <td class="{p_cls}">{_pct(pct_v)}</td>
   <td>{_f(r.get('rsi'), 1)}</td>
@@ -979,6 +1278,7 @@ def render_summary_table(results: list) -> None:
   <td>{(_f(r.get('kl_ratio'), 1) + '×') if r.get('kl_ratio') else '–'}</td>
   <td style="font-size:12px;color:var(--muted);">{r.get('trend_struct','–')}</td>
   <td>{_badge(r.get('signal',''))}{c_flag}{f_flag}</td>
+  <td>{rank_html}</td>
 </tr>"""
     st.markdown(f"""
 <table class="sum-table">
@@ -986,7 +1286,7 @@ def render_summary_table(results: list) -> None:
     <tr>
       <th>Mã</th><th>Giá</th><th>%Δ</th>
       <th>RSI</th><th>Stoch</th><th>ADX</th><th>KL×</th>
-      <th>Cấu trúc MA</th><th>Tín hiệu</th>
+      <th>Cấu trúc MA</th><th>Tín hiệu</th><th>MCDA Rank</th>
     </tr>
   </thead>
   <tbody>{rows}</tbody>
@@ -1111,7 +1411,7 @@ def _audit_snapshot_row_html(r: dict, runs: int) -> str:
     bc    = _audit_signal_color(sig)
     return (
         f'<tr>'
-        f'<td style="font-weight:700;font-size:14px;">{r["ticker"]}</td>'
+        f'<td style="font-weight:700;font-size:14px;">{_safe(r["ticker"])}</td>'
         f'<td style="font-family:var(--mono);">{_f(r.get("price"))}</td>'
         f'<td style="color:{pc};font-family:var(--mono);">{"+" if pct>=0 else ""}{pct:.1f}%</td>'
         f'<td style="color:{scol};font-weight:700;">{sig}</td>'
@@ -1485,7 +1785,7 @@ def render_sidebar():
         st.markdown("---")
         page = st.radio(
             "Trang",
-            ["📊 Phân tích", "🗂 Audit Log"],
+            ["📊 Phân tích", "📂 Portfolio Hub", "📡 Scanner", "🗂 Audit Log"],
             horizontal=False,
             label_visibility="collapsed",
             key="nav_page",
@@ -1629,7 +1929,406 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
         render_commentary(r)
 
     render_backtest(r)
+    render_monte_carlo(r, df)
+    render_forecast_horizons(r, df)
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  PORTFOLIO HUB
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_portfolio_hub() -> None:
+    """Portfolio Hub: CSV upload → T+2.5 settlement → P&L attribution."""
+    st.markdown("## 📂 Portfolio Hub")
+    st.caption("Tải file danh mục từ SSI/DNSE → phân tích P&L và trạng thái T+2 KRX tự động.")
+
+    # ── Upload or manual entry ────────────────────────────────────────────────
+    col_up, col_info = st.columns([2, 1])
+    with col_up:
+        uploaded = st.file_uploader(
+            "📁 Tải lên file danh mục (CSV hoặc XLSX)",
+            type=["csv", "xlsx", "xls"],
+            help="File từ SSI iBoard / Saturn. Hỗ trợ cả .xlsx và .csv.",
+            key="portfolio_upload",
+        )
+    with col_info:
+        st.markdown("""
+<div style="background:#141824;border:1px solid #2d3347;border-radius:8px;padding:12px;font-size:12px;color:#94a3b8;line-height:1.8;">
+<b style="color:#e2e8f0;">Định dạng hỗ trợ:</b><br>
+• <b style="color:#60a5fa;">SSI iBoard XLSX</b> — xuất từ mục Danh mục<br>
+• SSI Saturn / DNSE CSV export<br>
+• Cột cần có: <code>Mã CK</code>, <code>SL</code>, <code>Giá vốn</code><br>
+• Hoặc nhập tay bên dưới<br>
+<b style="color:#fbbf24;">T+2 KRX:</b> Cổ phiếu mua hôm nay về sau 2 phiên
+</div>
+""", unsafe_allow_html=True)
+
+    # Manual entry fallback
+    with st.expander("✏️ Nhập tay danh mục (nếu không có file)", expanded=not uploaded):
+        manual_txt = st.text_area(
+            "Nhập theo định dạng:  MÃ,SỐ_LƯỢNG,GIÁ_VỐN  (mỗi dòng một mã)",
+            placeholder="HPG,1000,20000\nVNM,500,60000\nTCH,2000,15000",
+            height=120,
+            key="portfolio_manual",
+        )
+
+    # ── Parse holdings ────────────────────────────────────────────────────────
+    holdings = None
+    if uploaded is not None:
+        try:
+            holdings = parse_portfolio_csv(uploaded)
+            st.success(f"✅ Đọc thành công {len(holdings)} mã từ file.")
+        except Exception as e:
+            st.error(f"❌ Không đọc được file: {e}")
+            st.info("💡 Thử nhập tay bên dưới hoặc kiểm tra lại định dạng CSV.")
+    elif manual_txt and manual_txt.strip():
+        rows = []
+        for line in manual_txt.strip().splitlines():
+            parts = [p.strip() for p in line.split(",")]
+            if len(parts) >= 3:
+                try:
+                    rows.append({
+                        "ticker":     parts[0].upper(),
+                        "qty":        float(parts[1].replace(",", "")),
+                        "avg_cost":   float(parts[2].replace(",", "")),
+                        "trade_date": None,
+                        "sector":     "",
+                    })
+                except ValueError:
+                    pass
+        if rows:
+            holdings = pd.DataFrame(rows)
+            st.info(f"📝 {len(holdings)} mã từ nhập tay.")
+
+    if holdings is None or holdings.empty:
+        st.markdown("""
+<div style="text-align:center;padding:48px;color:#475569;">
+    <div style="font-size:48px;">📂</div>
+    <p style="font-size:15px;margin-top:12px;">Chưa có danh mục. Tải file hoặc nhập tay bên trên.</p>
+</div>
+""", unsafe_allow_html=True)
+        return
+
+    # ── T+2 settlement status ─────────────────────────────────────────────────
+    from datetime import date as _date
+    holdings = classify_settlement_status(holdings, today=_date.today())
+
+    # ── Show editable holdings table ──────────────────────────────────────────
+    st.markdown("##### 📋 Danh mục (có thể chỉnh sửa)")
+    editable = st.data_editor(
+        holdings[["ticker", "qty", "avg_cost", "trade_date", "status"]].rename(columns={
+            "ticker": "Mã", "qty": "Số lượng", "avg_cost": "Giá vốn BQ",
+            "trade_date": "Ngày GD", "status": "Trạng thái T+2",
+        }),
+        use_container_width=True,
+        hide_index=True,
+        key="portfolio_editor",
+    )
+
+    # ── Fetch current prices (parallel, max 6 workers) ─────────────────────
+    import concurrent.futures as _cf
+    tickers_list = list(holdings["ticker"].unique())
+    def _fetch_price(tk):
+        try:
+            rt = fetch_ssi_realtime(tk)
+            return tk, (rt.get("price") or 0) if rt else 0
+        except Exception:
+            return tk, 0
+    with st.spinner(f"⏳ Lấy giá thực tế {len(tickers_list)} mã (song song)..."):
+        with _cf.ThreadPoolExecutor(max_workers=6) as _pool:
+            price_map = dict(_pool.map(_fetch_price, tickers_list))
+
+    # ── Calculate performance ─────────────────────────────────────────────────
+    perf_df  = calculate_performance(holdings, price_map)
+    summary  = build_portfolio_summary(perf_df)
+
+    # ── KPI tiles ─────────────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("##### 📊 Tổng quan danh mục")
+    k1, k2, k3, k4 = st.columns(4)
+    k1.metric(
+        "Giá trị thị trường",
+        f"{summary['total_value']:,.0f} ₫",
+    )
+    k2.metric(
+        "Vốn đầu tư",
+        f"{summary['total_cost']:,.0f} ₫",
+    )
+    pnl_val = summary["total_pnl"]
+    pnl_pct = summary["total_pnl_pct"]
+    k3.metric(
+        "Lãi/Lỗ chưa thực hiện",
+        f"{pnl_val:+,.0f} ₫",
+        delta=f"{pnl_pct:+.2f}%",
+        delta_color="normal",
+    )
+    k4.metric(
+        "Số mã",
+        str(summary["position_count"]),
+        delta=f"🏆 {summary['top_gainer']} ({summary['top_gainer_pct']:+.1f}%)" if summary["top_gainer"] else None,
+        delta_color="off",
+    )
+
+    # ── T+2.5 Holdings table ──────────────────────────────────────────────────
+    st.markdown("##### 🕐 Chi tiết P&L + Trạng thái T+2")
+
+    _STATUS_HTML = {
+        "settled":    '<span style="color:#22c55e;font-weight:700;">✅ Đã khớp</span>',
+        "t1_pending": '<span style="color:#f97316;font-weight:700;">⏳ T+1 Chờ về</span>',
+        "t2_pending": '<span style="color:#ef4444;font-weight:700;">⏰ T+2 Chờ về</span>',
+    }
+    rows_html = ""
+    for _, row in perf_df.sort_values("portfolio_weight", ascending=False).iterrows():
+        cp     = row.get("current_price", 0)
+        ac     = row.get("avg_cost", 0)
+        pnl    = row.get("unrealized_pnl", 0)
+        pnl_p  = row.get("pnl_pct", 0)
+        wt     = row.get("portfolio_weight", 0)
+        avail  = row.get("price_available", True)
+        stat   = _STATUS_HTML.get(row.get("status", "settled"), "")
+        pnl_c  = "color:#22c55e" if pnl >= 0 else "color:#ef4444"
+        cp_s   = f"{cp:,.0f}" if avail else "–"
+        pnl_s  = f"{pnl:+,.0f}" if avail else "–"
+        pnlp_s = f"{pnl_p:+.2f}%" if avail else "–"
+        rows_html += (
+            f'<tr>'
+            f'<td><b>{row["ticker"]}</b></td>'
+            f'<td style="font-family:monospace;">{int(row["qty"]):,}</td>'
+            f'<td style="font-family:monospace;">{ac:,.0f}</td>'
+            f'<td style="font-family:monospace;">{cp_s}</td>'
+            f'<td style="font-family:monospace;{pnl_c}">{pnl_s}</td>'
+            f'<td style="font-family:monospace;{pnl_c}">{pnlp_s}</td>'
+            f'<td style="font-family:monospace;">{wt:.1f}%</td>'
+            f'<td>{row.get("sector","")}</td>'
+            f'<td>{stat}</td>'
+            f'</tr>'
+        )
+    st.markdown(
+        f'<table class="sum-table"><thead><tr>'
+        f'<th>Mã</th><th>SL</th><th>Giá vốn</th><th>Giá hiện tại</th>'
+        f'<th>Lãi/Lỗ (₫)</th><th>Lãi/Lỗ (%)</th><th>Tỷ trọng</th><th>Ngành</th><th>T+2 KRX</th>'
+        f'</tr></thead><tbody>{rows_html}</tbody></table>',
+        unsafe_allow_html=True,
+    )
+
+    # ── Charts: Pie + Sector bar ──────────────────────────────────────────────
+    st.markdown("---")
+    ch1, ch2 = st.columns(2)
+    with ch1:
+        st.markdown("##### 🥧 Phân bổ danh mục theo mã")
+        pie_fig = go.Figure(go.Pie(
+            labels=perf_df["ticker"].tolist(),
+            values=perf_df["portfolio_weight"].tolist(),
+            hole=0.4,
+            textinfo="label+percent",
+            marker=dict(colors=[
+                "#3b82f6","#22c55e","#f97316","#a855f7","#06b6d4",
+                "#fbbf24","#ef4444","#94a3b8","#10b981","#6366f1",
+            ][:len(perf_df)]),
+        ))
+        pie_fig.update_layout(
+            height=280, margin=dict(t=10, b=10, l=10, r=10),
+            paper_bgcolor="#0e1117", font=dict(color="#e2e8f0", size=11),
+            legend=dict(orientation="h"),
+        )
+        st.plotly_chart(pie_fig, use_container_width=True, config={"displayModeBar": False})
+
+    with ch2:
+        st.markdown("##### 🏭 Phân bổ theo ngành")
+        sec = summary["sector_attribution"]
+        if sec:
+            bar_fig = go.Figure(go.Bar(
+                x=list(sec.values()),
+                y=list(sec.keys()),
+                orientation="h",
+                marker=dict(color="#3b82f6"),
+                text=[f"{v:.1f}%" for v in sec.values()],
+                textposition="inside",
+            ))
+            bar_fig.update_layout(
+                height=280, margin=dict(t=10, b=10, l=10, r=10),
+                plot_bgcolor="#0e1117", paper_bgcolor="#0e1117",
+                font=dict(color="#e2e8f0", size=11),
+                xaxis=dict(gridcolor="#1e2535", title="% Tỷ trọng"),
+                yaxis=dict(gridcolor="#1e2535"),
+            )
+            st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  SCANNER PAGE (REST polling + PROMETHEE II MCDA ranking)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_scanner() -> None:
+    """Real-time REST scanner with PROMETHEE II MCDA ranking."""
+    import time as _time
+
+    st.markdown("## 📡 Scanner — Chấm điểm MCDA Thời gian thực")
+    st.caption(
+        "Nhập danh sách mã → hệ thống chấm điểm và xếp hạng bằng PROMETHEE II. "
+        "Quét nhanh (Lite Mode): chỉ dùng giá real-time SSI. "
+        "Quét sâu (Deep Mode): phân tích đầy đủ 400 ngày."
+    )
+
+    col_inp, col_ctrl = st.columns([2, 1])
+    with col_inp:
+        scanner_input = st.text_area(
+            "🔍 Danh sách mã",
+            value=st.session_state.get("ticker_input", ""),
+            placeholder="VD: HPG, VNM, TCH, ACB, MBB, VCB",
+            height=80,
+            key="scanner_ticker_input",
+        )
+    with col_ctrl:
+        scan_mode  = st.radio("Chế độ quét", ["⚡ Lite (nhanh)", "🔬 Deep (đầy đủ)"],
+                              key="scanner_mode", horizontal=False)
+        auto_ref   = st.select_slider("🔄 Tự động làm mới", options=["Tắt", "30s", "60s"],
+                                      value="Tắt", key="scanner_autoref")
+        scan_btn   = st.button("▶ Quét ngay", type="primary", use_container_width=True)
+
+    tickers_raw = [
+        t.strip().upper()
+        for t in scanner_input.replace(";", ",").split(",")
+        if t.strip()
+    ]
+    tickers = list(dict.fromkeys(tickers_raw))  # deduplicate, preserve order
+
+    # Auto-refresh logic
+    if auto_ref != "Tắt" and "scanner_last_run" in st.session_state:
+        interval = 30 if auto_ref == "30s" else 60
+        elapsed  = _time.time() - st.session_state.get("scanner_last_run", 0)
+        if elapsed >= interval:
+            scan_btn = True
+
+    if not scan_btn or not tickers:
+        if not tickers:
+            st.info("← Nhập danh sách mã và nhấn **Quét ngay**.")
+        return
+
+    st.session_state["scanner_last_run"] = _time.time()
+
+    # ── Fetch data ────────────────────────────────────────────────────────────
+    scan_results = []
+    is_deep = "Deep" in scan_mode
+
+    with st.spinner(f"{'🔬 Phân tích sâu' if is_deep else '⚡ Quét nhanh'} {len(tickers)} mã..."):
+        if is_deep:
+            # Deep mode: full analyse_ticker — uses async parallel fetch
+            batch = async_fetch_many(tickers, days=400)
+            for tk in tickers:
+                pair = batch.get(tk)
+                if pair:
+                    res, df_ = pair
+                    scan_results.append(res)
+                    save_profiler_audit(res)
+        else:
+            # Lite mode: real-time price only (fast) — build minimal result dicts
+            for tk in tickers:
+                try:
+                    rt = fetch_ssi_realtime(tk)
+                    if rt and rt.get("price"):
+                        scan_results.append({
+                            "ticker":    tk,
+                            "price":     rt.get("price", 0),
+                            "pct_change":rt.get("pct_change", 0),
+                            "bull_pct":  50.0,   # neutral — no indicator data
+                            "kl_ratio":  None,
+                            "atr":       None,
+                            "signal":    "–",
+                            "signal_sym":"⚪",
+                            "rr1":       None,
+                        })
+                    else:
+                        scan_results.append({"ticker": tk, "error": "Không lấy được giá"})
+                except Exception as e:
+                    scan_results.append({"ticker": tk, "error": str(e)})
+
+    valid = [r for r in scan_results if "error" not in r and r.get("price")]
+    if not valid:
+        st.error("Không có dữ liệu hợp lệ. Kiểm tra lại kết nối SSI.")
+        return
+
+    # ── PROMETHEE II ranking ──────────────────────────────────────────────────
+    if is_deep and len(valid) >= 2:
+        rank_df = promethee_ii_ranking(valid)
+    else:
+        # Lite mode: rank by pct_change only
+        rank_df = pd.DataFrame([
+            {"ticker": r["ticker"], "rank": i + 1, "net_flow": 0.0,
+             "score_val": 50.0, "liq_val": 0.0, "vol_val": 0.0,
+             "signal": r.get("signal", "–"), "price": r["price"],
+             "pct_change": r.get("pct_change", 0)}
+            for i, r in enumerate(sorted(valid, key=lambda x: x.get("pct_change", 0), reverse=True))
+        ])
+
+    # ── Results table ─────────────────────────────────────────────────────────
+    st.markdown(f"#### 🏆 Kết quả xếp hạng  ({len(rank_df)} mã)  &nbsp;&nbsp; <span style='font-size:12px;color:#64748b;'>{'Deep Analysis' if is_deep else 'Lite Mode — chỉ giá RT'}</span>",
+                unsafe_allow_html=True)
+
+    _SIG_COLORS = {
+        "MUA":            "#22c55e",
+        "THEO DÕI–TĂNG":  "#3b82f6",
+        "TRUNG LẬP":     "#94a3b8",
+        "THEO DÕI–GIẢM": "#f97316",
+        "BÁN / TRÁNH":   "#ef4444",
+        "–":             "#475569",
+    }
+
+    rows_html = ""
+    r_lookup = {r["ticker"]: r for r in valid}
+    for _, row in rank_df.iterrows():
+        tk   = row["ticker"]
+        sig  = row.get("signal", "–")
+        sc   = _SIG_COLORS.get(sig, "#475569")
+        pr   = row.get("price", 0)
+        pct  = row.get("pct_change", 0) or 0
+        p_c  = "color:#22c55e" if pct > 0 else "color:#ef4444" if pct < 0 else "color:#94a3b8"
+        nf   = row.get("net_flow", 0)
+        rnk  = row.get("rank", "–")
+        sv   = row.get("score_val", 0)
+        lv   = row.get("liq_val", 0)
+        vv   = row.get("vol_val", 0)
+        rr   = r_lookup.get(tk, {}).get("rr1")
+        rr_s = f"{rr:.2f}:1" if rr else "–"
+        lv_s = f"{lv:.2f}×" if is_deep else "–"
+        vv_s = f"{vv:.2f}%" if is_deep else "–"
+        rows_html += (
+            f'<tr>'
+            f'<td><b style="color:#fbbf24;">#{rnk}</b></td>'
+            f'<td><b style="font-size:14px;">{_safe(tk)}</b></td>'
+            f'<td style="font-family:monospace;">{pr:,.0f}</td>'
+            f'<td style="font-family:monospace;{p_c}">{pct:+.2f}%</td>'
+            f'<td><span style="background:{sc}22;border:1px solid {sc};color:{sc};'
+            f'border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;">{sig}</span></td>'
+            f'<td style="font-family:monospace;">{nf:+.4f}</td>'
+            f'<td style="font-family:monospace;">{sv:.1f}</td>'
+            f'<td style="font-family:monospace;color:#94a3b8;">{lv_s}</td>'
+            f'<td style="font-family:monospace;color:#94a3b8;">{vv_s}</td>'
+            f'<td style="font-family:monospace;">{rr_s}</td>'
+            f'</tr>'
+        )
+
+    st.markdown(
+        f'<table class="sum-table"><thead><tr>'
+        f'<th>Hạng</th><th>Mã</th><th>Giá</th><th>%Δ</th>'
+        f'<th>Tín hiệu</th><th>NetFlow</th><th>Bull%</th>'
+        f'<th>Thanh khoản</th><th>Biến động</th><th>R:R</th>'
+        f'</tr></thead><tbody>{rows_html}</tbody></table>',
+        unsafe_allow_html=True,
+    )
+    st.caption(
+        "PROMETHEE II MCDA: Trọng số — Bull Score (50%), thanh khoản KL×MA20 (30%), biến động ATR/Giá (−20%). "
+        "Lite Mode không có đủ dữ liệu chỉ báo — chuyển sang Deep Mode để xếp hạng chính xác."
+    )
+
+    if auto_ref != "Tắt":
+        intv = int(auto_ref.replace("s",""))
+        elapsed = _time.time() - st.session_state.get("scanner_last_run", 0)
+        remaining = max(0, int(intv - elapsed))
+        st.info(f"🔄 Tự động làm mới sau ≈{remaining}s")
+        _time.sleep(1)   # 1s tick — do NOT block the full interval here
+        st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1640,6 +2339,14 @@ def main() -> None:
 
     if page == "🗂 Audit Log":
         render_audit_page()
+        return
+
+    if page == "📂 Portfolio Hub":
+        render_portfolio_hub()
+        return
+
+    if page == "📡 Scanner":
+        render_scanner()
         return
 
     # Session state init

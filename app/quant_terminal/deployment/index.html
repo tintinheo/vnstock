@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Quant Suite — Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg:    #0f1117;
+    --card:  #1a1f2e;
+    --bdr:   #2d3748;
+    --green: #22c55e;
+    --red:   #ef4444;
+    --muted: #64748b;
+    --text:  #e2e8f0;
+  }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Segoe UI', system-ui, sans-serif;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 48px 20px 60px;
+  }
+  header { text-align: center; margin-bottom: 44px; }
+  header h1 { font-size: 30px; font-weight: 800; letter-spacing: -0.5px; }
+  header h1 span { color: var(--green); }
+  #clock {
+    font-size: 13px; color: var(--muted); margin-top: 8px;
+    font-family: 'Consolas', monospace; font-variant-numeric: tabular-nums;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+    gap: 24px; width: 100%; max-width: 820px;
+  }
+  .card {
+    background: var(--card); border: 1px solid var(--bdr);
+    border-radius: 14px; padding: 28px 28px 22px;
+    text-decoration: none; color: inherit; display: block;
+    transition: border-color .2s, transform .15s, box-shadow .2s;
+  }
+  .card:hover {
+    border-color: var(--green);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 30px rgba(34,197,94,.08);
+  }
+  .card-top { display: flex; align-items: center; gap: 16px; margin-bottom: 14px; }
+  .icon { font-size: 34px; line-height: 1; }
+  .card-title { font-size: 19px; font-weight: 700; }
+  .card-sub { font-size: 12px; color: var(--muted); margin-top: 3px; }
+  .desc { font-size: 13px; color: #94a3b8; line-height: 1.65; }
+  .status-row {
+    display: flex; align-items: center; gap: 9px;
+    margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--bdr);
+  }
+  .dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--muted); flex-shrink: 0; transition: background .5s, box-shadow .5s;
+  }
+  .dot.up   { background: var(--green); box-shadow: 0 0 7px var(--green); }
+  .dot.down { background: var(--red);   box-shadow: 0 0 7px var(--red); }
+  .slabel { font-size: 12px; color: var(--muted); }
+  .kbd {
+    margin-left: auto;
+    background: #2d3748; border: 1px solid #475569;
+    border-radius: 5px; padding: 2px 9px;
+    font-size: 11px; color: var(--muted); font-family: 'Consolas', monospace;
+  }
+  footer {
+    margin-top: 52px; text-align: center;
+    color: var(--muted); font-size: 12px; line-height: 2;
+  }
+  footer code {
+    background: var(--card); padding: 1px 7px;
+    border-radius: 4px; font-family: 'Consolas', monospace;
+  }
+  .hint {
+    margin-top: 28px;
+    background: var(--card); border: 1px solid var(--bdr);
+    border-radius: 10px; padding: 14px 20px;
+    font-size: 12px; color: var(--muted);
+    max-width: 820px; width: 100%; text-align: center;
+    line-height: 1.8;
+  }
+  .hint kbd {
+    background: #1e293b; border: 1px solid #334155;
+    border-radius: 4px; padding: 1px 7px;
+    font-family: 'Consolas', monospace; font-size: 11px; color: #e2e8f0;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>📊 <span>Quant Suite</span> — Local Dashboard</h1>
+  <div id="clock">–</div>
+</header>
+
+<div class="grid">
+
+  <a class="card" href="http://127.0.0.1:8501" target="_blank">
+    <div class="card-top">
+      <div class="icon">🖥️</div>
+      <div>
+        <div class="card-title">Quant Terminal</div>
+        <div class="card-sub">Captain Seventh · Portfolio + Market Intel</div>
+      </div>
+    </div>
+    <div class="desc">
+      Portfolio P&amp;L · Scenario builder · Trade log<br>
+      Market breadth · FDI flow · Sector returns
+    </div>
+    <div class="status-row">
+      <div class="dot" id="dot1"></div>
+      <div class="slabel" id="lbl1">Đang kiểm tra…</div>
+      <span class="kbd">1</span>
+    </div>
+  </a>
+
+  <a class="card" href="http://127.0.0.1:8502" target="_blank">
+    <div class="card-top">
+      <div class="icon">📈</div>
+      <div>
+        <div class="card-title">Quant Profiler</div>
+        <div class="card-sub">VN Stock Technical Analyser · v1.0</div>
+      </div>
+    </div>
+    <div class="desc">
+      Bull/Bear score · Multi-timeframe backtest<br>
+      PROMETHEE II · Monte Carlo · Scanner
+    </div>
+    <div class="status-row">
+      <div class="dot" id="dot2"></div>
+      <div class="slabel" id="lbl2">Đang kiểm tra…</div>
+      <span class="kbd">2</span>
+    </div>
+  </a>
+
+</div>
+
+<div class="hint">
+  <kbd>1</kbd> Quant Terminal &nbsp;&nbsp;
+  <kbd>2</kbd> Quant Profiler &nbsp;&nbsp;
+  <kbd>S</kbd> Refresh status &nbsp;&nbsp;&nbsp;·&nbsp;&nbsp;&nbsp;
+  Status tự động cập nhật mỗi 5 giây
+</div>
+
+<footer>
+  Chạy <code>launch.bat</code> để khởi động &nbsp;·&nbsp; <code>stop.bat</code> để tắt<br>
+  Cổng 8501 (Terminal) &nbsp;·&nbsp; 8502 (Profiler) &nbsp;·&nbsp; localhost only &nbsp;·&nbsp; 2026
+</footer>
+
+<script>
+  // ── Live clock ─────────────────────────────────────────────────────────────
+  (function tick() {
+    const n = new Date();
+    document.getElementById('clock').textContent =
+      n.toLocaleDateString('vi-VN', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric' }) +
+      '  ·  ' + n.toLocaleTimeString('vi-VN', { hour12: false });
+    setTimeout(tick, 1000);
+  })();
+
+  // ── Status dots ────────────────────────────────────────────────────────────
+  const APPS = [
+    { port: 8501, dot: 'dot1', lbl: 'lbl1' },
+    { port: 8502, dot: 'dot2', lbl: 'lbl2' },
+  ];
+
+  async function checkApp({ port, dot, lbl }) {
+    try {
+      await fetch('http://127.0.0.1:' + port + '/', { mode: 'no-cors', cache: 'no-store' });
+      document.getElementById(dot).className = 'dot up';
+      document.getElementById(lbl).textContent = '● Đang chạy — http://127.0.0.1:' + port;
+    } catch {
+      document.getElementById(dot).className = 'dot down';
+      document.getElementById(lbl).textContent = '○ Chưa khởi động';
+    }
+  }
+
+  function checkAll() { APPS.forEach(checkApp); }
+  checkAll();
+  setInterval(checkAll, 5000);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────────────────────
+  document.addEventListener('keydown', e => {
+    if (e.key === '1') window.open('http://127.0.0.1:8501', '_blank');
+    if (e.key === '2') window.open('http://127.0.0.1:8502', '_blank');
+    if (e.key === 's' || e.key === 'S') checkAll();
+  });
+</script>
+</body>
+</html>
