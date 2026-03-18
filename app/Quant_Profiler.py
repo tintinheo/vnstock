@@ -647,6 +647,329 @@ def _last_str(df: pd.DataFrame, col: str) -> str:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA — Candlestick Pattern Detection  [C1]
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_candlestick_patterns(df: pd.DataFrame) -> dict:
+    """
+    VN-Swing Alpha [C1]: Detect bullish/bearish candlestick patterns in latest 3 bars.
+    Bullish : Hammer, Bullish Engulfing, Morning Star  → candle_pts = +3
+    Bearish : Shooting Star, Bearish Engulfing         → candle_pts = -3
+    """
+    result = {"pattern": "NEUTRAL", "candle_pts": 0}
+    if df is None or len(df) < 3 or "Open" not in df.columns:
+        return result
+    try:
+        o1 = float(df["Open"].iloc[-1]);  h1 = float(df["High"].iloc[-1])
+        l1 = float(df["Low"].iloc[-1]);   c1 = float(df["Close"].iloc[-1])
+        o2 = float(df["Open"].iloc[-2]);  c2 = float(df["Close"].iloc[-2])
+        o3 = float(df["Open"].iloc[-3]);  c3 = float(df["Close"].iloc[-3])
+        body1      = abs(c1 - o1)
+        rng1       = h1 - l1
+        if rng1 <= 0:
+            return result
+        low_shadow1 = min(o1, c1) - l1
+        up_shadow1  = h1 - max(o1, c1)
+        # ── Hammer ────────────────────────────────────────────────────────────
+        is_hammer = (
+            body1 <= rng1 * 0.3 and
+            low_shadow1 >= body1 * 2.0 and
+            up_shadow1  <= body1 * 0.5 and
+            c1 >= l1 + rng1 * 0.5
+        )
+        # ── Bullish Engulfing ─────────────────────────────────────────────────
+        is_bull_engulf = (
+            c2 < o2 and c1 > o1 and
+            o1 <= c2 and c1 >= o2
+        )
+        # ── Morning Star (3-bar) ─────────────────────────────────────────────
+        bar3_body = abs(c3 - o3)
+        bar2_body = abs(c2 - o2)
+        is_morning_star = (
+            c3 < o3 and
+            bar2_body <= bar3_body * 0.3 and
+            c1 > o1 and
+            c1 > o3 + bar3_body * 0.5
+        )
+        # ── Shooting Star (bearish) ───────────────────────────────────────────
+        up_shadow_ss = h1 - max(o1, c1)
+        is_shooting_star = (
+            body1 <= rng1 * 0.3 and
+            up_shadow_ss >= body1 * 2.0 and
+            low_shadow1  <= body1 * 0.5 and
+            c1 <= l1 + rng1 * 0.5
+        )
+        # ── Bearish Engulfing ─────────────────────────────────────────────────
+        is_bear_engulf = (
+            c2 > o2 and c1 < o1 and
+            o1 >= c2 and c1 <= o2
+        )
+        if is_morning_star:
+            return {"pattern": "MORNING_STAR",   "candle_pts":  3}
+        if is_bull_engulf:
+            return {"pattern": "BULL_ENGULFING", "candle_pts":  3}
+        if is_hammer:
+            return {"pattern": "HAMMER",         "candle_pts":  3}
+        if is_bear_engulf:
+            return {"pattern": "BEAR_ENGULFING", "candle_pts": -3}
+        if is_shooting_star:
+            return {"pattern": "SHOOTING_STAR",  "candle_pts": -3}
+    except Exception:
+        pass
+    return result
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA — RSI Divergence Detection  [C2]
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def detect_rsi_divergence(df: pd.DataFrame, lookback: int = 20) -> dict:
+    """
+    VN-Swing Alpha [C2]: RSI divergence vs price over last `lookback` bars.
+    Bullish (pos-div): price at 20-bar low, RSI making higher low  → div_pts = +4
+    Bearish (neg-div): price at 20-bar high, RSI making lower high → div_pts = -4
+    """
+    default = {"bullish_divergence": False, "bearish_divergence": False, "div_pts": 0}
+    if df is None or len(df) < lookback + 5 or "RSI" not in df.columns:
+        return default
+    try:
+        window_c   = df["Close"].iloc[-(lookback + 1):-1].values
+        window_r   = df["RSI"].iloc[-(lookback + 1):-1].values
+        curr_close = float(df["Close"].iloc[-1])
+        curr_rsi   = float(df["RSI"].iloc[-1])
+        if np.isnan(curr_rsi) or len(window_c) == 0:
+            return default
+        min_c_idx  = int(np.argmin(window_c))
+        rsi_at_low = float(window_r[min(min_c_idx, len(window_r) - 1)])
+        if not np.isnan(rsi_at_low) and curr_close <= float(window_c[min_c_idx]) * 1.005:
+            if curr_rsi > rsi_at_low + 3.0:
+                return {"bullish_divergence": True,  "bearish_divergence": False, "div_pts":  4}
+        max_c_idx   = int(np.argmax(window_c))
+        rsi_at_high = float(window_r[min(max_c_idx, len(window_r) - 1)])
+        if not np.isnan(rsi_at_high) and curr_close >= float(window_c[max_c_idx]) * 0.995:
+            if curr_rsi < rsi_at_high - 3.0:
+                return {"bullish_divergence": False, "bearish_divergence": True,  "div_pts": -4}
+    except Exception:
+        pass
+    return default
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA IMPROVEMENT — CSAD Herding Detection
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def calculate_csad(stock_returns) -> float:
+    """
+    Cross-Sectional Absolute Deviation — VN-Swing Alpha Improvement proposal.
+    Measures market irrationality/herding across a basket of stocks.
+
+    Low CSAD (<0.005) during a price spike = pure retail herding (dangerous for F0).
+    High CSAD = fundamental-driven divergence = safer entry signal.
+
+    Args:
+        stock_returns: 1-D array-like of fractional daily returns (not percent).
+                       E.g. [0.032, -0.011, 0.028, 0.005]
+    Returns:
+        csad: float — mean absolute deviation from cross-sectional average.
+    """
+    arr = np.asarray(stock_returns, dtype=float)
+    arr = arr[~np.isnan(arr)]
+    if len(arr) < 2:
+        return 0.0
+    avg_return = float(np.mean(arr))
+    return float(np.mean(np.abs(arr - avg_return)))
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA IMPROVEMENT — Rolling 5-day Beta vs VNINDEX
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# Module-level VNINDEX OHLCV cache (30-min TTL) — avoids repeated API calls
+_VNINDEX_CACHE: dict = {"df": None, "ts": 0.0}
+
+
+def _get_vnindex_df(max_age_seconds: float = 1800.0) -> pd.DataFrame:
+    """
+    Fetch VNINDEX OHLCV with a 30-min module-level cache.
+    Silent (verbose=False) — never blocks analyse_ticker with console output.
+    """
+    import time as _t
+    now = _t.time()
+    if _VNINDEX_CACHE["df"] is not None and (now - _VNINDEX_CACHE["ts"]) < max_age_seconds:
+        return _VNINDEX_CACHE["df"]
+    try:
+        df_vn, _ = fetch_ohlcv("VNINDEX", days=30, verbose=False)
+        if df_vn is not None and not df_vn.empty:
+            _VNINDEX_CACHE["df"] = df_vn
+            _VNINDEX_CACHE["ts"] = now
+            return df_vn
+    except Exception:
+        pass
+    return _VNINDEX_CACHE["df"] if _VNINDEX_CACHE["df"] is not None else pd.DataFrame()
+
+
+def compute_rolling_beta_5d(df: pd.DataFrame, market_df: pd.DataFrame = None) -> float:
+    """
+    VN-Swing Alpha Improvement: 5-day rolling Beta vs VNINDEX.
+    Beta = Cov(stock_5d_returns, market_5d_returns) / Var(market_5d_returns).
+
+    Interpretation:
+        >1.2  — high-beta: amplifies market swings, crash-to-recovery candidate
+        0.8–1.2 — neutral
+        <0.8  — defensive / low-volatility stock
+
+    Falls back to ATR 5-day ratio proxy when VNINDEX data is unavailable.
+    """
+    try:
+        if df is None or len(df) < 6:
+            return 1.0
+        stock_rets = df["Close"].pct_change().dropna().iloc[-5:].values
+        if market_df is not None and not market_df.empty and len(market_df) >= 6:
+            market_rets = market_df["Close"].pct_change().dropna().iloc[-5:].values
+            n = min(len(stock_rets), len(market_rets))
+            if n >= 3:
+                sr = stock_rets[-n:]
+                mr = market_rets[-n:]
+                var_m = float(np.var(mr, ddof=0))
+                if var_m > 1e-12:
+                    cov_mat = np.cov(sr, mr, ddof=0)
+                    return float(round(cov_mat[0, 1] / var_m, 3))
+        # Fallback: ATR 5-day vs ATR full-period ratio (no external data needed)
+        if "ATR" in df.columns and len(df) >= 20:
+            atr_5d  = float(df["ATR"].iloc[-5:].mean())
+            atr_all = float(df["ATR"].mean())
+            if atr_all > 1e-9:
+                return float(round(atr_5d / atr_all, 3))
+    except Exception:
+        pass
+    return 1.0
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA — T+2.5 Composite Score  (3-group weighted system)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def compute_t25_score(
+    macd_hist_arr, rsi, rsi_5bar_ago,
+    vol_ratio, pct_change,
+    stoch_k, stoch_k_arr, stoch_d_arr,
+    williams_r, williams_r_5bar,
+    cci, cci_4bar_ago,
+    ema9, ema21, sma50, sma200,
+    price, sma20,
+    fib_618, monthly_s1,
+    bb_lower, bb_mid,
+    adx, plus_di, minus_di,
+    vsa_state, candle_pts, div_pts, regime,
+) -> dict:
+    """
+    VN-Swing Alpha T+2.5 composite score — 3 groups, regime-adjusted weights.
+    Group A: MOMENTUM  (weight 0.35–0.45, max 20 pts raw)
+    Group B: STRUCTURE (weight 0.30–0.40, max 20 pts raw)
+    Group C: CONFIRM   (weight 0.25–0.30, max 10 pts raw)
+    Returns: t25_score (0-100), t25_signal (T25_BUY/T25_WATCH/T25_NEUTRAL/T25_AVOID)
+    """
+    mh = macd_hist_arr or []
+    # ── Group A: MOMENTUM (max 20 pts) ────────────────────────────────────────
+    A = 0.0
+    A_c = []
+    # [A1] MACD Hist slope — 3 consecutive rising bars
+    if len(mh) >= 3:
+        if   mh[-1] > mh[-2] > mh[-3]: A += 4; A_c.append("MACD_slope↑")
+        elif mh[-1] < mh[-2] < mh[-3]: A -= 4
+    # [A2] MACD crossover in last 3 bars (histogram sign flip)
+    if len(mh) >= 3:
+        if   mh[-3] < 0 < mh[-1]:  A += 4; A_c.append("MACD_cross↑")
+        elif mh[-3] > 0 > mh[-1]:  A -= 2
+    # [A3] RSI oversold recovery
+    if rsi is not None and rsi_5bar_ago is not None:
+        if   40 <= rsi <= 60 and rsi > rsi_5bar_ago: A += 3; A_c.append(f"RSI_rec={rsi:.0f}")
+        elif 35 <= rsi < 40:                          A += 5; A_c.append(f"RSI_deep={rsi:.0f}")
+    # [A4] Volume confirmation
+    if vol_ratio is not None and pct_change is not None:
+        if   vol_ratio > 2.0 and pct_change > 0:  A += 5; A_c.append(f"BreakoutVol={vol_ratio:.1f}x")
+        elif vol_ratio > 1.5 and pct_change > 0:  A += 3; A_c.append(f"BullVol={vol_ratio:.1f}x")
+    # [A5] Stochastic %K cross from below 30
+    try:
+        if (stoch_k is not None and len(stoch_k_arr) >= 2 and len(stoch_d_arr) >= 2 and
+                float(stoch_k_arr[-1]) > float(stoch_d_arr[-1]) and
+                float(stoch_k_arr[-2]) < float(stoch_d_arr[-2]) and
+                stoch_k < 40):
+            A += 3; A_c.append(f"Stoch_cross={stoch_k:.0f}")
+    except Exception:
+        pass
+    # [A6] Williams %R recovery from -80
+    if williams_r is not None and -80 <= williams_r <= -50:
+        if williams_r_5bar is not None and williams_r > williams_r_5bar:
+            A += 2; A_c.append(f"W%R_rec={williams_r:.0f}")
+    # [A7] CCI cross above 0
+    if cci is not None and cci_4bar_ago is not None:
+        if   cci > 0 and cci_4bar_ago < 0:  A += 2; A_c.append("CCI_cross↑0")
+        elif cci < 0 and cci_4bar_ago > 0:  A -= 2
+    A = max(0.0, min(20.0, A))
+    # ── Group B: STRUCTURE (max 20 pts) ───────────────────────────────────────
+    B = 0.0
+    B_c = []
+    # [B1] MA Alignment
+    ma_lay = sum([
+        bool(ema9  and ema21  and ema9  > ema21),
+        bool(ema21 and sma50  and ema21 > sma50),
+        bool(sma50 and sma200 and sma50 > sma200),
+    ])
+    B += ma_lay * 1.5
+    if ma_lay >= 2: B_c.append(f"MA_align={ma_lay}/3")
+    # [B2] Price vs SMA20 pullback zone
+    if price and sma20:
+        p2s = (price - sma20) / sma20 * 100
+        if   -3 <= p2s <= 2: B += 4; B_c.append(f"SMA20_pull={p2s:+.1f}%")
+        elif  0 < p2s <= 5:  B += 3; B_c.append(f"SMA20_ok={p2s:+.1f}%")
+    # [B3] Fib/Pivot support
+    if fib_618 and price and price <= fib_618 * 1.02:
+        B += 3; B_c.append("Fib_618")
+    elif monthly_s1 and price and monthly_s1 * 0.99 <= price <= monthly_s1 * 1.02:
+        B += 2; B_c.append("Pivot_S1")
+    # [B4] Bollinger Band position
+    if price and bb_lower:
+        if   price <= bb_lower:               B += 5; B_c.append("Below_BB")
+        elif bb_mid and price <= bb_mid * 0.99: B += 3; B_c.append("BB_lower_zone")
+    # [B5] ADX trend quality
+    if adx and plus_di and minus_di:
+        if   adx > 25 and plus_di > minus_di:          B += 3; B_c.append(f"ADX_strong={adx:.0f}")
+        elif 20 <= adx <= 25 and plus_di > minus_di:   B += 2; B_c.append(f"ADX_emerge={adx:.0f}")
+    # [B6] VSA state
+    if   vsa_state == "ACCUM":     B += 5; B_c.append("VSA:ACCUM")
+    elif vsa_state == "NO_SUPPLY": B += 3; B_c.append("VSA:NO_SUPPLY")
+    B = max(0.0, min(20.0, B))
+    # ── Group C: CONFIRMATION (max 10 pts) ────────────────────────────────────
+    C = float(max(0, candle_pts or 0))
+    C_c = []
+    if (candle_pts or 0) > 0: C_c.append(f"candle+{candle_pts}")
+    if (div_pts or 0) > 0:    C += 4; C_c.append("RSI_div↑")
+    if regime in ("BULL_TREND", "SIDEWAYS"):  C += 2; C_c.append("regime_ok")
+    elif regime and "BULL" in regime:         C += 1
+    C = max(0.0, min(10.0, C))
+    # ── Regime-adjusted weights ────────────────────────────────────────────────
+    if   regime == "BULL_TREND": w_m, w_s, w_c = 0.35, 0.40, 0.25
+    elif regime == "SIDEWAYS":   w_m, w_s, w_c = 0.45, 0.30, 0.25
+    elif regime == "BEAR_TREND": w_m, w_s, w_c = 0.40, 0.30, 0.30
+    else:                        w_m, w_s, w_c = 0.40, 0.35, 0.25
+    t25 = round(w_m * (A / 20 * 100) + w_s * (B / 20 * 100) + w_c * (C / 10 * 100), 1)
+    _bear_adj = 1.1 if regime == "BEAR_TREND" else 1.0
+    if   t25 >= 68 * _bear_adj: t25_sig = "T25_BUY"
+    elif t25 >= 55 * _bear_adj: t25_sig = "T25_WATCH"
+    elif t25 <= 32:             t25_sig = "T25_AVOID"
+    else:                       t25_sig = "T25_NEUTRAL"
+    return {
+        "t25_score":        t25,
+        "t25_signal":       t25_sig,
+        "t25_momo_score":   round(A, 1),
+        "t25_struct_score": round(B, 1),
+        "t25_conf_score":   round(C, 1),
+        "t25_confirms":     A_c + B_c + C_c,
+    }
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  D0a. PIVOT & FIBONACCI LEVELS
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -733,17 +1056,21 @@ def classify_regime(df: pd.DataFrame) -> dict:
         bull_di  = bool(pdi and ndi and pdi > ndi)
         s        = round(sma200_slope, 2)
 
-        if high_vol:
-            return {"regime": "HIGH_VOL",   "regime_label": "Biến động cao",     "regime_score":  0, "sma200_slope": s}
+        # VN-Swing Alpha fix: HIGH_VOL checked LAST — a parabolic bull with ATR spike
+        # remains BULL_TREND (with high_vol flag), not overridden to a neutral regime.
+        _hv     = high_vol
+        _hv_sfx = " · biến động cao" if _hv else ""
         if trending and above_sma200 and sma200_slope > 0.3 and bull_di:
-            return {"regime": "BULL_TREND", "regime_label": "Xu hướng tăng",     "regime_score":  2, "sma200_slope": s}
+            return {"regime": "BULL_TREND", "regime_label": f"Xu hướng tăng{_hv_sfx}",     "regime_score":  2, "sma200_slope": s, "high_vol": _hv}
         if trending and (not above_sma200 or sma200_slope < -0.3) and not bull_di:
-            return {"regime": "BEAR_TREND", "regime_label": "Xu hướng giảm",     "regime_score": -2, "sma200_slope": s}
+            return {"regime": "BEAR_TREND", "regime_label": f"Xu hướng giảm{_hv_sfx}",     "regime_score": -2, "sma200_slope": s, "high_vol": _hv}
         if trending:
             if bull_di:
-                return {"regime": "BULL_TREND", "regime_label": "Xu hướng tăng nhẹ", "regime_score":  1, "sma200_slope": s}
-            return     {"regime": "BEAR_TREND", "regime_label": "Xu hướng giảm nhẹ", "regime_score": -1, "sma200_slope": s}
-        return {"regime": "SIDEWAYS", "regime_label": "Đi ngang", "regime_score": 0, "sma200_slope": s}
+                return {"regime": "BULL_TREND", "regime_label": f"Xu hướng tăng nhẹ{_hv_sfx}", "regime_score":  1, "sma200_slope": s, "high_vol": _hv}
+            return     {"regime": "BEAR_TREND", "regime_label": f"Xu hướng giảm nhẹ{_hv_sfx}", "regime_score": -1, "sma200_slope": s, "high_vol": _hv}
+        if _hv:
+            return {"regime": "HIGH_VOL",  "regime_label": "Biến động cao",  "regime_score":  0, "sma200_slope": s, "high_vol": True}
+        return     {"regime": "SIDEWAYS",  "regime_label": "Đi ngang",       "regime_score":  0, "sma200_slope": s, "high_vol": False}
     except Exception as e:
         _log.debug("classify_regime error: %s", e)
         return _EMPTY
@@ -884,6 +1211,10 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     _bt7    = backtest_ticker(df, forward_days=7,  key_prefix="bt7")
     _bt10   = backtest_ticker(df, forward_days=10, key_prefix="bt10")
 
+    # ③c VN-Swing Alpha Improvement: Rolling 5-day Beta vs VNINDEX ────────────
+    _vnidx_df        = _get_vnindex_df()  # cached, silent
+    _rolling_beta_5d = compute_rolling_beta_5d(df, _vnidx_df if not _vnidx_df.empty else None)
+
     # ④ Extract latest values ─────────────────────────────────────────────────
     price    = rt.get("price")    or _last(df, "Close")
     ref      = rt.get("reference") or _last(df, "Close")
@@ -922,6 +1253,41 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     obv_ma   = _last(df, "OBV_MA20")
     wr       = _last(df, "WILLIAMS_R")
     cci      = _last(df, "CCI")
+
+    # ── VN-Swing Alpha extra extractions ─────────────────────────────────────
+    # MACD Histogram series (last 4 bars) for slope/crossover [A1, A2]
+    try:
+        _mh_raw        = df["MACD_Hist"].iloc[-4:].values if "MACD_Hist" in df.columns and len(df) >= 4 else []
+        _macd_hist_arr = [float(v) for v in _mh_raw if not np.isnan(float(v))]
+    except Exception:
+        _macd_hist_arr = []
+    # Williams %R 5 bars ago for recovery check [A6]
+    try:
+        _wr_5bar_raw = df["WILLIAMS_R"].iloc[-5] if "WILLIAMS_R" in df.columns and len(df) >= 5 else None
+        _wr_5bar = None if (_wr_5bar_raw is None or np.isnan(float(_wr_5bar_raw))) else float(_wr_5bar_raw)
+    except Exception:
+        _wr_5bar = None
+    # CCI 4 bars ago for cross-above-0 detection [A7]
+    try:
+        _cci_4bar_raw = df["CCI"].iloc[-4] if "CCI" in df.columns and len(df) >= 4 else None
+        _cci_4bar = None if (_cci_4bar_raw is None or np.isnan(float(_cci_4bar_raw))) else float(_cci_4bar_raw)
+    except Exception:
+        _cci_4bar = None
+    # RSI 5 bars ago for recovery check [A3]
+    try:
+        _rsi_5bar_raw = df["RSI"].iloc[-5] if "RSI" in df.columns and len(df) >= 5 else None
+        _rsi_5bar = None if (_rsi_5bar_raw is None or np.isnan(float(_rsi_5bar_raw))) else float(_rsi_5bar_raw)
+    except Exception:
+        _rsi_5bar = None
+    # Stochastic arrays for cross detection [A5]
+    try:
+        _stoch_k_arr = list(df["STOCH_K"].iloc[-3:].values) if "STOCH_K" in df.columns and len(df) >= 3 else []
+        _stoch_d_arr = list(df["STOCH_D"].iloc[-3:].values) if "STOCH_D" in df.columns and len(df) >= 3 else []
+    except Exception:
+        _stoch_k_arr = []; _stoch_d_arr = []
+    # Candlestick patterns & RSI divergence — VN-Swing Alpha [C1, C2]
+    _candle = detect_candlestick_patterns(df)
+    _diverg = detect_rsi_divergence(df)
 
     # ⑤ Trend structure ───────────────────────────────────────────────────────
     above_sma200 = bool(price and sma200 and price > sma200)
@@ -988,6 +1354,19 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         if macd > macd_sig:  bull += 3; confirms.append("MACD↑")
         else:                bear += 3; confirms.append("MACD↓")
 
+    # MACD Histogram slope — VN-Swing Alpha [A1]: momentum acceleration (4 pts)
+    if len(_macd_hist_arr) >= 3:
+        if   _macd_hist_arr[-1] > _macd_hist_arr[-2] > _macd_hist_arr[-3]:
+            bull += 4; confirms.append("MACD_slope↑")
+        elif _macd_hist_arr[-1] < _macd_hist_arr[-2] < _macd_hist_arr[-3]:
+            bear += 4; confirms.append("MACD_slope↓")
+    # MACD Histogram crossover — VN-Swing Alpha [A2] (4 pts)
+    if len(_macd_hist_arr) >= 3:
+        if   _macd_hist_arr[-3] < 0 < _macd_hist_arr[-1]:
+            bull += 4; confirms.append("MACD_cross↑")
+        elif _macd_hist_arr[-3] > 0 > _macd_hist_arr[-1]:
+            bear += 4; confirms.append("MACD_cross↓")
+
     # ADX direction (2 pts)
     if adx and adx > 20:
         if adx_dir == "UP":    bull += 2; confirms.append(f"ADX↑{adx:.0f}")
@@ -1004,10 +1383,19 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     if price and bb_upper and price > bb_upper:
         bear += 4; confirms.append("Giá>BB↑")
 
-    # Williams %R (2 pts)
+    # Williams %R — VN-Swing Alpha [A6]: extended scoring + recovery detection (2 pts)
     if wr is not None:
-        if wr < -80:  bull += 2; confirms.append(f"W%R={wr:.0f}↓")
-        elif wr > -20: bear += 2; confirms.append(f"W%R={wr:.0f}↑")
+        if wr < -80:
+            bull += 2; confirms.append(f"W%R={wr:.0f}↓oversold")
+        elif -80 <= wr <= -50 and _wr_5bar is not None and wr > _wr_5bar:
+            bull += 2; confirms.append(f"W%R={wr:.0f}↑recover")  # recovering from oversold
+        elif wr > -20:
+            bear += 2; confirms.append(f"W%R={wr:.0f}↑overbought")
+
+    # CCI cross above/below 0 — VN-Swing Alpha [A7] (2 pts)
+    if cci is not None and _cci_4bar is not None:
+        if   cci > 0 and _cci_4bar < 0:  bull += 2; confirms.append("CCI↑0")
+        elif cci < 0 and _cci_4bar > 0:  bear += 2; confirms.append("CCI↓0")
 
     # Volume + trend (2 pts)
     if kl_ratio and kl_ratio > 1.5:
@@ -1030,6 +1418,18 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     bear += _vsa_bear_pts.get(vsa_state, 0)
     if vsa_state not in ("NEUTRAL", ""):
         confirms.append(f"VSA:{vsa_state}")
+
+    # Candlestick patterns — VN-Swing Alpha [C1] (±3 pts)
+    if _candle["candle_pts"] > 0:
+        bull += _candle["candle_pts"]; confirms.append(f"candle:{_candle['pattern']}")
+    elif _candle["candle_pts"] < 0:
+        bear += abs(_candle["candle_pts"]); confirms.append(f"candle:{_candle['pattern']}")
+
+    # RSI divergence — VN-Swing Alpha [C2] (±4 pts)
+    if _diverg["div_pts"] > 0:
+        bull += _diverg["div_pts"]; confirms.append("RSI_div↑")
+    elif _diverg["div_pts"] < 0:
+        bear += abs(_diverg["div_pts"]); confirms.append("RSI_div↓")
 
     # ⑦ Signal label (regime-adjusted thresholds) ─────────────────────────────
     total    = bull + bear
@@ -1073,6 +1473,39 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         except Exception:
             pass
     signal_confirmed = _confirm_bars >= 2   # True if ≥2 of 3 trailing bars agree
+
+    # ⑦b VN-Swing Alpha T+2.5 composite score ─────────────────────────────────
+    _t25 = compute_t25_score(
+        macd_hist_arr   = _macd_hist_arr,
+        rsi             = rsi,
+        rsi_5bar_ago    = _rsi_5bar,
+        vol_ratio       = kl_ratio,
+        pct_change      = pct_chg,
+        stoch_k         = stoch_k,
+        stoch_k_arr     = _stoch_k_arr,
+        stoch_d_arr     = _stoch_d_arr,
+        williams_r      = wr,
+        williams_r_5bar = _wr_5bar,
+        cci             = cci,
+        cci_4bar_ago    = _cci_4bar,
+        ema9            = ema9,
+        ema21           = ema21,
+        sma50           = sma50,
+        sma200          = sma200,
+        price           = price,
+        sma20           = sma20,
+        fib_618         = _fib.get("fib_618"),
+        monthly_s1      = _pivots.get("monthly_s1"),
+        bb_lower        = bb_lower,
+        bb_mid          = bb_mid,
+        adx             = adx,
+        plus_di         = pdi,
+        minus_di        = ndi,
+        vsa_state       = vsa_state,
+        candle_pts      = _candle["candle_pts"],
+        div_pts         = _diverg["div_pts"],
+        regime          = _regime.get("regime", "SIDEWAYS"),
+    )
 
     # ⑧ ATR-based Entry / TP / SL ─────────────────────────────────────────────
     entry = price
@@ -1175,7 +1608,23 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         "ohlcv_src":    ohlcv_src,
         "bars":         len(df),
         "last_date":    str(df.index[-1].date()),
-        "scan_time":    datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        "scan_time":          datetime.now().strftime("%d/%m/%Y %H:%M:%S"),
+        # ── VN-Swing Alpha fields ─────────────────────────────────────────────
+        "t25_score":          _t25.get("t25_score"),
+        "t25_signal":         _t25.get("t25_signal"),
+        "t25_momo_score":     _t25.get("t25_momo_score"),
+        "t25_struct_score":   _t25.get("t25_struct_score"),
+        "t25_conf_score":     _t25.get("t25_conf_score"),
+        "t25_confirms":       _t25.get("t25_confirms", []),
+        "candle_pattern":     _candle.get("pattern", "NEUTRAL"),
+        "rsi_divergence":     (
+            "BULLISH" if _diverg.get("bullish_divergence")
+            else "BEARISH" if _diverg.get("bearish_divergence")
+            else "NONE"
+        ),
+        "high_vol":           _regime.get("high_vol", False),
+        "rolling_beta_5d":    round(_rolling_beta_5d, 3),
+        "algo_ref":           "VN-Swing Alpha",
     }
     if return_df:
         return result, df

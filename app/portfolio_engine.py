@@ -251,6 +251,141 @@ def classify_settlement_status(
     df["status"] = [r[1] for r in results]
     return df
 
+# ─── VN-Swing Alpha Improvement: Dynamic Fractional Kelly ───────────────────────────
+
+def calculate_fractional_kelly(
+    win_prob: float,
+    gain_loss_ratio: float,
+    market_volatility: float,
+) -> float:
+    """
+    Volatility-scaled Fractional Kelly — VN-Swing Alpha Improvement proposal.
+    Adjusts f* based on current market stress (Catastrophic Risk filter).
+
+    Args:
+        win_prob: Historical win probability (0–1).
+        gain_loss_ratio: avg_win / avg_loss ratio (b in Kelly formula).
+        market_volatility: ATR/price daily ratio.  >0.03 = high-stress session.
+
+    Returns:
+        f_kelly: Recommended position size as a fraction (0–1).
+                 Quarter-Kelly when market_volatility > 0.03 (crash/recovery).
+                 Half-Kelly otherwise (normal conditions).
+    """
+    b = float(gain_loss_ratio)
+    p = max(0.01, min(0.99, float(win_prob)))
+    q = 1.0 - p
+    f_star = (b * p - q) / b
+    if market_volatility > 0.03:          # High stress — Quarter-Kelly
+        return max(0.0, f_star * 0.25)
+    return max(0.0, f_star * 0.5)         # Normal — Half-Kelly
+
+
+# ─── VN-Swing Alpha T+2.5 Exit Manager ────────────────────────────────────────────
+
+class T25ExitManager:
+    """
+    VN-Swing Alpha T+2.5 Exit Manager.
+    Manages adaptive exit rules for the T+2.5 swing trading strategy.
+    All exit messages include 'recommend by VN-Swing Alpha'.
+
+    Usage:
+        mgr = T25ExitManager(entry_price=22_000, atr=500, bt_win_rate=0.65)
+        action = mgr.daily_update(current_price=23_100, day_in_trade=2,
+                                  regime="BULL_TREND", macd_hist_slope=-1.0,
+                                  vol_ratio=0.75)
+    """
+
+    def __init__(self, entry_price: float, atr: float, bt_win_rate: float = 0.60):
+        self.entry    = float(entry_price)
+        self.atr      = float(atr) if atr else self.entry * 0.02
+        self.sl       = self.entry - 1.5 * self.atr    # Hard stop-loss
+        self.tp1      = self.entry + 2.0 * self.atr    # TP1 — target 60% exit
+        self.tp2      = self.entry + 3.5 * self.atr    # TP2 — remaining 40%
+        self.trail    = self.sl                          # Trailing stop (updated daily)
+        self.win_rate = max(0.40, min(0.80, bt_win_rate))
+        # Dynamic Fractional Kelly — Quarter/Half based on market_volatility (ATR/price)
+        avg_win    = self.atr * 2.0
+        avg_loss   = self.atr * 1.5
+        glr        = avg_win / max(avg_loss, 1e-9)      # gain/loss ratio
+        market_vol = self.atr / max(self.entry, 1e-9)   # daily vol proxy
+        kelly_f    = calculate_fractional_kelly(self.win_rate, glr, market_vol)
+        self.recommended_size_pct = round(max(5.0, min(25.0, kelly_f * 100)), 1)
+        self.kelly_mode = "Quarter-Kelly" if market_vol > 0.03 else "Half-Kelly"
+
+    def daily_update(
+        self,
+        current_price:    float,
+        day_in_trade:     int,
+        regime:           str   = "SIDEWAYS",
+        macd_hist_slope:  float = 0.0,   # positive = rising, negative = falling
+        vol_ratio:        float = 1.0,   # current vol / vol_ma20
+    ) -> dict:
+        """
+        Call once per session close with the day's closing price.
+        Returns {"action": str, "reason": str, "trail": float, "tp1": float, "tp2": float}
+        Actions: HOLD | SELL_ALL | SELL_60PCT | SELL_50PCT
+        """
+        p = float(current_price)
+
+        # ── Hard Stop-Loss (non-negotiable) ───────────────────────────────────
+        if p <= self.sl:
+            return self._out("SELL_ALL", f"Stop-loss hit: {self.sl:,.0f} — recommend by VN-Swing Alpha")
+
+        # ── T+1: Monitor momentum, manage trailing stop ──────────────────────────
+        if day_in_trade == 1:
+            if p >= self.tp1 * 0.95:
+                self.trail = self.entry              # Move stop to breakeven
+            if macd_hist_slope < 0 and vol_ratio < 0.8:
+                return self._out("SELL_50PCT", "Momentum fading on T+1 — recommend by VN-Swing Alpha")
+
+        # ── T+2: Settlement day — core exit logic ─────────────────────────────
+        if day_in_trade == 2:
+            if p >= self.tp1:
+                self.trail = self.entry + 0.5 * (p - self.entry)
+                pct = (p / self.entry - 1) * 100
+                return self._out("SELL_60PCT", f"TP1 (±{pct:.1f}%) reached on T+2 — recommend by VN-Swing Alpha")
+            if p > self.entry * 1.01 and regime != "BEAR_TREND":
+                return self._out("HOLD", "Profitable on T+2, extending to T+3 — recommend by VN-Swing Alpha")
+            if p < self.entry * 0.99:
+                return self._out("SELL_ALL", "Below entry on T+2 — exit before T+3 gap risk (VN-Swing Alpha)")
+
+        # ── T+3+: Extended hold or mandatory exit ─────────────────────────────
+        if day_in_trade >= 3:
+            if p >= self.tp2:
+                pct = (p / self.entry - 1) * 100
+                return self._out("SELL_ALL", f"TP2 reached (+{pct:.1f}%) — recommend by VN-Swing Alpha")
+        if day_in_trade >= 4:
+            return self._out("SELL_ALL", "T+2.5 window expired (≥T+4) — mandatory exit per VN-Swing Alpha")
+
+        # ── Update trailing stop ──────────────────────────────────────────────
+        new_trail = p - 1.5 * self.atr
+        if new_trail > self.trail:
+            self.trail = new_trail
+        if p <= self.trail and day_in_trade >= 2:
+            return self._out("SELL_ALL", f"Trailing stop: {self.trail:,.0f} — recommend by VN-Swing Alpha")
+
+        return self._out("HOLD", f"Within parameters (day {day_in_trade}) — recommend by VN-Swing Alpha")
+
+    def _out(self, action: str, reason: str) -> dict:
+        return {
+            "action":          action,
+            "reason":          reason,
+            "trail":           round(self.trail, 0),
+            "tp1":             round(self.tp1,   0),
+            "tp2":             round(self.tp2,   0),
+            "sl":              round(self.sl,    0),
+            "rec_size_pct":    self.recommended_size_pct,
+            "kelly_mode":      self.kelly_mode,
+        }
+
+    @staticmethod
+    def entry_timing_note() -> str:
+        """VN-Swing Alpha entry timing recommendation."""
+        return (
+            "⏰ VN-Swing Alpha không cần:  • Giờ vào lệnh TỐT NHẤT: 10:00–11:00 sáng  "
+            "• Giờ thay thế: 13:30–14:00  • TRÁNH: 09:15–09:25 (ATO), 14:30–15:00 (ATC)"
+        )
 
 # ─── Performance Attribution ─────────────────────────────────────────────────
 

@@ -30,6 +30,8 @@ from Quant_Profiler import (
     analyse_ticker,
     async_fetch_many,
     save_profiler_audit,
+    calculate_csad,
+    compute_rolling_beta_5d,
     HISTORY_DAYS,
     _last,
 )
@@ -38,6 +40,7 @@ from portfolio_engine import (
     classify_settlement_status,
     calculate_performance,
     build_portfolio_summary,
+    T25ExitManager,
 )
 from forecast_engine import (
     promethee_ii_ranking,
@@ -444,6 +447,27 @@ def _badge(signal: str) -> str:
         "BÁN / TRÁNH":   "badge-sell",
     }
     return f'<span class="badge {_cls.get(signal, "badge-neutral")}">{signal}</span>'
+
+
+_T25_COLOR = {
+    "T25_BUY":     "#22c55e",
+    "T25_WATCH":   "#3b82f6",
+    "T25_NEUTRAL": "#94a3b8",
+    "T25_AVOID":   "#ef4444",
+}
+
+
+def _t25_badge(signal: str, score) -> str:
+    """Render a colored pill badge for a T+2.5 signal."""
+    _label = {"T25_BUY": "MUA", "T25_WATCH": "THEO DÕI", "T25_NEUTRAL": "TB", "T25_AVOID": "TRÁNH"}
+    c = _T25_COLOR.get(signal, "#475569")
+    lbl = _label.get(signal, signal or "–")
+    sc_str = f" {int(score)}" if score is not None and signal in ("T25_BUY", "T25_WATCH") else ""
+    return (
+        f'<span style="background:{c}22;border:1px solid {c};color:{c};'
+        f'border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">'
+        f'{lbl}{sc_str}</span>'
+    )
 
 
 def _f(v, d=0) -> str:
@@ -1429,6 +1453,7 @@ def render_summary_table(results: list) -> None:
   <td>{(_f(r.get('kl_ratio'), 1) + '×') if r.get('kl_ratio') else '–'}</td>
   <td style="font-size:12px;color:var(--muted);">{r.get('trend_struct','–')}</td>
   <td>{_badge(sig_v)}{c_flag}{f_flag}</td>
+  <td>{_t25_badge(r.get('t25_signal',''), r.get('t25_score'))}</td>
   <td>{rank_html}</td>
 </tr>"""
     table_html = f'''
@@ -1437,7 +1462,8 @@ def render_summary_table(results: list) -> None:
     <tr>
       <th>Mã</th><th>Giá</th><th>%Δ</th>
       <th>RSI</th><th>Stoch</th><th>ADX</th><th>KL×</th>
-      <th>Cấu trúc MA</th><th>Tín hiệu</th><th>MCDA Rank</th>
+      <th>Cấu trúc MA</th><th>Tín hiệu</th>
+      <th title="VN-Swing Alpha T+2.5 score">T+2.5</th><th>MCDA Rank</th>
     </tr>
   </thead>
   <tbody>{rows}</tbody>
@@ -1793,6 +1819,50 @@ def _audit_detail_expander(row: dict, idx: int, prev_row: dict | None) -> None:
             f"Ngày cuối: {row.get('last_date','–')}  ·  "
             f"Quét lúc: {ts_}"
         )
+
+        # ── VN-Swing Alpha T+2.5 panel ───────────────────────────────────────────
+        _t25_sig   = row.get("t25_signal", "")
+        _t25_score = row.get("t25_score")
+        _t25_confs = row.get("t25_confirms", [])
+        _t25_momo  = row.get("t25_momo_score")
+        _t25_str   = row.get("t25_struct_score")
+        _t25_con   = row.get("t25_conf_score")
+        _candle_p  = row.get("candle_pattern", "NEUTRAL")
+        _rsi_div   = row.get("rsi_divergence", "NONE")
+        if _t25_sig:
+            _tc = _T25_COLOR.get(_t25_sig, "#475569")
+            _timing = (
+                "⏰ Cửa sổ vào lệnh: **10:00–11:00** (tốt nhất) · 13:30–14:00 (thay thế) · **TRÁNH ATO/ATC**"
+                if _t25_sig == "T25_BUY" else ""
+            )
+            _score_str = f" · {_t25_score:.0f}/100" if _t25_score is not None else ""
+            _sub_str   = ""
+            if _t25_momo is not None:
+                _sub_str = f"Momentum: {_t25_momo:.0f}/20 · Structure: {_t25_str:.0f}/20 · Confirm: {_t25_con:.0f}/10"
+            _conf_str  = " · ".join((_t25_confs or [])[:6])
+            _extra = []
+            if _candle_p and _candle_p != "NEUTRAL":
+                _extra.append(f"Candle: {_candle_p}")
+            if _rsi_div and _rsi_div != "NONE":
+                _extra.append(f"RSI Div: {_rsi_div}")
+            _muted = "#94a3b8"
+            _dim   = "#64748b"
+            _hp = [
+                f'<div style="margin-top:8px;padding:8px 12px;border-left:3px solid {_tc};'
+                f'background:{_tc}12;border-radius:5px;">',
+                f'<span style="color:{_tc};font-weight:700;font-size:13px;">'
+                f'\U0001f4ca VN-Swing Alpha T+2.5: {_t25_sig.replace("T25_","")}{_score_str}</span>',
+            ]
+            if _sub_str:
+                _hp.append(f'<br><small style="color:{_muted};">{_sub_str}</small>')
+            if _conf_str:
+                _hp.append(f'<br><small style="color:{_dim};">{_conf_str}</small>')
+            if _extra:
+                _hp.append(f'<br><small style="color:{_dim};">{" · ".join(_extra)}</small>')
+            if _timing:
+                _hp.append(f'<br><small style="color:{_muted};">{_timing}</small>')
+            _hp.append('</div>')
+            st.markdown("".join(_hp), unsafe_allow_html=True)
 
 
 def render_audit_page() -> None:
@@ -2393,6 +2463,84 @@ def render_portfolio_hub() -> None:
         unsafe_allow_html=True,
     )
 
+    # ── VN-Swing Alpha T+2.5 Exit Recommendations ──────────────────────────────
+    st.markdown("---")
+    st.markdown("##### 🎯 VN-Swing Alpha — Khuyến nghị Exit T+2.5")
+    st.caption(
+        "Tính toán dựa trên ATR, regime và backtest win rate từ lần phân tích gần nhất. "
+        "Cần cập nhật giá trước | Ngày GD = số phiên kể từ ngày mua."
+    )
+    from datetime import date as _date_hub
+    _today_hub = _date_hub.today()
+    _ACTION_ICON = {
+        "HOLD":       "🟡 Giữ",
+        "SELL_ALL":   "🔴 Bán Hết",
+        "SELL_60PCT": "🟠 Bán 60%",
+        "SELL_50PCT": "🟠 Bán 50%",
+    }
+    _exit_rows = ""
+    for _, _row in perf_df.iterrows():
+        _tk  = _row["ticker"]
+        _ac  = _row.get("avg_cost", 0)
+        _cp  = _row.get("current_price", 0)
+        if not _cp or not _ac:
+            continue
+        _audit_h  = _load_audit_history(_tk)
+        _latest_a = _audit_h[0] if _audit_h else {}
+        _atr_v    = _latest_a.get("atr") or (_ac * 0.02)
+        _wr_v     = max(0.40, min(0.80, float(
+            _latest_a.get("bt5_win_rate") or _latest_a.get("bt_win_rate") or 0.50
+        )))
+        _regime_v = _latest_a.get("regime", "SIDEWAYS")
+        _kl_v     = float(_latest_a.get("kl_ratio") or 1.0)
+        _td_v     = _row.get("trade_date")
+        _dit_v    = 0
+        if _td_v:
+            try:
+                if isinstance(_td_v, str):
+                    from datetime import datetime as _dt_hub
+                    _td_v = _dt_hub.strptime(str(_td_v)[:10], "%Y-%m-%d").date()
+                _dit_v = max(0, (_today_hub - _td_v).days)
+            except Exception:
+                _dit_v = 0
+        _mgr_v  = T25ExitManager(_ac, _atr_v, _wr_v)
+        _out_v  = _mgr_v.daily_update(_cp, _dit_v, _regime_v, 0.0, _kl_v)
+        _act_lbl = _ACTION_ICON.get(_out_v["action"], _out_v["action"])
+        _act_c   = ("#22c55e" if _out_v["action"] == "HOLD"
+                    else "#ef4444" if _out_v["action"] == "SELL_ALL"
+                    else "#f97316")
+        # Rolling 5-day beta from last audit record — VN-Swing Alpha Improvement
+        _beta_v   = float(_latest_a.get("rolling_beta_5d") or 1.0)
+        _beta_c   = "#ef4444" if _beta_v > 1.2 else "#22c55e" if _beta_v < 0.8 else "#94a3b8"
+        _kelly_lbl = _out_v.get("kelly_mode", _mgr_v.kelly_mode)
+        _exit_rows += (
+            f'<tr>'
+            f'<td><b>{_safe(_tk)}</b></td>'
+            f'<td style="color:{_act_c};font-weight:700;">{_act_lbl}</td>'
+            f'<td style="font-family:monospace;">{_dit_v}d</td>'
+            f'<td style="font-family:monospace;color:#ef4444;">{_out_v["sl"]:,.0f}</td>'
+            f'<td style="font-family:monospace;color:#fbbf24;">{_out_v["tp1"]:,.0f}</td>'
+            f'<td style="font-family:monospace;color:#22c55e;">{_out_v["tp2"]:,.0f}</td>'
+            f'<td style="font-family:monospace;color:{_beta_c};">{_beta_v:.2f}β</td>'
+            f'<td style="font-size:11px;color:#64748b;">{_safe(_kelly_lbl)}</td>'
+            f'<td style="font-size:11px;color:#94a3b8;">{_safe(str(_out_v["reason"])[:70])}</td>'
+            f'</tr>'
+        )
+    if _exit_rows:
+        st.markdown(
+            f'<table class="sum-table"><thead><tr>'
+            f'<th>Mã</th><th>Hành động</th><th>Ngày GD</th>'
+            f'<th>Stop-loss</th><th>TP1</th><th>TP2</th>'
+            f'<th title="5-day Rolling Beta vs VNINDEX">Beta 5D</th>'
+            f'<th>Kelly Mode</th>'
+            f'<th>Lý do (VN-Swing Alpha)</th>'
+            f'</tr></thead><tbody>{_exit_rows}</tbody></table>',
+            unsafe_allow_html=True,
+        )
+        st.caption(T25ExitManager.entry_timing_note())
+    else:
+        st.info("⚠️ Chưa có dữ liệu giá để tính exit. Nhấn **🔄 Cập nhật giá** trước.")
+
     # ── Charts: Pie + Sector bar ──────────────────────────────────────────────
     st.markdown("---")
     ch1, ch2 = st.columns(2)
@@ -2556,6 +2704,48 @@ def render_scanner() -> None:
         st.error("Không có dữ liệu hợp lệ. Kiểm tra lại kết nối SSI.")
         return
 
+    # ── VN-Swing Alpha Improvement: CSAD Herding Detection ───────────────────
+    _csad_val = 0.0
+    _herding_detected = False
+    if is_deep and len(valid) >= 3:
+        _ret_arr = np.array(
+            [(r.get("pct_change") or 0) / 100.0 for r in valid], dtype=float
+        )
+        _csad_val = calculate_csad(_ret_arr)
+        _max_spike = max(abs(r.get("pct_change") or 0) for r in valid)
+        # Herding condition: extremely low cross-sectional dispersion during a spike
+        _herding_detected = _csad_val < 0.005 and _max_spike > 2.0
+        if _herding_detected:
+            # Downgrade all T25_BUY → T25_WATCH to protect F0 from irrational herding
+            for _rv in valid:
+                if _rv.get("t25_signal") == "T25_BUY":
+                    _rv["t25_signal"] = "T25_WATCH"
+                    _cc = list(_rv.get("t25_confirms") or [])
+                    _cc.append("⚠️CSAD_herding")
+                    _rv["t25_confirms"] = _cc
+
+        _csad_c1, _csad_c2 = st.columns([1, 3])
+        with _csad_c1:
+            st.metric(
+                "🌡 CSAD Herding Index",
+                f"{_csad_val:.4f}",
+                delta="⚠️ Herding — T25_BUY hạ bậc" if _herding_detected else "✅ Phân kỳ bình thường",
+                delta_color="inverse",
+            )
+        with _csad_c2:
+            if _herding_detected:
+                st.warning(
+                    f"🚨 **Herding Alert** — CSAD={_csad_val:.4f} quá thấp trong phiên biến động cao "
+                    f"(spike tối đa {_max_spike:.1f}%). Đây là dấu hiệu đám đông phi lý trí. "
+                    f"Tất cả tín hiệu **T25_BUY** đã hạ xuống **T25_WATCH**. "
+                    f"F0 không nên mua đuổi trong điều kiện này."
+                )
+            else:
+                st.info(
+                    f"✅ CSAD = {_csad_val:.4f} — Phân kỳ cơ bản tốt. "
+                    f"Không phát hiện herding đám đông trong rổ hiện tại."
+                )
+
     # ── PROMETHEE II ranking ──────────────────────────────────────────────────
     if is_deep and len(valid) >= 2:
         rank_df = promethee_ii_ranking(valid)
@@ -2600,6 +2790,9 @@ def render_scanner() -> None:
         rr_s = f"{rr:.2f}:1" if rr else "–"
         lv_s = f"{lv:.2f}×" if is_deep else "–"
         vv_s = f"{vv:.2f}%" if is_deep else "–"
+        t25_sig  = r_lookup.get(tk, {}).get("t25_signal", "")
+        t25_sc   = r_lookup.get(tk, {}).get("t25_score")
+        t25_cell = _t25_badge(t25_sig, t25_sc) if is_deep else "–"
         # ticker cell colored by signal
         tk_cell = (
             f'<b style="font-size:14px;border-left:3px solid {sc};'
@@ -2618,6 +2811,7 @@ def render_scanner() -> None:
             f'<td style="font-family:monospace;color:#94a3b8;">{lv_s}</td>'
             f'<td style="font-family:monospace;color:#94a3b8;">{vv_s}</td>'
             f'<td style="font-family:monospace;">{rr_s}</td>'
+            f'<td>{t25_cell}</td>'
             f'</tr>'
         )
 
@@ -2626,6 +2820,7 @@ def render_scanner() -> None:
         f'<th>Hạng</th><th>Mã</th><th>Giá</th><th>%Δ</th>'
         f'<th>Tín hiệu</th><th>NetFlow</th><th>Bull%</th>'
         f'<th>Thanh khoản</th><th>Biến động</th><th>R:R</th>'
+        f'<th title="VN-Swing Alpha T+2.5">T+2.5</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>'
     )
     st.markdown(_filterable_table("scanner_tbl", scanner_table_html), unsafe_allow_html=True)
