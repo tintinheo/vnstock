@@ -254,18 +254,103 @@ def classify_settlement_status(
 
 # ─── Performance Attribution ─────────────────────────────────────────────────
 
-# Sector map (VN stock exchange) — partial list of common tickers
+# Sector map (VN stock exchange) — comprehensive coverage of HOSE/HNX tickers
 _SECTOR_MAP = {
-    "HPG": "Thép", "HSG": "Thép", "NKG": "Thép",
+    # ── Ngân hàng ─────────────────────────────────────────────────────────
     "VCB": "Ngân hàng", "BID": "Ngân hàng", "CTG": "Ngân hàng",
     "MBB": "Ngân hàng", "TCB": "Ngân hàng", "ACB": "Ngân hàng",
+    "VPB": "Ngân hàng", "HDB": "Ngân hàng", "LPB": "Ngân hàng",
+    "SHB": "Ngân hàng", "STB": "Ngân hàng", "TPB": "Ngân hàng",
+    "OCB": "Ngân hàng", "MSB": "Ngân hàng", "VIB": "Ngân hàng",
+    "EIB": "Ngân hàng", "SSB": "Ngân hàng", "NAB": "Ngân hàng",
+    "BAB": "Ngân hàng", "KLB": "Ngân hàng",
+    # ── Chứng khoán ────────────────────────────────────────────────────────
+    "SSI": "Chứng khoán", "VCI": "Chứng khoán", "VND": "Chứng khoán",
+    "HCM": "Chứng khoán", "MBS": "Chứng khoán", "BSI": "Chứng khoán",
+    "TVS": "Chứng khoán", "VPS": "Chứng khoán", "AGR": "Chứng khoán",
+    "CTS": "Chứng khoán", "FTS": "Chứng khoán", "SHS": "Chứng khoán",
+    "ORS": "Chứng khoán", "VIX": "Chứng khoán", "BVS": "Chứng khoán",
+    # ── Bảo hiểm ──────────────────────────────────────────────────────────
+    "BVH": "Bảo hiểm", "BMI": "Bảo hiểm", "MIG": "Bảo hiểm",
+    "PGI": "Bảo hiểm", "BIC": "Bảo hiểm", "PTI": "Bảo hiểm",
+    # ── Bất động sản ──────────────────────────────────────────────────────
     "VHM": "Bất động sản", "NVL": "Bất động sản", "PDR": "Bất động sản",
-    "DIG": "Bất động sản", "CII": "Hạ tầng", "TCH": "Bất động sản",
-    "VNM": "Tiêu dùng", "MSN": "Tiêu dùng", "SAB": "Tiêu dùng",
+    "DIG": "Bất động sản", "KDH": "Bất động sản", "TCH": "Bất động sản",
+    "NLG": "Bất động sản", "DXG": "Bất động sản", "AGG": "Bất động sản",
+    "HQC": "Bất động sản", "CRE": "Bất động sản", "SJS": "Bất động sản",
+    "VRE": "Bất động sản", "VPI": "Bất động sản", "CEO": "Bất động sản",
+    "DRH": "Bất động sản", "HDG": "Bất động sản", "NTL": "Bất động sản",
+    "QCG": "Bất động sản", "SCR": "Bất động sản", "ITA": "Bất động sản",
+    "TDH": "Bất động sản", "TDC": "Bất động sản", "IJC": "Bất động sản",
+    "IDC": "Bất động sản", "DXS": "Bất động sản", "NBB": "Bất động sản",
+    "SGR": "Bất động sản", "OGC": "Bất động sản", "DTA": "Bất động sản",
+    "SZC": "Bất động sản", "KBC": "Bất động sản", "SIP": "Bất động sản",
+    "SZL": "Bất động sản", "TDM": "Bất động sản", "VID": "Bất động sản",
+    "HAG": "Bất động sản", "ROS": "Bất động sản", "LDG": "Bất động sản",
+    "HDC": "Bất động sản", "NHA": "Bất động sản", "CLG": "Bất động sản",
+    # ── Xây dựng / Hạ tầng ───────────────────────────────────────────────
+    "CTD": "Xây dựng", "CTI": "Xây dựng", "CII": "Hạ tầng",
+    "VCG": "Xây dựng", "C47": "Xây dựng", "C32": "Xây dựng",
+    "LCG": "Xây dựng", "HBC": "Xây dựng", "DPG": "Xây dựng",
+    "HTN": "Xây dựng", "FCN": "Xây dựng", "SC5": "Xây dựng",
+    "L10": "Xây dựng", "L14": "Xây dựng", "L18": "Xây dựng",
+    "L63": "Xây dựng", "PTB": "Xây dựng", "ST8": "Xây dựng",
+    "HHV": "Xây dựng",
+    # ── Vật liệu xây dựng ─────────────────────────────────────────────────
+    "HT1": "Vật liệu XD", "BCC": "Vật liệu XD", "BMP": "Vật liệu XD",
+    "VGC": "Vật liệu XD", "ACC": "Vật liệu XD", "PLP": "Vật liệu XD",
+    # ── Thép ──────────────────────────────────────────────────────────────
+    "HPG": "Thép", "HSG": "Thép", "NKG": "Thép",
+    "POM": "Thép", "TLH": "Thép", "SMC": "Thép", "DTL": "Thép",
+    # ── Dầu khí ────────────────────────────────────────────────────────────
+    "GAS": "Dầu khí", "PVD": "Dầu khí", "PVT": "Dầu khí",
+    "PLX": "Dầu khí", "BSR": "Dầu khí", "PVC": "Dầu khí",
+    "PVS": "Dầu khí", "PXS": "Dầu khí", "PGD": "Dầu khí",
+    "PGN": "Dầu khí", "PGC": "Dầu khí", "CNG": "Dầu khí",
+    "GDT": "Dầu khí", "PET": "Dầu khí", "COM": "Dầu khí",
+    # ── Điện / Năng lượng tái tạo ─────────────────────────────────────────
     "GEG": "Điện", "REE": "Điện/Hạ tầng", "PC1": "Điện",
-    "VIC": "Đa ngành", "VRE": "Bất động sản",
-    "FPT": "Công nghệ", "CMG": "Công nghệ",
+    "POW": "Điện", "NT2": "Điện", "PPC": "Điện",
+    "TBC": "Điện", "VSH": "Điện", "SJD": "Điện",
+    "BWE": "Điện", "SHP": "Điện", "EVG": "Điện", "GEX": "Điện",
+    # ── Tiêu dùng / Thực phẩm ─────────────────────────────────────────────
+    "VNM": "Tiêu dùng", "MSN": "Tiêu dùng", "SAB": "Tiêu dùng",
+    "KDC": "Tiêu dùng", "DBC": "Tiêu dùng", "AGM": "Tiêu dùng",
+    "NSC": "Tiêu dùng", "PAN": "Tiêu dùng", "BHN": "Tiêu dùng",
+    "LSS": "Tiêu dùng", "SBT": "Tiêu dùng",
+    # ── Bán lẻ ────────────────────────────────────────────────────────────
+    "MWG": "Bán lẻ", "PNJ": "Bán lẻ", "FRT": "Bán lẻ",
+    "DGW": "Bán lẻ", "AST": "Bán lẻ",
+    # ── Công nghệ ─────────────────────────────────────────────────────────
+    "FPT": "Công nghệ", "CMG": "Công nghệ", "ELC": "Công nghệ",
+    "VNG": "Công nghệ", "ICT": "Công nghệ",
+    # ── Hàng không ────────────────────────────────────────────────────────
     "VJC": "Hàng không", "HVN": "Hàng không",
+    # ── Vận tải / Cảng biển ───────────────────────────────────────────────
+    "GMD": "Vận tải", "HAH": "Vận tải", "VOS": "Vận tải",
+    "PJT": "Vận tải", "TMS": "Vận tải", "VTB": "Vận tải",
+    "SGN": "Vận tải",
+    "SCS": "Hạ tầng", "DVP": "Hạ tầng", "VSC": "Hạ tầng",
+    # ── Dệt may ───────────────────────────────────────────────────────────
+    "TNG": "Dệt may", "STK": "Dệt may", "MSH": "Dệt may",
+    "TCM": "Dệt may", "EVE": "Dệt may", "HTG": "Dệt may",
+    "GIL": "Dệt may",
+    # ── Thủy sản ──────────────────────────────────────────────────────────
+    "VHC": "Thủy sản", "ANV": "Thủy sản", "IDI": "Thủy sản",
+    "ABT": "Thủy sản", "ACL": "Thủy sản", "FMC": "Thủy sản",
+    # ── Y tế / Dược ───────────────────────────────────────────────────────
+    "DHG": "Y tế", "DMC": "Y tế", "IMP": "Y tế",
+    "OPC": "Y tế", "TRA": "Y tế", "HAI": "Y tế", "DBD": "Y tế",
+    # ── Phân bón / Hóa chất ───────────────────────────────────────────────
+    "DPM": "Phân bón", "DCM": "Phân bón", "LAS": "Phân bón",
+    "SFG": "Phân bón", "VAF": "Phân bón", "DGC": "Hóa chất",
+    # ── Cao su ────────────────────────────────────────────────────────────
+    "PHR": "Cao su", "DRC": "Cao su", "CSM": "Cao su",
+    "SRC": "Cao su", "HRC": "Cao su",
+    # ── Khoáng sản ────────────────────────────────────────────────────────
+    "KSB": "Khoáng sản", "NBC": "Khoáng sản", "BMC": "Khoáng sản",
+    # ── Đa ngành ──────────────────────────────────────────────────────────
+    "VIC": "Đa ngành",
 }
 
 

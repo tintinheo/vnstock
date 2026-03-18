@@ -1,4 +1,6 @@
-$ErrorActionPreference = "SilentlyContinue"
+# NOTE: Do NOT run as Administrator — Windows Store Python aliases require a
+#       normal user session.  If apps fail, check each console window for errors.
+$ErrorActionPreference = "Continue"
 
 Write-Host "═══════════════════════════════════════════" -ForegroundColor Cyan
 Write-Host "  Quant Suite — Local Launcher" -ForegroundColor Cyan
@@ -17,22 +19,18 @@ foreach ($port in 8501, 8502) {
 }
 Start-Sleep -Seconds 1
 
-# ── App definitions ────────────────────────────────────────────────────────────
-$apps = @(
-    @{ Name = "Quant Terminal";  Dir = "D:\portfolio\vnstock\app\quant_terminal"; File = "app.py";               Port = 8501 },
-    @{ Name = "Quant Profiler";  Dir = "D:\portfolio\vnstock\app";                File = "Quant_Profiler_ui.py"; Port = 8502 }
+# ── Launch apps via cmd.exe ────────────────────────────────────────────────────
+# cmd.exe reliably resolves Windows Store Python App Execution Aliases.
+# Each runner .bat keeps its window open on error so you can read the message.
+$root    = $PSScriptRoot
+$runners = @(
+    @{ Name = "Quant Terminal (8501)"; Script = "_run_8501.bat" },
+    @{ Name = "Quant Profiler (8502)"; Script = "_run_8502.bat" }
 )
-
-# ── Launch each app in its own PowerShell window ──────────────────────────────
-foreach ($app in $apps) {
-    $cmd = "Set-Location '$($app.Dir)'; " +
-           "python3.13 -m streamlit run '$($app.File)' " +
-           "--server.port $($app.Port) " +
-           "--server.address 127.0.0.1 " +
-           "--server.headless true " +
-           "--server.fileWatcherType none"
-    Start-Process powershell -ArgumentList "-NoExit", "-Command", $cmd -WindowStyle Normal
-    Write-Host "  Started : $($app.Name)  →  http://127.0.0.1:$($app.Port)" -ForegroundColor Green
+foreach ($r in $runners) {
+    $bat = Join-Path $root $r.Script
+    Start-Process "cmd.exe" -ArgumentList "/k `"$bat`"" -WindowStyle Normal
+    Write-Host "  Started : $($r.Name)" -ForegroundColor Green
 }
 
 # ── Wait for apps to initialise ───────────────────────────────────────────────

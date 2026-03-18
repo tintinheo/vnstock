@@ -969,12 +969,13 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         else:             bear += 2
 
     # RSI (up to 10 pts)
+    # FIX: use round() before int() so RSI=34.5 gives 1 pt instead of 0
     if rsi is not None:
         if rsi < 35:
-            pts = min(int((35 - rsi) * 0.5), 10)
+            pts = min(round((35 - rsi) * 0.5), 10)
             bull += pts; confirms.append(f"RSI={rsi:.0f}↓")
         elif rsi > 65:
-            pts = min(int((rsi - 65) * 0.5), 10)
+            pts = min(round((rsi - 65) * 0.5), 10)
             bear += pts; confirms.append(f"RSI={rsi:.0f}↑")
 
     # Stochastic (3 pts)
@@ -1457,11 +1458,13 @@ def main() -> None:
         print("Không có mã nào được nhập. Thoát.")
         sys.exit(0)
 
-    tickers = [
-        t.strip().upper()
-        for t in ticker_str.replace(";", ",").split(",")
-        if t.strip()
-    ]
+    import re as _re_cli
+    _VN_TICKER_RE = _re_cli.compile(r'^(?=.*[A-Za-z])[A-Za-z0-9]{2,6}$')
+    _raw = [t.strip().upper() for t in ticker_str.replace(";", ",").split(",") if t.strip()]
+    tickers = [t for t in _raw if _VN_TICKER_RE.match(t)]
+    _skipped = [t for t in _raw if not _VN_TICKER_RE.match(t)]
+    if _skipped:
+        print(f"⚠️  Bỏ qua mã không hợp lệ: {', '.join(_skipped)}")
     if not tickers:
         print("Không có mã hợp lệ. Thoát.")
         sys.exit(0)

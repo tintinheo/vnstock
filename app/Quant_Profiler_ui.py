@@ -402,6 +402,22 @@ hr { border-color: var(--border); }
 [data-testid="stMarkdownContainer"] table.sum-table tr:last-child td {
   border-bottom: none !important;
 }
+/* ── Filterable-table search box ──────────────────────────────── */
+.tbl-search-wrap { margin: 0 0 8px; }
+.tbl-search-wrap input {
+  width: 100%;
+  background: #141824;
+  border: 1px solid #2d3347;
+  border-radius: 6px;
+  color: #e2e8f0;
+  font-size: 13px;
+  padding: 6px 12px;
+  outline: none;
+  box-sizing: border-box;
+}
+.tbl-search-wrap input::placeholder { color: #475569; }
+.tbl-search-wrap input:focus { border-color: #3b82f6; }
+tr.tbl-hidden { display: none !important; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1243,6 +1259,140 @@ def render_backtest(r: dict) -> None:
         )
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+#  KELLY POSITION SIZING
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_position_sizing(r: dict) -> None:
+    """
+    Quarter-Kelly position sizing calculator driven by walk-forward backtest stats.
+    Prefers 5-day backtest; falls back to 7 → 10 → 3.
+    f* = (p·b − q) / b  where p=win_rate, q=1-p, b=avg_win/avg_loss.
+    Shows position value, share lot (round-down to 100), and risk in ₫.
+    """
+    # Pick best available backtest prefix
+    bt_pfx = next(
+        (p for p in ("bt5", "bt7", "bt10", "bt3") if r.get(f"{p}_win_rate")),
+        None,
+    )
+    if not bt_pfx:
+        bars = r.get("bars") or 0
+        if bars > 0:
+            # Data was loaded but backtest produced <5 signals — tell the user why
+            with st.expander("💰 Kelly Position Sizing  ·  Không đủ dữ liệu backtest",
+                             expanded=False):
+                st.caption(
+                    f"⚠️ Cần ≥ 220 nến và ≥ 5 tín hiệu BUY trong lịch sử để tính Kelly. "
+                    f"Dữ liệu hiện có: {bars} nến. Tăng số ngày lịch sử lên 400–600 ngày "
+                    f"hoặc chọn các mã có thanh khoản cao hơn."
+                )
+        return
+
+    win_rate = (r.get(f"{bt_pfx}_win_rate") or 0) / 100
+    avg_win  = r.get(f"{bt_pfx}_avg_win")  or 0
+    avg_loss = abs(r.get(f"{bt_pfx}_avg_loss") or 0)
+    price    = r.get("price") or 0
+
+    # Guard: need valid inputs for meaningful output
+    if avg_loss == 0 or price <= 0 or win_rate <= 0:
+        return
+
+    b         = avg_win / avg_loss           # win/loss magnitude ratio
+    q         = 1.0 - win_rate
+    f_full    = (win_rate * b - q) / b       # full Kelly fraction (can be negative)
+    f_quarter = max(0.0, f_full * 0.25)      # ¼ Kelly, floor at 0 (never short)
+    bt_lbl    = {"bt3": "3 ngày", "bt5": "5 ngày", "bt7": "7 ngày", "bt10": "10 ngày"}[bt_pfx]
+
+    with st.expander(
+        f"💰 Kelly Position Sizing  ·  Backtest {bt_lbl}  ·  "
+        f"¼ Kelly = {f_quarter * 100:.1f}%  ·  W/L ratio = {b:.2f}",
+        expanded=False,
+    ):
+        pv_col, _ = st.columns([1, 2])
+        with pv_col:
+            portfolio_vnd = st.number_input(
+                "Tổng vốn danh mục (₫)",
+                min_value=10_000_000,
+                max_value=10_000_000_000,
+                value=500_000_000,
+                step=50_000_000,
+                format="%d",
+                key=f"kelly_pv_{r['ticker']}",
+            )
+
+        pos_value   = portfolio_vnd * f_quarter
+        # Round down to nearest lot of 100 shares; minimum 100 when Kelly > 0
+        shares      = int(pos_value / price / 100) * 100
+        shares      = max(100, shares) if f_quarter > 0 and shares < 100 else shares
+        risk_amt    = shares * price * avg_loss / 100          # ₫ at-risk per avg loss
+        actual_pct  = (shares * price / portfolio_vnd * 100) if portfolio_vnd > 0 else 0
+
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Full Kelly",           f"{f_full * 100:.1f}%",
+                  help="Mức lý thuyết Kelly — biến động rất cao, KHÔNG nên dùng")
+        c2.metric("¼ Kelly (khuyến nghị)", f"{f_quarter * 100:.1f}%")
+        c3.metric("Số lượng CP (lot 100)", f"{shares:,}")
+        c4.metric("Rủi ro ước tính",       f"{risk_amt:,.0f} ₫",
+                  delta=f"{avg_loss:.1f}% avg loss/trade", delta_color="inverse")
+
+        st.markdown(
+            f'<div style="background:#141824;border:1px solid #2d3347;border-radius:8px;'
+            f'padding:12px 16px;font-size:12.5px;color:#94a3b8;line-height:2.1;">'
+            f'<b style="color:#e2e8f0;">Giá trị vị thế:</b> '
+            f'<span style="color:#22c55e;font-weight:700;">{shares * price:,.0f} ₫</span>'
+            f'&nbsp;({actual_pct:.1f}% danh mục)'
+            f'&nbsp;&nbsp;·&nbsp;&nbsp;'
+            f'<b style="color:#e2e8f0;">Win rate:</b> '
+            f'<span style="color:#60a5fa;font-weight:700;">{win_rate * 100:.1f}%</span>'
+            f'&nbsp;&nbsp;·&nbsp;&nbsp;'
+            f'<b style="color:#e2e8f0;">W/L (b):</b> '
+            f'<span style="color:#60a5fa;font-weight:700;">{b:.2f}</span>'
+            f'&nbsp;&nbsp;·&nbsp;&nbsp;'
+            f'<b style="color:#e2e8f0;">Nguồn:</b> backtest {bt_lbl}'
+            f'</div>',
+            unsafe_allow_html=True,
+        )
+        st.caption(
+            "⚠️ Kelly Criterion — f* = (p·b − q) / b. "
+            "¼ Kelly giảm phương sai, bảo toàn vốn tốt hơn Full Kelly. "
+            "Không bao gồm phí giao dịch và slippage. Chỉ dùng làm tham khảo."
+        )
+
+
+# ── signal color map (used in multiple tables) ─────────────────────────────
+_SIG_COLOR_MAP = {
+    "MUA":            "#22c55e",
+    "THEO DÕI–TĂNG":  "#3b82f6",
+    "TRUNG LẬP":      "#94a3b8",
+    "THEO DÕI–GIẢM":  "#f97316",
+    "BÁN / TRÁNH":    "#ef4444",
+}
+
+
+def _ticker_sig_cell(ticker: str, sig: str) -> str:
+    """Ticker cell with signal-based left-border color strip."""
+    c = _SIG_COLOR_MAP.get(sig, "#475569")
+    return (
+        f'<b style="font-size:14px;border-left:3px solid {c};'
+        f'padding-left:7px;color:{c}">{_safe(ticker)}</b>'
+    )
+
+
+def _filterable_table(table_id: str, html: str) -> str:
+    """Wrap a <table> in a live-search input that hides non-matching rows."""
+    tagged = html.replace("<table ", f'<table id="{table_id}" ')
+    return (
+        f'<div class="tbl-search-wrap">'
+        f'<input id="{table_id}_q" oninput="(function(){{'
+        f'var q=document.getElementById(\'{table_id}_q\').value.toLowerCase();'
+        f'document.querySelectorAll(\'#{table_id} tbody tr\').forEach(function(r){{'
+        f'r.classList.toggle(\'tbl-hidden\',!r.innerText.toLowerCase().includes(q));'
+        f'}});}})()" placeholder="🔍 Lọc theo mã, tín hiệu, chỉ số..." />'
+        f'</div>'
+        + tagged
+    )
+
+
 def render_summary_table(results: list) -> None:
     st.markdown("<hr>", unsafe_allow_html=True)
     st.markdown("### 📋 Bảng Tổng Kết")
@@ -1254,8 +1404,9 @@ def render_summary_table(results: list) -> None:
 
     rows = ""
     for r in results:
+        sig_v = r.get("signal", "")
         if "error" in r:
-            rows += (f'<tr><td><b>{_safe(r["ticker"])}</b></td>'
+            rows += (f'<tr><td>{_ticker_sig_cell(r["ticker"], "")}</td>'
                      f'<td colspan="9" class="col-red">❌ {_safe(r["error"])}</td></tr>')
             continue
         pct_v  = r.get("pct_change", 0) or 0
@@ -1269,7 +1420,7 @@ def render_summary_table(results: list) -> None:
             if rk is not None else "–"
         )
         rows += f"""<tr>
-  <td><b style="font-size:15px;">{_safe(r['ticker'])}</b></td>
+  <td>{_ticker_sig_cell(r['ticker'], sig_v)}</td>
   <td>{_f(r.get('price'))}</td>
   <td class="{p_cls}">{_pct(pct_v)}</td>
   <td>{_f(r.get('rsi'), 1)}</td>
@@ -1277,10 +1428,10 @@ def render_summary_table(results: list) -> None:
   <td>{_f(r.get('adx'), 1)}</td>
   <td>{(_f(r.get('kl_ratio'), 1) + '×') if r.get('kl_ratio') else '–'}</td>
   <td style="font-size:12px;color:var(--muted);">{r.get('trend_struct','–')}</td>
-  <td>{_badge(r.get('signal',''))}{c_flag}{f_flag}</td>
+  <td>{_badge(sig_v)}{c_flag}{f_flag}</td>
   <td>{rank_html}</td>
 </tr>"""
-    st.markdown(f"""
+    table_html = f'''
 <table class="sum-table">
   <thead>
     <tr>
@@ -1291,7 +1442,8 @@ def render_summary_table(results: list) -> None:
   </thead>
   <tbody>{rows}</tbody>
 </table>
-""", unsafe_allow_html=True)
+'''
+    st.markdown(_filterable_table("summary_tbl", table_html), unsafe_allow_html=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1323,7 +1475,20 @@ def _load_audit_history(ticker: str) -> list:
                 line = line.strip()
                 if line:
                     try:
-                        rows.append(json.loads(line))
+                        rec = json.loads(line)
+                        # ── Migrate old-format records (pre-multi-horizon backtest)
+                        # Old code wrote 'bt_win_rate' etc.; new code writes 'bt5_*'.
+                        # Copy old keys into the bt5 slot so Kelly panel and audit
+                        # charts work correctly for historical runs.
+                        if rec.get('bt_win_rate') and not rec.get('bt5_win_rate'):
+                            for _sfx in ('signals','win_rate','avg_return','avg_win',
+                                         'avg_loss','max_loss_streak','forward_days','threshold'):
+                                if f'bt_{_sfx}' in rec:
+                                    rec[f'bt5_{_sfx}'] = rec[f'bt_{_sfx}']
+                        # Migrate old 'vsa' key → 'vsa_state'
+                        if rec.get('vsa') and not rec.get('vsa_state'):
+                            rec['vsa_state'] = rec['vsa']
+                        rows.append(rec)
                     except Exception:
                         pass
     except Exception:
@@ -1397,7 +1562,7 @@ def _build_audit_trend_chart(history_asc: list) -> go.Figure:
 #  AUDIT PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 def _audit_snapshot_row_html(r: dict, runs: int) -> str:
-    """Build one <tr> for the snapshot table."""
+    """Build one <tr> for the snapshot table with signal-colored ticker."""
     sig   = r.get("signal", "")
     scol  = _audit_signal_color(sig)
     pct   = r.get("pct_change", 0) or 0
@@ -1405,13 +1570,26 @@ def _audit_snapshot_row_html(r: dict, runs: int) -> str:
     ts    = (r.get("run_ts") or "")[:16].replace("T", " ")
     rl    = r.get("regime_label") or r.get("regime") or "–"
     vsa   = r.get("vsa_state", "NEUTRAL") or "NEUTRAL"
-    conf  = "✓" if r.get("signal_confirmed", True) else "⚡"
-    cc    = "#22c55e" if r.get("signal_confirmed", True) else "#f97316"
+    _sc   = r.get("signal_confirmed")
+    conf  = "✓" if _sc is True else ("⚡" if _sc is False else "–")
+    cc    = "#22c55e" if _sc is True else ("#f97316" if _sc is False else "#94a3b8")
     pc    = "#22c55e" if pct > 0 else "#ef4444" if pct < 0 else "#94a3b8"
     bc    = _audit_signal_color(sig)
+    # Forecast summary (if saved)
+    fc_ov   = r.get("fc_overall_vote", "")
+    fc_conf = r.get("fc_overall_conf")
+    fc_cell = (
+        f'<span style="color:{_audit_signal_color(fc_ov)};font-size:11px;">'
+        f'{fc_ov} <span style="color:#64748b;">({fc_conf:.0f}%)</span></span>'
+        if fc_ov and fc_conf else "–"
+    )
+    tk_cell = (
+        f'<b style="font-size:14px;border-left:3px solid {scol};'
+        f'padding-left:7px;color:{scol};">{_safe(r["ticker"])}</b>'
+    )
     return (
         f'<tr>'
-        f'<td style="font-weight:700;font-size:14px;">{_safe(r["ticker"])}</td>'
+        f'<td>{tk_cell}</td>'
         f'<td style="font-family:var(--mono);">{_f(r.get("price"))}</td>'
         f'<td style="color:{pc};font-family:var(--mono);">{"+" if pct>=0 else ""}{pct:.1f}%</td>'
         f'<td style="color:{scol};font-weight:700;">{sig}</td>'
@@ -1422,6 +1600,7 @@ def _audit_snapshot_row_html(r: dict, runs: int) -> str:
         f'<td style="font-size:12px;color:#94a3b8;">{rl}</td>'
         f'<td style="font-size:12px;color:#64748b;">{vsa}</td>'
         f'<td style="text-align:center;color:{cc};font-weight:700;">{conf}</td>'
+        f'<td>{fc_cell}</td>'
         f'<td style="font-size:11px;color:#475569;">{ts}</td>'
         f'<td style="text-align:center;color:#475569;">{runs}</td>'
         f'</tr>'
@@ -1563,6 +1742,50 @@ def _audit_detail_expander(row: dict, idx: int, prev_row: dict | None) -> None:
             st.markdown(f'<div class="commentary" style="margin-top:6px;">{body}</div>',
                         unsafe_allow_html=True)
 
+        # ── Forecast summary (if persisted in audit record) ───────────────
+        _fc_ov    = row.get("fc_overall_vote", "")
+        _fc_conf  = row.get("fc_overall_conf")
+        _fc_short = row.get("fc_short_vote", "")
+        _fc_mid   = row.get("fc_mid_vote", "")
+        _fc_long  = row.get("fc_long_vote", "")
+        _fc_lstm  = row.get("fc_lstm_pct")
+        if _fc_ov:
+            def _fvcolor(v):
+                return "#22c55e" if "TĂNG" in v or "MUA" in v else "#ef4444" if "GIẢM" in v or "BÁN" in v else "#94a3b8"
+            _fc_rows = []
+            for _lbl2, _vote2, _conf2, _rkkey in [
+                ("Tổng hợp",          _fc_ov,    _fc_conf,                  None),
+                ("⏱ Ngắn (3–5ngày)",  _fc_short, row.get("fc_short_conf"),  "fc_short_reasons"),
+                ("📅 Trung (1tháng)",   _fc_mid,   row.get("fc_mid_conf"),    "fc_mid_reasons"),
+                ("📈 Dài (3–6tháng)",   _fc_long,  row.get("fc_long_conf"),   "fc_long_reasons"),
+            ]:
+                if not _vote2: continue
+                _rc  = _fvcolor(_vote2)
+                _c2s = f" ({_conf2:.0f}%)" if _conf2 else ""
+                _rrs = row.get(_rkkey, []) if _rkkey else []
+                _rrs_txt = " · ".join(_rrs[:3])
+                _fc_rows.append(
+                    f'<tr><td style="color:#94a3b8;white-space:nowrap;">{_lbl2}</td>'
+                    f'<td style="color:{_rc};font-weight:700;">{_vote2}</td>'
+                    f'<td style="color:#64748b;font-size:11px;">{_c2s.strip()}</td>'
+                    f'<td style="color:#475569;font-size:11px;">{_rrs_txt}</td></tr>'
+                )
+            if _fc_lstm is not None:
+                _lc = "#22c55e" if _fc_lstm >= 0 else "#ef4444"
+                _fc_rows.append(
+                    f'<tr><td style="color:#94a3b8;">🧠 ML/LSTM</td>'
+                    f'<td style="color:{_lc};font-weight:700;">{_fc_lstm:+.2f}%</td>'
+                    f'<td colspan="2" style="color:#64748b;font-size:11px;">5 ngày</td></tr>'
+                )
+            if _fc_rows:
+                st.markdown("<div style='height:6px'></div>", unsafe_allow_html=True)
+                st.markdown(
+                    f'<table class="sum-table"><thead><tr>'
+                    f'<th>Dự báo</th><th>Kết luận</th><th>Xác tín</th><th>Lý do chính</th>'
+                    f'</tr></thead><tbody>{"".join(_fc_rows)}</tbody></table>',
+                    unsafe_allow_html=True,
+                )
+
         # ── Meta ──────────────────────────────────────────────────────────
         st.caption(
             f"Nguồn: {row.get('ohlcv_src','–')}  ·  "
@@ -1635,7 +1858,7 @@ def render_audit_page() -> None:
 
     # ═══ FILTER BAR ══════════════════════════════════════════════════════
     st.markdown("---")
-    fc1, fc2, fc3 = st.columns([2, 2, 1])
+    fc1, fc2, fc3, fc4 = st.columns([2, 2, 2, 1])
     with fc1:
         _SIG_ALL = "— Tất cả tín hiệu —"
         _SIG_OPTIONS = [_SIG_ALL, "MUA", "THEO DÕI–TĂNG", "TRUNG LẬP", "THEO DÕI–GIẢM", "BÁN / TRÁNH"]
@@ -1647,6 +1870,15 @@ def render_audit_page() -> None:
                                           key="audit_ticker_filter")
         ticker_filter = {t.strip().upper() for t in ticker_filter_raw.split(",") if t.strip()}
     with fc3:
+        _DATE_ALL = "— Tất cả ngày —"
+        _all_dates = sorted(
+            {(r.get("run_ts") or "")[:10] for r in latest_by_ticker.values()
+             if (r.get("run_ts") or "")[:10]},
+            reverse=True,
+        )
+        date_filter = st.selectbox("📅 Ngày quét", [_DATE_ALL] + _all_dates,
+                                   key="audit_date_filter")
+    with fc4:
         sort_by = st.selectbox("📶 Sắp xếp", ["Tín hiệu", "Bull %↓", "Giá↓", "Thay đổi↓", "Mã A→Z"],
                                key="audit_sort")
 
@@ -1656,6 +1888,7 @@ def render_audit_page() -> None:
         if "error" not in r
         and (not ticker_filter or r["ticker"] in ticker_filter)
         and (sig_filter == _SIG_ALL or r.get("signal", "") == sig_filter)
+        and (date_filter == _DATE_ALL or (r.get("run_ts") or "")[:10] == date_filter)
     ]
 
     _SIG_ORDER = ["MUA", "THEO DÕI–TĂNG", "TRUNG LẬP", "THEO DÕI–GIẢM", "BÁN / TRÁNH", ""]
@@ -1683,19 +1916,20 @@ def render_audit_page() -> None:
             _audit_snapshot_row_html(r, runs_count.get(r["ticker"], 0))
             for r in filtered
         )
-        st.markdown(f"""
+        audit_snap_html = f'''
 <table class="sum-table">
   <thead>
     <tr>
       <th>Mã</th><th>Giá</th><th>%Δ</th>
       <th>Tín hiệu</th><th>Bull %</th>
       <th>Regime</th><th>VSA</th><th>Xác nhận</th>
-      <th>Lần quét cuối</th><th>Số lần</th>
+      <th>Dự báo</th><th>Lần quét cuối</th><th>Số lần</th>
     </tr>
   </thead>
   <tbody>{rows_html}</tbody>
 </table>
-""", unsafe_allow_html=True)
+'''
+        st.markdown(_filterable_table("audit_snap_tbl", audit_snap_html), unsafe_allow_html=True)
 
     # ― Per-ticker drilldown ――――――――――――――――――――――――――――――――――――――――――――――――
     st.markdown("---")
@@ -1754,6 +1988,22 @@ def render_sidebar():
     Vietnam Stock · Technical Analysis</div>
 </div>
 """, unsafe_allow_html=True)
+
+        # ── Watchlist nhanh ───────────────────────────────────────────────
+        _WATCHLIST_GROUPS = {
+            "VN30 Blue-chip":  "HPG,VNM,VCB,BID,CTG,TCB,VHM,VIC,MBB,ACB,FPT,GAS,SAB,VJC,PLX,REE,MWG,PNJ,MSN,VRE",
+            "Ngân hàng":       "VCB,BID,CTG,MBB,TCB,ACB,VPB,HDB,LPB,SHB,STB,TPB,OCB,MSB,VIB,EIB,SSB",
+            "BDS + Xay dung":  "VHM,NVL,PDR,DIG,KDH,TCH,NLG,DXG,CTD,HBC,VCG,DPG,CII",
+            "Nang luong":      "GAS,PLX,POW,NT2,GEG,REE,PC1,PVD,PVT,BSR",
+            "Cong nghe":       "FPT,CMG,ELC,VNG,ICT",
+            "Tieu dung + BL":  "VNM,MSN,SAB,MWG,PNJ,FRT,KDC,DBC,VHC,ANV",
+            "Chung khoan":     "SSI,VCI,VND,HCM,MBS,FTS,VIX,ORS",
+        }
+        with st.expander("📋 Watchlist nhanh", expanded=False):
+            for _grp_name, _grp_tickers in _WATCHLIST_GROUPS.items():
+                if st.button(_grp_name, key=f"wl_{_grp_name.replace(' ','_')}",
+                             use_container_width=True):
+                    st.session_state["ticker_input"] = _grp_tickers
 
         ticker_input = st.text_area(
             "🔍 Mã cổ phiếu",
@@ -1928,6 +2178,7 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
         st.markdown("##### 📝 Nhận xét phân tích")
         render_commentary(r)
 
+    render_position_sizing(r)
     render_backtest(r)
     render_monte_carlo(r, df)
     render_forecast_horizons(r, df)
@@ -2025,19 +2276,49 @@ def render_portfolio_hub() -> None:
         hide_index=True,
         key="portfolio_editor",
     )
+    # Apply any user edits from the table back to holdings (internal column names)
+    holdings = editable.rename(columns={
+        "Mã": "ticker", "Số lượng": "qty", "Giá vốn BQ": "avg_cost",
+        "Ngày GD": "trade_date", "Trạng thái T+2": "status",
+    })
 
-    # ── Fetch current prices (parallel, max 6 workers) ─────────────────────
+    # ── Fetch current prices — button-gated, cached in session state ─────────
+    # Fetching on every Streamlit rerender would block the UI on each interaction.
+    # Instead: cache prices in session_state and only re-fetch on explicit button click.
     import concurrent.futures as _cf
-    tickers_list = list(holdings["ticker"].unique())
-    def _fetch_price(tk):
-        try:
-            rt = fetch_ssi_realtime(tk)
-            return tk, (rt.get("price") or 0) if rt else 0
-        except Exception:
-            return tk, 0
-    with st.spinner(f"⏳ Lấy giá thực tế {len(tickers_list)} mã (song song)..."):
-        with _cf.ThreadPoolExecutor(max_workers=6) as _pool:
-            price_map = dict(_pool.map(_fetch_price, tickers_list))
+    tickers_list = list(holdings["ticker"].dropna().str.upper().unique())
+    _price_key   = "portfolio_price_cache"
+
+    btn_col, ts_col = st.columns([1, 3])
+    with btn_col:
+        do_fetch = st.button("🔄 Cập nhật giá", key="portfolio_refresh", type="primary")
+    with ts_col:
+        _cached = st.session_state.get(_price_key)
+        if _cached:
+            st.caption(f"📅 Giá cập nhật lúc {_cached['ts']}  ·  {len(_cached['prices'])} mã")
+        else:
+            st.caption("⚠️ Chưa có giá — nhấn **🔄 Cập nhật giá** để tải.")
+
+    if do_fetch or _price_key not in st.session_state:
+        def _fetch_price(tk):
+            try:
+                rt = fetch_ssi_realtime(tk)
+                return tk, (rt.get("price") or 0) if rt else 0
+            except Exception:
+                return tk, 0
+        with st.spinner(f"⏳ Lấy giá {len(tickers_list)} mã (song song)..."):
+            with _cf.ThreadPoolExecutor(max_workers=6) as _pool:
+                _prices = dict(_pool.map(_fetch_price, tickers_list))
+        st.session_state[_price_key] = {
+            "prices": _prices,
+            "ts": datetime.now().strftime("%H:%M:%S"),
+        }
+
+    _cached = st.session_state.get(_price_key)
+    if not _cached:
+        st.info("💡 Nhấn **🔄 Cập nhật giá** để tính P&L và hiển thị biểu đồ.")
+        return
+    price_map = _cached["prices"]
 
     # ── Calculate performance ─────────────────────────────────────────────────
     perf_df  = calculate_performance(holdings, price_map)
@@ -2187,12 +2468,20 @@ def render_scanner() -> None:
                                       value="Tắt", key="scanner_autoref")
         scan_btn   = st.button("▶ Quét ngay", type="primary", use_container_width=True)
 
+    import re as _re_sc
+    _VN_RE_SC = _re_sc.compile(r'^(?=.*[A-Za-z])[A-Za-z0-9]{2,6}$')
     tickers_raw = [
         t.strip().upper()
         for t in scanner_input.replace(";", ",").split(",")
         if t.strip()
     ]
-    tickers = list(dict.fromkeys(tickers_raw))  # deduplicate, preserve order
+    _sc_invalid = [t for t in tickers_raw if not _VN_RE_SC.match(t)]
+    tickers     = list(dict.fromkeys(t for t in tickers_raw if _VN_RE_SC.match(t)))
+    if _sc_invalid:
+        st.warning(
+            f"⚠️ Bỏ qua mã không hợp lệ: " + ", ".join(_sc_invalid[:10])
+            + (" …" if len(_sc_invalid) > 10 else "")
+        )
 
     # Auto-refresh logic
     if auto_ref != "Tắt" and "scanner_last_run" in st.session_state:
@@ -2220,6 +2509,24 @@ def render_scanner() -> None:
                 pair = batch.get(tk)
                 if pair:
                     res, df_ = pair
+                    # Enrich with forecast data before saving to audit
+                    if not res.get("error") and isinstance(df_, pd.DataFrame) and not df_.empty:
+                        try:
+                            _fc2 = multi_horizon_forecast(res, df_)
+                            res["fc_overall_vote"]  = _fc2.get("overall_vote", "")
+                            res["fc_overall_conf"]  = _fc2.get("overall_conf", 0.0)
+                            res["fc_short_vote"]    = _fc2.get("short_vote", "")
+                            res["fc_short_conf"]    = _fc2.get("short_conf", 0.0)
+                            res["fc_short_reasons"] = _fc2.get("short_reasons", [])
+                            res["fc_mid_vote"]      = _fc2.get("mid_vote", "")
+                            res["fc_mid_conf"]      = _fc2.get("mid_conf", 0.0)
+                            res["fc_mid_reasons"]   = _fc2.get("mid_reasons", [])
+                            res["fc_long_vote"]     = _fc2.get("long_vote", "")
+                            res["fc_long_conf"]     = _fc2.get("long_conf", 0.0)
+                            res["fc_long_reasons"]  = _fc2.get("long_reasons", [])
+                            res["fc_lstm_pct"]      = _fc2.get("lstm_pred_pct")
+                        except Exception:
+                            pass
                     scan_results.append(res)
                     save_profiler_audit(res)
         else:
@@ -2293,10 +2600,15 @@ def render_scanner() -> None:
         rr_s = f"{rr:.2f}:1" if rr else "–"
         lv_s = f"{lv:.2f}×" if is_deep else "–"
         vv_s = f"{vv:.2f}%" if is_deep else "–"
+        # ticker cell colored by signal
+        tk_cell = (
+            f'<b style="font-size:14px;border-left:3px solid {sc};'
+            f'padding-left:7px;color:{sc}">{_safe(tk)}</b>'
+        )
         rows_html += (
             f'<tr>'
             f'<td><b style="color:#fbbf24;">#{rnk}</b></td>'
-            f'<td><b style="font-size:14px;">{_safe(tk)}</b></td>'
+            f'<td>{tk_cell}</td>'
             f'<td style="font-family:monospace;">{pr:,.0f}</td>'
             f'<td style="font-family:monospace;{p_c}">{pct:+.2f}%</td>'
             f'<td><span style="background:{sc}22;border:1px solid {sc};color:{sc};'
@@ -2309,14 +2621,14 @@ def render_scanner() -> None:
             f'</tr>'
         )
 
-    st.markdown(
+    scanner_table_html = (
         f'<table class="sum-table"><thead><tr>'
         f'<th>Hạng</th><th>Mã</th><th>Giá</th><th>%Δ</th>'
         f'<th>Tín hiệu</th><th>NetFlow</th><th>Bull%</th>'
         f'<th>Thanh khoản</th><th>Biến động</th><th>R:R</th>'
-        f'</tr></thead><tbody>{rows_html}</tbody></table>',
-        unsafe_allow_html=True,
+        f'</tr></thead><tbody>{rows_html}</tbody></table>'
     )
+    st.markdown(_filterable_table("scanner_tbl", scanner_table_html), unsafe_allow_html=True)
     st.caption(
         "PROMETHEE II MCDA: Trọng số — Bull Score (50%), thanh khoản KL×MA20 (30%), biến động ATR/Giá (−20%). "
         "Lite Mode không có đủ dữ liệu chỉ báo — chuyển sang Deep Mode để xếp hạng chính xác."
@@ -2357,11 +2669,22 @@ def main() -> None:
 
     # Process on button click
     if analyse_btn and ticker_input.strip():
-        tickers = [
+        import re as _re
+        _VN_TICKER_RE = _re.compile(r'^(?=.*[A-Za-z])[A-Za-z0-9]{2,6}$')
+        _raw = [
             t.strip().upper()
             for t in ticker_input.replace(";", ",").split(",")
             if t.strip()
         ]
+        _invalid = [t for t in _raw if not _VN_TICKER_RE.match(t)]
+        tickers  = [t for t in _raw if _VN_TICKER_RE.match(t)]
+        if _invalid:
+            st.warning(
+                f"⚠️ Bỏ qua {len(_invalid)} mã không hợp lệ: "
+                + ", ".join(_invalid[:10])
+                + (" …" if len(_invalid) > 10 else "")
+                + " — Mã VN gồm 2–6 ký tự chữ-số, phải có ít nhất 1 chữ cái."
+            )
         if tickers:
             results, dfs = [], {}
             prog = st.progress(0, text="Khởi động phân tích...")
@@ -2372,6 +2695,24 @@ def main() -> None:
                 )
                 try:
                     result, df = cached_analyse(ticker, days)
+                    # Enrich result with forecast data before saving to audit
+                    if not result.get("error") and isinstance(df, pd.DataFrame) and not df.empty:
+                        try:
+                            _fc = multi_horizon_forecast(result, df)
+                            result["fc_overall_vote"]  = _fc.get("overall_vote", "")
+                            result["fc_overall_conf"]  = _fc.get("overall_conf", 0.0)
+                            result["fc_short_vote"]    = _fc.get("short_vote", "")
+                            result["fc_short_conf"]    = _fc.get("short_conf", 0.0)
+                            result["fc_short_reasons"] = _fc.get("short_reasons", [])
+                            result["fc_mid_vote"]      = _fc.get("mid_vote", "")
+                            result["fc_mid_conf"]      = _fc.get("mid_conf", 0.0)
+                            result["fc_mid_reasons"]   = _fc.get("mid_reasons", [])
+                            result["fc_long_vote"]     = _fc.get("long_vote", "")
+                            result["fc_long_conf"]     = _fc.get("long_conf", 0.0)
+                            result["fc_long_reasons"]  = _fc.get("long_reasons", [])
+                            result["fc_lstm_pct"]      = _fc.get("lstm_pred_pct")
+                        except Exception:
+                            pass
                 except Exception as exc:
                     result = {"ticker": ticker, "error": str(exc)}
                     df = pd.DataFrame()
