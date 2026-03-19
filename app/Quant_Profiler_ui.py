@@ -41,11 +41,17 @@ from portfolio_engine import (
     calculate_performance,
     build_portfolio_summary,
     T25ExitManager,
+    generate_t_plus_recommendation,
+    _T_REC_GRADES,
+    _T_REC_COLORS,
 )
 from forecast_engine import (
     promethee_ii_ranking,
     monte_carlo_projection,
     multi_horizon_forecast,
+    train_lstm_model,
+    _KERAS_AVAILABLE,
+    _KERAS_BACKEND,
 )
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -1122,9 +1128,111 @@ def _conf_color(conf: float) -> str:
 
 def render_forecast_horizons(r: dict, df: pd.DataFrame) -> None:
     """3-column multi-horizon forecast panel with vote + confidence bars."""
+    from pathlib import Path as _Path
+    _ticker     = r.get("ticker", "")
+    _mdl_path   = _Path(os.path.join(_DIR, "data", "models", f"{_ticker}_lstm.keras"))
+    _mdl_exists = _mdl_path.exists()
+
+    # ── Keras unavailability warning ─────────────────────────────────────────
+    if not _KERAS_AVAILABLE:
+        st.warning(
+            "⚠️ **Keras chưa được cài đặt** — dự báo ML đang dùng **Ridge fallback**. "
+            f"Cài đặt: `pip install tensorflow`"
+            + (f"  *(backend phát hiện: `{_KERAS_BACKEND}`)*" if _KERAS_BACKEND else ""),
+            icon="⚠️",
+        )
+
+    # ── LSTM status + Train/Retrain control ──────────────────────────────────
+    _lc1, _lc2, _lc3 = st.columns([3, 2, 3])
+    with _lc1:
+        if not _KERAS_AVAILABLE:
+            _badge_html = '❌ <b style="color:#ef4444;">Keras N/A</b> — Ridge fallback'
+        elif _mdl_exists:
+            _badge_html = f'🧠 <b style="color:#22c55e;">LSTM model</b> — {_ticker}_lstm.keras'
+        else:
+            _badge_html = f'📊 <b style="color:#f97316;">Ridge ML</b> — chưa có LSTM model cho {_ticker}'
+        st.markdown(
+            f'<div style="font-size:13px;padding:6px 0;">{_badge_html}</div>',
+            unsafe_allow_html=True,
+        )
+    with _lc2:
+        _retrain_btn = st.button(
+            "🔄 Retrain LSTM" if _mdl_exists else "🧠 Train LSTM ngay",
+            key=f"lstm_train_{_ticker}",
+            type="secondary" if _mdl_exists else "primary",
+            use_container_width=True,
+            disabled=not _KERAS_AVAILABLE,
+            help=(
+                "Huấn luyện lại model LSTM với toàn bộ dữ liệu lịch sử."
+                if _mdl_exists else
+                "Huấn luyện model LSTM cục bộ. Mất ~10–20 giây (CPU). "
+                "Sau khi xong, dự báo sẽ dùng LSTM thay Ridge."
+            ),
+        )
+    with _lc3:
+        if _mdl_exists:
+            _ts     = _mdl_path.stat().st_mtime
+            _ts_str = __import__("datetime").datetime.fromtimestamp(_ts).strftime("%d/%m/%Y %H:%M")
+            st.caption(f"📅 Lần train cuối: {_ts_str}")
+        elif _KERAS_AVAILABLE:
+            st.caption("💡 Train LSTM để tăng độ chính xác dự báo.")
+
+    # ── Live training with per-epoch progress bar ────────────────────────────
+    if _retrain_btn and df is not None and not df.empty:
+        _prog_placeholder = st.empty()
+        _prog_placeholder.progress(0, text="⏳ Đang khởi tạo model...")
+
+        def _on_epoch(epoch: int, total: int, logs: dict) -> None:
+            pct      = min(int(epoch / total * 100), 99)
+            mae_str  = (
+                f"  ·  val_mae: {logs['val_mae']:.4f}"
+                if "val_mae" in logs else ""
+            )
+            loss_str = (
+                f"  ·  val_loss: {logs['val_loss']:.4f}"
+                if "val_loss" in logs else ""
+            )
+            _prog_placeholder.progress(
+                pct,
+                text=f"🧠 Epoch {epoch}/{total}{loss_str}{mae_str}",
+            )
+
+        _trained = train_lstm_model(_ticker, df, force=True, progress_callback=_on_epoch)
+
+        if _trained is not None:
+            _prog_placeholder.progress(100, text="✅ Hoàn thành!")
+            _ep    = getattr(_trained, "_train_epochs",  "?")
+            _mae   = getattr(_trained, "_train_val_mae", None)
+            _n     = getattr(_trained, "_train_samples",  "?")
+            _mae_s = f"  ·  Val MAE: **{_mae:.4f}%**" if _mae is not None else ""
+            st.success(
+                f"✅ **LSTM huấn luyện xong!**  {_ep} epochs  ·  {_n} samples{_mae_s}  "
+                f"·  Đã lưu: `data/models/{_ticker}_lstm.keras`"
+            )
+            st.rerun()
+        else:
+            _prog_placeholder.empty()
+            _backend_hint = (
+                f" *(backend: `{_KERAS_BACKEND}`)*" if _KERAS_BACKEND else ""
+            )
+            st.error(
+                f"❌ **Huấn luyện thất bại**{_backend_hint}.  "
+                "Kiểm tra: `pip install tensorflow`  |  dữ liệu >= 30 phiên  |  xem log console."
+            )
+
+    # ── Forecast computation + expander ─────────────────────────────────────
     fc = multi_horizon_forecast(r, df)
+    _lstm_src_label = (
+        "🧠 LSTM" if fc["lstm_source"] == "lstm"
+        else "📊 Ridge" if fc["lstm_source"] == "ridge"
+        else "⚪ N/A"
+    )
+    _lstm_val_label = (
+        f"{fc['lstm_pred_pct']:+.2f}%" if fc["lstm_pred_pct"] is not None else "---"
+    )
     with st.expander(
-        f"🔭 Dự báo Đa Khung Thời gian  ·  Tổng hợp: {fc['overall_vote']}  ({fc['overall_conf']:.0f}%)",
+        f"🔭 Dự báo Đa Khung Thời gian  ·  Tổng hợp: {fc['overall_vote']}  ({fc['overall_conf']:.0f}%)"
+        f"  ·  {_lstm_src_label}: {_lstm_val_label}",
         expanded=False,
     ):
         st.markdown(_HORIZON_CSS, unsafe_allow_html=True)
@@ -1863,6 +1971,127 @@ def _audit_detail_expander(row: dict, idx: int, prev_row: dict | None) -> None:
                 _hp.append(f'<br><small style="color:{_muted};">{_timing}</small>')
             _hp.append('</div>')
             st.markdown("".join(_hp), unsafe_allow_html=True)
+        render_t_plus_recommendation(row)
+def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
+    """
+    Render the T+ Entry Recommendation card for a single ticker result dict.
+    Uses generate_t_plus_recommendation() to compute the score/action then
+    displays it in an expander with grade badge, confidence gauge, trade levels,
+    sizing info, and supporting/risk signal chips.
+    """
+    ticker = r.get("ticker", "")
+    # Build minimal fc from stored fields if not supplied
+    if fc is None and r.get("fc_lstm_pct") is not None:
+        fc = {"lstm_pred_pct": r["fc_lstm_pct"], "lstm_source": r.get("fc_lstm_source", "ridge")}
+
+    rec = generate_t_plus_recommendation(r, fc)
+    action    = rec["action"]
+    grade     = rec["grade"]
+    score     = rec["confidence_score"]
+    color     = _T_REC_COLORS.get(action, "#94a3b8")
+
+    action_labels = {
+        "STRONG_BUY": "💎 STRONG BUY",
+        "BUY":        "✅ BUY",
+        "WATCH":      "👁 WATCH",
+        "SKIP":       "⏭ SKIP",
+        "AVOID":      "🚫 AVOID",
+    }
+    label = action_labels.get(action, action)
+
+    with st.expander(
+        f"🎯 Khuyến nghị T+ Entry · **{ticker}** · {label} (Grade {grade}) · {score}/100",
+        expanded=(action in ("STRONG_BUY", "BUY")),
+    ):
+        # ── Row 1: Action banner ──────────────────────────────────────────────
+        bar_w = max(4, score)
+        st.markdown(
+            f'<div style="padding:10px 14px;border-radius:7px;'
+            f'background:{color}1a;border:1px solid {color}55;margin-bottom:8px;">'
+            f'<span style="color:{color};font-size:18px;font-weight:800;">{label}</span>'
+            f'&nbsp;&nbsp;<span style="color:#94a3b8;font-size:13px;">Grade&nbsp;</span>'
+            f'<span style="color:{color};font-size:22px;font-weight:900;'
+            f'font-family:monospace;">{grade}</span>'
+            f'<span style="float:right;color:#94a3b8;font-size:12px;line-height:2;">'
+            f'Score: <b style="color:{color};">{score}</b>/100</span>'
+            f'</div>'
+            f'<div style="background:#1a2030;border-radius:4px;height:8px;overflow:hidden;margin-bottom:10px;">'
+            f'<div style="background:{color};width:{bar_w}%;height:100%;transition:width .4s;"></div></div>',
+            unsafe_allow_html=True,
+        )
+
+        # ── Row 2: 3 columns — entry zone | SL/TP | sizing ───────────────────
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            st.markdown("**📍 Vùng vào lệnh**")
+            if rec["entry_zone_low"] and rec["entry_zone_high"]:
+                st.markdown(
+                    f'<div style="font-family:monospace;color:#fbbf24;font-size:14px;">'
+                    f'{rec["entry_zone_low"]:,.0f} – {rec["entry_zone_high"]:,.0f}</div>',
+                    unsafe_allow_html=True,
+                )
+            else:
+                st.markdown("–")
+            st.caption(rec.get("entry_timing", "") or "")
+        with c2:
+            st.markdown("**📉 SL / TP1 / TP2**")
+            _sl  = rec["sl_price"]
+            _tp1 = rec["tp1_price"]
+            _tp2 = rec["tp2_price"]
+            _rr  = rec["rr_ratio"]
+            _mr  = rec["max_risk_pct"]
+            _er  = rec["expected_return_pct"]
+            _parts = []
+            if _sl:
+                _parts.append(f'<span style="color:#ef4444;">SL {_sl:,.0f}</span>')
+            if _tp1:
+                _t1_sfx = f' (+{_er:.1f}%)' if _er else ''
+                _parts.append(f'<span style="color:#06b6d4;">TP1 {_tp1:,.0f}{_t1_sfx}</span>')
+            if _tp2:
+                _parts.append(f'<span style="color:#22c55e;">TP2 {_tp2:,.0f}</span>')
+            st.markdown(
+                '<div style="font-family:monospace;font-size:13px;line-height:1.8;">'
+                + '<br>'.join(_parts) + '</div>',
+                unsafe_allow_html=True,
+            )
+            if _rr:
+                st.caption(f"R:R = {_rr:.2f}:1{'  ·  Risk ' + str(_mr) + '%' if _mr else ''}")
+        with c3:
+            st.markdown("**💼 Sizing / Kelly**")
+            _pct  = rec["position_size_pct"]
+            _kmode= rec["kelly_mode"]
+            st.markdown(
+                f'<div style="font-size:20px;font-weight:700;font-family:monospace;'
+                f'color:#a78bfa;">{_pct:.1f}%</div>',
+                unsafe_allow_html=True,
+            )
+            st.caption(f"Phương pháp: {_kmode}")
+
+        # ── Row 3: Supporting signals and risk flags ──────────────────────────
+        sup = rec.get("supporting_signals", [])
+        flags = rec.get("risk_flags", [])
+        if sup:
+            chips = "".join(
+                f'<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;'
+                f'border-radius:12px;background:#16a34a22;color:#22c55e;font-size:11px;">'
+                f'✅ {s}</span>' for s in sup
+            )
+            st.markdown(f'<div>{chips}</div>', unsafe_allow_html=True)
+        if flags:
+            fchips = "".join(
+                f'<span style="display:inline-block;margin:2px 4px 2px 0;padding:2px 8px;'
+                f'border-radius:12px;background:#dc262622;color:#ef4444;font-size:11px;">'
+                f'⚠️ {f}</span>' for f in flags
+            )
+            st.markdown(f'<div style="margin-top:4px;">{fchips}</div>', unsafe_allow_html=True)
+
+        # ── Row 4 (informational): LSTM badge ─────────────────────────────────
+        if rec.get("lstm_info"):
+            st.markdown(
+                f'<div style="margin-top:6px;color:#64748b;font-size:11px;">'
+                f'🧠 {rec["lstm_info"]}</div>',
+                unsafe_allow_html=True,
+            )
 
 
 def render_audit_page() -> None:
@@ -2105,7 +2334,7 @@ def render_sidebar():
         st.markdown("---")
         page = st.radio(
             "Trang",
-            ["📊 Phân tích", "📂 Portfolio Hub", "📡 Scanner", "🗂 Audit Log"],
+            ["📊 Phân tích", "📂 Portfolio Hub", "📡 Scanner", "🗂 Audit Log", "🎯 T+ Khuyến nghị"],
             horizontal=False,
             label_visibility="collapsed",
             key="nav_page",
@@ -2252,6 +2481,7 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
     render_backtest(r)
     render_monte_carlo(r, df)
     render_forecast_horizons(r, df)
+    render_t_plus_recommendation(r)
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
 
 
@@ -2793,6 +3023,21 @@ def render_scanner() -> None:
         t25_sig  = r_lookup.get(tk, {}).get("t25_signal", "")
         t25_sc   = r_lookup.get(tk, {}).get("t25_score")
         t25_cell = _t25_badge(t25_sig, t25_sc) if is_deep else "–"
+        # T+ Recommendation badge (deep mode only)
+        if is_deep:
+            _trec = generate_t_plus_recommendation(r_lookup.get(tk, {}))
+            _tact = _trec["action"]
+            _tscr = _trec["confidence_score"]
+            _tcol = _T_REC_COLORS.get(_tact, "#94a3b8")
+            _act_short = {"STRONG_BUY": "S.BUY", "BUY": "BUY", "WATCH": "WATCH",
+                          "SKIP": "SKIP", "AVOID": "AVOID"}.get(_tact, _tact)
+            rec_cell = (
+                f'<span style="background:{_tcol}22;border:1px solid {_tcol};color:{_tcol};'
+                f'border-radius:999px;padding:2px 8px;font-size:11px;font-weight:700;">'
+                f'{_act_short} {_tscr}</span>'
+            )
+        else:
+            rec_cell = "–"
         # ticker cell colored by signal
         tk_cell = (
             f'<b style="font-size:14px;border-left:3px solid {sc};'
@@ -2812,6 +3057,7 @@ def render_scanner() -> None:
             f'<td style="font-family:monospace;color:#94a3b8;">{vv_s}</td>'
             f'<td style="font-family:monospace;">{rr_s}</td>'
             f'<td>{t25_cell}</td>'
+            f'<td>{rec_cell}</td>'
             f'</tr>'
         )
 
@@ -2821,6 +3067,7 @@ def render_scanner() -> None:
         f'<th>Tín hiệu</th><th>NetFlow</th><th>Bull%</th>'
         f'<th>Thanh khoản</th><th>Biến động</th><th>R:R</th>'
         f'<th title="VN-Swing Alpha T+2.5">T+2.5</th>'
+        f'<th title="T+ Khuyến nghị">T+ Rec</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>'
     )
     st.markdown(_filterable_table("scanner_tbl", scanner_table_html), unsafe_allow_html=True)
@@ -2839,6 +3086,104 @@ def render_scanner() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  T+ RECOMMENDATION PAGE
+# ═══════════════════════════════════════════════════════════════════════════════
+def render_t_plus_page() -> None:
+    """Standalone 🎯 T+ Khuyến nghị page.
+
+    Ranks all tickers in session results by T+ confidence_score and shows
+    a compact summary table + per-ticker expandable recommendation cards.
+    User can optionally enter new tickers to analyse from scratch.
+    """
+    st.markdown("## 🎯 T+ Entry Khuyến nghị")
+    st.caption("Xếp hạng toàn bộ tín hiệu & khuyến nghị vào lệnh T+ theo điểm tin cậy tổng hợp.")
+
+    results = st.session_state.get("results", [])
+    valid   = [r for r in results if "error" not in r and r.get("price")]
+
+    if not valid:
+        st.info("📭 Chưa có kết quả phân tích. Hãy chạy phân tích từ tab **📊 Phân tích** trước.")
+        return
+
+    # ── Compute recommendations for all valid tickers ─────────────────────────
+    recs = []
+    for r in valid:
+        rec = generate_t_plus_recommendation(r)
+        recs.append({**rec, "ticker": r["ticker"], "price": r.get("price")})
+
+    # Sort by confidence_score descending
+    recs.sort(key=lambda x: x["confidence_score"], reverse=True)
+
+    # ── Summary table ──────────────────────────────────────────────────────────
+    tbl_rows = ""
+    for rd in recs:
+        _a = rd["action"]
+        _g = rd["grade"]
+        _s = rd["confidence_score"]
+        _c = _T_REC_COLORS.get(_a, "#94a3b8")
+        _pr = rd.get("price")
+        _sl = rd.get("sl_price")
+        _tp = rd.get("tp1_price")
+        _rr = rd.get("rr_ratio")
+        _pct_sz = rd.get("position_size_pct", 0)
+        _entry_lo = rd.get("entry_zone_low")
+        _entry_hi = rd.get("entry_zone_high")
+        _entry_str = (
+            f"{_entry_lo:,.0f}–{_entry_hi:,.0f}" if _entry_lo and _entry_hi else "–"
+        )
+        _flag_cnt = len(rd.get("risk_flags", []))
+        _sup_cnt  = len(rd.get("supporting_signals", []))
+        _action_lbl = {
+            "STRONG_BUY": "💎 S.BUY",
+            "BUY":        "✅ BUY",
+            "WATCH":      "👁 WATCH",
+            "SKIP":       "⏭ SKIP",
+            "AVOID":      "🚫 AVOID",
+        }.get(_a, _a)
+        tbl_rows += (
+            f'<tr>'
+            f'<td><b style="color:{_c};font-size:14px;border-left:3px solid {_c};'
+            f'padding-left:7px;">{_safe(rd["ticker"])}</b></td>'
+            f'<td style="font-family:monospace;">{_f(_pr)}</td>'
+            f'<td><span style="background:{_c}22;border:1px solid {_c};color:{_c};'
+            f'border-radius:999px;padding:2px 10px;font-size:11px;font-weight:700;">'
+            f'{_action_lbl}</span></td>'
+            f'<td style="color:{_c};font-size:20px;font-weight:900;'
+            f'font-family:monospace;text-align:center;">{_g}</td>'
+            f'<td style="text-align:center;">'
+            f'<div style="background:#1a2030;border-radius:4px;height:8px;width:80px;overflow:hidden;display:inline-block;">'
+            f'<div style="background:{_c};width:{_s}%;height:100%;"></div></div>'
+            f'<span style="font-size:11px;color:#94a3b8;"> {_s}</span></td>'
+            f'<td style="font-family:monospace;color:#fbbf24;">{_entry_str}</td>'
+            f'<td style="font-family:monospace;color:#ef4444;">{_f(_sl)}</td>'
+            f'<td style="font-family:monospace;color:#06b6d4;">{_f(_tp)}</td>'
+            f'<td style="font-family:monospace;">{f"{_rr:.2f}:1" if _rr else "–"}</td>'
+            f'<td style="font-family:monospace;color:#a78bfa;">{_pct_sz:.1f}%</td>'
+            f'<td style="font-size:11px;">'
+            f'{"✅ " + str(_sup_cnt) if _sup_cnt else ""}'
+            f'{"  ⚠️ " + str(_flag_cnt) if _flag_cnt else ""}</td>'
+            f'</tr>'
+        )
+    st.markdown(
+        f'<table class="sum-table"><thead><tr>'
+        f'<th>Mã</th><th>Giá</th><th>Hành động</th><th>Grade</th><th>Score</th>'
+        f'<th>Vùng vào</th><th>SL</th><th>TP1</th><th>R:R</th>'
+        f'<th>Sizing</th><th>Tín hiệu</th>'
+        f'</tr></thead><tbody>{tbl_rows}</tbody></table>',
+        unsafe_allow_html=True,
+    )
+    st.markdown("<div style='height:16px'></div>", unsafe_allow_html=True)
+
+    # ── Per-ticker recommendation cards ───────────────────────────────────────
+    st.markdown("### 📋 Chi tiết từng mã")
+    results_by_ticker = {r["ticker"]: r for r in valid}
+    for rd in recs:
+        tk = rd["ticker"]
+        r  = results_by_ticker.get(tk, {})
+        render_t_plus_recommendation(r)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  MAIN
 # ═══════════════════════════════════════════════════════════════════════════════
 def main() -> None:
@@ -2850,6 +3195,10 @@ def main() -> None:
 
     if page == "📂 Portfolio Hub":
         render_portfolio_hub()
+        return
+
+    if page == "🎯 T+ Khuyến nghị":
+        render_t_plus_page()
         return
 
     if page == "📡 Scanner":

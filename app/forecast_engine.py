@@ -24,13 +24,24 @@ warnings.filterwarnings("ignore", category=FutureWarning)
 
 _DIR        = Path(__file__).parent
 _MODELS_DIR = _DIR / "data" / "models"
+_MODELS_DIR.mkdir(parents=True, exist_ok=True)   # auto-create on first import
+
+# In-memory LSTM model cache — avoids reloading .keras from disk on every Streamlit rerun
+_LSTM_CACHE: dict = {}
 
 # ─── Optional heavy deps with graceful fallback ───────────────────────────────
 try:
     import keras                         # type: ignore
     _KERAS_AVAILABLE = True
+    _KERAS_BACKEND   = "keras"
 except ImportError:
-    _KERAS_AVAILABLE = False
+    try:
+        from tensorflow import keras     # type: ignore  # TF 2.x bundled Keras
+        _KERAS_AVAILABLE = True
+        _KERAS_BACKEND   = "tf.keras"
+    except ImportError:
+        _KERAS_AVAILABLE = False
+        _KERAS_BACKEND   = None
 
 try:
     from sklearn.linear_model import Ridge
@@ -513,17 +524,209 @@ def prepare_lstm_features(df: pd.DataFrame) -> Optional[np.ndarray]:
         return None
 
 
-def _lstm_inference(ticker: str, features: np.ndarray) -> Optional[float]:
-    """Load {ticker}_lstm.keras and predict the 5-day forward return (%)."""
+import logging as _log_mod
+_fe_log = _log_mod.getLogger("quant_profiler")
+
+
+def _build_lstm_training_data(
+    df: pd.DataFrame,
+) -> "tuple[Optional[np.ndarray], Optional[np.ndarray]]":
+    """
+    Build (X, y) training arrays from a full OHLCV+indicator DataFrame.
+
+    X: (n_samples, SEQ_LEN, FEATURES)  float32 — sliding windows
+    y: (n_samples,)                    float32 — 5-day forward return in %
+
+    Returns (None, None) if df is None, too short, missing columns, or < 20 samples.
+    """
+    needed = ("Close", "Volume", "RSI", "MACD_Hist", "ATR", "Vol_MA20")
+    if df is None or len(df) < _SEQ_LEN + 10:
+        return None, None
+    for col in needed:
+        if col not in df.columns:
+            return None, None
+    try:
+        close   = df["Close"].values.astype(float)
+        vol     = df["Volume"].values.astype(float)
+        rsi     = df["RSI"].values.astype(float)
+        mh      = df["MACD_Hist"].values.astype(float)
+        atr_arr = df["ATR"].values.astype(float)
+        vol_ma  = df["Vol_MA20"].values.astype(float)
+
+        # Per-bar features — same definition as prepare_lstm_features()
+        close_ret = np.concatenate([[0.0], np.diff(close) / (close[:-1] + 1e-9) * 100])
+        vol_ratio = vol / (vol_ma + 1e-9)
+        rsi_n     = np.clip(rsi / 100.0, 0, 1)
+        mh_n      = np.clip(mh / (close + 1e-9) * 100, -5, 5)
+        atr_pct   = atr_arr / (close + 1e-9) * 100
+
+        feat_mat = np.stack([close_ret, vol_ratio, rsi_n, mh_n, atr_pct], axis=1)  # (N, 5)
+        feat_mat = np.nan_to_num(feat_mat, nan=0.0, posinf=0.0, neginf=0.0).astype(np.float32)
+
+        n = len(close)
+        X_list, y_list = [], []
+        for i in range(_SEQ_LEN, n - 5):
+            X_list.append(feat_mat[i - _SEQ_LEN : i])
+            fwd = (close[i + 5] - close[i]) / (close[i] + 1e-9) * 100
+            y_list.append(float(fwd))
+
+        if len(X_list) < 20:
+            return None, None
+
+        return np.array(X_list, dtype=np.float32), np.array(y_list, dtype=np.float32)
+    except Exception:
+        return None, None
+
+
+def train_lstm_model(
+    ticker:            str,
+    df:                pd.DataFrame,
+    force:             bool  = False,
+    epochs:            int   = 60,
+    patience:          int   = 8,
+    progress_callback = None,
+) -> "Optional[object]":
+    """
+    Train (or retrain) an LSTM model for *ticker* and persist to data/models/.
+
+    Args:
+        force:             re-train even if a saved model already exists.
+        epochs:            max training epochs (EarlyStopping usually cuts short).
+        patience:          EarlyStopping patience.
+        progress_callback: callable(epoch: int, total: int, logs: dict) called each
+                           epoch — use this for live UI progress bars.
+
+    Returns trained Keras model, or None if Keras unavailable / training failed.
+    """
     if not _KERAS_AVAILABLE:
         return None
-    model_path = _MODELS_DIR / f"{ticker.upper()}_lstm.keras"
-    if not model_path.exists():
+
+    cache_key  = ticker.upper()
+    model_path = _MODELS_DIR / f"{cache_key}_lstm.keras"
+
+    # Return cached in-memory model when not forcing a retrain
+    if not force and cache_key in _LSTM_CACHE:
+        return _LSTM_CACHE[cache_key]
+
+    X, y = _build_lstm_training_data(df)
+    if X is None or len(X) < 20:
+        _fe_log.warning("train_lstm_model %s: insufficient training data (%s rows)", ticker,
+                        len(df) if df is not None else 0)
+        return None
+
+    _fe_log.info("train_lstm_model %s: %d samples — starting", ticker, len(X))
+    try:
+        # Build inline progress callback class if caller wants epoch-level updates
+        callbacks_list = []
+
+        es = keras.callbacks.EarlyStopping(
+            monitor="val_loss",
+            patience=patience,
+            restore_best_weights=True,
+            verbose=0,
+        )
+        callbacks_list.append(es)
+
+        if progress_callback is not None:
+            _req_epochs = epochs   # capture for closure
+
+            class _PBar(keras.callbacks.Callback):   # type: ignore[misc]
+                def on_epoch_end(self, epoch, logs=None):   # noqa: ANN001
+                    progress_callback(epoch + 1, _req_epochs, logs or {})
+
+            callbacks_list.append(_PBar())
+
+        # Time-ordered 85/15 split — no shuffle, preserves temporal structure
+        split   = max(10, int(len(X) * 0.85))
+        X_tr, X_val = X[:split], X[split:]
+        y_tr, y_val = y[:split], y[split:]
+
+        model = keras.Sequential([
+            keras.layers.Input(shape=(_SEQ_LEN, _FEATURES)),
+            keras.layers.LSTM(64, return_sequences=True),
+            keras.layers.Dropout(0.2),
+            keras.layers.LSTM(32),
+            keras.layers.Dropout(0.1),
+            keras.layers.Dense(16, activation="relu"),
+            keras.layers.Dense(1),
+        ])
+        model.compile(
+            optimizer=keras.optimizers.Adam(learning_rate=0.001),
+            loss="mse",
+            metrics=["mae"],
+        )
+
+        history = model.fit(
+            X_tr, y_tr,
+            validation_data=(X_val, y_val),
+            epochs=epochs,
+            batch_size=max(8, min(32, len(X_tr) // 4)),
+            callbacks=callbacks_list,
+            verbose=0,
+        )
+
+        stopped_epoch = len(history.history["loss"])
+        val_mae       = history.history.get("val_mae", [None])[-1]
+        _fe_log.info(
+            "train_lstm_model %s: done in %d epochs, val_mae=%.4f",
+            ticker, stopped_epoch, val_mae or 0,
+        )
+
+        _MODELS_DIR.mkdir(parents=True, exist_ok=True)
+        model.save(str(model_path))
+        _LSTM_CACHE[cache_key] = model
+
+        # Attach training metadata as lightweight attributes for UI display
+        model._train_epochs   = stopped_epoch   # type: ignore[attr-defined]
+        model._train_val_mae  = val_mae          # type: ignore[attr-defined]
+        model._train_samples  = len(X_tr)        # type: ignore[attr-defined]
+        return model
+
+    except Exception as exc:
+        _fe_log.warning("train_lstm_model %s failed: %s", ticker, exc)
+        return None
+
+
+def _lstm_inference(
+    ticker:   str,
+    features: np.ndarray,
+    df:       pd.DataFrame = None,   # provided for silent auto-train on first use
+) -> Optional[float]:
+    """
+    Predict 5-day forward return (%) using the saved LSTM model for *ticker*.
+
+    Resolution order:
+      1. In-memory _LSTM_CACHE (fastest — no disk I/O)
+      2. Load from data/models/{TICKER}_lstm.keras
+      3. Auto-train on first use if df is provided (silent, no progress callback)
+
+    Falls through to None if Keras is unavailable or no model can be obtained.
+    """
+    if not _KERAS_AVAILABLE:
+        return None
+
+    cache_key  = ticker.upper()
+    model_path = _MODELS_DIR / f"{cache_key}_lstm.keras"
+
+    # 1. In-memory cache
+    model = _LSTM_CACHE.get(cache_key)
+
+    # 2. Load from disk
+    if model is None and model_path.exists():
+        try:
+            model = keras.models.load_model(str(model_path), compile=False)
+            _LSTM_CACHE[cache_key] = model
+        except Exception:
+            pass
+
+    # 3. Silent auto-train on first analysis
+    if model is None and df is not None:
+        model = train_lstm_model(ticker, df)
+
+    if model is None:
         return None
     try:
-        import keras as _k
-        model = _k.models.load_model(str(model_path), compile=False)
-        pred  = float(model.predict(features, verbose=0)[0][0])
+        pred = float(model.predict(features, verbose=0)[0][0])
         return round(pred, 2)
     except Exception:
         return None
@@ -621,7 +824,7 @@ def multi_horizon_forecast(
     lstm_src   = "n/a"
     if features is not None:
         ticker     = r.get("ticker", "")
-        lstm_pred  = _lstm_inference(ticker, features)
+        lstm_pred  = _lstm_inference(ticker, features, df)   # pass df for silent auto-train
         if lstm_pred is not None:
             lstm_src = "lstm"
         else:

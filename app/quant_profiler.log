@@ -2569,3 +2569,83 @@ QNP
 2026-03-18 18:21:30 INFO     quant_profiler │ C47  price=9980  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=2  confirmed=True
 2026-03-18 20:38:46 INFO     quant_profiler │ HPG  price=26800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=6  bear=13  confirmed=True
 2026-03-18 20:39:07 INFO     quant_profiler │ HPG  price=26800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=6  bear=13  confirmed=True
+2026-03-18 20:42:31 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-18 20:42:32 INFO     quant_profiler │ PVS  price=43000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=10  confirmed=True
+2026-03-18 20:42:34 INFO     quant_profiler │ BSR  price=30650  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=10  confirmed=True
+2026-03-18 20:42:35 INFO     quant_profiler │ HUT  price=16200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-03-18 20:42:37 INFO     quant_profiler │ CII  price=16400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-03-18 20:42:38 INFO     quant_profiler │ TCH  price=14400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=12  confirmed=True
+2026-03-18 20:42:39 INFO     quant_profiler │ VCG  price=22100  signal=THEO DÕI–TĂNG  VSA=DISTRIB  regime=BULL_TREND  bull=14  bear=11  confirmed=True
+2026-03-18 20:42:41 INFO     quant_profiler │ VGC  price=46550  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-03-18 20:42:42 INFO     quant_profiler │ POW  price=13300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-03-18 20:53:59 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-18 20:53:59 INFO     quant_profiler │ async_fetch_many ✓ GEG
+2026-03-18 20:53:59 INFO     quant_profiler │ BSR  price=30650  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=10  confirmed=True
+2026-03-18 20:53:59 INFO     quant_profiler │ async_fetch_many ✓ BSR
+2026-03-18 20:54:00 INFO     quant_profiler │ HUT  price=16200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-03-18 20:54:00 INFO     quant_profiler │ async_fetch_many ✓ HUT
+2026-03-18 20:54:00 INFO     quant_profiler │ PVS  price=43000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=10  confirmed=True
+2026-03-18 20:54:00 INFO     quant_profiler │ async_fetch_many ✓ PVS
+2026-03-18 20:54:01 INFO     quant_profiler │ CII  price=16400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-03-18 20:54:01 INFO     quant_profiler │ async_fetch_many ✓ CII
+2026-03-18 20:54:02 INFO     quant_profiler │ VCG  price=22100  signal=THEO DÕI–TĂNG  VSA=DISTRIB  regime=BULL_TREND  bull=14  bear=11  confirmed=True
+2026-03-18 20:54:02 INFO     quant_profiler │ async_fetch_many ✓ VCG
+2026-03-18 20:54:02 INFO     quant_profiler │ VGC  price=46550  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-03-18 20:54:02 INFO     quant_profiler │ async_fetch_many ✓ VGC
+2026-03-18 20:54:02 INFO     quant_profiler │ TCH  price=14400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=12  confirmed=True
+2026-03-18 20:54:02 INFO     quant_profiler │ async_fetch_many ✓ TCH
+2026-03-18 20:54:03 INFO     quant_profiler │ POW  price=13300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-03-18 20:54:03 INFO     quant_profiler │ async_fetch_many ✓ POW
+2026-03-18 20:54:36 INFO     quant_profiler │ BSR  price=30650  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=10  confirmed=True
+2026-03-18 20:54:36 INFO     quant_profiler │ async_fetch_many ✓ BSR
+2026-03-18 20:54:37 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-18 20:54:37 INFO     quant_profiler │ async_fetch_many ✓ GEG
+2026-03-18 20:54:37 INFO     quant_profiler │ PVS  price=43000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=10  confirmed=True
+2026-03-18 20:54:37 INFO     quant_profiler │ async_fetch_many ✓ PVS
+2026-03-18 20:54:37 INFO     quant_profiler │ HUT  price=16200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-03-18 20:54:37 INFO     quant_profiler │ async_fetch_many ✓ HUT
+2026-03-18 20:54:38 INFO     quant_profiler │ CII  price=16400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-03-18 20:54:38 INFO     quant_profiler │ async_fetch_many ✓ CII
+2026-03-18 20:54:38 INFO     quant_profiler │ TCH  price=14400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=12  confirmed=True
+2026-03-18 20:54:38 INFO     quant_profiler │ async_fetch_many ✓ TCH
+2026-03-18 20:54:38 INFO     quant_profiler │ VGC  price=46550  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-03-18 20:54:38 INFO     quant_profiler │ async_fetch_many ✓ VGC
+2026-03-18 20:54:38 INFO     quant_profiler │ VCG  price=22100  signal=THEO DÕI–TĂNG  VSA=DISTRIB  regime=BULL_TREND  bull=14  bear=11  confirmed=True
+2026-03-18 20:54:38 INFO     quant_profiler │ async_fetch_many ✓ VCG
+2026-03-18 20:54:40 INFO     quant_profiler │ POW  price=13300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-03-18 20:54:40 INFO     quant_profiler │ async_fetch_many ✓ POW
+2026-03-18 20:55:41 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-18 20:55:42 INFO     quant_profiler │ HUT  price=16200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-03-18 20:57:02 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-18 20:57:02 INFO     quant_profiler │ async_fetch_many ✓ GEG
+2026-03-18 20:57:02 INFO     quant_profiler │ HUT  price=16200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-03-18 20:57:02 INFO     quant_profiler │ async_fetch_many ✓ HUT
+2026-03-18 20:57:14 INFO     quant_profiler │ BSR  price=30650  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=10  confirmed=True
+2026-03-18 20:57:14 INFO     quant_profiler │ async_fetch_many ✓ BSR
+2026-03-18 20:58:45 INFO     quant_profiler │ CII  price=16400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-03-18 20:59:28 INFO     quant_profiler │ NVL  price=13000  signal=MUA  VSA=DISTRIB  regime=SIDEWAYS  bull=14  bear=7  confirmed=True
+2026-03-18 20:59:29 INFO     quant_profiler │ VIC  price=146000  signal=THEO DÕI–GIẢM  VSA=DISTRIB  regime=SIDEWAYS  bull=12  bear=17  confirmed=True
+2026-03-18 21:01:30 INFO     quant_profiler │ GEG  price=16350  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=0  confirmed=True
+2026-03-19 20:29:12 INFO     quant_profiler │ HPG  price=26700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=6  bear=13  confirmed=True
+2026-03-19 20:29:24 INFO     quant_profiler │ HPG  price=26700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=6  bear=13  confirmed=True
+2026-03-19 20:36:39 INFO     quant_profiler │ HPG  price=26700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-19 20:36:41 INFO     quant_profiler │ VNM  price=61000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=10  confirmed=True
+2026-03-19 20:36:42 INFO     quant_profiler │ VCB  price=59800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-03-19 20:36:43 INFO     quant_profiler │ BID  price=40650  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=10  confirmed=False
+2026-03-19 20:36:45 INFO     quant_profiler │ CTG  price=34650  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-19 20:36:46 INFO     quant_profiler │ TCB  price=30050  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=15  confirmed=True
+2026-03-19 20:36:47 INFO     quant_profiler │ VHM  price=102300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=18  bear=9  confirmed=True
+2026-03-19 20:36:49 INFO     quant_profiler │ VIC  price=145000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=13  confirmed=True
+2026-03-19 20:36:50 INFO     quant_profiler │ MBB  price=26400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-19 20:36:51 INFO     quant_profiler │ ACB  price=23600  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=11  bear=10  confirmed=True
+2026-03-19 20:36:53 INFO     quant_profiler │ FPT  price=76800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-03-19 20:36:54 INFO     quant_profiler │ GAS  price=88100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=12  confirmed=True
+2026-03-19 20:36:55 INFO     quant_profiler │ SAB  price=44350  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-03-19 20:36:57 INFO     quant_profiler │ VJC  price=158700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=7  confirmed=False
+2026-03-19 20:36:58 INFO     quant_profiler │ PLX  price=46000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=12  confirmed=True
+2026-03-19 20:36:59 INFO     quant_profiler │ REE  price=65400  signal=MUA  VSA=ACCUM  regime=HIGH_VOL  bull=21  bear=9  confirmed=True
+2026-03-19 20:37:01 INFO     quant_profiler │ MWG  price=82400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-19 20:37:02 INFO     quant_profiler │ PNJ  price=114900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=12  confirmed=True
+2026-03-19 20:37:04 INFO     quant_profiler │ MSN  price=75400  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=17  bear=8  confirmed=False
+2026-03-19 20:37:05 INFO     quant_profiler │ VRE  price=26050  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-19 21:09:37 INFO     quant_profiler │ HPG  price=26700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=6  bear=13  confirmed=True

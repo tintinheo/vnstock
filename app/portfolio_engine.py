@@ -387,6 +387,235 @@ class T25ExitManager:
             "• Giờ thay thế: 13:30–14:00  • TRÁNH: 09:15–09:25 (ATO), 14:30–15:00 (ATC)"
         )
 
+
+# ─── T+ Recommendation Engine ────────────────────────────────────────────────
+
+
+# Action labels and their Grade codes
+_T_REC_GRADES = {
+    "STRONG_BUY": "A",
+    "BUY":        "B",
+    "WATCH":      "C",
+    "SKIP":       "D",
+    "AVOID":      "E",
+}
+
+_T_REC_COLORS = {
+    "STRONG_BUY": "#22c55e",
+    "BUY":        "#4ade80",
+    "WATCH":      "#f59e0b",
+    "SKIP":       "#94a3b8",
+    "AVOID":      "#ef4444",
+}
+
+
+def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
+    """
+    Synthesize all VN-Swing Alpha signals into a single T+ entry recommendation.
+
+    Scoring (0–100):
+      T+2.5 signal   (40 pts)  T25_BUY=40, T25_WATCH=25, T25_NEUTRAL=10, T25_AVOID=0
+      Momentum       (30 pts)  bull_pct ≥65→30, ≥55→20, ≥50→10, <50→0; +5 if confirmed
+      Market regime  (20 pts)  BULL_TREND=20, SIDEWAYS=12, UNKNOWN=8, BEAR_TREND=3
+      Structure      (10 pts)  VSA_ACCUM+5, VSA_NO_SUPPLY+3, bullish_candle+3,
+                               RSI_div_bullish+4, at_floor+2 (capped at 10)
+
+    Risk deductions: at_ceiling−20, unconfirmed−5, bearish_div−5,
+                     VSA_DISTRIB−5, beta>1.5−5, illiquid−5.
+
+    Overrides: T25_AVOID or at_ceiling → forced AVOID/Grade E.
+
+    Args:
+        r:  Full analyse_ticker result dict.
+        fc: Optional multi_horizon_forecast dict (informational only, no grade impact).
+
+    Returns dict with keys:
+        action, grade, confidence_score,
+        entry_zone_low, entry_zone_high,
+        sl_price, tp1_price, tp2_price, rr_ratio,
+        position_size_pct, kelly_mode,
+        entry_timing, risk_flags, supporting_signals,
+        max_risk_pct, expected_return_pct,
+        lstm_info,   # str or None — LSTM/Ridge pred (informational)
+    """
+    # ── Extract fields with safe defaults ────────────────────────────────────
+    t25_sig    = r.get("t25_signal",   "T25_NEUTRAL")
+    bull_pct   = float(r.get("bull_pct",   50.0) or 50.0)
+    regime     = r.get("regime",       "UNKNOWN")
+    confirmed  = bool(r.get("signal_confirmed", False))
+    vsa_state  = r.get("vsa_state",    "NEUTRAL")
+    candle_p   = r.get("candle_pattern","NEUTRAL")
+    rsi_div    = r.get("rsi_divergence","NONE")
+    at_ceiling = bool(r.get("at_ceiling", False))
+    at_floor   = bool(r.get("at_floor",   False))
+    beta       = float(r.get("rolling_beta_5d", 1.0) or 1.0)
+    kl_ratio   = float(r.get("kl_ratio", 1.0)  or 1.0)
+    price      = float(r.get("price",    0.0)   or 0.0)
+    sma20      = float(r.get("sma20",    0.0)   or 0.0)
+    atr        = float(r.get("atr",      0.0)   or 0.0)
+    sl         = r.get("sl")
+    tp1        = r.get("tp1")
+    tp2        = r.get("tp2")
+    win_rate   = float(
+        r.get("bt5_win_rate") or r.get("bt_win_rate") or 0.55
+    )
+
+    # ── Forced override checks ────────────────────────────────────────────────
+    if t25_sig == "T25_AVOID" or at_ceiling:
+        risk_flags = []
+        if t25_sig == "T25_AVOID":
+            risk_flags.append("T+2.5 score: AVOID zone")
+        if at_ceiling:
+            risk_flags.append("Giá chạm TRẦN — rủi ro cao nhất")
+        return {
+            "action": "AVOID", "grade": "E", "confidence_score": 0,
+            "entry_zone_low": None, "entry_zone_high": None,
+            "sl_price": sl, "tp1_price": tp1, "tp2_price": tp2, "rr_ratio": None,
+            "position_size_pct": 0.0, "kelly_mode": "N/A",
+            "entry_timing": "AVOID_TODAY",
+            "risk_flags": risk_flags,
+            "supporting_signals": [],
+            "max_risk_pct": None, "expected_return_pct": None,
+            "lstm_info": None,
+        }
+
+    # ── Component scoring ─────────────────────────────────────────────────────
+    # A: T+2.5 signal (0-40)
+    _t25_pts = {"T25_BUY": 40, "T25_WATCH": 25, "T25_NEUTRAL": 10, "T25_AVOID": 0}
+    score_a  = float(_t25_pts.get(t25_sig, 10))
+
+    # B: Momentum (0-30)
+    if bull_pct >= 65:   score_b = 30.0
+    elif bull_pct >= 55: score_b = 20.0
+    elif bull_pct >= 50: score_b = 10.0
+    else:                score_b =  0.0
+    if confirmed:        score_b = min(30.0, score_b + 5.0)
+
+    # C: Regime (0-20)
+    _reg_pts = {"BULL_TREND": 20, "SIDEWAYS": 12, "UNKNOWN": 8, "BEAR_TREND": 3}
+    score_c  = float(_reg_pts.get(regime, 8))
+
+    # D: Structure confirms (0-10)
+    score_d = 0.0
+    supporting_signals = []
+    if vsa_state == "ACCUM":
+        score_d += 5; supporting_signals.append("VSA:ACCUM")
+    elif vsa_state == "NO_SUPPLY":
+        score_d += 3; supporting_signals.append("VSA:NO_SUPPLY")
+    if candle_p in ("HAMMER", "BULL_ENGULFING", "MORNING_STAR"):
+        score_d += 3; supporting_signals.append(f"Candle:{candle_p}")
+    if rsi_div == "BULLISH":
+        score_d += 4; supporting_signals.append("RSI Divergence↑")
+    if at_floor:
+        score_d += 2; supporting_signals.append("Giá chạm SÀN")
+    score_d = min(10.0, score_d)
+
+    # Append other confirms from t25_confirms (first 4 not already listed)
+    for _c in (r.get("t25_confirms") or [])[:6]:
+        if _c not in supporting_signals and len(supporting_signals) < 6:
+            supporting_signals.append(_c)
+
+    raw_score = score_a + score_b + score_c + score_d
+
+    # ── Risk deductions ───────────────────────────────────────────────────────
+    risk_flags = []
+    if not confirmed:
+        raw_score -= 5; risk_flags.append("Tín hiệu chưa được xác nhận 2/3 phiên")
+    if rsi_div == "BEARISH":
+        raw_score -= 5; risk_flags.append("RSI Divergence âm (bearish)")
+    if vsa_state == "DISTRIB":
+        raw_score -= 5; risk_flags.append("VSA:DISTRIB — phân phối tổ chức")
+    if beta > 1.5:
+        raw_score -= 5; risk_flags.append(f"Beta 5D cao: {beta:.2f}β — biến động mạnh")
+    if kl_ratio < 0.5:
+        raw_score -= 5; risk_flags.append(f"Thanh khoản thấp: KL={kl_ratio:.1f}× MA20")
+
+    confidence_score = int(max(0, min(100, raw_score)))
+
+    # ── Map to action tier ────────────────────────────────────────────────────
+    if confidence_score >= 80:
+        action = "STRONG_BUY"
+    elif confidence_score >= 65:
+        action = "BUY"
+    elif confidence_score >= 50:
+        action = "WATCH"
+    elif confidence_score >= 35:
+        action = "SKIP"
+    else:
+        action = "AVOID"
+
+    grade = _T_REC_GRADES[action]
+
+    # ── Entry zone ────────────────────────────────────────────────────────────
+    if price and sma20 and abs(price - sma20) / sma20 <= 0.03:
+        entry_low  = round(sma20 * 0.990, 0)
+        entry_high = round(sma20 * 1.010, 0)
+    elif price:
+        entry_low  = round(price * 0.990, 0)
+        entry_high = round(price * 1.005, 0)
+    else:
+        entry_low = entry_high = None
+
+    # ── Entry timing ──────────────────────────────────────────────────────────
+    if action in ("STRONG_BUY", "BUY"):
+        entry_timing = "10:00–11:30 (tốt nhất) · 13:30–14:00 (thay thế)"
+    elif action == "WATCH":
+        entry_timing = "13:30–14:00 (chờ xác nhận thêm)"
+    else:
+        entry_timing = "AVOID_TODAY"
+
+    # ── Risk/reward metrics ───────────────────────────────────────────────────
+    entry_ref = price or 0
+    max_risk_pct = (
+        round((entry_ref - float(sl)) / entry_ref * 100, 2)
+        if sl and entry_ref > 0 else None
+    )
+    expected_return_pct = (
+        round((float(tp1) - entry_ref) / entry_ref * 100, 2)
+        if tp1 and entry_ref > 0 else None
+    )
+    rr_ratio = (
+        round((float(tp1) - entry_ref) / (entry_ref - float(sl)), 2)
+        if tp1 and sl and entry_ref > float(sl) > 0 else None
+    )
+
+    # ── Kelly position sizing (reuse T25ExitManager) ──────────────────────────
+    _atr_use = atr if atr > 0 else entry_ref * 0.02
+    try:
+        _mgr = T25ExitManager(entry_ref or 1, _atr_use, min(0.80, max(0.40, win_rate)))
+        position_size_pct = _mgr.recommended_size_pct
+        kelly_mode        = _mgr.kelly_mode
+    except Exception:
+        position_size_pct = 10.0
+        kelly_mode        = "Half-Kelly"
+
+    # ── LSTM info (informational, no grade impact) ────────────────────────────
+    lstm_info = None
+    if fc is not None and fc.get("lstm_pred_pct") is not None:
+        _src = "LSTM" if fc.get("lstm_source") == "lstm" else "Ridge ML"
+        lstm_info = f"{_src}: {fc['lstm_pred_pct']:+.2f}% (5-ngày, chỉ tham khảo)"
+
+    return {
+        "action":               action,
+        "grade":                grade,
+        "confidence_score":     confidence_score,
+        "entry_zone_low":       entry_low,
+        "entry_zone_high":      entry_high,
+        "sl_price":             round(float(sl),  0) if sl  else None,
+        "tp1_price":            round(float(tp1), 0) if tp1 else None,
+        "tp2_price":            round(float(tp2), 0) if tp2 else None,
+        "rr_ratio":             rr_ratio,
+        "position_size_pct":    position_size_pct,
+        "kelly_mode":           kelly_mode,
+        "entry_timing":         entry_timing,
+        "risk_flags":           risk_flags,
+        "supporting_signals":   supporting_signals,
+        "max_risk_pct":         max_risk_pct,
+        "expected_return_pct":  expected_return_pct,
+        "lstm_info":            lstm_info,
+    }
+
+
 # ─── Performance Attribution ─────────────────────────────────────────────────
 
 # Sector map (VN stock exchange) — comprehensive coverage of HOSE/HNX tickers
