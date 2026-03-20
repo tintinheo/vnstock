@@ -296,19 +296,24 @@ class T25ExitManager:
                                   vol_ratio=0.75)
     """
 
-    def __init__(self, entry_price: float, atr: float, bt_win_rate: float = 0.60):
+    def __init__(self, entry_price: float, atr: float, bt_win_rate: float = 0.60,
+                 kl_ratio: float = 1.0, beta: float = 1.0):
         self.entry    = float(entry_price)
         self.atr      = float(atr) if atr else self.entry * 0.02
-        self.sl       = self.entry - 1.5 * self.atr    # Hard stop-loss
-        self.tp1      = self.entry + 2.0 * self.atr    # TP1 — target 60% exit
-        self.tp2      = self.entry + 3.5 * self.atr    # TP2 — remaining 40%
-        self.trail    = self.sl                          # Trailing stop (updated daily)
+        # F10: Dynamic SL multiplier — wider for illiquid/high-beta, tighter otherwise
+        #   base 1.5×; +0.4× per unit of illiquidity below 1.0; +0.2× per unit of beta above 1.5
+        _sl_mult = 1.5 + max(0.0, (1.0 - float(kl_ratio)) * 0.4) + max(0.0, (float(beta) - 1.5) * 0.2)
+        _sl_mult = max(1.0, min(2.2, _sl_mult))         # clamp [1.0, 2.2]
+        self.sl       = self.entry - _sl_mult * self.atr # Hard stop-loss
+        self.tp1      = self.entry + 2.0 * self.atr      # TP1 — target 60% exit
+        self.tp2      = self.entry + 3.5 * self.atr      # TP2 — remaining 40%
+        self.trail    = self.sl                           # Trailing stop (updated daily)
         self.win_rate = max(0.40, min(0.80, bt_win_rate))
         # Dynamic Fractional Kelly — Quarter/Half based on market_volatility (ATR/price)
         avg_win    = self.atr * 2.0
-        avg_loss   = self.atr * 1.5
-        glr        = avg_win / max(avg_loss, 1e-9)      # gain/loss ratio
-        market_vol = self.atr / max(self.entry, 1e-9)   # daily vol proxy
+        avg_loss   = self.atr * _sl_mult
+        glr        = avg_win / max(avg_loss, 1e-9)       # gain/loss ratio
+        market_vol = self.atr / max(self.entry, 1e-9)    # daily vol proxy
         kelly_f    = calculate_fractional_kelly(self.win_rate, glr, market_vol)
         self.recommended_size_pct = round(max(5.0, min(25.0, kelly_f * 100)), 1)
         self.kelly_mode = "Quarter-Kelly" if market_vol > 0.03 else "Half-Kelly"
@@ -510,6 +515,19 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         score_d += 2; supporting_signals.append("Giá chạm SÀN")
     score_d = min(10.0, score_d)
 
+    # F2: HH+HL structure bonus
+    if r.get("is_hh") and r.get("is_hl"):
+        score_d = min(10.0, score_d + 5.0)
+        supporting_signals.append("HH+HL structure")
+    elif r.get("is_hh") or r.get("is_hl"):
+        supporting_signals.append(r.get("structure_label", ""))
+
+    # F3: RS Rating bonus
+    rs_rating = int(r.get("rs_rating") or 50)
+    if rs_rating >= 70:
+        score_b = min(35.0, score_b + 5.0)
+        supporting_signals.append(f"RS Rating {rs_rating} — outperforming VNI")
+
     # Append other confirms from t25_confirms (first 4 not already listed)
     for _c in (r.get("t25_confirms") or [])[:6]:
         if _c not in supporting_signals and len(supporting_signals) < 6:
@@ -529,6 +547,19 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         raw_score -= 5; risk_flags.append(f"Beta 5D cao: {beta:.2f}β — biến động mạnh")
     if kl_ratio < 0.5:
         raw_score -= 5; risk_flags.append(f"Thanh khoản thấp: KL={kl_ratio:.1f}× MA20")
+    # F4: Gap deduction
+    gap_type = r.get("gap_type", "NO_GAP")
+    if gap_type == "GAP_DOWN":
+        raw_score -= 5; risk_flags.append(f"Gap DOWN sáng nay: {r.get('gap_pct', 0):.1f}%")
+    # F8: Far above VWAP deduction
+    vwap_dev = r.get("vwap_dev", "AT")
+    pvp      = float(r.get("price_vs_vwap_pct") or 0.0)
+    if vwap_dev == "ABOVE" and pvp > 3.0:
+        raw_score -= 3; risk_flags.append(f"Giá {pvp:.1f}% trên VWAP — xa ngưỡng tốt")
+    # F9: Dividend risk
+    ex_div_days = r.get("ex_div_days")
+    if ex_div_days is not None and ex_div_days <= 5:
+        raw_score -= 10; risk_flags.append(f"Ex-dividend trong {ex_div_days} phiên — rủi ro giảm giá")
 
     confidence_score = int(max(0, min(100, raw_score)))
 
@@ -579,10 +610,14 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         if tp1 and sl and entry_ref > float(sl) > 0 else None
     )
 
-    # ── Kelly position sizing (reuse T25ExitManager) ──────────────────────────
+    # ── Kelly position sizing (reuse T25ExitManager with dynamic SL) ─────────
     _atr_use = atr if atr > 0 else entry_ref * 0.02
     try:
-        _mgr = T25ExitManager(entry_ref or 1, _atr_use, min(0.80, max(0.40, win_rate)))
+        _mgr = T25ExitManager(
+            entry_ref or 1, _atr_use,
+            min(0.80, max(0.40, win_rate)),
+            kl_ratio=kl_ratio, beta=beta,
+        )
         position_size_pct = _mgr.recommended_size_pct
         kelly_mode        = _mgr.kelly_mode
     except Exception:
@@ -613,6 +648,80 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         "max_risk_pct":         max_risk_pct,
         "expected_return_pct":  expected_return_pct,
         "lstm_info":            lstm_info,
+    }
+
+
+# ─── F15: Swing Strength Index (SSI) ─────────────────────────────────────────
+_SSI_GRADE = [
+    (90, "S", "#f59e0b"),
+    (75, "A", "#22c55e"),
+    (60, "B", "#3b82f6"),
+    (45, "C", "#94a3b8"),
+    (0,  "D", "#ef4444"),
+]
+
+
+def compute_ssi_score(r: dict) -> dict:
+    """
+    Swing Strength Index — proprietary composite 1–100 score for T+2–5 trading.
+
+    Components:
+        w1=25%  t25_score         (0–100)
+        w2=25%  rs_rating         (1–99, scaled 0–100)
+        w3=20%  bt5_win_rate      mapped: ≥70%→100, ≥55%→60, ≥45%→20, else 0
+        w4=15%  structure bonus   HH+HL→100, HH or HL only→53, else 0
+        w5=15%  volume impulse    kl_ratio: ≥2→100, ≥1.5→67, ≥1→33, else 0
+
+    Grade: S(90–100) / A(75–89) / B(60–74) / C(45–59) / D(<45)
+    """
+    t25    = float(r.get("t25_score")    or 0) / 100  # 0–1
+    rs     = float(r.get("rs_rating")    or 50) / 99  # 0–1
+    bt5_wr = float(r.get("bt5_win_rate") or r.get("bt_win_rate") or 0.50)
+    if bt5_wr >= 0.70:
+        w3 = 1.0
+    elif bt5_wr >= 0.55:
+        w3 = 0.60
+    elif bt5_wr >= 0.45:
+        w3 = 0.20
+    else:
+        w3 = 0.0
+    is_hh = bool(r.get("is_hh"))
+    is_hl = bool(r.get("is_hl"))
+    if is_hh and is_hl:
+        w4 = 1.0
+    elif is_hh or is_hl:
+        w4 = 0.53
+    else:
+        w4 = 0.0
+    kl = float(r.get("kl_ratio") or 1.0)
+    if kl >= 2.0:
+        w5 = 1.0
+    elif kl >= 1.5:
+        w5 = 0.67
+    elif kl >= 1.0:
+        w5 = 0.33
+    else:
+        w5 = 0.0
+    raw = 0.25 * t25 + 0.25 * rs + 0.20 * w3 + 0.15 * w4 + 0.15 * w5
+    ssi = int(max(1, min(100, round(raw * 100))))
+    grade = "D"
+    color = "#ef4444"
+    for threshold, g, c in _SSI_GRADE:
+        if ssi >= threshold:
+            grade = g
+            color = c
+            break
+    return {
+        "ssi":       ssi,
+        "ssi_grade": grade,
+        "ssi_color": color,
+        "ssi_factors": {
+            "t25": round(t25, 3),
+            "rs":  round(rs,  3),
+            "bt5": round(w3,  3),
+            "struct": round(w4, 3),
+            "vol":    round(w5, 3),
+        },
     }
 
 

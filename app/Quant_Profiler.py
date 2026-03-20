@@ -1172,6 +1172,404 @@ def _vn_tick_round(price: float) -> int:
     return int(round(price / 10) * 10)
 
 
+# ─── F2: Price Structure Detection (Higher-High / Higher-Low) ─────────────────
+def detect_price_structure(df: "pd.DataFrame", lookback: int = 10) -> dict:
+    """
+    Detect Higher-High and Higher-Low patterns for T+2–5 swing confirmation.
+
+    Returns:
+        is_hh (bool): Close[-1] > max(Close[−lookback:−1])
+        is_hl (bool): Low[-1]   > min(Low[−lookback:−1])
+        structure_label: "HH+HL"|"HH_only"|"HL_only"|"LL+LH"|"NEUTRAL"
+        structure_bars: count of consecutive up-bars in last 5 bars
+    """
+    try:
+        if df is None or len(df) < lookback + 1:
+            return {"is_hh": False, "is_hl": False, "structure_label": "NEUTRAL", "structure_bars": 0}
+        closes = df["Close"].values
+        lows   = df["Low"].values
+        highs  = df["High"].values
+        prior_close_max = float(closes[-(lookback + 1):-1].max())
+        prior_low_min   = float(lows[-(lookback + 1):-1].min())
+        is_hh = float(closes[-1]) > prior_close_max
+        is_hl = float(lows[-1])   > prior_low_min
+        # Conservative: also detect LL+LH
+        prior_high_max = float(highs[-(lookback + 1):-1].max())
+        prior_close_min = float(closes[-(lookback + 1):-1].min())
+        is_ll = float(closes[-1]) < prior_close_min
+        is_lh = float(highs[-1])  < prior_high_max
+        if is_hh and is_hl:
+            label = "HH+HL"
+        elif is_hh:
+            label = "HH_only"
+        elif is_hl:
+            label = "HL_only"
+        elif is_ll and is_lh:
+            label = "LL+LH"
+        else:
+            label = "NEUTRAL"
+        # Count consecutive up-bars (Close > prev Close) in last 5 bars
+        up_bars = 0
+        for i in range(-5, 0):
+            try:
+                if closes[i] > closes[i - 1]:
+                    up_bars += 1
+            except Exception:
+                break
+        return {
+            "is_hh":          is_hh,
+            "is_hl":          is_hl,
+            "structure_label": label,
+            "structure_bars": up_bars,
+        }
+    except Exception:
+        return {"is_hh": False, "is_hl": False, "structure_label": "NEUTRAL", "structure_bars": 0}
+
+
+# ─── F3: Relative Strength Rating vs VNIndex ──────────────────────────────────
+def compute_rs_rating(df: "pd.DataFrame", market_df: "pd.DataFrame") -> dict:
+    """
+    Compute RS Rating (1–99) — stock outperformance vs VNIndex.
+
+    rs_line   = 20d stock return / 20d market return (ratio; >1 = outperforming)
+    rs_slope  = 5-bar slope of rs_line series → "IMPROVING"/"STEADY"/"WEAKENING"
+    rs_rating = 1–99 rank approximated from rs_line via sigmoid
+    """
+    try:
+        if df is None or len(df) < 22 or market_df is None or len(market_df) < 22:
+            return {"rs_line": 1.0, "rs_slope": "STEADY", "rs_rating": 50}
+        stock_ret_20d  = float(df["Close"].iloc[-1] / df["Close"].iloc[-21] - 1)
+        market_ret_20d = float(market_df["Close"].iloc[-1] / market_df["Close"].iloc[-21] - 1)
+        if abs(market_ret_20d) < 1e-8:
+            rs_line = 1.0
+        else:
+            rs_line = (1 + stock_ret_20d) / (1 + market_ret_20d)
+        # 5-bar rolling RS line series for slope
+        rs_vals = []
+        for lag in range(5, 0, -1):
+            try:
+                sr = float(df["Close"].iloc[-lag] / df["Close"].iloc[-(lag + 20)] - 1)
+                mr = float(market_df["Close"].iloc[-lag] / market_df["Close"].iloc[-(lag + 20)] - 1)
+                denom = (1 + mr) if abs(mr) > 1e-8 else 1.0
+                rs_vals.append((1 + sr) / denom)
+            except Exception:
+                rs_vals.append(1.0)
+        slope = rs_vals[-1] - rs_vals[0] if len(rs_vals) >= 2 else 0.0
+        rs_slope = "IMPROVING" if slope > 0.02 else ("WEAKENING" if slope < -0.02 else "STEADY")
+        # Sigmoid mapping: rs_line 0.85–1.15 → rating 1–99
+        import math as _math
+        x = (rs_line - 1.0) * 10           # centre at 0, ±1.5 range
+        sigmoid = 1 / (1 + _math.exp(-x))  # 0–1
+        rs_rating = max(1, min(99, int(sigmoid * 98 + 1)))
+        return {
+            "rs_line":   round(rs_line, 4),
+            "rs_slope":  rs_slope,
+            "rs_rating": rs_rating,
+        }
+    except Exception:
+        return {"rs_line": 1.0, "rs_slope": "STEADY", "rs_rating": 50}
+
+
+# ─── F4: Overnight Gap Analysis ───────────────────────────────────────────────
+def detect_gaps(df: "pd.DataFrame") -> dict:
+    """
+    Classify latest overnight gap and compute gap-fill statistics.
+
+    gap_pct:       (Open[-1] − Close[-2]) / Close[-2] × 100
+    gap_type:      GAP_UP (>+0.5%), GAP_DOWN (<-0.5%), NO_GAP
+    avg_gap_pct:   mean absolute gap % over last 20 bars
+    gap_fill_pct:  % of last-20 gaps that were filled within 5 bars (0–100)
+    """
+    try:
+        if df is None or len(df) < 3:
+            return {"gap_pct": 0.0, "gap_type": "NO_GAP", "avg_gap_pct": 0.0, "gap_fill_pct": 0.0}
+        opens  = df["Open"].values
+        closes = df["Close"].values
+        highs  = df["High"].values
+        lows   = df["Low"].values
+        # Latest gap
+        gap_pct = (opens[-1] - closes[-2]) / closes[-2] * 100 if closes[-2] != 0 else 0.0
+        if gap_pct > 0.5:
+            gap_type = "GAP_UP"
+        elif gap_pct < -0.5:
+            gap_type = "GAP_DOWN"
+        else:
+            gap_type = "NO_GAP"
+        # Historical stats over last 20 bars
+        n = min(20, len(df) - 1)
+        gap_pcts_abs = []
+        filled = 0
+        valid  = 0
+        for i in range(-(n + 1), -1):
+            try:
+                gp = (opens[i + 1] - closes[i]) / closes[i] * 100 if closes[i] != 0 else 0.0
+                gap_pcts_abs.append(abs(gp))
+                if abs(gp) > 0.5:   # meaningful gap
+                    valid += 1
+                    fill_price = closes[i]
+                    # Check if price returned to fill_price within next 5 bars
+                    for j in range(i + 1, min(i + 6, 0)):
+                        try:
+                            if lows[j] <= fill_price <= highs[j]:
+                                filled += 1
+                                break
+                        except Exception:
+                            break
+            except Exception:
+                pass
+        avg_gap_pct  = float(sum(gap_pcts_abs) / len(gap_pcts_abs)) if gap_pcts_abs else 0.0
+        gap_fill_pct = round(filled / valid * 100, 1) if valid > 0 else 0.0
+        return {
+            "gap_pct":      round(gap_pct, 2),
+            "gap_type":     gap_type,
+            "avg_gap_pct":  round(avg_gap_pct, 2),
+            "gap_fill_pct": gap_fill_pct,
+        }
+    except Exception:
+        return {"gap_pct": 0.0, "gap_type": "NO_GAP", "avg_gap_pct": 0.0, "gap_fill_pct": 0.0}
+
+
+# ─── F8: Anchored Daily VWAP ──────────────────────────────────────────────────
+def compute_vwap(df: "pd.DataFrame", anchor_bars: int = 20) -> dict:
+    """
+    Compute 20-bar anchored VWAP (daily granularity).
+
+    vwap:              weighted average price (VND)
+    price_vs_vwap_pct: (current_price − vwap) / vwap × 100
+    vwap_dev:          "ABOVE" / "BELOW" / "AT" (within ±0.5%)
+    """
+    try:
+        if df is None or len(df) < anchor_bars:
+            return {"vwap": None, "price_vs_vwap_pct": 0.0, "vwap_dev": "AT"}
+        sub = df.tail(anchor_bars)
+        typical = (sub["High"] + sub["Low"] + sub["Close"]) / 3
+        vol     = sub["Volume"].clip(lower=1)
+        vwap    = float((typical * vol).sum() / vol.sum())
+        price   = float(df["Close"].iloc[-1])
+        dev_pct = (price - vwap) / vwap * 100 if vwap > 0 else 0.0
+        if dev_pct > 0.5:
+            vwap_dev = "ABOVE"
+        elif dev_pct < -0.5:
+            vwap_dev = "BELOW"
+        else:
+            vwap_dev = "AT"
+        return {
+            "vwap":               round(vwap, 0),
+            "price_vs_vwap_pct":  round(dev_pct, 2),
+            "vwap_dev":           vwap_dev,
+        }
+    except Exception:
+        return {"vwap": None, "price_vs_vwap_pct": 0.0, "vwap_dev": "AT"}
+
+
+# ─── F9: Upcoming Dividend / Ex-Date Fetcher (CafeF) ─────────────────────────
+import json as _json_module
+import time as _time_module
+
+_DIV_CACHE_PATH = _os_.path.join(_os_.path.dirname(_os_.path.abspath(__file__)),
+                                  "data", "dividend_cache.json")
+_DIV_CACHE_TTL  = 86400   # 24 hours
+
+
+def _load_div_cache() -> dict:
+    try:
+        if _os_.path.isfile(_DIV_CACHE_PATH):
+            with open(_DIV_CACHE_PATH, encoding="utf-8") as _fh:
+                return _json_module.load(_fh)
+    except Exception:
+        pass
+    return {}
+
+
+def _save_div_cache(cache: dict) -> None:
+    try:
+        _os_.makedirs(_os_.path.dirname(_DIV_CACHE_PATH), exist_ok=True)
+        with open(_DIV_CACHE_PATH, "w", encoding="utf-8") as _fh:
+            _json_module.dump(cache, _fh, ensure_ascii=False)
+    except Exception:
+        pass
+
+
+def fetch_upcoming_dividend(ticker: str) -> dict:
+    """
+    Fetch nearest upcoming ex-dividend date for a VN ticker from CafeF.
+    Results cached 24 h to data/dividend_cache.json.
+
+    Returns dict with keys: ex_date, dividend_vnd, days_to_ex, is_near
+    Returns {} on any error or if no upcoming event found.
+    """
+    ticker = ticker.upper().strip()
+    now_ts = _time_module.time()
+    cache  = _load_div_cache()
+    entry  = cache.get(ticker, {})
+    if entry.get("cached_ts", 0) + _DIV_CACHE_TTL > now_ts:
+        return entry.get("data", {})
+
+    try:
+        import requests as _req
+        from datetime import date as _date, timedelta as _td
+        headers = {
+            "User-Agent": "Mozilla/5.0",
+            "Referer":    "https://s.cafef.vn/",
+        }
+        # CafeF dividend events endpoint
+        url = f"https://s.cafef.vn/Lich-su-giao-dich/{ticker}/lich-co-tuc.chn"
+        resp = _req.get(url, headers=headers, timeout=8)
+        if not resp.ok:
+            raise ValueError(f"HTTP {resp.status_code}")
+
+        import re as _re
+        today = _date.today()
+        best  = None
+        # Parse ex-date patterns like "dd/mm/yyyy" in the page
+        # Look for rows containing "Ngày GD KHÔNG hưởng" or "GDKHQ"
+        pattern = _re.compile(r'(\d{2}/\d{2}/\d{4})')
+        text    = resp.text
+        # Look for dividends table — find dates near "GDKHQ" mention
+        gdkhq_pos = [m.start() for m in _re.finditer(r'GDKHQ|GD không hưởng|chốt quyền', text, _re.IGNORECASE)]
+        for pos in gdkhq_pos:
+            chunk = text[max(0, pos - 200):pos + 600]
+            for dm in pattern.finditer(chunk):
+                try:
+                    d_str = dm.group(1)
+                    d_obj = _date(int(d_str[6:10]), int(d_str[3:5]), int(d_str[0:2]))
+                    if d_obj >= today and (best is None or d_obj < best["ex_date"]):
+                        # Look for dividend amount near same chunk
+                        amt_m = _re.search(r'([\d,]+)\s*(?:đồng|VND|%)', chunk, _re.IGNORECASE)
+                        amt   = 0
+                        if amt_m:
+                            try:
+                                amt = int(amt_m.group(1).replace(",", ""))
+                            except Exception:
+                                pass
+                        best = {"ex_date": d_obj, "dividend_vnd": amt}
+                except Exception:
+                    pass
+
+        if best is None:
+            data = {}
+        else:
+            days_to_ex = (best["ex_date"] - today).days
+            data = {
+                "ex_date":      str(best["ex_date"]),
+                "dividend_vnd": best["dividend_vnd"],
+                "days_to_ex":   days_to_ex,
+                "is_near":      days_to_ex <= 5,
+            }
+
+        cache[ticker] = {"cached_ts": now_ts, "data": data}
+        _save_div_cache(cache)
+        return data
+
+    except Exception:
+        return {}
+
+
+# ─── F7: Market Breadth (VN30 Advance / Decline) ─────────────────────────────
+_VN30_TICKERS = [
+    "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "MBB", "MSN", "MWG", "NVL", "PDR", "PLX", "POW", "SAB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+]
+_BREADTH_CACHE: dict = {"data": None, "ts": 0.0}
+_BREADTH_CACHE_TTL = 300  # 5 minutes
+
+
+def compute_market_breadth(symbols: list = None, days: int = 10) -> dict:
+    """
+    Compute advance/decline breadth for VN30 (or custom list).
+
+    Returns:
+        adl_today (int): today's net advance-decline count
+        adl_slope (str): "BULLISH" / "BEARISH" / "NEUTRAL"
+        uv_dv_ratio (float): up-volume / down-volume ratio
+        breadth_signal (str): "BROAD_BULL" / "BROAD_BEAR" / "MIXED"
+    Cached 5 minutes.
+    """
+    import time as _t
+    now = _t.time()
+    if (_BREADTH_CACHE["data"] is not None and
+            (now - _BREADTH_CACHE["ts"]) < _BREADTH_CACHE_TTL):
+        return _BREADTH_CACHE["data"]
+
+    try:
+        tickers = symbols or _VN30_TICKERS
+        # Batch fetch OHLCV
+        results_map, _ = async_fetch_many(tickers, days=days + 3, max_workers=8, on_progress=None)
+
+        advance = 0
+        decline = 0
+        up_vol  = 0.0
+        dn_vol  = 0.0
+        adl_series = []  # daily ADL over `days`
+
+        # Build per-day A/D array
+        day_advances = {i: 0 for i in range(days)}
+        day_declines = {i: 0 for i in range(days)}
+
+        for tk, (df_tk, _) in results_map.items():
+            if df_tk is None or df_tk.empty or len(df_tk) < 2:
+                continue
+            for i in range(-days, 0):
+                try:
+                    c = df_tk["Close"].iloc[i]
+                    p = df_tk["Close"].iloc[i - 1]
+                    day_idx = days + i  # 0 = oldest
+                    if c > p:
+                        day_advances[day_idx] = day_advances.get(day_idx, 0) + 1
+                    elif c < p:
+                        day_declines[day_idx] = day_declines.get(day_idx, 0) + 1
+                except Exception:
+                    pass
+            # Today's volum split
+            try:
+                c0 = float(df_tk["Close"].iloc[-1])
+                p0 = float(df_tk["Close"].iloc[-2])
+                v0 = float(df_tk["Volume"].iloc[-1])
+                if c0 > p0:
+                    advance += 1; up_vol += v0
+                else:
+                    decline += 1; dn_vol += v0
+            except Exception:
+                pass
+
+        adl_today   = advance - decline
+        uv_dv_ratio = round(up_vol / max(dn_vol, 1.0), 2)
+
+        # 5-day ADL slope
+        series = [day_advances.get(i, 0) - day_declines.get(i, 0)
+                  for i in range(days - 5, days)]
+        adl_slope = ("BULLISH" if series[-1] > series[0] + 2
+                     else "BEARISH" if series[-1] < series[0] - 2
+                     else "NEUTRAL")
+
+        if adl_today > 10 and uv_dv_ratio > 1.5:
+            breadth_signal = "BROAD_BULL"
+        elif adl_today < -10 and uv_dv_ratio < 0.7:
+            breadth_signal = "BROAD_BEAR"
+        else:
+            breadth_signal = "MIXED"
+
+        data = {
+            "adl_today":      adl_today,
+            "adl_slope":      adl_slope,
+            "uv_dv_ratio":    uv_dv_ratio,
+            "breadth_signal": breadth_signal,
+            "advance":        advance,
+            "decline":        decline,
+        }
+        _BREADTH_CACHE["data"] = data
+        _BREADTH_CACHE["ts"]   = now
+        return data
+
+    except Exception:
+        return {
+            "adl_today": 0, "adl_slope": "NEUTRAL",
+            "uv_dv_ratio": 1.0, "breadth_signal": "MIXED",
+            "advance": 0, "decline": 0,
+        }
+
+
 def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, return_df: bool = False):
     """
     Full pipeline: OHLCV → Indicators → Real-time price → Signal → Output dict.
@@ -1507,6 +1905,29 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         regime          = _regime.get("regime", "SIDEWAYS"),
     )
 
+    # ⑦c Price Structure (F2) — Higher-High / Higher-Low ──────────────────────
+    _struct = detect_price_structure(df)
+    if _struct["is_hh"] and _struct["is_hl"]:
+        _t25.setdefault("t25_confirms", []).append("HH+HL")
+
+    # ⑦d RS Rating (F3) — Relative Strength vs VNIndex ────────────────────────
+    _market_df_rs = _get_vnindex_df()
+    _rs = compute_rs_rating(df, _market_df_rs)
+    if _rs.get("rs_rating", 50) > 70:
+        _t25.setdefault("t25_confirms", []).append(f"RS={_rs['rs_rating']}")
+
+    # ⑦e Gap Analysis (F4) ────────────────────────────────────────────────────
+    _gap = detect_gaps(df)
+
+    # ⑦f Anchored VWAP (F8) ───────────────────────────────────────────────────
+    _vwap_data = compute_vwap(df)
+
+    # ⑦g Upcoming Dividend (F9) — non-blocking, 24h cached ───────────────────
+    try:
+        _div = fetch_upcoming_dividend(symbol)
+    except Exception:
+        _div = {}
+
     # ⑧ ATR-based Entry / TP / SL ─────────────────────────────────────────────
     entry = price
     if atr and price:
@@ -1624,6 +2045,28 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         ),
         "high_vol":           _regime.get("high_vol", False),
         "rolling_beta_5d":    round(_rolling_beta_5d, 3),
+        # ── F2: Price Structure ───────────────────────────────────────────────
+        "is_hh":              _struct.get("is_hh", False),
+        "is_hl":              _struct.get("is_hl", False),
+        "structure_label":    _struct.get("structure_label", "NEUTRAL"),
+        "structure_bars":     _struct.get("structure_bars", 0),
+        # ── F3: Relative Strength ─────────────────────────────────────────────
+        "rs_line":            _rs.get("rs_line", 1.0),
+        "rs_slope":           _rs.get("rs_slope", "STEADY"),
+        "rs_rating":          _rs.get("rs_rating", 50),
+        # ── F4: Gap Analysis ──────────────────────────────────────────────────
+        "gap_pct":            _gap.get("gap_pct", 0.0),
+        "gap_type":           _gap.get("gap_type", "NO_GAP"),
+        "avg_gap_pct":        _gap.get("avg_gap_pct", 0.0),
+        "gap_fill_pct":       _gap.get("gap_fill_pct", 0.0),
+        # ── F8: VWAP ─────────────────────────────────────────────────────────
+        "vwap":               _vwap_data.get("vwap"),
+        "price_vs_vwap_pct":  _vwap_data.get("price_vs_vwap_pct", 0.0),
+        "vwap_dev":           _vwap_data.get("vwap_dev", "AT"),
+        # ── F9: Dividend / Ex-Date ────────────────────────────────────────────
+        "ex_div_date":        _div.get("ex_date"),
+        "ex_div_days":        _div.get("days_to_ex"),
+        "ex_div_amt":         _div.get("dividend_vnd"),
         "algo_ref":           "VN-Swing Alpha",
     }
     if return_df:

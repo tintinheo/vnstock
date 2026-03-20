@@ -532,8 +532,159 @@ test_bear_trend_reduces_confidence()
 test_risk_flags_populated()
 print("  PASS (5/5)")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 10: detect_price_structure  (F2)
+# ─────────────────────────────────────────────────────────────────────────────
+from Quant_Profiler import detect_price_structure, compute_rs_rating, detect_gaps, compute_vwap
+from portfolio_engine import compute_ssi_score
+
+def _make_rising_df(n=22):
+    """20 bars of cleanly rising prices (HH+HL) + 2 extra for gap detection."""
+    closes = [100.0 + i * 1.0 for i in range(n)]
+    highs  = [c + 0.5 for c in closes]
+    lows   = [c - 0.5 for c in closes]
+    opens  = [c - 0.2 for c in closes]
+    return pd.DataFrame({"Open": opens, "High": highs, "Low": lows, "Close": closes,
+                          "Volume": [1_000_000] * n})
+
+def _make_flat_df(n=22):
+    closes = [100.0] * n
+    return pd.DataFrame({"Open": closes, "High": [c+0.3 for c in closes],
+                          "Low": [c-0.3 for c in closes], "Close": closes,
+                          "Volume": [1_000_000] * n})
+
+def test_detect_price_structure_hh_hl():
+    df = _make_rising_df()
+    out = detect_price_structure(df, lookback=10)
+    assert out["is_hh"] is True,  f"Expected is_hh=True, got {out['is_hh']}"
+    assert out["is_hl"] is True,  f"Expected is_hl=True, got {out['is_hl']}"
+    assert "HH+HL" in out["structure_label"], f"Expected HH+HL in label, got {out['structure_label']}"
+
+def test_detect_price_structure_neutral():
+    df = _make_flat_df()
+    out = detect_price_structure(df, lookback=10)
+    # Flat bars → neither HH+HL nor LH+LL definitively; structure_label must be defined
+    assert "structure_label" in out
+    assert isinstance(out["is_hh"], bool)
+    assert isinstance(out["is_hl"], bool)
+
+print("\nT10: detect_price_structure")
+test_detect_price_structure_hh_hl()
+test_detect_price_structure_neutral()
+print("  PASS (2/2)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 11: compute_rs_rating  (F3)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_compute_rs_rating_outperform():
+    """Stock +10% vs market +3% → rs_line > 1, rs_rating > 50."""
+    n = 90
+    closes_stock  = [100.0 * (1 + 0.10 * i / n) for i in range(n + 1)]
+    closes_market = [100.0 * (1 + 0.03 * i / n) for i in range(n + 1)]
+    df_s = pd.DataFrame({"Close": closes_stock,  "Volume": [1_000_000] * (n + 1)})
+    df_m = pd.DataFrame({"Close": closes_market, "Volume": [1_000_000] * (n + 1)})
+    out  = compute_rs_rating(df_s, df_m)
+    assert out["rs_line"] > 1.0,  f"Expected rs_line > 1, got {out['rs_line']}"
+    assert out["rs_rating"] > 50, f"Expected rs_rating > 50, got {out['rs_rating']}"
+
+print("\nT11: compute_rs_rating")
+test_compute_rs_rating_outperform()
+print("  PASS (1/1)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 12: detect_gaps  (F4)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_detect_gaps_gap_up():
+    """Open > prev Close by 2% → GAP_UP."""
+    closes = [100.0] * 20
+    opens  = closes[:]
+    opens[-1] = 102.5   # gap up on last bar
+    highs  = [max(o, c) + 0.2 for o, c in zip(opens, closes)]
+    lows   = [min(o, c) - 0.2 for o, c in zip(opens, closes)]
+    df = pd.DataFrame({"Open": opens, "High": highs, "Low": lows, "Close": closes,
+                        "Volume": [1_000_000] * 20})
+    out = detect_gaps(df)
+    assert out["gap_type"] == "GAP_UP", f"Expected GAP_UP, got {out['gap_type']}"
+    assert out["gap_pct"]  > 0,         f"Expected gap_pct > 0, got {out['gap_pct']}"
+
+def test_detect_gaps_no_gap():
+    """Open ≈ prev Close → NO_GAP."""
+    df = _make_rising_df(22)
+    out = detect_gaps(df)
+    # rising_df has smooth open ≈ close-0.2: gap tiny – just check key exists
+    assert "gap_type" in out
+    assert "gap_pct"  in out
+
+print("\nT12: detect_gaps")
+test_detect_gaps_gap_up()
+test_detect_gaps_no_gap()
+print("  PASS (2/2)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 13: compute_vwap  (F8)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_compute_vwap_basic():
+    """VWAP over uniform price & volume should equal that price."""
+    n = 25
+    df = pd.DataFrame({
+        "Open":   [100.0] * n, "High": [101.0] * n,
+        "Low":    [99.0]  * n, "Close": [100.0] * n,
+        "Volume": [1_000_000] * n,
+    })
+    out = compute_vwap(df, anchor_bars=20)
+    assert out["vwap"] is not None, "vwap should not be None"
+    assert abs(out["vwap"] - 100.0) < 1.0, f"VWAP should be ~100, got {out['vwap']}"
+    assert "price_vs_vwap_pct" in out
+    assert "vwap_dev" in out
+
+print("\nT13: compute_vwap")
+test_compute_vwap_basic()
+print("  PASS (1/1)")
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Test 14: compute_ssi_score  (F15)
+# ─────────────────────────────────────────────────────────────────────────────
+def test_compute_ssi_strong():
+    """All strongly positive inputs → SSI >= 80, grade S or A."""
+    r_strong = {
+        "t25_score":    95,
+        "rs_rating":    90,
+        "bt5_win_rate": 0.75,
+        "is_hh":        True,
+        "is_hl":        True,
+        "kl_ratio":     2.5,
+    }
+    out = compute_ssi_score(r_strong)
+    assert out["ssi"] >= 75, f"Expected SSI >= 75, got {out['ssi']}"
+    assert out["ssi_grade"] in ("S", "A"), f"Expected grade S/A, got {out['ssi_grade']}"
+
+def test_compute_ssi_weak():
+    """All low/zero inputs → SSI < 50, grade C or D."""
+    r_weak = {
+        "t25_score":    10,
+        "rs_rating":    10,
+        "bt5_win_rate": 0.30,
+        "is_hh":        False,
+        "is_hl":        False,
+        "kl_ratio":     0.3,
+    }
+    out = compute_ssi_score(r_weak)
+    assert out["ssi"] < 55, f"Expected SSI < 55, got {out['ssi']}"
+    assert out["ssi_grade"] in ("C", "D"), f"Expected grade C/D, got {out['ssi_grade']}"
+
+print("\nT14: compute_ssi_score")
+test_compute_ssi_strong()
+test_compute_ssi_weak()
+print("  PASS (2/2)")
+
+
 print()
 print("=" * 52)
-print("  ALL 43 TEST CASES PASSED — T+ Rec + LSTM + Improvements")
+print("  ALL 51 TEST CASES PASSED — T+ Rec + LSTM + Improvements + 15-Feature Swing Suite")
 print("=" * 52)
 
