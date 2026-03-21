@@ -18,6 +18,10 @@ import plotly.graph_objects as go
 from plotly.subplots import make_subplots
 from datetime import datetime
 
+# Suppress TensorFlow/oneDNN verbose startup noise in Streamlit console
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "3")
+os.environ.setdefault("TF_ENABLE_ONEDNN_OPTS", "0")
+
 # ─── Import core logic from same directory ────────────────────────────────────
 _DIR = os.path.dirname(os.path.abspath(__file__))
 if _DIR not in sys.path:
@@ -450,7 +454,7 @@ tr.tbl-hidden { display: none !important; }
 # ═══════════════════════════════════════════════════════════════════════════════
 #  CACHED ANALYSIS
 # ═══════════════════════════════════════════════════════════════════════════════
-@st.cache_data(ttl=300, show_spinner=False)
+@st.cache_data(ttl=300, show_spinner=False, max_entries=50)
 def cached_analyse(symbol: str, days: int) -> tuple:
     """Fetch + indicators + signal. Cached 5 min. Returns (result_dict, df)."""
     result, df = analyse_ticker(symbol, days, verbose=False, return_df=True)
@@ -2326,7 +2330,8 @@ def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
     if fc is None and r.get("fc_lstm_pct") is not None:
         fc = {"lstm_pred_pct": r["fc_lstm_pct"], "lstm_source": r.get("fc_lstm_source", "ridge")}
 
-    rec = generate_t_plus_recommendation(r, fc)
+    # Use pre-embedded fields when available; recompute only when fc carries lstm data
+    rec = generate_t_plus_recommendation(r, fc) if fc else _get_or_compute_t_rec(r)
     action    = rec["action"]
     grade     = rec["grade"]
     score     = rec["confidence_score"]
@@ -2469,6 +2474,30 @@ def _embed_t_rec(result: dict) -> None:
         result["ex_div_days_snap"] = result.get("ex_div_days")
     except Exception:
         pass
+
+
+def _get_or_compute_t_rec(r: dict) -> dict:
+    """Return pre-embedded T+ rec fields from r (set by _embed_t_rec);
+    falls back to generate_t_plus_recommendation() only if not yet embedded.
+    This avoids redundant recomputation on every render cycle.
+    """
+    if r.get("t_rec_action"):
+        return {
+            "action":             r["t_rec_action"],
+            "grade":              r.get("t_rec_grade", "C"),
+            "confidence_score":   r.get("t_rec_score", 0),
+            "entry_zone_low":     r.get("t_rec_entry_low"),
+            "entry_zone_high":    r.get("t_rec_entry_high"),
+            "sl_price":           r.get("t_rec_sl"),
+            "tp1_price":          r.get("t_rec_tp1"),
+            "rr_ratio":           r.get("t_rec_rr"),
+            "position_size_pct":  r.get("t_rec_size_pct", 0),
+            "kelly_mode":         r.get("t_rec_kelly", "NONE"),
+            "entry_timing":       r.get("t_rec_timing", ""),
+            "risk_flags":         r.get("t_rec_flags", []),
+            "supporting_signals": r.get("t_rec_signals", []),
+        }
+    return generate_t_plus_recommendation(r)
 
 
 def render_audit_page() -> None:
@@ -3508,15 +3537,21 @@ def render_scanner() -> None:
         "Quét sâu (Deep Mode): phân tích đầy đủ 400 ngày."
     )
 
-    # ── Market Breadth banner (F7) ───────────────────────────────────────────
-    _bc_key = "scanner_breadth_cache"
-    if _bc_key not in st.session_state:
+    # ── Market Breadth banner (F7) — refresh every 5 min ─────────────────────
+    _bc_key    = "scanner_breadth_cache"
+    _bc_ts_key = "scanner_breadth_ts"
+    _bc_now    = _time.time()
+    if (
+        _bc_key not in st.session_state
+        or _bc_now - st.session_state.get(_bc_ts_key, 0) > 300
+    ):
         try:
             _bdata = compute_market_breadth()
         except Exception:
             _bdata = {"adl_today": 0, "adl_slope": "NEUTRAL", "uv_dv_ratio": 1.0,
                       "breadth_signal": "MIXED", "advance": 0, "decline": 0}
-        st.session_state[_bc_key] = _bdata
+        st.session_state[_bc_key]    = _bdata
+        st.session_state[_bc_ts_key] = _bc_now
     _bdata = st.session_state[_bc_key]
     _bs    = _bdata.get("breadth_signal", "MIXED")
     _bc    = {"BROAD_BULL": "#22c55e", "BROAD_BEAR": "#ef4444", "MIXED": "#f59e0b"}.get(_bs, "#94a3b8")
@@ -3726,13 +3761,15 @@ def render_scanner() -> None:
             _sc_sig_set = set()
     if is_deep and _fsc2 is not None:
         with _fsc2:
-            _sc_act_present = [
-                a for a in _SC_ACT_ALL
-                if any(
-                    generate_t_plus_recommendation(r_lookup_pre.get(row["ticker"], {})).get("action") == a
-                    for _, row in rank_df.iterrows()
+            # Build action map once using pre-embedded fields — avoids N recomputations
+            _t_rec_action_map = {
+                row["ticker"]: (
+                    r_lookup_pre.get(row["ticker"], {}).get("t_rec_action")
+                    or _get_or_compute_t_rec(r_lookup_pre.get(row["ticker"], {})).get("action", "SKIP")
                 )
-            ]
+                for _, row in rank_df.iterrows()
+            }
+            _sc_act_present = [a for a in _SC_ACT_ALL if a in _t_rec_action_map.values()]
             if _sc_act_present:
                 _sc_act_opts = [f"{_SC_ACT_ICONS[a]} {a}" for a in _sc_act_present]
                 _sc_act_sel  = st.multiselect(
@@ -3745,6 +3782,7 @@ def render_scanner() -> None:
             else:
                 _sc_act_set = set(_SC_ACT_ALL)
     else:
+        _t_rec_action_map = {}
         _sc_act_set = set(_SC_ACT_ALL)
 
     # Apply signal filter to rank_df
@@ -3754,11 +3792,11 @@ def render_scanner() -> None:
         rank_df = rank_df[rank_df.apply(_row_sig, axis=1).isin(_sc_sig_set)].reset_index(drop=True)
         # Re-number rank column
         rank_df["rank"] = range(1, len(rank_df) + 1)
-    # Apply T+ action filter to rank_df (deep mode only)
+    # Apply T+ action filter using pre-built map — no per-row recompute
     if is_deep and _sc_act_set != set(_SC_ACT_ALL):
-        def _row_act(row):
-            return generate_t_plus_recommendation(r_lookup_pre.get(row["ticker"], {})).get("action", "–")
-        rank_df = rank_df[rank_df.apply(_row_act, axis=1).isin(_sc_act_set)].reset_index(drop=True)
+        rank_df = rank_df[
+            rank_df["ticker"].map(lambda t: _t_rec_action_map.get(t, "SKIP")).isin(_sc_act_set)
+        ].reset_index(drop=True)
         rank_df["rank"] = range(1, len(rank_df) + 1)
 
     if rank_df.empty:
@@ -3799,11 +3837,12 @@ def render_scanner() -> None:
         t25_sig  = r_lookup.get(tk, {}).get("t25_signal", "")
         t25_sc   = r_lookup.get(tk, {}).get("t25_score")
         t25_cell = _t25_badge(t25_sig, t25_sc) if is_deep else "–"
-        # T+ Recommendation badge (deep mode only)
+        # T+ Recommendation badge (deep mode only) — read pre-embedded fields
         if is_deep:
-            _trec = generate_t_plus_recommendation(r_lookup.get(tk, {}))
-            _tact = _trec["action"]
-            _tscr = _trec["confidence_score"]
+            _r_cur = r_lookup.get(tk, {})
+            _tact  = _r_cur.get("t_rec_action") or _get_or_compute_t_rec(_r_cur).get("action", "SKIP")
+            _tscr  = _r_cur.get("t_rec_score", 0) if _r_cur.get("t_rec_action") \
+                     else _get_or_compute_t_rec(_r_cur).get("confidence_score", 0)
             _tcol = _T_REC_COLORS.get(_tact, "#94a3b8")
             _act_short = {"STRONG_BUY": "S.BUY", "BUY": "BUY", "WATCH": "WATCH",
                           "SKIP": "SKIP", "AVOID": "AVOID"}.get(_tact, _tact)
@@ -4425,7 +4464,7 @@ def render_t_plus_page() -> None:
     # ── Compute recommendations for all valid tickers ─────────────────────────
     recs = []
     for r in valid:
-        rec = generate_t_plus_recommendation(r)
+        rec = _get_or_compute_t_rec(r)   # reads pre-embedded fields; no recompute
         recs.append({**rec, "ticker": r["ticker"], "price": r.get("price")})
 
     # Sort by confidence_score descending
@@ -4637,7 +4676,11 @@ def main() -> None:
             prog.progress(100, text="✓ Hoàn thành")
             prog.empty()
             st.session_state.results = results
-            st.session_state.dfs     = dfs
+            # Trim to last 252 rows (1 trading year) before storing — bounds session memory
+            st.session_state.dfs = {
+                k: v.tail(252) if len(v) > 252 else v
+                for k, v in dfs.items()
+            }
 
     results = st.session_state.get("results", [])
     dfs     = st.session_state.get("dfs", {})

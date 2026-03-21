@@ -8,9 +8,12 @@ Run:
 All 32 tests should pass.  Exit code 0 = success, 1 = failure.
 """
 from __future__ import annotations
-
 import sys
 import os
+
+# Force UTF-8 stdout so emoji pass-through works on cp1252 consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 

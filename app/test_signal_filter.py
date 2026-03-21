@@ -11,8 +11,13 @@ Run:
 from __future__ import annotations
 
 import sys
+import io
 import os
 import types
+
+# Force UTF-8 stdout so emoji pass-through works on cp1252 consoles
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8', errors='replace')
 
 # ── Stub Streamlit so the import works without a running server ───────────────
 _st_stub = types.ModuleType("streamlit")
