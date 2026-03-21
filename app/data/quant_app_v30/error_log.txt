@@ -1,0 +1,6 @@
+2026-03-21 17:27:11,174 [WARNING] in fetch_stooq: Stooq GC.F failed: Stooq no data for GC.F — trying yFinance fallback
+2026-03-21 17:27:11,954 [INFO] in fetch_stooq: yFinance fallback GC.F→GC=F: 125 rows
+2026-03-21 17:27:13,161 [WARNING] in fetch_stooq: Stooq CL.F failed: Stooq no data for CL.F — trying yFinance fallback
+2026-03-21 17:27:13,336 [INFO] in fetch_stooq: yFinance fallback CL.F→CL=F: 125 rows
+2026-03-21 17:27:14,618 [WARNING] in fetch_stooq: Stooq NG.F failed: Stooq no data for NG.F — trying yFinance fallback
+2026-03-21 17:27:14,847 [INFO] in fetch_stooq: yFinance fallback NG.F→NG=F: 125 rows

@@ -596,7 +596,7 @@ def load_audit_from_disk() -> list:
 #  PATHS & TRADING CONSTANTS
 # ══════════════════════════════════════════════════════════════
 BASE_DIR            = os.getcwd()
-DATA_DIR            = os.path.join(BASE_DIR, "data")
+DATA_DIR            = os.path.join(BASE_DIR, "data","quant_app_v30")
 JSON_STORAGE_PATH   = os.path.join(DATA_DIR, "vnstock")
 ML_AUDIT_PATH       = os.path.join(DATA_DIR, "ml_forecast")
 LOG_FILE            = os.path.join(DATA_DIR, "error_log.txt")
