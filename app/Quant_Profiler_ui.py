@@ -73,6 +73,11 @@ from trend_warning_engine import (
     REVERSAL_WARNING_LOW_CONF, REVERSAL_WARNING_CONFIRMED,
     INSUFFICIENT_DATA,
 )
+from candle_forecast_engine import (
+    run_candle_forecast,
+    train_candle_lstm_model,
+    _CANDLE_KERAS_AVAILABLE,
+)
 
 # ═══════════════════════════════════════════════════════════════════════════════
 #  PAGE CONFIG
@@ -2330,8 +2335,13 @@ def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
     if fc is None and r.get("fc_lstm_pct") is not None:
         fc = {"lstm_pred_pct": r["fc_lstm_pct"], "lstm_source": r.get("fc_lstm_source", "ridge")}
 
-    # Use pre-embedded fields when available; recompute only when fc carries lstm data
-    rec = generate_t_plus_recommendation(r, fc) if fc else _get_or_compute_t_rec(r)
+    # Pull cached CF result (default N=5) and enrich T+ recommendation
+    _cf_cache_key = f"candle_fc_{ticker}_5"
+    _cf_result    = st.session_state.get(_cf_cache_key)
+    if fc or _cf_result:
+        rec = generate_t_plus_recommendation(r, fc, cf_result=_cf_result)
+    else:
+        rec = _get_or_compute_t_rec(r)
     action    = rec["action"]
     grade     = rec["grade"]
     score     = rec["confidence_score"]
@@ -2437,6 +2447,37 @@ def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
             st.markdown(
                 f'<div style="margin-top:6px;color:#64748b;font-size:11px;">'
                 f'🧠 {rec["lstm_info"]}</div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Row 5: CF enrichment panel (visible only when cf_result cached) ────
+        _hmm_tr = rec.get("hmm_transition")
+        _d1_pct = rec.get("day1_forecast_pct")
+        _ci_lo  = rec.get("forecast_ci_low")
+        _ci_hi  = rec.get("forecast_ci_high")
+        _sl_g   = rec.get("sl_garch")
+        _tp1_g  = rec.get("tp1_garch")
+        if any(x is not None for x in [_hmm_tr, _d1_pct, _sl_g]):
+            _cf_parts = []
+            if _hmm_tr:
+                _cf_parts.append(f"📡 HMM: <b>{_hmm_tr}</b>")
+            if _d1_pct is not None:
+                _d1_col = "#22c55e" if _d1_pct > 0 else "#ef4444"
+                _cf_parts.append(
+                    f'CF ngày 1: <span style="color:{_d1_col};font-weight:700;">'
+                    f'{_d1_pct:+.2f}%</span>'
+                )
+            if _ci_lo and _ci_hi:
+                _cf_parts.append(f"CI₉₅: {_ci_lo:,.0f}–{_ci_hi:,.0f}")
+            if _sl_g:
+                _cf_parts.append(f'<span style="color:#ef4444;">SL★ {_sl_g:,.0f}</span>')
+            if _tp1_g:
+                _cf_parts.append(f'<span style="color:#22c55e;">TP1★ {_tp1_g:,.0f}</span>')
+            st.markdown(
+                '<div style="margin-top:8px;padding:6px 12px;border-left:3px solid #3b82f6;'
+                'background:#0f172a;border-radius:4px;font-size:12px;line-height:1.8;">'
+                + "&nbsp;&nbsp;·&nbsp;&nbsp;".join(_cf_parts)
+                + '&nbsp;<span style="color:#475569;font-size:10px;">(★ GARCH CF)</span></div>',
                 unsafe_allow_html=True,
             )
 
@@ -3189,7 +3230,556 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
     render_t_plus_recommendation(r)
     render_smart_money(r, df)
     render_trend_warning(r, df)
+    render_candle_forecast(r, df)
     st.markdown("<div style='height:24px'></div>", unsafe_allow_html=True)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+#  CANDLESTICK FORECAST  (Dự báo Nến)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+# ── colour helpers ─────────────────────────────────────────────────────────────
+_ACTION_COLORS = {
+    "STRONG_BUY":  "#22c55e",
+    "BUY":         "#4ade80",
+    "HOLD":        "#94a3b8",
+    "SELL":        "#f97316",
+    "STRONG_SELL": "#ef4444",
+    "AVOID":       "#7f1d1d",
+}
+_GRADE_COLORS = {
+    "A+": "#22c55e",
+    "A":  "#4ade80",
+    "B":  "#fbbf24",
+    "C":  "#f97316",
+    "D":  "#ef4444",
+}
+_SIGNAL_ICONS = {
+    "STRONG_BUY": "🟢⬆",
+    "BUY":        "🟢",
+    "NEUTRAL":    "⚪",
+    "SELL":       "🔴",
+    "STRONG_SELL":"🔴⬇",
+}
+
+
+def _build_forecast_chart(
+    df: pd.DataFrame,
+    candles: list,
+    garch,
+    current_price: float,
+    timing,
+    ticker: str,
+    hmm,
+) -> go.Figure:
+    """
+    Plotly chart: last 20 historical OHLCV candles (grey) +
+    N predicted candles (blue) + GARCH CI band + pattern annotations.
+    """
+    from plotly.subplots import make_subplots
+
+    # ── Historical slice ──────────────────────────────────────────────────────
+    hist    = df.tail(20).copy()
+    hist_dates = list(range(-len(hist), 0))   # -20…-1 as x-axis positions
+    pred_x  = list(range(1, len(candles) + 1)) # 1…N
+
+    # Build combined x labels: "date_str" for hist, "T+N" for pred
+    hist_xlabels = []
+    for idx in hist.index:
+        try:
+            hist_xlabels.append(str(idx)[:10])
+        except Exception:
+            hist_xlabels.append(str(idx))
+    pred_xlabels = [c.date_lbl for c in candles]
+    all_xlabels  = hist_xlabels + pred_xlabels
+    all_x        = list(range(len(all_xlabels)))
+    hist_x_idx   = list(range(len(hist)))
+    pred_x_idx   = list(range(len(hist), len(hist) + len(candles)))
+
+    fig = make_subplots(
+        rows=2, cols=1,
+        shared_xaxes=True,
+        row_heights=[0.75, 0.25],
+        vertical_spacing=0.04,
+    )
+
+    # ── Historical candles (grey/muted) ───────────────────────────────────────
+    fig.add_trace(go.Candlestick(
+        x=hist_x_idx,
+        open=hist["Open"].values.tolist()  if "Open" in hist.columns else hist["Close"].values.tolist(),
+        high=hist["High"].values.tolist(),
+        low=hist["Low"].values.tolist(),
+        close=hist["Close"].values.tolist(),
+        increasing_line_color="#4b5563",
+        decreasing_line_color="#374151",
+        increasing_fillcolor="#374151",
+        decreasing_fillcolor="#1f2937",
+        name="Lịch sử",
+        showlegend=True,
+        opacity=0.7,
+    ), row=1, col=1)
+
+    # ── Predicted candles (blue palette) ─────────────────────────────────────
+    pred_open  = [c.open  for c in candles]
+    pred_high  = [c.high  for c in candles]
+    pred_low   = [c.low   for c in candles]
+    pred_close = [c.close for c in candles]
+
+    fig.add_trace(go.Candlestick(
+        x=pred_x_idx,
+        open=pred_open,
+        high=pred_high,
+        low=pred_low,
+        close=pred_close,
+        increasing_line_color="#3b82f6",
+        decreasing_line_color="#1d4ed8",
+        increasing_fillcolor="#1d4ed8",
+        decreasing_fillcolor="#1e3a8a",
+        name="Dự báo",
+        showlegend=True,
+    ), row=1, col=1)
+
+    # ── GARCH CI band ─────────────────────────────────────────────────────────
+    lower_ci = [c.lower_ci for c in candles]
+    upper_ci = [c.upper_ci for c in candles]
+
+    fig.add_trace(go.Scatter(
+        x=pred_x_idx,
+        y=upper_ci,
+        mode="lines",
+        line=dict(color="rgba(251,191,36,0)", width=0),
+        showlegend=False,
+        name="CI Upper",
+    ), row=1, col=1)
+    fig.add_trace(go.Scatter(
+        x=pred_x_idx,
+        y=lower_ci,
+        mode="lines",
+        fill="tonexty",
+        fillcolor="rgba(251,191,36,0.10)",
+        line=dict(color="rgba(251,191,36,0.25)", width=1, dash="dot"),
+        showlegend=True,
+        name="95% CI (GARCH)",
+    ), row=1, col=1)
+
+    # ── Entry / SL / TP lines ────────────────────────────────────────────────
+    if timing.entry_period is not None:
+        ep_x = pred_x_idx[timing.entry_period]
+        ep_p = candles[timing.entry_period].close
+        sl   = ep_p * (1 - 1.645 * garch.sigma_t1)
+        tp1  = ep_p * (1 + 2.0   * garch.sigma_t1)
+        tp2  = ep_p * (1 + 3.5   * garch.sigma_t1)
+        for lvl, color, lbl in [
+            (ep_p, "#fbbf24", "Entry"),
+            (sl,   "#ef4444", "SL"),
+            (tp1,  "#22c55e", "TP1"),
+            (tp2,  "#86efac", "TP2"),
+        ]:
+            fig.add_hline(
+                y=lvl, line_dash="dash",
+                line_color=color, line_width=1,
+                annotation_text=f" {lbl} {lvl:,.0f}",
+                annotation_font_color=color,
+                annotation_font_size=10,
+                row=1, col=1,
+            )
+
+    # ── Pattern annotations ───────────────────────────────────────────────────
+    for xi, c in zip(pred_x_idx, candles):
+        if c.pattern != "Bullish" and c.pattern != "Bearish":
+            icon = _SIGNAL_ICONS.get(c.signal, "")
+            fig.add_annotation(
+                x=xi,
+                y=c.high * 1.005,
+                text=f"{icon} {c.pattern}",
+                showarrow=False,
+                font=dict(size=8, color="#94a3b8"),
+                xanchor="center",
+                yanchor="bottom",
+                row=1, col=1,
+            )
+
+    # ── Volume bars ──────────────────────────────────────────────────────────
+    hist_vol = hist["Volume"].values.tolist() if "Volume" in hist.columns else [0] * len(hist)
+    pred_vol = [int(c.volume) for c in candles]
+
+    fig.add_trace(go.Bar(
+        x=hist_x_idx,
+        y=hist_vol,
+        marker_color="#374151",
+        opacity=0.6,
+        name="Vol lịch sử",
+        showlegend=False,
+    ), row=2, col=1)
+    fig.add_trace(go.Bar(
+        x=pred_x_idx,
+        y=pred_vol,
+        marker_color="#1d4ed8",
+        opacity=0.7,
+        name="Vol dự báo",
+        showlegend=False,
+    ), row=2, col=1)
+
+    # ── Vertical separator at forecast start ─────────────────────────────────
+    fig.add_vline(
+        x=len(hist) - 0.5,
+        line_dash="dot",
+        line_color="#475569",
+        line_width=1,
+        annotation_text=" Dự báo →",
+        annotation_font_color="#64748b",
+        annotation_font_size=10,
+    )
+
+    # ── HMM title ────────────────────────────────────────────────────────────
+    next_max_idx = int(np.argmax(hmm.next_state_probs))
+    next_labels  = ["Bear", "Range", "Bull"]
+    next_label   = next_labels[next_max_idx]
+    next_prob    = hmm.next_state_probs[next_max_idx] * 100
+
+    fig.update_layout(
+        title=dict(
+            text=(
+                f"<b>{ticker}</b> — Dự báo {len(candles)} ngày  "
+                f"| HMM: <b>{hmm.regime_label}</b> → {next_label} ({next_prob:.0f}%)"
+            ),
+            font=dict(size=13, color="#e2e8f0"),
+        ),
+        paper_bgcolor="#0e1117",
+        plot_bgcolor="#0e1117",
+        font=dict(color="#94a3b8", size=11),
+        height=520,
+        margin=dict(l=10, r=10, t=50, b=10),
+        xaxis=dict(
+            tickmode="array",
+            tickvals=list(range(len(all_xlabels))),
+            ticktext=all_xlabels,
+            tickfont=dict(size=9),
+            gridcolor="#1e2533",
+            showgrid=True,
+        ),
+        yaxis=dict(gridcolor="#1e2533", showgrid=True, tickformat=",.0f"),
+        yaxis2=dict(gridcolor="#1e2533", showgrid=False),
+        legend=dict(x=0, y=1.05, orientation="h", font=dict(size=10)),
+        xaxis_rangeslider_visible=False,
+    )
+    return fig
+
+
+def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
+    """
+    Render the 📊 Dự báo Nến expander section.
+    Controls: n_days slider + Run Forecast button + optional LSTM train button.
+    Layout:
+        Row 1 — Chart (predicted candles + GARCH CI)
+        Row 2 — Confidence panel | HMM transition heatmap | Model weights
+        Row 3 — Action card + Timing + Kelly sizing
+    """
+    ticker = r.get("ticker", "")
+    from pathlib import Path as _CPath
+
+    with st.expander("📊 Dự báo Nến  (Candlestick Forecast)", expanded=False):
+        # ── Controls ───────────────────────────────────────────────────────────
+        ctrl_col1, ctrl_col2, ctrl_col3, ctrl_col4 = st.columns([2, 1, 1, 2])
+        with ctrl_col1:
+            n_days = st.slider(
+                "Số ngày dự báo (N)",
+                min_value=3, max_value=30, value=5, step=1,
+                key=f"cf_ndays_{ticker}",
+                help="Số phiên giao dịch cần dự báo (3–30). Nhấn ▶ Chạy để cập nhật.",
+            )
+        with ctrl_col2:
+            run_btn = st.button(
+                "▶ Chạy Dự báo",
+                key=f"cf_run_{ticker}",
+                type="primary",
+                use_container_width=True,
+            )
+        # LSTM train button
+        _mdl_path   = _CPath(os.path.join(_DIR, "data", "models", f"{ticker}_candle_lstm_{n_days}.keras"))
+        _mdl_exists = _mdl_path.exists()
+        with ctrl_col3:
+            train_btn = st.button(
+                "🔄 Retrain LSTM" if _mdl_exists else "🧠 Train LSTM",
+                key=f"cf_train_{ticker}_{n_days}",
+                type="secondary",
+                use_container_width=True,
+                disabled=not _CANDLE_KERAS_AVAILABLE,
+                help="Huấn luyện CandleLSTM cho ticker này (LSTM×2 + MultiHead Attention → N×OHLCV).",
+            )
+        with ctrl_col4:
+            if _mdl_exists:
+                _ts = _mdl_path.stat().st_mtime
+                _ts_str = __import__("datetime").datetime.fromtimestamp(_ts).strftime("%d/%m %H:%M")
+                st.caption(f"🧠 LSTM model: `{ticker}_candle_lstm_{n_days}.keras`  ·  {_ts_str}")
+            elif _CANDLE_KERAS_AVAILABLE:
+                st.caption("💡 Chưa có CandleLSTM — có thể train để tăng độ chính xác.")
+            else:
+                st.caption("⚠️ Keras không khả dụng — dùng SARIMA+Prophet ensemble.")
+
+        # ── LSTM Training ──────────────────────────────────────────────────────
+        if train_btn and df is not None and not df.empty:
+            _pbar = st.empty()
+            _pbar.progress(0, text="⏳ Đang khởi tạo CandleLSTM…")
+
+            def _on_epoch_cf(epoch: int, total: int, logs: dict) -> None:
+                pct = min(int(epoch / total * 100), 99)
+                _pbar.progress(pct, text=f"🧠 CandleLSTM Epoch {epoch}/{total}")
+
+            _trained = train_candle_lstm_model(
+                ticker, df, n_days=n_days, force=True, progress_callback=_on_epoch_cf,
+            )
+            if _trained is not None:
+                ep = getattr(_trained, "_train_epochs", "?")
+                ns = getattr(_trained, "_train_samples", "?")
+                _pbar.progress(100, text="✅ Hoàn thành!")
+                st.success(
+                    f"✅ **CandleLSTM huấn luyện xong!**  {ep} epochs · {ns} samples  "
+                    f"·  `data/models/{ticker}_candle_lstm_{n_days}.keras`"
+                )
+                st.rerun()
+            else:
+                _pbar.empty()
+                st.error("❌ Huấn luyện thất bại — kiểm tra dữ liệu >= 50 phiên và Keras khả dụng.")
+
+        # ── No-run state ───────────────────────────────────────────────────────
+        _cache_key = f"candle_fc_{ticker}_{n_days}"
+        if not run_btn and _cache_key not in st.session_state:
+            st.info(
+                "ℹ️ Nhấn **▶ Chạy Dự báo** để chạy mô hình SARIMA + LSTM + Prophet "
+                f"và dự báo **{n_days} nến** tiếp theo."
+            )
+            return
+
+        # ── Run forecast (with cache) ──────────────────────────────────────────
+        if run_btn or _cache_key not in st.session_state:
+            with st.spinner(f"⏳ Đang chạy dự báo {n_days} ngày cho {ticker}…"):
+                fc_result = run_candle_forecast(ticker, r, df, n_days=n_days)
+            st.session_state[_cache_key] = fc_result
+        else:
+            fc_result = st.session_state[_cache_key]
+
+        if "error" in fc_result:
+            st.error(f"❌ {fc_result['error']}")
+            return
+
+        garch    = fc_result["garch"]
+        hmm      = fc_result["hmm"]
+        ensemble = fc_result["ensemble"]
+        candles  = fc_result["candles"]
+        conf     = fc_result["confidence"]
+        grade    = fc_result["grade"]
+        action   = fc_result["action"]
+        timing   = fc_result["timing"]
+        kelly    = fc_result["kelly"]
+        statuses = fc_result["model_statuses"]
+
+        # ── Model status badges ───────────────────────────────────────────────
+        def _status_badge(name: str) -> str:
+            s = statuses.get(name, "?")
+            c = "#22c55e" if s == "ok" else "#f97316"
+            return f'<span style="background:{c}22;color:{c};border-radius:4px;padding:1px 6px;font-size:10px;font-weight:700;">{name.upper()} {s}</span>'
+
+        st.markdown(
+            " &nbsp; ".join([_status_badge(n) for n in ["garch", "hmm", "sarima", "lstm", "prophet"]]),
+            unsafe_allow_html=True,
+        )
+        st.markdown("<div style='height:8px'></div>", unsafe_allow_html=True)
+
+        # ══ ROW 1 — Forecast Chart ════════════════════════════════════════════
+        if candles:
+            chart = _build_forecast_chart(df, candles, garch, fc_result["current_price"], timing, ticker, hmm)
+            st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"cf_chart_{ticker}_{n_days}")
+        else:
+            st.warning("Không tạo được nến dự báo.")
+
+        # ══ ROW 2 — Confidence + HMM + Model Weights ════════════════════════
+        r2c1, r2c2, r2c3 = st.columns([1, 1, 1], gap="small")
+
+        with r2c1:
+            # Confidence gauge
+            grade_color = _GRADE_COLORS.get(grade, "#94a3b8")
+            fig_gauge   = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=conf,
+                number=dict(suffix="%", font=dict(size=22, color=grade_color)),
+                gauge=dict(
+                    axis=dict(range=[0, 100], tickfont=dict(size=9, color="#64748b")),
+                    bar=dict(color=grade_color, thickness=0.3),
+                    bgcolor="#141824",
+                    bordercolor="#2d3347",
+                    steps=[
+                        dict(range=[0, 35],  color="#1a0a0a"),
+                        dict(range=[35, 50], color="#1a140a"),
+                        dict(range=[50, 65], color="#0a1a0a"),
+                        dict(range=[65, 80], color="#0a1a14"),
+                        dict(range=[80, 100], color="#0a1a0a"),
+                    ],
+                    threshold=dict(line=dict(color=grade_color, width=2), thickness=0.7, value=conf),
+                ),
+                title=dict(text=f"Confidence &nbsp; <b style='color:{grade_color};font-size:18px;'>{grade}</b>", font=dict(size=11, color="#94a3b8")),
+            ))
+            fig_gauge.update_layout(
+                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                height=180, margin=dict(l=15, r=15, t=30, b=5),
+                font=dict(color="#94a3b8"),
+            )
+            st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False}, key=f"cf_gauge_{ticker}_{n_days}")
+
+            # DA per model
+            da = ensemble.directional_accuracy
+            da_html = "".join([
+                f'<div style="display:flex;justify-content:space-between;font-size:11px;color:#94a3b8;padding:2px 0;">'
+                f'<span>{m.upper()}</span>'
+                f'<span style="color:{"#22c55e" if v>=58 else "#f97316"}"><b>{v:.0f}%</b> DA</span>'
+                f'</div>'
+                for m, v in da.items()
+            ])
+            st.markdown(
+                f'<div style="background:#141824;border:1px solid #2d3347;border-radius:6px;padding:10px;">'
+                f'<div style="font-size:10px;color:#64748b;margin-bottom:4px;">DIRECTIONAL ACCURACY</div>'
+                f'{da_html}</div>',
+                unsafe_allow_html=True,
+            )
+
+        with r2c2:
+            # HMM transition matrix heatmap
+            trans = hmm.transition_matrix
+            labels = ["Bear", "Range", "Bull"]
+            fig_hmm = go.Figure(go.Heatmap(
+                z=trans,
+                x=labels,
+                y=labels,
+                colorscale=[[0, "#0e1117"], [0.5, "#1e3a5f"], [1.0, "#3b82f6"]],
+                zmin=0, zmax=1,
+                text=[[f"{v:.0%}" for v in row] for row in trans],
+                texttemplate="%{text}",
+                textfont=dict(size=12, color="#e2e8f0"),
+                showscale=False,
+            ))
+            fig_hmm.update_layout(
+                title=dict(text=f"HMM Transition · <b style='color:#60a5fa;'>{hmm.regime_label}</b>", font=dict(size=11, color="#94a3b8")),
+                paper_bgcolor="#0e1117", plot_bgcolor="#141824",
+                height=200, margin=dict(l=40, r=10, t=40, b=40),
+                xaxis=dict(title="Trạng thái tiếp theo", tickfont=dict(size=10, color="#64748b"), side="bottom"),
+                yaxis=dict(title="Trạng thái hiện tại",  tickfont=dict(size=10, color="#64748b"), autorange="reversed"),
+                font=dict(color="#94a3b8"),
+            )
+            # Highlight current state
+            cur = hmm.current_state
+            fig_hmm.add_shape(
+                type="rect",
+                x0=cur - 0.5, x1=cur + 0.5,
+                y0=cur - 0.5, y1=cur + 0.5,
+                line=dict(color="#fbbf24", width=2),
+            )
+            st.plotly_chart(fig_hmm, use_container_width=True, config={"displayModeBar": False}, key=f"cf_hmm_{ticker}_{n_days}")
+
+        with r2c3:
+            # Model weight bar chart
+            wts  = ensemble.model_weights
+            wt_names = list(wts.keys())
+            wt_vals  = [v * 100 for v in wts.values()]
+            wt_colors = ["#60a5fa", "#4ade80", "#fbbf24"]
+            fig_wt = go.Figure(go.Bar(
+                y=wt_names,
+                x=wt_vals,
+                orientation="h",
+                marker_color=wt_colors[:len(wt_names)],
+                text=[f"{v:.1f}%" for v in wt_vals],
+                textposition="inside",
+                textfont=dict(size=11, color="#0e1117"),
+            ))
+            fig_wt.update_layout(
+                title=dict(text="Trọng số Ensemble", font=dict(size=11, color="#94a3b8")),
+                paper_bgcolor="#0e1117", plot_bgcolor="#141824",
+                height=200, margin=dict(l=10, r=10, t=40, b=10),
+                xaxis=dict(range=[0, 100], showticklabels=False, showgrid=False),
+                yaxis=dict(tickfont=dict(size=11, color="#94a3b8")),
+                font=dict(color="#94a3b8"),
+                showlegend=False,
+            )
+            st.plotly_chart(fig_wt, use_container_width=True, config={"displayModeBar": False}, key=f"cf_weights_{ticker}_{n_days}")
+
+        # ══ ROW 3 — Action Card + Timing + Kelly ═════════════════════════════
+        r3c1, r3c2, r3c3 = st.columns([1, 1, 1], gap="small")
+
+        with r3c1:
+            act_color = _ACTION_COLORS.get(action, "#94a3b8")
+            # High vol warning
+            hv_banner = ""
+            if garch.high_vol_regime:
+                hv_banner = '<div style="background:#7f1d1d22;border:1px solid #7f1d1d;border-radius:5px;padding:6px 10px;margin-top:8px;font-size:11px;color:#fca5a5;">⚠️ HIGH VOLATILITY REGIME — Giảm size 50%</div>'
+            # Kelly hold override
+            hold_banner = ""
+            if kelly.is_hold:
+                hold_banner = '<div style="background:#1e293b;border:1px solid #475569;border-radius:5px;padding:6px 10px;margin-top:8px;font-size:11px;color:#94a3b8;">🛑 Kelly ≤ 0 — HOLD bắt buộc (kỳ vọng âm)</div>'
+
+            st.markdown(
+                f'<div style="background:#141824;border:1px solid {act_color}55;border-radius:8px;padding:14px;">'
+                f'<div style="font-size:10px;color:#64748b;letter-spacing:1px;">KHUYẾN NGHỊ DỰ BÁO</div>'
+                f'<div style="font-size:26px;font-weight:800;color:{act_color};margin:4px 0;">{action}</div>'
+                f'<div style="font-size:11px;color:#94a3b8;">Grade <b style="color:{_GRADE_COLORS.get(grade,"#94a3b8")}">{grade}</b> · Confidence {conf:.1f}%</div>'
+                f'{hv_banner}{hold_banner}'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        with r3c2:
+            ep = timing.entry_period
+            xp = timing.exit_period
+            t25_str = ", ".join([f"T+{i+1}" for i in timing.t25_windows]) or "—"
+            avoid_str = ", ".join([f"T+{i+1}" for i in timing.avoid_periods]) or "—"
+
+            ep_str = f"T+{ep+1} — {timing.entry_reason}" if ep is not None else "Không có tín hiệu vào"
+            xp_str = f"T+{xp+1} — {timing.exit_reason}"  if xp is not None else "—"
+
+            st.markdown(
+                f'<div style="background:#141824;border:1px solid #2d3347;border-radius:8px;padding:14px;">'
+                f'<div style="font-size:10px;color:#64748b;letter-spacing:1px;margin-bottom:8px;">TIMING OPTIMIZER</div>'
+                f'<div style="font-size:11px;line-height:2.0;">'
+                f'<b style="color:#4ade80;">Vào:</b> {ep_str}<br>'
+                f'<b style="color:#f97316;">Thoát:</b> {xp_str}<br>'
+                f'<b style="color:#fbbf24;">T+2.5 ↑:</b> {t25_str}<br>'
+                f'<b style="color:#ef4444;">Tránh:</b> {avoid_str}'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        with r3c3:
+            k_color = "#22c55e" if not kelly.is_hold else "#94a3b8"
+            pos_vnd = f"{kelly.max_position_vnd:,.0f}đ" if kelly.max_position_vnd > 0 else "—"
+            st.markdown(
+                f'<div style="background:#141824;border:1px solid #2d3347;border-radius:8px;padding:14px;">'
+                f'<div style="font-size:10px;color:#64748b;letter-spacing:1px;margin-bottom:8px;">HALF-KELLY POSITION</div>'
+                f'<div style="font-size:11px;line-height:2.0;">'
+                f'<b style="color:{k_color};">f½ = {kelly.half_kelly:.2%}</b>'
+                f'{"  <span style=\"color:#94a3b8;font-size:10px;\">(HOLD override)</span>" if kelly.is_hold else ""}<br>'
+                f'<b style="color:#e2e8f0;">Vị thế tối đa:</b> {pos_vnd}<br>'
+                f'<b style="color:#e2e8f0;">Số lô:</b> {kelly.num_lots} lô  (×100 CP)<br>'
+                f'<b style="color:#60a5fa;">GARCH P:</b> {garch.persistence:.3f}'
+                f'{"  <span style=\"color:#fca5a5;font-size:10px;\">HIGH VOL</span>" if garch.high_vol_regime else ""}'
+                f'</div></div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Candle table detail ───────────────────────────────────────────────
+        with st.expander("📋 Chi tiết nến dự báo", expanded=False):
+            rows = []
+            for c in candles:
+                rows.append({
+                    "Ngày": c.date_lbl,
+                    "Open": f"{c.open:,.0f}",
+                    "High": f"{c.high:,.0f}",
+                    "Low":  f"{c.low:,.0f}",
+                    "Close":f"{c.close:,.0f}",
+                    "Khối lượng":f"{int(c.volume):,}",
+                    "Mẫu hình": c.pattern,
+                    "Tín hiệu": c.signal,
+                    "CI Thấp (95%)": f"{c.lower_ci:,.0f}",
+                    "CI Cao (95%)":  f"{c.upper_ci:,.0f}",
+                })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════

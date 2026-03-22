@@ -414,7 +414,7 @@ _T_REC_COLORS = {
 }
 
 
-def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
+def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = None) -> dict:
     """
     Synthesize all VN-Swing Alpha signals into a single T+ entry recommendation.
 
@@ -465,6 +465,47 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         r.get("bt5_win_rate") or r.get("bt_win_rate") or 0.55
     )
 
+    # ── CF enrichment: extract Candlestick Forecast signals ──────────────────
+    _garch_sigma    = None
+    _garch_high_vol = False
+    _hmm_transition = None
+    _hmm_bull_next  = 0.0
+    _hmm_bear_next  = 0.0
+    _day1_pct       = None
+    _forecast_ci_low  = None
+    _forecast_ci_high = None
+    _sl_garch  = None
+    _tp1_garch = None
+    _tp2_garch = None
+    if cf_result and not cf_result.get("error"):
+        _garch_cf = cf_result.get("garch")
+        _hmm_cf   = cf_result.get("hmm")
+        _ens_cf   = cf_result.get("ensemble")
+        if _garch_cf and hasattr(_garch_cf, "sigma_t1"):
+            _garch_sigma    = float(_garch_cf.sigma_t1)       # already fraction
+            _garch_high_vol = bool(_garch_cf.high_vol_regime)
+            if price > 0 and _garch_sigma > 0:
+                _tp_mult   = 2.5 if (_hmm_cf and getattr(_hmm_cf, "regime_label", "") == "Bull") else 2.0
+                _sl_garch  = round(price * (1.0 - 1.645 * _garch_sigma), 0)
+                _tp1_garch = round(price * (1.0 + _tp_mult * _garch_sigma), 0)
+                _tp2_garch = round(price * (1.0 + (_tp_mult + 1.0) * _garch_sigma), 0)
+        if _hmm_cf and hasattr(_hmm_cf, "next_state_probs") and len(_hmm_cf.next_state_probs) == 3:
+            _hmm_bear_next  = float(_hmm_cf.next_state_probs[0])
+            _hmm_bull_next  = float(_hmm_cf.next_state_probs[2])
+            _curr_lbl       = getattr(_hmm_cf, "regime_label", "?")
+            _ns_idx         = int(np.argmax(_hmm_cf.next_state_probs))
+            _ns_lbl         = ("Bear", "Range", "Bull")[_ns_idx]
+            _ns_pct         = round(_hmm_cf.next_state_probs[_ns_idx] * 100)
+            _hmm_transition = f"{_curr_lbl}\u2192{_ns_lbl} ({_ns_pct}%)"
+        if _ens_cf and hasattr(_ens_cf, "pct_changes") and _ens_cf.pct_changes:
+            _day1_pct   = float(_ens_cf.pct_changes[0])
+            _candles_cf = cf_result.get("candles", [])
+            if _candles_cf:
+                _c0 = _candles_cf[0]
+                if hasattr(_c0, "lower_ci"):
+                    _forecast_ci_low  = round(float(_c0.lower_ci), 0)
+                    _forecast_ci_high = round(float(_c0.upper_ci), 0)
+
     # ── Forced override checks ────────────────────────────────────────────────
     if t25_sig == "T25_AVOID" or at_ceiling:
         risk_flags = []
@@ -475,13 +516,23 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         return {
             "action": "AVOID", "grade": "E", "confidence_score": 0,
             "entry_zone_low": None, "entry_zone_high": None,
-            "sl_price": sl, "tp1_price": tp1, "tp2_price": tp2, "rr_ratio": None,
+            "sl_price":  _sl_garch  if _sl_garch  is not None else (round(float(sl),  0) if sl  else None),
+            "tp1_price": _tp1_garch if _tp1_garch is not None else (round(float(tp1), 0) if tp1 else None),
+            "tp2_price": _tp2_garch if _tp2_garch is not None else (round(float(tp2), 0) if tp2 else None),
+            "rr_ratio": None,
             "position_size_pct": 0.0, "kelly_mode": "N/A",
             "entry_timing": "AVOID_TODAY",
             "risk_flags": risk_flags,
             "supporting_signals": [],
             "max_risk_pct": None, "expected_return_pct": None,
             "lstm_info": None,
+            "sl_garch":          _sl_garch,
+            "tp1_garch":         _tp1_garch,
+            "tp2_garch":         _tp2_garch,
+            "hmm_transition":    _hmm_transition,
+            "day1_forecast_pct": _day1_pct,
+            "forecast_ci_low":   _forecast_ci_low,
+            "forecast_ci_high":  _forecast_ci_high,
         }
 
     # ── Component scoring ─────────────────────────────────────────────────────
@@ -561,6 +612,24 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
     if ex_div_days is not None and ex_div_days <= 5:
         raw_score -= 10; risk_flags.append(f"Ex-dividend trong {ex_div_days} phiên — rủi ro giảm giá")
 
+    # ── CF scoring adjustments (from Candlestick Forecast enrichment) ─────────
+    if _hmm_bull_next > 0.60:
+        raw_score += 5
+        supporting_signals.append(f"HMM\u2192{_hmm_transition or 'Bull next'}")
+    elif _hmm_bear_next > 0.60:
+        raw_score -= 5
+        risk_flags.append(f"HMM Bear next: {_hmm_transition or '?'}")
+    if _day1_pct is not None:
+        if _day1_pct > 1.0:
+            raw_score += 5
+            supporting_signals.append(f"CF ngày 1: +{_day1_pct:.1f}%")
+        elif _day1_pct < -1.0:
+            raw_score -= 5
+            risk_flags.append(f"CF ngày 1: {_day1_pct:.1f}%")
+    if _garch_high_vol:
+        raw_score -= 5
+        risk_flags.append("GARCH: vol regime cao (persistence>0.97)")
+
     confidence_score = int(max(0, min(100, raw_score)))
 
     # ── Map to action tier ────────────────────────────────────────────────────
@@ -595,23 +664,32 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
     else:
         entry_timing = "AVOID_TODAY"
 
+    # ── GARCH-adaptive SL/TP (use CF levels when available) ─────────────────
+    _sl_use  = _sl_garch  if _sl_garch  is not None else (round(float(sl),  0) if sl  else None)
+    _tp1_use = _tp1_garch if _tp1_garch is not None else (round(float(tp1), 0) if tp1 else None)
+    _tp2_use = _tp2_garch if _tp2_garch is not None else (round(float(tp2), 0) if tp2 else None)
+
     # ── Risk/reward metrics ───────────────────────────────────────────────────
     entry_ref = price or 0
     max_risk_pct = (
-        round((entry_ref - float(sl)) / entry_ref * 100, 2)
-        if sl and entry_ref > 0 else None
+        round((entry_ref - float(_sl_use)) / entry_ref * 100, 2)
+        if _sl_use and entry_ref > 0 else None
     )
     expected_return_pct = (
-        round((float(tp1) - entry_ref) / entry_ref * 100, 2)
-        if tp1 and entry_ref > 0 else None
+        round((float(_tp1_use) - entry_ref) / entry_ref * 100, 2)
+        if _tp1_use and entry_ref > 0 else None
     )
     rr_ratio = (
-        round((float(tp1) - entry_ref) / (entry_ref - float(sl)), 2)
-        if tp1 and sl and entry_ref > float(sl) > 0 else None
+        round((float(_tp1_use) - entry_ref) / (entry_ref - float(_sl_use)), 2)
+        if _tp1_use and _sl_use and entry_ref > float(_sl_use) > 0 else None
     )
 
-    # ── Kelly position sizing (reuse T25ExitManager with dynamic SL) ─────────
-    _atr_use = atr if atr > 0 else entry_ref * 0.02
+    # ── Kelly position sizing (GARCH σ×price as ATR when CF available) ────────
+    _atr_use = (
+        (_garch_sigma * entry_ref)
+        if (_garch_sigma and entry_ref > 0)
+        else (atr if atr > 0 else entry_ref * 0.02)
+    )
     try:
         _mgr = T25ExitManager(
             entry_ref or 1, _atr_use,
@@ -623,6 +701,8 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
     except Exception:
         position_size_pct = 10.0
         kelly_mode        = "Half-Kelly"
+    if _garch_high_vol and position_size_pct > 0:
+        position_size_pct = round(position_size_pct * 0.5, 1)
 
     # ── LSTM info (informational, no grade impact) ────────────────────────────
     lstm_info = None
@@ -636,9 +716,9 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         "confidence_score":     confidence_score,
         "entry_zone_low":       entry_low,
         "entry_zone_high":      entry_high,
-        "sl_price":             round(float(sl),  0) if sl  else None,
-        "tp1_price":            round(float(tp1), 0) if tp1 else None,
-        "tp2_price":            round(float(tp2), 0) if tp2 else None,
+        "sl_price":             _sl_use,
+        "tp1_price":            _tp1_use,
+        "tp2_price":            _tp2_use,
         "rr_ratio":             rr_ratio,
         "position_size_pct":    position_size_pct,
         "kelly_mode":           kelly_mode,
@@ -648,6 +728,13 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None) -> dict:
         "max_risk_pct":         max_risk_pct,
         "expected_return_pct":  expected_return_pct,
         "lstm_info":            lstm_info,
+        "sl_garch":             _sl_garch,
+        "tp1_garch":            _tp1_garch,
+        "tp2_garch":            _tp2_garch,
+        "hmm_transition":       _hmm_transition,
+        "day1_forecast_pct":    _day1_pct,
+        "forecast_ci_low":      _forecast_ci_low,
+        "forecast_ci_high":     _forecast_ci_high,
     }
 
 
