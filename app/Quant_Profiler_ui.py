@@ -4619,7 +4619,7 @@ def render_active_trades_page() -> None:
         with st.form("add_trade_form"):
             fc1, fc2, fc3, fc4 = st.columns(4)
             new_tk    = fc1.text_input("Mã CK", placeholder="HPG").upper().strip()
-            new_entry = fc2.number_input("Giá vào (₫)", min_value=100.0, step=100.0, value=25000.0)
+            new_entry = fc2.number_input("Giá vào (₫)", min_value=0.0, value=25000.0, step=0.5, format="%.1f")
             new_qty   = fc3.number_input("Số lượng (cp)", min_value=100, step=100, value=1000)
             new_date  = fc4.date_input("Ngày vào lệnh", value=_date.today())
             new_notes = st.text_input("Ghi chú", placeholder="Lý do vào lệnh…")
@@ -4881,7 +4881,7 @@ def render_alerts_page() -> None:
             al_cond = ac2.selectbox("Điều kiện", [
                 "PRICE_ABOVE", "PRICE_BELOW", "T25_BUY", "RS_ABOVE_70", "SSI_ABOVE_80", "AVOID_LIFTED",
             ])
-            al_val  = ac3.number_input("Giá trị ngưỡng (nếu cần)", min_value=0.0, step=100.0)
+            al_val  = ac3.number_input("Giá trị ngưỡng (nếu cần)", min_value=0.0, value=0.0, step=0.5, format="%.1f")
             al_sub  = st.form_submit_button("➕ Thêm cảnh báo", use_container_width=True)
             if al_sub and al_tk:
                 alerts.append({
@@ -5019,9 +5019,9 @@ def render_trade_journal_page() -> None:
         with st.form("add_journal_form"):
             jc1, jc2, jc3, jc4 = st.columns(4)
             j_tk    = jc1.text_input("Mã CK", placeholder="HPG").upper().strip()
-            j_entry = jc2.number_input("Giá vào (₫)", min_value=100.0, step=100.0)
-            j_exit  = jc3.number_input("Giá ra (₫)",  min_value=100.0, step=100.0)
-            j_qty   = jc4.number_input("KL", min_value=100, step=100)
+            j_entry = jc2.number_input("Giá vào (₫)", min_value=0.0, value=0.0, step=0.5, format="%.1f")
+            j_exit  = jc3.number_input("Giá ra (₫)",  min_value=0.0, value=0.0, step=0.5, format="%.1f")
+            j_qty   = jc4.number_input("KL", min_value=0, value=0, step=100)
             j_edate = st.date_input("Ngày vào", value=_dt.today())
             j_xdate = st.date_input("Ngày ra",  value=_dt.today())
             j_grade = st.selectbox("Grade lúc vào", ["A", "B", "C", "D", "E", "?"])
