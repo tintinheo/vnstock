@@ -1,0 +1,1287 @@
+{
+  "scan_date": "2026-03-24",
+  "results": [
+    {
+      "ticker": "BVH",
+      "action": "STRONG_BUY",
+      "score": 89,
+      "grade": "A",
+      "t25": "T25_BUY",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 62.7,
+      "risk": [
+        "Tín hiệu chưa được xác nhận 2/3 phiên",
+        "Giá 3.5% trên VWAP — xa ngưỡng tốt"
+      ],
+      "signals": [
+        "VSA:ACCUM",
+        "HH+HL structure",
+        "RS Rating 73 — outperforming VNI",
+        "MACD_slope↑",
+        "MACD_cross↑",
+        "RSI_rec=59"
+      ],
+      "price": 80300.0,
+      "pct_chg": 6.92410119840213,
+      "rsi": 58.95533310878409,
+      "vwap_dev": "ABOVE",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "DCM",
+      "action": "BUY",
+      "score": 70,
+      "grade": "B",
+      "t25": "T25_WATCH",
+      "regime": "BULL_TREND",
+      "bt5_wr": 70.7,
+      "risk": [
+        "Tín hiệu chưa được xác nhận 2/3 phiên",
+        "Thanh khoản thấp: KL=0.5× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RS Rating 91 — outperforming VNI",
+        "MACD_slope↑",
+        "RSI_rec=54",
+        "Stoch_cross=34",
+        "W%R_rec=-66"
+      ],
+      "price": 45350.0,
+      "pct_chg": 2.3702031602708806,
+      "rsi": 53.534596885093556,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BEARISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "CTG",
+      "action": "SKIP",
+      "score": 37,
+      "grade": "D",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 47.2,
+      "risk": [],
+      "signals": [
+        "HL_only",
+        "RSI_deep=39",
+        "Stoch_cross=30",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 33550.0,
+      "pct_chg": 3.230769230769231,
+      "rsi": 38.81608399035167,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "DPM",
+      "action": "SKIP",
+      "score": 35,
+      "grade": "D",
+      "t25": "T25_NEUTRAL",
+      "regime": "BULL_TREND",
+      "bt5_wr": 65.0,
+      "risk": [
+        "Tín hiệu chưa được xác nhận 2/3 phiên",
+        "Thanh khoản thấp: KL=0.3× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RS Rating 90 — outperforming VNI",
+        "Stoch_cross=10",
+        "MA_align=3/3",
+        "AboveSMA200+slope↑",
+        "Fib_618"
+      ],
+      "price": 28800.0,
+      "pct_chg": 0.34843205574912894,
+      "rsi": 49.522494767661954,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VJC",
+      "action": "SKIP",
+      "score": 35,
+      "grade": "D",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 18.5,
+      "risk": [],
+      "signals": [
+        "VSA:ACCUM",
+        "Candle:BULL_ENGULFING",
+        "RSI_deep=39",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 153000.0,
+      "pct_chg": 0.7905138339920948,
+      "rsi": 39.35762228300976,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VCB",
+      "action": "AVOID",
+      "score": 32,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 38.5,
+      "risk": [
+        "Thanh khoản thấp: KL=0.5× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RSI_deep=38",
+        "Stoch_cross=24",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 58200.0,
+      "pct_chg": 1.0416666666666665,
+      "rsi": 37.9310911660191,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "MBB",
+      "action": "AVOID",
+      "score": 27,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 52.9,
+      "risk": [],
+      "signals": [
+        "HL_only",
+        "Stoch_cross=28",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 25600.0,
+      "pct_chg": 2.4,
+      "rsi": 41.57109892123237,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VPB",
+      "action": "AVOID",
+      "score": 27,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 24.3,
+      "risk": [
+        "Beta 5D cao: 1.53β — biến động mạnh"
+      ],
+      "signals": [
+        "VSA:ACCUM",
+        "HL_only",
+        "RSI_rec=41",
+        "BullVol=1.6x",
+        "Stoch_cross=32",
+        "W%R_rec=-68"
+      ],
+      "price": 25250.0,
+      "pct_chg": 5.208333333333334,
+      "rsi": 41.231587874375705,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "IDC",
+      "action": "AVOID",
+      "score": 27,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 67.7,
+      "risk": [
+        "Thanh khoản thấp: KL=0.5× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RS Rating 70 — outperforming VNI",
+        "RSI_rec=51",
+        "AboveSMA200+slope↑",
+        "SMA20_pull=-0.5%",
+        "Fib_618"
+      ],
+      "price": 44700.0,
+      "pct_chg": 5.4245283018867925,
+      "rsi": 50.505715784894015,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "POW",
+      "action": "AVOID",
+      "score": 22,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 52.4,
+      "risk": [
+        "Thanh khoản thấp: KL=0.5× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RSI_deep=40",
+        "Stoch_cross=9",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 12700.0,
+      "pct_chg": 0.0,
+      "rsi": 39.636739389118034,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VNM",
+      "action": "AVOID",
+      "score": 22,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 27.8,
+      "risk": [
+        "Thanh khoản thấp: KL=0.3× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "MACD_slope↑",
+        "RSI_rec=42",
+        "W%R_rec=-56",
+        "AboveSMA200",
+        "Fib_618"
+      ],
+      "price": 61200.0,
+      "pct_chg": 0.6578947368421052,
+      "rsi": 42.173980048886555,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "GMD",
+      "action": "AVOID",
+      "score": 18,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "HIGH_VOL",
+      "bt5_wr": 72.3,
+      "risk": [
+        "BT-rescue: WR=72% ret=+2.7% (WATCH max)",
+        "Thanh khoản thấp: KL=0.2× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "Stoch_cross=37",
+        "MA_align=2/3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 73900.0,
+      "pct_chg": 2.638888888888889,
+      "rsi": 48.14037425109272,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BEARISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "HAH",
+      "action": "AVOID",
+      "score": 17,
+      "grade": "E",
+      "t25": "T25_NEUTRAL",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 35.7,
+      "risk": [
+        "Beta 5D cao: 2.21β — biến động mạnh",
+        "Thanh khoản thấp: KL=0.3× MA20"
+      ],
+      "signals": [
+        "HL_only",
+        "RSI_deep=39",
+        "Stoch_cross=13",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 52000.0,
+      "pct_chg": 4.627766599597585,
+      "rsi": 38.52306588096867,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "HPG",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 20.6,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=24",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 25950.0,
+      "pct_chg": 1.7647058823529411,
+      "rsi": 42.12247467632575,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "TCB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 33.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_deep=36",
+        "Stoch_cross=23",
+        "W%R_rec=-77",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 29850.0,
+      "pct_chg": 3.2871972318339098,
+      "rsi": 36.32300496848261,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "ACB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 33.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA20_pull=-1.4%",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok",
+        "RS=75"
+      ],
+      "price": 23100.0,
+      "pct_chg": 2.666666666666667,
+      "rsi": 46.0243389372302,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VIC",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 40.6,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 124000.0,
+      "pct_chg": -1.2738853503184715,
+      "rsi": 31.09462724139847,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VHM",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 27.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA200_rising",
+        "SMA20_pull=+0.4%",
+        "candle+3",
+        "regime_ok"
+      ],
+      "price": 99000.0,
+      "pct_chg": 1.0204081632653061,
+      "rsi": 46.88100456536995,
+      "vwap_dev": "ABOVE",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "FPT",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 50.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "W%R_rec=-75",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 75400.0,
+      "pct_chg": 3.146374829001368,
+      "rsi": 33.034731546228016,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "GAS",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 48.5,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MACD_slope↑",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 80700.0,
+      "pct_chg": 0.2484472049689441,
+      "rsi": 34.63249473267348,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "SAB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 19.2,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MACD_cross↑",
+        "RSI_rec=47",
+        "SMA20_pull=-0.4%",
+        "Fib_618",
+        "HH+HL"
+      ],
+      "price": 45100.0,
+      "pct_chg": 5.128205128205128,
+      "rsi": 46.95623316358363,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "PLX",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 55.9,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 39800.0,
+      "pct_chg": -2.9268292682926833,
+      "rsi": 30.964050116249624,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "SSI",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 41.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=7",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 25900.0,
+      "pct_chg": 1.968503937007874,
+      "rsi": 29.301246485066102,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "MWG",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 46.5,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_deep=36",
+        "Stoch_cross=12",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 76000.0,
+      "pct_chg": 2.4258760107816713,
+      "rsi": 36.41441244742351,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "BID",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 70.8,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=12",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 39100.0,
+      "pct_chg": 1.6905071521456438,
+      "rsi": 33.53522369538793,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "HDB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 48.8,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 24300.0,
+      "pct_chg": 0.0,
+      "rsi": 31.284507925836934,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "STB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 45.6,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 60800.0,
+      "pct_chg": 1.3333333333333335,
+      "rsi": 42.66259053809065,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VRE",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 30.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_deep=40",
+        "Fib_618",
+        "BB_lower_zone",
+        "VSA:NO_SUPPLY"
+      ],
+      "price": 25300.0,
+      "pct_chg": -0.19723865877712032,
+      "rsi": 39.806594863509154,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "REE",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BULL_TREND",
+      "bt5_wr": 53.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "AboveSMA200",
+        "SMA20_ok=+5.0%",
+        "ADX_strong=27",
+        "regime_ok"
+      ],
+      "price": 66300.0,
+      "pct_chg": 2.0,
+      "rsi": 60.45393314173666,
+      "vwap_dev": "ABOVE",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "PVD",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 58.2,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 33500.0,
+      "pct_chg": -2.3323615160349855,
+      "rsi": 40.930967979566184,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "PVT",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 53.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone",
+        "candle+3"
+      ],
+      "price": 21200.0,
+      "pct_chg": -0.2352941176470588,
+      "rsi": 40.84777002582696,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "GVR",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 45.8,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=1",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 28700.0,
+      "pct_chg": 0.34965034965034963,
+      "rsi": 33.174110382669795,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "BCM",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 46.2,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 51500.0,
+      "pct_chg": 1.9801980198019802,
+      "rsi": 31.063191821890427,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "MSN",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 42.1,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 72100.0,
+      "pct_chg": 1.8361581920903955,
+      "rsi": 41.38669619546504,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VIB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 7.7,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA20_pull=-0.6%",
+        "regime_ok",
+        "RS=75"
+      ],
+      "price": 16700.0,
+      "pct_chg": 2.4539877300613497,
+      "rsi": 46.85437514983171,
+      "vwap_dev": "AT",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "TPB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 25.6,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_rec=41",
+        "Stoch_cross=27",
+        "W%R_rec=-73",
+        "SMA200_rising",
+        "Fib_618"
+      ],
+      "price": 15800.0,
+      "pct_chg": 4.635761589403973,
+      "rsi": 40.996654344260435,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "LPB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 44.7,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA200_rising",
+        "SMA20_pull=-0.6%",
+        "Fib_618",
+        "regime_ok",
+        "RS=79"
+      ],
+      "price": 41900.0,
+      "pct_chg": 1.8226002430133657,
+      "rsi": 48.64301532215022,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BEARISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "OCB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 7.7,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_rec=45",
+        "SMA20_pull=-0.9%",
+        "Fib_618",
+        "RS=71"
+      ],
+      "price": 10950.0,
+      "pct_chg": 2.336448598130841,
+      "rsi": 44.67961032456624,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "SHB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 18.8,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_deep=36",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 14450.0,
+      "pct_chg": 0.3472222222222222,
+      "rsi": 35.859888049584015,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "EIB",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 16.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "SMA20_pull=-1.2%",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 22150.0,
+      "pct_chg": 4.235294117647059,
+      "rsi": 49.48280097848673,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "KDH",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 0.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=32",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 25000.0,
+      "pct_chg": 4.166666666666666,
+      "rsi": 40.86070950722566,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "NLG",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 0.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_rec=53",
+        "SMA20_ok=+4.8%",
+        "VSA:ACCUM",
+        "regime_ok",
+        "HH+HL"
+      ],
+      "price": 28200.0,
+      "pct_chg": 6.8181818181818175,
+      "rsi": 53.336259081157905,
+      "vwap_dev": "ABOVE",
+      "vwap_divergence": "BULLISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "PDR",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 0.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_rec=41",
+        "SMA20_pull=-2.2%",
+        "Fib_618",
+        "BB_lower_zone",
+        "VSA:ACCUM"
+      ],
+      "price": 15150.0,
+      "pct_chg": 4.482758620689655,
+      "rsi": 40.76408480798384,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "NVL",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "HIGH_VOL",
+      "bt5_wr": 14.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "ADX_emerge=22",
+        "VSA:ACCUM",
+        "RS=87"
+      ],
+      "price": 13250.0,
+      "pct_chg": 5.577689243027888,
+      "rsi": 56.20315858753795,
+      "vwap_dev": "ABOVE",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VHC",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 51.7,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=31",
+        "AboveSMA200",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 57400.0,
+      "pct_chg": 2.6833631484794274,
+      "rsi": 43.37629592887307,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "VSC",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 48.7,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "MA_align=2/3",
+        "AboveSMA200+slope↑",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 23500.0,
+      "pct_chg": 0.0,
+      "rsi": 46.15255247239029,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "BEARISH",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "DGC",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 31.2,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Fib_618",
+        "Below_BB"
+      ],
+      "price": 52500.0,
+      "pct_chg": 1.5473887814313347,
+      "rsi": 28.684349035608363,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "GEX",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "BEAR_TREND",
+      "bt5_wr": 5.3,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=38",
+        "Fib_618",
+        "BB_lower_zone"
+      ],
+      "price": 33600.0,
+      "pct_chg": 4.5101088646967336,
+      "rsi": 44.23821367819164,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "PHR",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 39.1,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "Stoch_cross=18",
+        "SMA200_rising",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 57800.0,
+      "pct_chg": 1.7605633802816902,
+      "rsi": 42.18322289130334,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    },
+    {
+      "ticker": "CSV",
+      "action": "AVOID",
+      "score": 0,
+      "grade": "E",
+      "t25": "T25_AVOID",
+      "regime": "SIDEWAYS",
+      "bt5_wr": 25.0,
+      "risk": [
+        "T+2.5 score: AVOID zone"
+      ],
+      "signals": [
+        "RSI_deep=38",
+        "Stoch_cross=6",
+        "Fib_618",
+        "BB_lower_zone",
+        "regime_ok"
+      ],
+      "price": 26200.0,
+      "pct_chg": 1.550387596899225,
+      "rsi": 37.81589485466305,
+      "vwap_dev": "BELOW",
+      "vwap_divergence": "NONE",
+      "manip_flag": false,
+      "is_breakout": false
+    }
+  ],
+  "errors": []
+}

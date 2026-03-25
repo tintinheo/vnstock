@@ -34,6 +34,23 @@ import requests
 
 warnings.filterwarnings("ignore")
 
+# ── Screening / microstructure helpers (optional — graceful fallback if missing)
+try:
+    from microstructure import (
+        compute_vwap_intraday as _compute_vwap_intraday,
+        compute_garman_klass  as _compute_garman_klass,
+    )
+    from screening import (
+        get_pivot_breakout          as _get_pivot_breakout,
+        filter_canslim              as _filter_canslim,
+        compute_manipulation_score  as _compute_manipulation_score,
+        detect_pump_dump_advanced   as _detect_pump_dump_advanced,
+        detect_false_breakout       as _detect_false_breakout,
+    )
+    _SCREENING_AVAILABLE = True
+except ImportError:
+    _SCREENING_AVAILABLE = False
+
 # ─── STRUCTURED LOGGING ──────────────────────────────────────────────────────
 # Writes to both console (INFO+) and a rotating file (DEBUG+).
 # Switch root level to logging.DEBUG to see HTTP detail.
@@ -720,6 +737,216 @@ def detect_candlestick_patterns(df: pd.DataFrame) -> dict:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  VN-SWING ALPHA — Full TA-Lib Candlestick Scan + VWAP Divergence [C3, C4]
+# ═══════════════════════════════════════════════════════════════════════════════
+
+try:
+    import talib as _talib
+    _TALIB_AVAILABLE = True
+    _CDL_FUNCS = [f for f in _talib.get_functions() if f.startswith("CDL")]
+except ImportError:
+    _TALIB_AVAILABLE = False
+    _CDL_FUNCS = []
+
+
+def detect_vwap_divergence(df: pd.DataFrame) -> str:
+    """
+    VN-Swing Alpha [C4]: Detect price / daily-VWAP divergence using swing pivots.
+
+    Unlike the rolling-minimum approach in the academic proposal (which generates
+    excessive false positives on choppy days), this uses discrete swing pivots
+    (local extrema) for a statistically cleaner divergence signal.
+
+    Swing pivot: a bar is a local low if its low is lower than the N bars
+    before AND after it (configurable via VWAP_DIV_SWING_WINDOW in qp_config).
+
+    Bullish divergence: price makes a lower swing low, but VWAP makes a higher
+    swing low — sellers are losing momentum despite price appearing weaker.
+
+    Bearish divergence: price makes a higher swing high, but VWAP makes a lower
+    swing high — rally is not supported by institutional volume.
+
+    Args:
+        df: Daily OHLCV with 20-bar anchored VWAP already computed (needs
+            'Close', 'High', 'Low', 'Volume', min 40 rows).
+
+    Returns:
+        "BULLISH" | "BEARISH" | "NONE"
+    """
+    try:
+        from qp_config import VWAP_DIV_SWING_WINDOW as _N
+        if df is None or len(df) < _N * 4 + 2:
+            return "NONE"
+
+        close  = pd.to_numeric(df["Close"],  errors="coerce").values
+        high   = pd.to_numeric(df["High"],   errors="coerce").values
+        low    = pd.to_numeric(df["Low"],    errors="coerce").values
+        volume = pd.to_numeric(df["Volume"], errors="coerce").fillna(1).values
+
+        # Compute rolling VWAP series (20-bar anchored, daily resolution)
+        typical = (high + low + close) / 3.0
+        pv      = typical * volume
+        n_bars  = len(close)
+        vwap_series = np.zeros(n_bars)
+        for i in range(n_bars):
+            start_i = max(0, i - 19)
+            sub_pv  = pv[start_i: i + 1]
+            sub_vol = volume[start_i: i + 1]
+            vwap_series[i] = sub_pv.sum() / max(sub_vol.sum(), 1)
+
+        def _swing_lows(arr, n):
+            """Indices of swing lows within arr (excluding edges)."""
+            idxs = []
+            for i in range(n, len(arr) - n):
+                if arr[i] == min(arr[i - n: i + n + 1]):
+                    idxs.append(i)
+            return idxs
+
+        def _swing_highs(arr, n):
+            """Indices of swing highs within arr (excluding edges)."""
+            idxs = []
+            for i in range(n, len(arr) - n):
+                if arr[i] == max(arr[i - n: i + n + 1]):
+                    idxs.append(i)
+            return idxs
+
+        # ── Bullish divergence ────────────────────────────────────────────────
+        price_lows = _swing_lows(low, _N)
+        vwap_lows  = _swing_lows(vwap_series, _N)
+        if len(price_lows) >= 2 and len(vwap_lows) >= 2:
+            # Compare the LAST two swing lows on price vs VWAP
+            pl1, pl2 = price_lows[-2], price_lows[-1]   # older, newer
+            vl_candidates = [i for i in vwap_lows if abs(i - pl2) <= _N * 2]
+            if not vl_candidates:
+                vl_candidates = vwap_lows
+            if len(vl_candidates) >= 2:
+                vl1, vl2 = vl_candidates[-2], vl_candidates[-1]
+                if low[pl2] < low[pl1] and vwap_series[vl2] > vwap_series[vl1]:
+                    return "BULLISH"
+
+        # ── Bearish divergence ────────────────────────────────────────────────
+        price_highs = _swing_highs(high, _N)
+        vwap_highs  = _swing_highs(vwap_series, _N)
+        if len(price_highs) >= 2 and len(vwap_highs) >= 2:
+            ph1, ph2 = price_highs[-2], price_highs[-1]
+            vh_candidates = [i for i in vwap_highs if abs(i - ph2) <= _N * 2]
+            if not vh_candidates:
+                vh_candidates = vwap_highs
+            if len(vh_candidates) >= 2:
+                vh1, vh2 = vh_candidates[-2], vh_candidates[-1]
+                if high[ph2] > high[ph1] and vwap_series[vh2] < vwap_series[vh1]:
+                    return "BEARISH"
+
+        return "NONE"
+
+    except Exception as e:
+        import logging as _lg
+        _lg.getLogger("quant_profiler").debug("detect_vwap_divergence: %s", e)
+        return "NONE"
+
+
+def detect_candlestick_patterns_talib(
+    df: pd.DataFrame,
+    vwap_dev: str = "AT",
+    vsa_state: str = "NEUTRAL",
+) -> dict:
+    """
+    VN-Swing Alpha [C3]: Full TA-Lib CDL pattern scan with VWAP context filter.
+
+    Scans all ~61 CDL* functions from TA-Lib on the last 30 daily bars.
+    Applies two context filters to reduce the noise inherent in raw pattern scanning:
+
+    1. VWAP filter: if vwap_dev == "BELOW" with large negative deviation
+       (price is far below institutional fair value), bullish signals are
+       *discounted* — they may be dead-cat bounces, not genuine reversals.
+       Conversely bearish signals are amplified.
+
+    2. VSA filter: DISTRIB state amplifies bearish pattern confidence;
+       ACCUM / NO_SUPPLY state amplifies bullish pattern confidence.
+
+    Args:
+        df:        Daily OHLCV DataFrame (cols: Open/High/Low/Close/Volume),
+                   minimum 30 rows.
+        vwap_dev:  Pre-computed VWAP deviation label ("ABOVE"/"BELOW"/"AT").
+        vsa_state: Latest VSA state string from df["VSA_State"].
+
+    Returns:
+        dict:
+            candle_talib_pattern : str  — name of dominant pattern ("NEUTRAL" if none)
+            candle_talib_pts     : int  — net signal score (-6..+6, filtered)
+            talib_signals        : list — all triggered pattern names (bullish +, bearish -)
+    """
+    empty = {
+        "candle_talib_pattern": "NEUTRAL",
+        "candle_talib_pts":     0,
+        "talib_signals":        [],
+    }
+    if not _TALIB_AVAILABLE:
+        return empty
+    try:
+        if df is None or len(df) < 30 or "Open" not in df.columns:
+            return empty
+
+        # Use last 30 bars (enough for all multi-bar patterns, not excessively slow)
+        sub = df.tail(30)
+        op  = sub["Open"].astype(float).values
+        hi  = sub["High"].astype(float).values
+        lo  = sub["Low"].astype(float).values
+        cl  = sub["Close"].astype(float).values
+
+        bullish_hits: list[str] = []
+        bearish_hits: list[str] = []
+
+        for func_name in _CDL_FUNCS:
+            try:
+                result_arr = getattr(_talib, func_name)(op, hi, lo, cl)
+                last_val   = int(result_arr[-1])
+                if last_val > 0:
+                    bullish_hits.append(func_name)
+                elif last_val < 0:
+                    bearish_hits.append(func_name)
+            except Exception:
+                continue
+
+        # ── VSA context weight ────────────────────────────────────────────────
+        # ACCUM/NO_SUPPLY boost bullish; DISTRIB/NO_DEMAND boost bearish
+        _bull_weight = 1.5 if vsa_state in ("ACCUM", "NO_SUPPLY") else 1.0
+        _bear_weight = 1.5 if vsa_state in ("DISTRIB", "NO_DEMAND") else 1.0
+
+        # ── VWAP filter ───────────────────────────────────────────────────────
+        # If price is far BELOW VWAP, discount bullish patterns (potential dead-cat)
+        if vwap_dev == "BELOW":
+            _bull_weight *= 0.7
+        elif vwap_dev == "ABOVE":
+            _bear_weight *= 0.7
+
+        net_score = len(bullish_hits) * _bull_weight - len(bearish_hits) * _bear_weight
+
+        # Cap at ±6 to keep on same scale as existing candle_pts (±3)
+        pts = max(-6, min(6, int(round(net_score))))
+
+        # Dominant pattern: pick the most "important" one (multi-bar > single-bar)
+        # Priority heuristic: longer pattern name usually = more complex = higher reliability
+        all_hits  = [(n, +1) for n in bullish_hits] + [(n, -1) for n in bearish_hits]
+        all_hits.sort(key=lambda x: (len(x[0]), x[1]), reverse=True)
+        dominant  = all_hits[0][0] if all_hits else "NEUTRAL"
+
+        # Build human-readable signal list
+        sig_list = ([f"+{n}" for n in bullish_hits[:4]] +
+                    [f"-{n}" for n in bearish_hits[:4]])
+
+        return {
+            "candle_talib_pattern": dominant,
+            "candle_talib_pts":     pts,
+            "talib_signals":        sig_list,
+        }
+    except Exception as e:
+        import logging as _lg
+        _lg.getLogger("quant_profiler").debug("detect_candlestick_patterns_talib: %s", e)
+        return empty
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  VN-SWING ALPHA — RSI Divergence Detection  [C2]
 # ═══════════════════════════════════════════════════════════════════════════════
 
@@ -861,6 +1088,7 @@ def compute_t25_score(
     bb_lower, bb_mid,
     adx, plus_di, minus_di,
     vsa_state, candle_pts, div_pts, regime,
+    sma200_slope: float = 0.0,
 ) -> dict:
     """
     VN-Swing Alpha T+2.5 composite score — 3 groups, regime-adjusted weights.
@@ -918,6 +1146,11 @@ def compute_t25_score(
     ])
     B += ma_lay * 1.5
     if ma_lay >= 2: B_c.append(f"MA_align={ma_lay}/3")
+    # [B1b] SMA200 health — price above SMA200 and/or rising slope
+    _above_s200 = bool(sma200 and price and price > sma200)
+    if   _above_s200 and sma200_slope > 2.0:       B += 4; B_c.append("AboveSMA200+slope\u2191")
+    elif _above_s200 and sma200_slope > 0.0:       B += 2; B_c.append("AboveSMA200")
+    elif not _above_s200 and sma200_slope > 2.0:   B += 1; B_c.append("SMA200_rising")
     # [B2] Price vs SMA20 pullback zone
     if price and sma20:
         p2s = (price - sma20) / sma20 * 100
@@ -954,11 +1187,12 @@ def compute_t25_score(
     elif regime == "BEAR_TREND": w_m, w_s, w_c = 0.40, 0.30, 0.30
     else:                        w_m, w_s, w_c = 0.40, 0.35, 0.25
     t25 = round(w_m * (A / 20 * 100) + w_s * (B / 20 * 100) + w_c * (C / 10 * 100), 1)
-    _bear_adj = 1.1 if regime == "BEAR_TREND" else 1.0
-    if   t25 >= 68 * _bear_adj: t25_sig = "T25_BUY"
-    elif t25 >= 55 * _bear_adj: t25_sig = "T25_WATCH"
-    elif t25 <= 32:             t25_sig = "T25_AVOID"
-    else:                       t25_sig = "T25_NEUTRAL"
+    _bear_adj    = 1.1 if regime == "BEAR_TREND" else 1.0
+    _avoid_thresh = 28 if regime == "SIDEWAYS" else 32
+    if   t25 >= 68 * _bear_adj:    t25_sig = "T25_BUY"
+    elif t25 >= 55 * _bear_adj:    t25_sig = "T25_WATCH"
+    elif t25 <= _avoid_thresh:     t25_sig = "T25_AVOID"
+    else:                          t25_sig = "T25_NEUTRAL"
     return {
         "t25_score":        t25,
         "t25_signal":       t25_sig,
@@ -1903,6 +2137,7 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         candle_pts      = _candle["candle_pts"],
         div_pts         = _diverg["div_pts"],
         regime          = _regime.get("regime", "SIDEWAYS"),
+        sma200_slope    = _regime.get("sma200_slope", 0.0),
     )
 
     # ⑦c Price Structure (F2) — Higher-High / Higher-Low ──────────────────────
@@ -1921,6 +2156,92 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
 
     # ⑦f Anchored VWAP (F8) ───────────────────────────────────────────────────
     _vwap_data = compute_vwap(df)
+
+    # ⑦h VWAP Divergence [C4] ─────────────────────────────────────────────────
+    _vwap_div = detect_vwap_divergence(df)
+
+    # ⑦i Intraday VWAP + T+2.5 position ──────────────────────────────────────
+    if _SCREENING_AVAILABLE:
+        try:
+            _vwap_intraday = _compute_vwap_intraday(symbol)
+        except Exception:
+            _vwap_intraday = {"vwap_last": None, "t25_position": "AT",
+                              "vwap_slope": 0.0, "t25_window_now": False, "bars_available": 0}
+    else:
+        _vwap_intraday = {"vwap_last": None, "t25_position": "AT",
+                          "vwap_slope": 0.0, "t25_window_now": False, "bars_available": 0}
+
+    # ⑦j Full TA-Lib candlestick scan [C3] ────────────────────────────────────
+    _candle_talib = detect_candlestick_patterns_talib(
+        df,
+        vwap_dev  = _vwap_data.get("vwap_dev", "AT"),
+        vsa_state = vsa_state,
+    )
+
+    # ⑦k CANSLIM filter + breakout + manipulation [CANSLIM, Manip] ────────────
+    if _SCREENING_AVAILABLE:
+        try:
+            _breakout = _get_pivot_breakout(df)
+        except Exception:
+            _breakout = {"is_breakout": False, "pivot_price": None, "vol_ratio": None,
+                         "false_breakout": False, "base_depth_pct": None}
+        try:
+            # Build a lightweight financials dict from fields already in result
+            _fin_proxy = {
+                "roe":        None,   # fetched below if available
+                "pe":         None,
+                "eps":        None,
+                "eps_prev":   None,
+                "debt_equity": None,
+            }
+            _canslim = _filter_canslim(_fin_proxy)
+        except Exception:
+            _canslim = {"canslim_eligible": False, "canslim_score": 0,
+                        "eps_growth_ok": False, "roe_ok": False,
+                        "eps_growth": None, "detail": "error"}
+        try:
+            _manip = _compute_manipulation_score(df)
+        except Exception:
+            _manip = {"manip_score": 0.0, "manip_flag": False,
+                      "vol_zscore": 0.0, "price_spike": 0.0, "dump_signal": False}
+        try:
+            _pump = _detect_pump_dump_advanced(df)
+        except Exception:
+            _pump = {"pump_score": 0.0, "pump_flag": False, "dump_risk": False,
+                     "pump_vol_factor": 0.0, "pump_price_factor": 0.0,
+                     "pump_ceiling_factor": 0.0, "pump_dump_factor": 0.0}
+        try:
+            # Pass partial result dict (only fields computed so far) to false breakout
+            _fb_input = {
+                "rsi":                rsi,
+                "pivot_price":        _breakout.get("pivot_price"),
+                "signal_confirm_bars": _confirm_bars if "_confirm_bars" in dir() else 0,
+            }
+            _fb = _detect_false_breakout(df, _fb_input) if _breakout.get("is_breakout") \
+                  else {"false_breakout_prob": 0.5, "fb_criteria_met": 0,
+                        "fb_grade": "N/A", "fb_criteria": [False] * 5}
+        except Exception:
+            _fb = {"false_breakout_prob": 0.5, "fb_criteria_met": 0,
+                   "fb_grade": "N/A", "fb_criteria": [False] * 5}
+        try:
+            _gk = _compute_garman_klass(df, window=20)
+        except Exception:
+            _gk = {"gk_annualized_pct": None, "gk_daily_pct": None,
+                   "gk_upper_1sd": None, "gk_lower_1sd": None}
+    else:
+        _breakout = {"is_breakout": False, "pivot_price": None, "vol_ratio": None,
+                     "false_breakout": False, "base_depth_pct": None}
+        _canslim  = {"canslim_eligible": False, "canslim_score": 0,
+                     "eps_growth_ok": False, "roe_ok": False, "eps_growth": None, "detail": "unavailable"}
+        _manip    = {"manip_score": 0.0, "manip_flag": False,
+                     "vol_zscore": 0.0, "price_spike": 0.0, "dump_signal": False}
+        _pump     = {"pump_score": 0.0, "pump_flag": False, "dump_risk": False,
+                     "pump_vol_factor": 0.0, "pump_price_factor": 0.0,
+                     "pump_ceiling_factor": 0.0, "pump_dump_factor": 0.0}
+        _fb       = {"false_breakout_prob": 0.5, "fb_criteria_met": 0,
+                     "fb_grade": "N/A", "fb_criteria": [False] * 5}
+        _gk       = {"gk_annualized_pct": None, "gk_daily_pct": None,
+                     "gk_upper_1sd": None, "gk_lower_1sd": None}
 
     # ⑦g Upcoming Dividend (F9) — non-blocking, 24h cached ───────────────────
     try:
@@ -2067,6 +2388,49 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         "ex_div_date":        _div.get("ex_date"),
         "ex_div_days":        _div.get("days_to_ex"),
         "ex_div_amt":         _div.get("dividend_vnd"),
+        # ── C3: TA-Lib full candlestick scan (VWAP + VSA filtered) ───────────
+        "candle_talib_pattern": _candle_talib.get("candle_talib_pattern", "NEUTRAL"),
+        "candle_talib_pts":     _candle_talib.get("candle_talib_pts", 0),
+        "talib_signals":        _candle_talib.get("talib_signals", []),
+        # ── C4: VWAP divergence (swing-pivot based) ───────────────────────────
+        "vwap_divergence":    _vwap_div,
+        # ── C5: Intraday VWAP + T+2.5 window ─────────────────────────────────
+        "vwap_intraday":      _vwap_intraday.get("vwap_last"),
+        "vwap_t25_position":  _vwap_intraday.get("t25_position", "AT"),
+        "vwap_intraday_slope": _vwap_intraday.get("vwap_slope", 0.0),
+        "t25_window_active":  _vwap_intraday.get("t25_window_now", False),
+        # ── CANSLIM: breakout detection ───────────────────────────────────────
+        "is_breakout":        _breakout.get("is_breakout", False),
+        "pivot_price":        _breakout.get("pivot_price"),
+        "vol_ratio_breakout": _breakout.get("vol_ratio"),
+        "false_breakout":     _breakout.get("false_breakout", False),
+        "base_depth_pct":     _breakout.get("base_depth_pct"),
+        # ── CANSLIM: fundamental filter ───────────────────────────────────────
+        "canslim_eligible":   _canslim.get("canslim_eligible", False),
+        "canslim_score":      _canslim.get("canslim_score", 0),
+        # ── Manipulation detection ────────────────────────────────────────────
+        "manip_score":        _manip.get("manip_score", 0.0),
+        "manip_flag":         _manip.get("manip_flag", False),
+        "vol_zscore":         _manip.get("vol_zscore", 0.0),
+        "dump_signal":        _manip.get("dump_signal", False),
+        # ── Optimal T+: Pump & Dump advanced ─────────────────────────────────
+        "pump_score":         _pump.get("pump_score", 0.0),
+        "pump_flag":          _pump.get("pump_flag", False),
+        "dump_risk":          _pump.get("dump_risk", False),
+        "pump_vol_factor":    _pump.get("pump_vol_factor", 0.0),
+        "pump_price_factor":  _pump.get("pump_price_factor", 0.0),
+        "pump_ceiling_factor": _pump.get("pump_ceiling_factor", 0.0),
+        "pump_dump_factor":   _pump.get("pump_dump_factor", 0.0),
+        # ── Optimal T+: False breakout probability ────────────────────────────
+        "false_breakout_prob": _fb.get("false_breakout_prob", 0.5),
+        "fb_criteria_met":    _fb.get("fb_criteria_met", 0),
+        "fb_grade":           _fb.get("fb_grade", "N/A"),
+        "fb_criteria":        _fb.get("fb_criteria", [False] * 5),
+        # ── Optimal T+: Garman-Klass offline volatility ───────────────────────
+        "gk_annualized_pct":  _gk.get("gk_annualized_pct"),
+        "gk_daily_pct":       _gk.get("gk_daily_pct"),
+        "gk_upper_1sd":       _gk.get("gk_upper_1sd"),
+        "gk_lower_1sd":       _gk.get("gk_lower_1sd"),
         "algo_ref":           "VN-Swing Alpha",
     }
     if return_df:

@@ -18,6 +18,12 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
+try:
+    from nl_explainer import generate_nl_explanation as _gen_nl
+except Exception:
+    def _gen_nl(r, rec):  # type: ignore
+        return ""
+
 # ─── VN Public Holidays (fixed + approximate recurring) ──────────────────────
 _VN_HOLIDAYS_2025_2026 = {
     date(2025, 1, 1),   # Tết Dương lịch
@@ -453,17 +459,21 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
     rsi_div    = r.get("rsi_divergence","NONE")
     at_ceiling = bool(r.get("at_ceiling", False))
     at_floor   = bool(r.get("at_floor",   False))
-    beta       = float(r.get("rolling_beta_5d", 1.0) or 1.0)
-    kl_ratio   = float(r.get("kl_ratio", 1.0)  or 1.0)
-    price      = float(r.get("price",    0.0)   or 0.0)
-    sma20      = float(r.get("sma20",    0.0)   or 0.0)
-    atr        = float(r.get("atr",      0.0)   or 0.0)
-    sl         = r.get("sl")
-    tp1        = r.get("tp1")
-    tp2        = r.get("tp2")
-    win_rate   = float(
+    beta         = float(r.get("rolling_beta_5d", 1.0) or 1.0)
+    kl_ratio     = float(r.get("kl_ratio", 1.0)  or 1.0)
+    price        = float(r.get("price",    0.0)   or 0.0)
+    sma20        = float(r.get("sma20",    0.0)   or 0.0)
+    sma200       = float(r.get("sma200",   0.0)   or 0.0)
+    sma200_slope = float(r.get("sma200_slope", 0.0) or 0.0)
+    atr          = float(r.get("atr",      0.0)   or 0.0)
+    sl           = r.get("sl")
+    tp1          = r.get("tp1")
+    tp2          = r.get("tp2")
+    win_rate     = float(
         r.get("bt5_win_rate") or r.get("bt_win_rate") or 0.55
     )
+    bt5_win_rate  = float(r.get("bt5_win_rate")  or 0.0)
+    bt5_avg_ret   = float(r.get("bt5_avg_return") or -99.0)
 
     # ── CF enrichment: extract Candlestick Forecast signals ──────────────────
     _garch_sigma    = None
@@ -506,14 +516,35 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
                     _forecast_ci_low  = round(float(_c0.lower_ci), 0)
                     _forecast_ci_high = round(float(_c0.upper_ci), 0)
 
+    # ── Backtest rescue check (for T25_AVOID only) ───────────────────────────
+    # When T25 scores AVOID but long-term statistics are positive AND price is
+    # above a rising SMA200 in a SIDEWAYS regime, allow scoring to continue
+    # but cap the final output at WATCH (score ≤50).  BEAR_TREND is excluded.
+    _bt_rescue = (
+        t25_sig == "T25_AVOID"
+        and regime != "BEAR_TREND"
+        and sma200 > 0
+        and price > sma200
+        and sma200_slope > 1.0
+        and bt5_win_rate >= 55.0
+        and bt5_avg_ret  >  0.0
+    )
+    # Effective T25 signal used for score_a — rescue promotes to NEUTRAL
+    _t25_sig_eff = "T25_NEUTRAL" if _bt_rescue else t25_sig
+
     # ── Forced override checks ────────────────────────────────────────────────
-    if t25_sig == "T25_AVOID" or at_ceiling:
+    if (t25_sig == "T25_AVOID" and not _bt_rescue) or at_ceiling:
+        _avoid_sigs: list = []
+        for _s in (r.get("t25_confirms") or [])[:5]:
+            _avoid_sigs.append(_s)
+        if r.get("rsi_divergence") == "BULLISH" and "RSI_div\u2191" not in _avoid_sigs:
+            _avoid_sigs.insert(0, "RSI_div\u2191")
         risk_flags = []
         if t25_sig == "T25_AVOID":
             risk_flags.append("T+2.5 score: AVOID zone")
         if at_ceiling:
             risk_flags.append("Giá chạm TRẦN — rủi ro cao nhất")
-        return {
+        _avoid_rec = {
             "action": "AVOID", "grade": "E", "confidence_score": 0,
             "entry_zone_low": None, "entry_zone_high": None,
             "sl_price":  _sl_garch  if _sl_garch  is not None else (round(float(sl),  0) if sl  else None),
@@ -523,7 +554,7 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
             "position_size_pct": 0.0, "kelly_mode": "N/A",
             "entry_timing": "AVOID_TODAY",
             "risk_flags": risk_flags,
-            "supporting_signals": [],
+            "supporting_signals": _avoid_sigs,
             "max_risk_pct": None, "expected_return_pct": None,
             "lstm_info": None,
             "sl_garch":          _sl_garch,
@@ -534,11 +565,15 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
             "forecast_ci_low":   _forecast_ci_low,
             "forecast_ci_high":  _forecast_ci_high,
         }
+        _avoid_rec["nl_explanation"] = _gen_nl(r, _avoid_rec)
+        return _avoid_rec
 
     # ── Component scoring ─────────────────────────────────────────────────────
-    # A: T+2.5 signal (0-40)
+    # A: T+2.5 signal (0-40)  — use effective signal (rescue promotes AVOID→NEUTRAL)
     _t25_pts = {"T25_BUY": 40, "T25_WATCH": 25, "T25_NEUTRAL": 10, "T25_AVOID": 0}
-    score_a  = float(_t25_pts.get(t25_sig, 10))
+    score_a  = float(_t25_pts.get(_t25_sig_eff, 10))
+    if _bt_rescue:
+        risk_flags = [f"BT-rescue: WR={bt5_win_rate:.0f}% ret={bt5_avg_ret:+.1f}% (WATCH max)"]
 
     # B: Momentum (0-30)
     if bull_pct >= 65:   score_b = 30.0
@@ -587,7 +622,9 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
     raw_score = score_a + score_b + score_c + score_d
 
     # ── Risk deductions ───────────────────────────────────────────────────────
-    risk_flags = []
+    # Preserve BT-rescue flag if set; otherwise start fresh
+    if not _bt_rescue:
+        risk_flags = []
     if not confirmed:
         raw_score -= 5; risk_flags.append("Tín hiệu chưa được xác nhận 2/3 phiên")
     if rsi_div == "BEARISH":
@@ -631,6 +668,8 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
         risk_flags.append("GARCH: vol regime cao (persistence>0.97)")
 
     confidence_score = int(max(0, min(100, raw_score)))
+    if _bt_rescue:
+        confidence_score = min(50, confidence_score)   # rescue path: never above WATCH
 
     # ── Map to action tier ────────────────────────────────────────────────────
     if confidence_score >= 80:
@@ -710,7 +749,7 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
         _src = "LSTM" if fc.get("lstm_source") == "lstm" else "Ridge ML"
         lstm_info = f"{_src}: {fc['lstm_pred_pct']:+.2f}% (5-ngày, chỉ tham khảo)"
 
-    return {
+    _rec = {
         "action":               action,
         "grade":                grade,
         "confidence_score":     confidence_score,
@@ -736,6 +775,8 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
         "forecast_ci_low":      _forecast_ci_low,
         "forecast_ci_high":     _forecast_ci_high,
     }
+    _rec["nl_explanation"] = _gen_nl(r, _rec)
+    return _rec
 
 
 # ─── F15: Swing Strength Index (SSI) ─────────────────────────────────────────
@@ -912,6 +953,105 @@ _SECTOR_MAP = {
     # ── Đa ngành ──────────────────────────────────────────────────────────
     "VIC": "Đa ngành",
 }
+
+
+# ─── Optimal T+: Multi-horizon target matrix ─────────────────────────────────
+
+# Proposal table: score band → T+3/5/7/10 pct targets, SL pct, estimated win rate
+_T_PLUS_TARGET_TABLE = [
+    # (min_score, t3%, t5%, t7%, t10%, sl%, win_rate_est)
+    (80, 4.0,  7.0,  10.0, 15.0, -3.0,  0.68),
+    (70, 3.0,  5.0,   8.0, 12.0, -2.5,  0.60),
+    (60, 2.0,  3.5,   6.0,  9.0, -2.0,  0.52),
+    ( 0, 0.0,  0.0,   0.0,  0.0,  0.0,  0.45),
+]
+
+
+def compute_t_plus_multiframe(
+    price: float,
+    atr: float,
+    score: int,
+    bt5_win_rate: float = None,
+) -> dict:
+    """
+    Map T+ confidence_score to multi-horizon absolute price targets.
+
+    Uses the academic proposal table as base win-rate estimates,
+    overriding with actual bt5_win_rate when available.
+
+    Args:
+        price        : Current price (thousands-VND).
+        atr          : ATR-14 (thousands-VND). Used to compute price-band context.
+        score        : T+ confidence_score 0–100 from generate_t_plus_recommendation().
+        bt5_win_rate : Actual 5-day backtest win rate %. Overrides proposal default.
+
+    Returns:
+        dict:
+            t3_pct, t5_pct, t7_pct, t10_pct : float  target % returns
+            sl_pct                           : float  stop-loss %
+            t3_price, t5_price, t7_price, t10_price, sl_price : float absolute prices
+            win_rate_est    : float  estimated win rate (bt5 override if available)
+            win_rate_source : str   "backtest" | "proposal"
+            score_band      : str   e.g. "≥80 (STRONG BUY)"
+    """
+    empty = {
+        "t3_pct": 0.0, "t5_pct": 0.0, "t7_pct": 0.0, "t10_pct": 0.0,
+        "sl_pct": 0.0,
+        "t3_price": None, "t5_price": None, "t7_price": None, "t10_price": None,
+        "sl_price": None,
+        "win_rate_est": 0.45, "win_rate_source": "proposal",
+        "score_band": "< 60 (AVOID)",
+    }
+    if not price or price <= 0:
+        return empty
+    try:
+        # Find matching band
+        row = _T_PLUS_TARGET_TABLE[-1]  # default: <60
+        for min_s, t3, t5, t7, t10, sl, wr in _T_PLUS_TARGET_TABLE:
+            if score >= min_s:
+                row = (min_s, t3, t5, t7, t10, sl, wr)
+                break
+        _, t3_pct, t5_pct, t7_pct, t10_pct, sl_pct, wr_est = row
+
+        # Override win rate with actual backtest if available
+        if bt5_win_rate is not None and bt5_win_rate > 0:
+            win_rate_est    = round(bt5_win_rate / 100.0, 3)
+            win_rate_source = "backtest"
+        else:
+            win_rate_est    = wr_est
+            win_rate_source = "proposal"
+
+        def _tp(pct):
+            if pct == 0.0:
+                return None
+            # Round to nearest VN tick (100 VND = 0.1 in thousands-VND)
+            raw = price * (1.0 + pct / 100.0)
+            return round(raw / 0.1) * 0.1
+
+        band_labels = {
+            80: ">= 80 (STRONG BUY)",
+            70: "70-79 (BUY)",
+            60: "60-69 (WATCH)",
+             0: "< 60 (AVOID)",
+        }
+
+        return {
+            "t3_pct":          t3_pct,
+            "t5_pct":          t5_pct,
+            "t7_pct":          t7_pct,
+            "t10_pct":         t10_pct,
+            "sl_pct":          sl_pct,
+            "t3_price":        _tp(t3_pct),
+            "t5_price":        _tp(t5_pct),
+            "t7_price":        _tp(t7_pct),
+            "t10_price":       _tp(t10_pct),
+            "sl_price":        _tp(sl_pct),
+            "win_rate_est":    win_rate_est,
+            "win_rate_source": win_rate_source,
+            "score_band":      band_labels.get(row[0], "< 60 (AVOID)"),
+        }
+    except Exception:
+        return empty
 
 
 def calculate_performance(

@@ -48,6 +48,7 @@ from portfolio_engine import (
     T25ExitManager,
     generate_t_plus_recommendation,
     compute_ssi_score,
+    compute_t_plus_multiframe,
     _T_REC_GRADES,
     _T_REC_COLORS,
 )
@@ -1736,6 +1737,13 @@ def render_summary_table(results: list) -> None:
             f'<span style="font-size:10px;color:#64748b;"> ({rk["net_flow"]:+.3f})</span>'
             if rk is not None else "–"
         )
+        _sv_vw  = r.get("vwap")
+        _sv_pvp = float(r.get("price_vs_vwap_pct") or 0)
+        _sv_vwc = "color:#22c55e" if _sv_pvp > 0 else "color:#ef4444" if _sv_pvp < 0 else "color:#94a3b8"
+        _sv_dir = "trên" if _sv_pvp > 0 else "dưới"
+        _sv_nl  = f"Giá {_sv_dir} VWAP {abs(_sv_pvp):.1f}% — {'tích cực, lực mua chiếm ưu thế' if _sv_pvp > 0 else 'tiêu cực, áp lực bán'}"
+        _sv_vws = (f"{_sv_vw:,.0f}<br><span style='{_sv_vwc};font-size:10px;' title='{_sv_nl}'>({_sv_pvp:+.1f}%)</span>"
+                   if _sv_vw else "–")
         rows += f"""<tr>
   <td>{_ticker_sig_cell(r['ticker'], sig_v)}</td>
   <td>{_f(r.get('price'))}</td>
@@ -1748,6 +1756,7 @@ def render_summary_table(results: list) -> None:
   <td>{_badge(sig_v)}{c_flag}{f_flag}</td>
   <td>{_t25_badge(r.get('t25_signal',''), r.get('t25_score'))}</td>
   <td>{_ssi_cell(r)}</td>
+  <td style="font-family:monospace;font-size:12px;">{_sv_vws}</td>
   <td>{rank_html}</td>
 </tr>"""
     table_html = f'''
@@ -1759,6 +1768,7 @@ def render_summary_table(results: list) -> None:
       <th>Cấu trúc MA</th><th>Tín hiệu</th>
       <th title="VN-Swing Alpha T+2.5 score">T+2.5</th>
       <th title="Swing Strength Index">SSI</th>
+      <th title="VWAP 20-bar: giá bình quân KL. Hover từng ô để đọc giải thích.">VWAP</th>
       <th>MCDA Rank</th>
     </tr>
   </thead>
@@ -2392,12 +2402,12 @@ def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
             st.caption(rec.get("entry_timing", "") or "")
         with c2:
             st.markdown("**📉 SL / TP1 / TP2**")
-            _sl  = rec["sl_price"]
-            _tp1 = rec["tp1_price"]
-            _tp2 = rec["tp2_price"]
-            _rr  = rec["rr_ratio"]
-            _mr  = rec["max_risk_pct"]
-            _er  = rec["expected_return_pct"]
+            _sl  = rec.get("sl_price")
+            _tp1 = rec.get("tp1_price")
+            _tp2 = rec.get("tp2_price")
+            _rr  = rec.get("rr_ratio")
+            _mr  = rec.get("max_risk_pct")
+            _er  = rec.get("expected_return_pct")
             _parts = []
             if _sl:
                 _parts.append(f'<span style="color:#ef4444;">SL {_sl:,.0f}</span>')
@@ -2441,6 +2451,57 @@ def render_t_plus_recommendation(r: dict, fc: dict = None) -> None:
                 f'⚠️ {f}</span>' for f in flags
             )
             st.markdown(f'<div style="margin-top:4px;">{fchips}</div>', unsafe_allow_html=True)
+
+        # ── Row 3c: VWAP context bar with NL explanation ────────────────────
+        _vw_val = r.get("vwap")
+        _vw_pvp = float(r.get("price_vs_vwap_pct") or 0)
+        _vw_div = r.get("vwap_divergence", "NONE")
+        _vw_t25 = r.get("vwap_t25_position", "AT")
+        _vw_slp = float(r.get("vwap_intraday_slope") or 0)
+        if _vw_val:
+            _vw_pos_c  = "#22c55e" if _vw_pvp > 0 else "#ef4444"
+            _vw_div_c  = {"BULLISH": "#22c55e", "BEARISH": "#ef4444"}.get(_vw_div, "#94a3b8")
+            _vw_t25_c  = {"ABOVE": "#22c55e", "BELOW": "#ef4444"}.get(_vw_t25, "#64748b")
+            # Natural-language explanation
+            _vw_nl_pos  = ("Giá đang TRÊN VWAP — dòng tiền mua chiếm ưu thế, xu hướng ngắn hạn tích cực."
+                           if _vw_pvp > 0 else
+                           "Giá đang DƯỚI VWAP — áp lực bán đang chi phối, cần thận trọng.")
+            _vw_nl_div  = ({"BULLISH": "Divergence BULLISH: RSI/OBV tạo đáy cao hơn — tín hiệu đảo chiều tăng tiềm năng.",
+                            "BEARISH": "Divergence BEARISH: Giá tạo đỉnh cao hơn nhưng chỉ báo thấp hơn — nguy cơ đảo chiều giảm.",
+                            "NONE":    "Không có phân kỳ VWAP — xu hướng hiện tại ổn định."}.get(_vw_div, ""))
+            _vw_nl_t25  = ({"ABOVE": "Tại cửa sổ 13:00 (T25): Giá TRÊN VWAP — áp lực bán T+2.5 giảm.",
+                            "BELOW": "Tại cửa sổ 13:00 (T25): Giá DƯỚI VWAP — nguy cơ xả hàng T+2.5 tăng.",
+                            "AT":    "Tại cửa sổ 13:00 (T25): Giá AT VWAP — trung lập."}.get(_vw_t25, ""))
+            st.markdown(
+                f'<div style="margin:6px 0;padding:8px 12px;background:#0c1322;'
+                f'border-radius:6px;border:1px solid #1e2535;">'
+                f'<div style="font-size:12px;font-weight:700;color:#64748b;margin-bottom:4px;">'
+                f'📏 VWAP 20-bar</div>'
+                f'<div style="display:flex;gap:18px;flex-wrap:wrap;font-size:12px;">'
+                f'<span>Giá trị: <b style="color:#06b6d4;font-family:monospace;">{_vw_val:,.0f}</b>'
+                f' <span style="color:{_vw_pos_c};">({_vw_pvp:+.1f}%)</span></span>'
+                f'<span>Phân kỳ: <b style="color:{_vw_div_c};">{_vw_div}</b></span>'
+                f'<span>Vị thế T25: <b style="color:{_vw_t25_c};">{_vw_t25}</b></span>'
+                f'</div>'
+                f'<div style="margin-top:6px;font-size:11px;color:#94a3b8;line-height:1.7;">'
+                f'{_vw_nl_pos}<br>{_vw_nl_div}<br>{_vw_nl_t25}'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+        # ── Row 3b: AI Natural-Language explanation for F0 ────────────────────
+        _nl_key = f"nl_{ticker}_{score}_{action}"
+        if _nl_key not in st.session_state:
+            st.session_state[_nl_key] = rec.get("nl_explanation", "")
+        _nl = st.session_state[_nl_key]
+        if _nl:
+            with st.expander("📖 Giải thích cho F0 — đọc hiểu kết quả", expanded=False):
+                st.markdown(_nl)
+                st.caption(
+                    "Giải thích được sinh bởi AI (Groq / llama-3.1). "
+                    "Chỉ mang tính tham khảo, không phải tư vấn đầu tư chính thức."
+                )
 
         # ── Row 4 (informational): LSTM badge ─────────────────────────────────
         if rec.get("lstm_info"):
@@ -2495,12 +2556,39 @@ def _embed_t_rec(result: dict) -> None:
         result["t_rec_entry_high"] = rec["entry_zone_high"]
         result["t_rec_sl"]         = rec["sl_price"]
         result["t_rec_tp1"]        = rec["tp1_price"]
+        result["t_rec_tp2"]        = rec.get("tp2_price")
+        result["t_rec_max_risk"]   = rec.get("max_risk_pct")
+        result["t_rec_exp_ret"]    = rec.get("expected_return_pct")
         result["t_rec_rr"]         = rec["rr_ratio"]
         result["t_rec_size_pct"]   = rec["position_size_pct"]
         result["t_rec_kelly"]      = rec["kelly_mode"]
         result["t_rec_timing"]     = rec["entry_timing"]
         result["t_rec_flags"]      = rec["risk_flags"]
         result["t_rec_signals"]    = rec["supporting_signals"]
+        result["t_rec_nl"]         = rec.get("nl_explanation", "")
+        # Optimal T+: multi-horizon targets (t_rec_t3/t5/t7/t10)
+        try:
+            _mf = compute_t_plus_multiframe(
+                price       = result.get("price") or 0,
+                atr         = result.get("atr") or 0,
+                score       = rec.get("confidence_score", 0),
+                bt5_win_rate= result.get("bt5_win_rate"),
+            )
+            result["t_rec_t3"]          = _mf.get("t3_price")
+            result["t_rec_t5"]          = _mf.get("t5_price")
+            result["t_rec_t7"]          = _mf.get("t7_price")
+            result["t_rec_t10"]         = _mf.get("t10_price")
+            result["t_rec_t3_pct"]      = _mf.get("t3_pct", 0.0)
+            result["t_rec_t5_pct"]      = _mf.get("t5_pct", 0.0)
+            result["t_rec_t7_pct"]      = _mf.get("t7_pct", 0.0)
+            result["t_rec_t10_pct"]     = _mf.get("t10_pct", 0.0)
+            result["t_rec_sl_target"]   = _mf.get("sl_price")
+            result["t_rec_sl_pct"]      = _mf.get("sl_pct", 0.0)
+            result["t_rec_win_est"]     = _mf.get("win_rate_est", 0.45)
+            result["t_rec_win_source"]  = _mf.get("win_rate_source", "proposal")
+            result["t_rec_score_band"]  = _mf.get("score_band", "")
+        except Exception:
+            pass
         # Phase 7: new snapshot fields
         try:
             _ssi_snap               = compute_ssi_score(result)
@@ -2531,12 +2619,16 @@ def _get_or_compute_t_rec(r: dict) -> dict:
             "entry_zone_high":    r.get("t_rec_entry_high"),
             "sl_price":           r.get("t_rec_sl"),
             "tp1_price":          r.get("t_rec_tp1"),
+            "tp2_price":          r.get("t_rec_tp2"),
+            "max_risk_pct":       r.get("t_rec_max_risk"),
+            "expected_return_pct": r.get("t_rec_exp_ret"),
             "rr_ratio":           r.get("t_rec_rr"),
             "position_size_pct":  r.get("t_rec_size_pct", 0),
             "kelly_mode":         r.get("t_rec_kelly", "NONE"),
             "entry_timing":       r.get("t_rec_timing", ""),
             "risk_flags":         r.get("t_rec_flags", []),
             "supporting_signals": r.get("t_rec_signals", []),
+            "nl_explanation":     r.get("t_rec_nl", ""),
         }
     return generate_t_plus_recommendation(r)
 
@@ -2831,7 +2923,8 @@ def render_sidebar():
                 "📡 Scanner",
                 "🗂 Audit Log",
                 "🎯 T+ Khuyến nghị",
-                "🔄 Quản lý lệnh",
+                "� Optimal T+",
+                "�🔄 Quản lý lệnh",
                 "🌡️ Sector Flow",
                 "🔔 Cảnh báo",
                 "📓 Trade Journal",
@@ -4427,6 +4520,22 @@ def render_scanner() -> None:
         t25_sig  = r_lookup.get(tk, {}).get("t25_signal", "")
         t25_sc   = r_lookup.get(tk, {}).get("t25_score")
         t25_cell = _t25_badge(t25_sig, t25_sc) if is_deep else "–"
+        # VWAP cell (deep mode)
+        _sc_r    = r_lookup.get(tk, {})
+        _sc_vw   = _sc_r.get("vwap")
+        _sc_pvp  = float(_sc_r.get("price_vs_vwap_pct") or 0)
+        _sc_div  = _sc_r.get("vwap_divergence", "NONE")
+        _sc_vwc  = "color:#22c55e" if _sc_pvp > 0 else "color:#ef4444" if _sc_pvp < 0 else "color:#94a3b8"
+        _sc_dir  = "trên" if _sc_pvp > 0 else "dưới"
+        _sc_nl   = (
+            f"Giá {_sc_dir} VWAP {abs(_sc_pvp):.1f}% "
+            + ("— lực mua chiếm ưu thế ✅" if _sc_pvp > 0 else "— áp lực bán ⚠") 
+            + (f" | Phân kỳ: {_sc_div}" if _sc_div != "NONE" else "")
+        )
+        _sc_vws  = (
+            f"{_sc_vw:,.0f}<br><span style='{_sc_vwc};font-size:10px;' title='{_sc_nl}'>({_sc_pvp:+.1f}%)</span>"
+            if _sc_vw and is_deep else "–"
+        )
         # T+ Recommendation badge (deep mode only) — read pre-embedded fields
         if is_deep:
             _r_cur = r_lookup.get(tk, {})
@@ -4463,6 +4572,7 @@ def render_scanner() -> None:
             f'<td style="font-family:monospace;">{rr_s}</td>'
             f'<td>{t25_cell}</td>'
             f'<td>{rec_cell}</td>'
+            f'<td style="font-family:monospace;font-size:12px;">{_sc_vws}</td>'
             f'</tr>'
         )
 
@@ -4473,6 +4583,7 @@ def render_scanner() -> None:
         f'<th>Thanh khoản</th><th>Biến động</th><th>R:R</th>'
         f'<th title="VN-Swing Alpha T+2.5">T+2.5</th>'
         f'<th title="T+ Khuyến nghị">T+ Rec</th>'
+        f'<th title="VWAP 20-bar: giá bình quân theo KL. Hover ô để đọc NL.">VWAP</th>'
         f'</tr></thead><tbody>{rows_html}</tbody></table>'
     )
     st.markdown(_filterable_table("scanner_tbl", scanner_table_html), unsafe_allow_html=True)
@@ -5032,6 +5143,504 @@ def render_trade_journal_page() -> None:
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
+#  OPTIMAL T+ PAGE — Multi-horizon, Pump/FB, Timing, Realized Vol
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def render_optimal_t_plus_page() -> None:
+    """
+    📈 Optimal T+ — Comprehensive T+ decision hub.
+
+    Refreshes real-time prices on load (fetch_ssi_realtime for all session tickers).
+    Sections:
+      S1  Decision Header — ranked table with T+3/5/7/10 targets
+      S2  Multi-Horizon Target Matrix — per-ticker expandable
+      S3  Pump & Dump Radar — all tickers, 4-factor scores
+      S4  False Breakout Filter — breakout tickers only, 5-criteria
+      S5  Session Timing + Volatility — GK offline + intraday RV on demand
+      S6  Per-ticker T+ deep dive — reuses render_t_plus_recommendation()
+    """
+    from microstructure import build_session_timing_windows, compute_realized_volatility
+    import concurrent.futures as _cf_lib
+    from datetime import datetime as _dt
+
+    st.markdown("## 📈 Optimal T+ — Chiến lược Tối ưu")
+    st.caption(
+        "Dữ liệu giá cập nhật tự động khi mở trang · GK vol luôn có · "
+        "Intraday RV theo nút lệnh từng mã"
+    )
+
+    results = st.session_state.get("results", [])
+    dfs     = st.session_state.get("dfs", {})
+    valid   = [r for r in results if "error" not in r and r.get("price")]
+
+    if not valid:
+        st.info("📭 Chưa có kết quả phân tích. Hãy chạy phân tích từ tab **📊 Phân tích** trước.")
+        return
+
+    # ── Auto-refresh real-time prices ─────────────────────────────────────────
+    _rt_key = f"opt_rt_{_dt.now().strftime('%Y%m%d_%H%M')}"  # cache per-minute
+    if _rt_key not in st.session_state:
+        with st.spinner("🔄 Đang cập nhật giá thời gian thực…"):
+            def _rt_fetch(r):
+                try:
+                    rt = fetch_ssi_realtime(r["ticker"])
+                    if rt and rt.get("price"):
+                        return r["ticker"], rt
+                except Exception:
+                    pass
+                return r["ticker"], None
+
+            with _cf_lib.ThreadPoolExecutor(max_workers=min(12, len(valid))) as ex:
+                _futures = {ex.submit(_rt_fetch, r): r for r in valid}
+                _rt_map  = {}
+                for fut in _cf_lib.as_completed(_futures):
+                    tk, rt = fut.result()
+                    if rt:
+                        _rt_map[tk] = rt
+            st.session_state[_rt_key] = _rt_map
+    else:
+        _rt_map = st.session_state[_rt_key]
+
+    # Overlay fresh prices onto result copies (non-destructive)
+    _enriched = []
+    for r in valid:
+        rt = _rt_map.get(r["ticker"])
+        if rt:
+            r = {**r, "price": rt["price"], "pct_change": rt.get("pct_change", r.get("pct_change", 0))}
+        _enriched.append(r)
+
+    # Recompute multiframe targets with fresh prices
+    _mf_map = {}
+    for r in _enriched:
+        try:
+            _mf_map[r["ticker"]] = compute_t_plus_multiframe(
+                price        = r.get("price") or 0,
+                atr          = r.get("atr") or 0,
+                score        = r.get("t_rec_score") or 0,
+                bt5_win_rate = r.get("bt5_win_rate"),
+            )
+        except Exception:
+            _mf_map[r["ticker"]] = {}
+
+    # Sort by T+ score descending
+    _enriched.sort(key=lambda x: x.get("t_rec_score") or 0, reverse=True)
+
+    st.markdown(
+        f'<div style="font-size:12px;color:#64748b;margin-bottom:6px;">'
+        f'⏱ Giá cập nhật lúc: <b>{_dt.now().strftime("%H:%M:%S")}</b>'
+        f' &nbsp;·&nbsp; {len(_enriched)} mã &nbsp;·&nbsp; '
+        f'Tự động làm mới mỗi phút khi mở trang</div>',
+        unsafe_allow_html=True,
+    )
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S1 — DECISION HEADER TABLE
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown("### 📊 S1 — Bảng Quyết định Tổng hợp")
+
+    _hdr_rows = ""
+    for r in _enriched:
+        tk    = r["ticker"]
+        mf    = _mf_map.get(tk, {})
+        act   = r.get("t_rec_action") or "SKIP"
+        grade = r.get("t_rec_grade") or "C"
+        score = r.get("t_rec_score") or 0
+        price = r.get("price") or 0
+        pct   = r.get("pct_change") or 0
+        color = _T_REC_COLORS.get(act, "#94a3b8")
+        p_cls = "color:#22c55e" if pct > 0 else "color:#ef4444" if pct < 0 else "color:#94a3b8"
+        t3    = mf.get("t3_price")
+        t5    = mf.get("t5_price")
+        t7    = mf.get("t7_price")
+        t10   = mf.get("t10_price")
+        sl    = mf.get("sl_price")
+        sl_p  = mf.get("sl_pct", 0.0)
+        wr    = mf.get("win_rate_est", 0.0)
+        pump  = float(r.get("pump_score") or 0)
+        pump_c = "#ef4444" if pump > 75 else "#f97316" if pump > 50 else "#22c55e"
+        fb_p  = float(r.get("false_breakout_prob") or 0.5)
+        fb_c  = "#ef4444" if fb_p > 0.6 else "#f97316" if fb_p > 0.4 else "#22c55e"
+        is_bo = bool(r.get("is_breakout", False))
+        act_lbl = {"STRONG_BUY": "💎 S.BUY", "BUY": "✅ BUY", "WATCH": "👁 WATCH",
+                   "SKIP": "⏭ SKIP", "AVOID": "🚫 AVOID"}.get(act, act)
+        _t3_cell  = ("+" + str(mf.get("t3_pct",  0.0)) + "%") if t3  else "–"
+        _t5_cell  = ("+" + str(mf.get("t5_pct",  0.0)) + "%") if t5  else "–"
+        _t7_cell  = ("+" + str(mf.get("t7_pct",  0.0)) + "%") if t7  else "–"
+        _t10_cell = ("+" + str(mf.get("t10_pct", 0.0)) + "%") if t10 else "–"
+        _t3_p  = f"{t3:,.0f}"  if t3  else ""
+        _t5_p  = f"{t5:,.0f}"  if t5  else ""
+        _t7_p  = f"{t7:,.0f}"  if t7  else ""
+        _t10_p = f"{t10:,.0f}" if t10 else ""
+        _sl_p  = f"{sl:,.0f}"  if sl  else "–"
+        _wr_src = "backtest" if mf.get("win_rate_source") == "backtest" else "proposal"
+        _fb_cell = (
+            f'<span style="color:{fb_c};font-size:12px;">{fb_p*100:.0f}%</span>'
+            if is_bo else ""
+        )
+        # VWAP cell for Optimal T+
+        _opt_vw  = r.get("vwap")
+        _opt_pvp = float(r.get("price_vs_vwap_pct") or 0)
+        _opt_vwc = "#22c55e" if _opt_pvp > 0 else "#ef4444" if _opt_pvp < 0 else "#94a3b8"
+        _opt_nl  = ("Giá trên VWAP — lực mua ✅" if _opt_pvp > 0
+                    else "Giá dưới VWAP — áp lực bán ⚠" if _opt_pvp < 0
+                    else "Giá AT VWAP — trung lập")
+        _opt_vws = (
+            f'<b style="color:#06b6d4;font-family:monospace;">{_opt_vw:,.0f}</b>'
+            f'<br><span style="color:{_opt_vwc};font-weight:700;">{_opt_pvp:+.1f}%</span>'
+            f'<br><span style="font-size:9px;color:#64748b;" title="{_opt_nl}">{_opt_nl[:22]}…</span>'
+            if _opt_vw else "–"
+        )
+        _hdr_rows += (
+            f'<tr>'
+            f'<td><b style="font-size:13px;border-left:3px solid {color};padding-left:6px;color:{color}">{_safe(tk)}</b></td>'
+            f'<td style="font-family:monospace;">{price:,.0f}<br><span style="{p_cls};font-size:10px;">{pct:+.2f}%</span></td>'
+            f'<td><span style="background:{color}22;border:1px solid {color};color:{color};'
+            f'border-radius:999px;padding:1px 7px;font-size:11px;font-weight:700;">{act_lbl}</span>'
+            f'<br><span style="font-size:10px;color:#64748b;">Grade {grade} · {score}/100</span></td>'
+            f'<td style="font-family:monospace;color:#22c55e;font-size:12px;">{_t3_cell}<br>'
+            f'<span style="font-size:10px;color:#64748b;">{_t3_p}</span></td>'
+            f'<td style="font-family:monospace;color:#22c55e;font-size:12px;">{_t5_cell}<br>'
+            f'<span style="font-size:10px;color:#64748b;">{_t5_p}</span></td>'
+            f'<td style="font-family:monospace;color:#3b82f6;font-size:12px;">{_t7_cell}<br>'
+            f'<span style="font-size:10px;color:#64748b;">{_t7_p}</span></td>'
+            f'<td style="font-family:monospace;color:#a78bfa;font-size:12px;">{_t10_cell}<br>'
+            f'<span style="font-size:10px;color:#64748b;">{_t10_p}</span></td>'
+            f'<td style="font-family:monospace;color:#ef4444;font-size:12px;">'
+            f'{sl_p:+.1f}%<br><span style="font-size:10px;color:#64748b;">{_sl_p}</span></td>'
+            f'<td style="font-family:monospace;font-size:12px;">{wr*100:.0f}%'
+            f'<br><span style="font-size:9px;color:#64748b;">{_wr_src}</span></td>'
+            f'<td><span style="color:{pump_c};font-weight:700;font-size:13px;">{pump:.0f}</span></td>'
+            f'<td>{_fb_cell}</td>'
+            f'<td style="font-family:monospace;font-size:12px;text-align:center;">{_opt_vws}</td>'
+            f'</tr>'
+        )
+
+    _hdr_html = (
+        f'<table class="sum-table">'
+        f'<thead><tr>'
+        f'<th>Mã</th><th>Giá / %Δ</th><th>Khuyến nghị</th>'
+        f'<th title="T+3 target">T+3</th>'
+        f'<th title="T+5 target">T+5</th>'
+        f'<th title="T+7 target">T+7</th>'
+        f'<th title="T+10 target">T+10</th>'
+        f'<th title="Stop-Loss">SL%</th>'
+        f'<th title="Estimated win rate">Win%</th>'
+        f'<th title="Pump score 0-100">Pump⚠</th>'
+        f'<th title="False breakout prob % (only for breakout tickers)">FB%</th>'
+        f'<th title="VWAP 20-bar: giá TRÊN=tích cực, DƯỚI=cảnh báo">VWAP%</th>'
+        f'</tr></thead>'
+        f'<tbody>{_hdr_rows}</tbody></table>'
+    )
+    st.markdown(_filterable_table("opt_hdr_tbl", _hdr_html), unsafe_allow_html=True)
+    st.caption(
+        "T+3/5/7/10 targets: bảng học thuật (score≥80→+4/7/10/15%, 70-79→+3/5/8/12%, "
+        "60-69→+2/3.5/6/9%). Win%: backtest thực tế khi có, proposal khi không. "
+        "Pump⚠: >75=red (cực kỳ nguy hiểm), 50-75=orange. FB%: chỉ hiện khi có Breakout. "
+        "VWAP%: % deviation giá vs VWAP 20-bar — xanh=trên (tốt), đỏ=dưới (cẩn thận)."
+    )
+
+    st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S2 — MULTI-HORIZON TARGET MATRIX (per-ticker expandable)
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown("### 🎯 S2 — Ma trận Mục tiêu Đa Khung")
+    _buy_tickers = [r for r in _enriched if (r.get("t_rec_action") or "") in ("STRONG_BUY", "BUY", "WATCH")]
+
+    if not _buy_tickers:
+        st.info("Không có mã BUY/WATCH trong phiên hiện tại.")
+    else:
+        for r in _buy_tickers:
+            tk    = r["ticker"]
+            mf    = _mf_map.get(tk, {})
+            act   = r.get("t_rec_action") or "SKIP"
+            score = r.get("t_rec_score") or 0
+            price = r.get("price") or 0
+            color = _T_REC_COLORS.get(act, "#94a3b8")
+            wr    = mf.get("win_rate_est", 0.0)
+            ws    = mf.get("win_rate_source", "proposal")
+
+            with st.expander(
+                f"{tk}  ·  {act}  ·  Score {score}  ·  Band: {mf.get('score_band', '–')}",
+                expanded=(act == "STRONG_BUY"),
+            ):
+                cols = st.columns(4)
+                horizons = [
+                    ("T+3",  mf.get("t3_price"),  mf.get("t3_pct",  0.0), "#22c55e"),
+                    ("T+5",  mf.get("t5_price"),  mf.get("t5_pct",  0.0), "#4ade80"),
+                    ("T+7",  mf.get("t7_price"),  mf.get("t7_pct",  0.0), "#3b82f6"),
+                    ("T+10", mf.get("t10_price"), mf.get("t10_pct", 0.0), "#a78bfa"),
+                ]
+                for col, (lbl, tprice, tpct, tcol) in zip(cols, horizons):
+                    with col:
+                        _tp_pct_str = ("+" + str(tpct) + "%") if tprice else "–"
+                        _tp_px_str  = f"{tprice:,.0f}" if tprice else "–"
+                        st.markdown(
+                            f'<div style="background:#141824;border:1px solid {tcol}44;'
+                            f'border-radius:8px;padding:10px;text-align:center;">'
+                            f'<div style="font-size:11px;color:#94a3b8;text-transform:uppercase;">{lbl}</div>'
+                            f'<div style="font-size:22px;font-weight:800;color:{tcol};">'
+                            f'{_tp_pct_str}</div>'
+                            f'<div style="font-size:13px;color:#e2e8f0;font-family:monospace;">'
+                            f'{_tp_px_str}</div>'
+                            f'</div>',
+                            unsafe_allow_html=True,
+                        )
+                sl_p = mf.get("sl_price")
+                sl_pct = mf.get("sl_pct", 0.0)
+                _sl_px_str = f"{sl_p:,.0f}" if sl_p else "–"
+                st.markdown(
+                    f'<div style="margin-top:8px;font-size:12px;color:#94a3b8;">'
+                    f'🛑 SL: <b style="color:#ef4444;">{_sl_px_str}</b>'
+                    f' ({sl_pct:+.1f}%)'
+                    f' &nbsp;·&nbsp; '
+                    f'Win%: <b style="color:#22c55e;">{wr*100:.0f}%</b>'
+                    f' <span style="font-size:10px;color:#64748b;">({ws})</span>'
+                    f' &nbsp;·&nbsp; Giá hiện tại: <b>{price:,.0f}</b>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+
+    st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S3 — PUMP & DUMP RADAR (all tickers)
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown("### 🚨 S3 — Pump & Dump Radar")
+    st.caption("Hiển thị tất cả mã — kể cả AVOID. Pump score >75 = NGUY HIỂM CỰC CAO, không mua đuổi.")
+
+    _pd_cols = st.columns(min(4, len(_enriched)))
+    for i, r in enumerate(_enriched):
+        pump  = float(r.get("pump_score") or 0)
+        tk    = r["ticker"]
+        act   = r.get("t_rec_action") or "SKIP"
+        col   = _pd_cols[i % len(_pd_cols)]
+        p_col = "#ef4444" if pump > 75 else "#f97316" if pump > 50 else "#22c55e"
+        p_lbl = "PUMP NGUY HIỂM" if pump > 75 else "Chú ý" if pump > 50 else "Bình thường"
+        f1    = float(r.get("pump_vol_factor") or 0)
+        f2    = float(r.get("pump_price_factor") or 0)
+        f3    = float(r.get("pump_ceiling_factor") or 0)
+        f4    = float(r.get("pump_dump_factor") or 0)
+        dump_risk = bool(r.get("dump_risk", False))
+
+        with col:
+            st.markdown(
+                f'<div style="background:#141824;border:1px solid {p_col}55;border-radius:8px;'
+                f'padding:10px;margin-bottom:8px;">'
+                f'<div style="font-size:13px;font-weight:700;color:{_T_REC_COLORS.get(act, "#94a3b8")};">'
+                f'{_safe(tk)}</div>'
+                f'<div style="font-size:28px;font-weight:900;color:{p_col};line-height:1.1;">{pump:.0f}</div>'
+                f'<div style="font-size:11px;color:{p_col};margin-bottom:6px;">{p_lbl}</div>'
+                + (f'<div style="font-size:10px;background:#ef444422;color:#ef4444;border-radius:4px;'
+                   f'padding:2px 6px;margin-bottom:4px;">⚠ DUMP RISK</div>' if dump_risk else '')
+                + f'<div style="font-size:10px;color:#64748b;line-height:1.9;">'
+                f'Vol spike: <b style="color:#e2e8f0;">{f1:.1f}/40</b><br>'
+                f'Price accel (5d): <b style="color:#e2e8f0;">{f2:.1f}/30</b><br>'
+                f'Ceiling hits: <b style="color:#e2e8f0;">{f3:.1f}/20</b><br>'
+                f'Dump reversal: <b style="color:#e2e8f0;">{f4:.1f}/10</b>'
+                f'</div>'
+                f'</div>',
+                unsafe_allow_html=True,
+            )
+
+    st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S4 — FALSE BREAKOUT FILTER (breakout tickers only)
+    # ──────────────────────────────────────────────────────────────────────────
+    _breakout_tickers = [r for r in _enriched if r.get("is_breakout", False)]
+    if _breakout_tickers:
+        st.markdown("### 🔍 S4 — Bộ lọc Breakout Giả")
+        st.caption("Chỉ hiện các mã đang có tín hiệu Breakout. 5 tiêu chí xác nhận — càng nhiều ✅ càng thật.")
+
+        _CRITERIA_LABELS = [
+            "Volume ≥ 1.3× TB20",
+            "Đóng cửa ≥ Pivot",
+            "RSI < 75 (không quá mua)",
+            "Không giảm KL 3 phiên liên tiếp",
+            "≥ 2 phiên xác nhận",
+        ]
+        for r in _breakout_tickers:
+            tk      = r["ticker"]
+            fb_prob = float(r.get("false_breakout_prob") or 0.5)
+            fb_met  = int(r.get("fb_criteria_met") or 0)
+            fb_g    = r.get("fb_grade") or "?"
+            fb_crit = r.get("fb_criteria") or [False] * 5
+            fb_col  = "#ef4444" if fb_prob > 0.6 else "#f97316" if fb_prob > 0.4 else "#22c55e"
+            grade_col = {"A": "#22c55e", "B": "#3b82f6", "C": "#f97316"}.get(fb_g, "#ef4444")
+            pivot_p = r.get("pivot_price")
+            bd_pct  = r.get("base_depth_pct")
+
+            with st.expander(
+                f"🔎 {tk}  ·  FB Prob {fb_prob*100:.0f}%  ·  "
+                f"{fb_met}/5 tiêu chí  ·  Grade {fb_g}",
+                expanded=(fb_g in ("A", "B")),
+            ):
+                _crit_html = ""
+                for ci, (lbl, ok) in enumerate(zip(_CRITERIA_LABELS, fb_crit)):
+                    icon = "✅" if ok else "❌"
+                    _crit_html += (
+                        f'<div style="padding:3px 0;font-size:12px;border-bottom:0.5px solid #1e2535;">'
+                        f'{icon} {lbl}</div>'
+                    )
+                st.markdown(
+                    f'<div style="display:flex;gap:20px;align-items:flex-start;">'
+                    f'<div style="background:#141824;border:1px solid {grade_col}44;'
+                    f'border-radius:8px;padding:10px 14px;min-width:120px;text-align:center;">'
+                    f'<div style="font-size:11px;color:#94a3b8;">Breakout Grade</div>'
+                    f'<div style="font-size:36px;font-weight:900;color:{grade_col};">{fb_g}</div>'
+                    f'<div style="font-size:13px;color:{fb_col};font-weight:700;">'
+                    f'FB Prob {fb_prob*100:.0f}%</div>'
+                    f'</div>'
+                    f'<div style="flex:1;">{_crit_html}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True,
+                )
+                _extra = []
+                if pivot_p:
+                    _extra.append(f"Pivot: <b>{pivot_p:,.0f}</b>")
+                if bd_pct is not None:
+                    _extra.append(f"Độ sâu nền: <b>{bd_pct:.1f}%</b>")
+                if _extra:
+                    st.caption(" · ".join(_extra).replace("<b>", "**").replace("</b>", "**"))
+    else:
+        st.markdown("### 🔍 S4 — Bộ lọc Breakout Giả")
+        st.info("Không có mã nào đang trong trạng thái Breakout trong phiên này.")
+
+    st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S5 — SESSION TIMING + VOLATILITY
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown("### ⏰ S5 — Thời điểm Giao dịch & Biến động")
+
+    _s5_col_timer, _s5_col_vol = st.columns([1, 1], gap="large")
+
+    with _s5_col_timer:
+        st.markdown("**🕐 Cửa sổ phiên HoSE (khuyến nghị F0)**")
+        windows = build_session_timing_windows()
+        _win_rows = ""
+        for w in windows:
+            _is_cur = w["is_current"]
+            _bg     = "background:#1e3a2a;" if _is_cur else ""
+            _bdr    = "border-left:3px solid #22c55e;" if _is_cur else "border-left:3px solid #1e2535;"
+            _vm     = w["vol_mult"]
+            _vc     = "#22c55e" if _vm <= 1.0 else "#f97316" if _vm <= 1.5 else "#ef4444"
+            _cur_badge = ' <span style="background:#22c55e33;color:#22c55e;font-size:9px;border-radius:3px;padding:1px 4px;">HIỆN TẠI</span>' if _is_cur else ""
+            _win_rows += (
+                f'<tr style="{_bg}{_bdr}">'
+                f'<td style="font-family:monospace;font-size:11px;">'
+                f'{w["start_hm"]}–{w["end_hm"]}{_cur_badge}</td>'
+                f'<td style="font-size:11px;">{w["label"]}</td>'
+                f'<td style="color:{_vc};font-weight:700;text-align:center;">{_vm}×</td>'
+                f'<td style="font-size:10px;color:#94a3b8;">{w["f0_note"]}</td>'
+                f'</tr>'
+            )
+        st.markdown(
+            f'<table class="sum-table" style="font-size:11.5px;">'
+            f'<thead><tr><th>Giờ</th><th>Cửa sổ</th><th>Vol×</th><th>Gợi ý F0</th></tr></thead>'
+            f'<tbody>{_win_rows}</tbody></table>',
+            unsafe_allow_html=True,
+        )
+        # Current time note
+        _now_vn = _dt.now().strftime("%H:%M:%S")
+        _any_cur = any(w["is_current"] for w in windows)
+        if not _any_cur:
+            st.caption(f"⏰ {_now_vn} — Ngoài giờ giao dịch HoSE (09:15–15:00)")
+        else:
+            st.caption(f"⏰ {_now_vn} VN")
+
+    with _s5_col_vol:
+        st.markdown("**📊 Biến động Garman-Klass (offline · 20 phiên)**")
+        _gk_rows = ""
+        for r in _enriched:
+            tk  = r["ticker"]
+            gk  = r.get("gk_annualized_pct")
+            gkd = r.get("gk_daily_pct")
+            atr = r.get("atr")
+            p   = r.get("price") or 1
+            atr_pct = (atr / p * 100) if atr and p > 0 else None
+            gk_col  = "#ef4444" if (gkd or 0) > 3.0 else "#f97316" if (gkd or 0) > 2.0 else "#22c55e"
+            _gk_str     = f"{gk:.1f}%"      if gk      else "–"
+            _gkd_str    = f"{gkd:.2f}%"     if gkd     else "–"
+            _atrpct_str = f"{atr_pct:.2f}%" if atr_pct else "–"
+            _gk_rows += (
+                f'<tr>'
+                f'<td><b style="color:{_T_REC_COLORS.get(r.get("t_rec_action","SKIP"), "#94a3b8")}">'
+                f'{_safe(tk)}</b></td>'
+                f'<td style="font-family:monospace;color:{gk_col};">'
+                f'{_gk_str}</td>'
+                f'<td style="font-family:monospace;color:{gk_col};">'
+                f'{_gkd_str}</td>'
+                f'<td style="font-family:monospace;color:#94a3b8;">'
+                f'{_atrpct_str}</td>'
+                f'</tr>'
+            )
+        st.markdown(
+            f'<table class="sum-table" style="font-size:12px;">'
+            f'<thead><tr><th>Mã</th><th>GK Ann.</th><th>GK Daily</th><th>ATR/P%</th></tr></thead>'
+            f'<tbody>{_gk_rows}</tbody></table>',
+            unsafe_allow_html=True,
+        )
+        st.caption("GK = Garman-Klass. GK Daily > 3% = biến động cao — mở rộng SL, giảm vị thế.")
+
+        # Intraday RV section (on-demand per ticker)
+        st.markdown("**⚡ Realized Volatility nội phiên (5-min SSI)**")
+        _rv_tk = st.selectbox(
+            "Chọn mã để tính RV nội phiên",
+            options=[r["ticker"] for r in _enriched],
+            key="opt_rv_ticker",
+        )
+        _rv_btn = st.button("🔄 Fetch Intraday RV", key="opt_rv_fetch", use_container_width=True)
+        _rv_cache_key = f"rv_{_rv_tk}_{_dt.now().strftime('%Y%m%d_%H')}"
+
+        if _rv_btn or _rv_cache_key in st.session_state:
+            if _rv_btn or _rv_cache_key not in st.session_state:
+                _rv_r = next((r for r in _enriched if r["ticker"] == _rv_tk), {})
+                _df_daily = dfs.get(_rv_tk)
+                with st.spinner(f"Đang tính RV nội phiên {_rv_tk}…"):
+                    _rv_data = compute_realized_volatility(
+                        symbol   = _rv_tk,
+                        df_daily = _df_daily,
+                    )
+                st.session_state[_rv_cache_key] = _rv_data
+            else:
+                _rv_data = st.session_state[_rv_cache_key]
+
+            rv_pct  = _rv_data.get("rv_intraday_pct")
+            gk_d    = _rv_data.get("gk_daily_pct")
+            rv_up   = _rv_data.get("rv_upper_target")
+            rv_dn   = _rv_data.get("rv_lower_target")
+            rv_src  = _rv_data.get("rv_source", "unavailable")
+            rv_note = _rv_data.get("rv_status_note", "")
+            rv_bars = _rv_data.get("rv_bars", 0)
+
+            _rv_col1, _rv_col2, _rv_col3 = st.columns(3)
+            _rv_col1.metric(
+                "Intraday RV (5-min)",
+                f"{rv_pct:.3f}%" if rv_pct else "–",
+                delta="online" if rv_src == "intraday_5min" else "offline only",
+                delta_color="normal" if rv_src == "intraday_5min" else "off",
+            )
+            _rv_col2.metric("GK Daily (offline)", f"{gk_d:.2f}%" if gk_d else "–")
+            _rv_col3.metric(
+                "Intraday Range Est.",
+                f"{rv_dn:,.0f}–{rv_up:,.0f}" if rv_up and rv_dn else "–",
+                delta=f"{rv_bars} bars",
+            )
+            st.caption(f"ℹ️ {rv_note}")
+
+    st.markdown("---")
+
+    # ──────────────────────────────────────────────────────────────────────────
+    # S6 — PER-TICKER T+ DEEP DIVE
+    # ──────────────────────────────────────────────────────────────────────────
+    st.markdown("### 📋 S6 — Chi tiết T+ từng mã")
+    for r in _enriched:
+        render_t_plus_recommendation(r)
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
 #  T+ RECOMMENDATION PAGE
 # ═══════════════════════════════════════════════════════════════════════════════
 def render_t_plus_page() -> None:
@@ -5183,7 +5792,11 @@ def main() -> None:
         render_t_plus_page()
         return
 
-    if page == "� Quản lý lệnh":
+    if page == "📈 Optimal T+":
+        render_optimal_t_plus_page()
+        return
+
+    if page == "🔄 Quản lý lệnh":
         render_active_trades_page()
         return
 
