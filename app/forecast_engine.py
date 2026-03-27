@@ -26,8 +26,22 @@ _DIR        = Path(__file__).parent
 _MODELS_DIR = _DIR / "data" / "models"
 _MODELS_DIR.mkdir(parents=True, exist_ok=True)   # auto-create on first import
 
-# In-memory LSTM model cache — avoids reloading .keras from disk on every Streamlit rerun
-_LSTM_CACHE: dict = {}
+# In-memory LSTM model cache — avoids reloading .keras from disk on every Streamlit rerun.
+# Capped at _LSTM_CACHE_MAX entries (LRU via OrderedDict) to prevent unbounded growth.
+# Each Keras model ≈ 1–5 MB; 15 entries ≈ 15–75 MB ceiling.
+from collections import OrderedDict as _OrderedDict
+_LSTM_CACHE_MAX: int = 15
+_LSTM_CACHE: _OrderedDict = _OrderedDict()
+
+
+def _lstm_cache_put(key: str, model) -> None:
+    """Insert into LRU cache, evicting the oldest entry when at capacity."""
+    _LSTM_CACHE.pop(key, None)         # remove if already present (refresh position)
+    _LSTM_CACHE[key] = model
+    while len(_LSTM_CACHE) > _LSTM_CACHE_MAX:
+        evicted, _ = _LSTM_CACHE.popitem(last=False)
+        import logging as _lg
+        _lg.getLogger(__name__).debug("LSTM cache evicted: %s (capacity=%d)", evicted, _LSTM_CACHE_MAX)
 
 # ─── Optional heavy deps with graceful fallback ───────────────────────────────
 try:
@@ -674,7 +688,7 @@ def train_lstm_model(
 
         _MODELS_DIR.mkdir(parents=True, exist_ok=True)
         model.save(str(model_path))
-        _LSTM_CACHE[cache_key] = model
+        _lstm_cache_put(cache_key, model)
 
         # Attach training metadata as lightweight attributes for UI display
         model._train_epochs   = stopped_epoch   # type: ignore[attr-defined]
@@ -715,7 +729,7 @@ def _lstm_inference(
     if model is None and model_path.exists():
         try:
             model = keras.models.load_model(str(model_path), compile=False)
-            _LSTM_CACHE[cache_key] = model
+            _lstm_cache_put(cache_key, model)
         except Exception:
             pass
 

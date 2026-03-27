@@ -172,13 +172,28 @@ def filter_canslim(financials: dict) -> dict:
             elif eps_growth >= 0.15: score_a = 20
             elif eps_growth >= 0.05: score_a = 10
 
-        # Score: L criterion (0-20) — low (healthy) P/E is a leadership proxy
-        # For VN: P/E 8-16 = reasonable leader; >25 = extended; <8 = value trap risk
+        # Score: L criterion (0-20) — price momentum as RS Rating proxy
+        # VN adaptation: Full-universe RS Rating requires real-time universe data
+        # unavailable in VN. Proxy: stock's own 6m/3m price return.
+        # Rationale: price leaders (FPT, VHM, VIC) exhibit strong momentum
+        # regardless of P/E level — P/E-based scoring incorrectly penalised them.
+        # Bands calibrated to VN market: 6m >30% = clear leader; <0% = laggard.
         score_l = 0
-        if 8 <= pe <= 16:   score_l = 20
-        elif 16 < pe <= 22: score_l = 12
-        elif 22 < pe <= 28: score_l = 6
-        elif pe > 0:        score_l = 0
+        p6m = financials.get("price_6m_return")
+        p3m = financials.get("price_3m_return")
+        if p6m is not None:
+            if   p6m >= 0.30:  score_l = 20   # ≥30% 6m = clear price leader
+            elif p6m >= 0.15:  score_l = 14   # 15–30% = moderate leader
+            elif p6m >= 0.00:  score_l = 8    # 0–15% = keeping pace
+            # < 0% = underperformer = 0 pts
+        elif p3m is not None:                  # 3m fallback
+            if   p3m >= 0.15:  score_l = 20
+            elif p3m >= 0.07:  score_l = 14
+            elif p3m >= 0.00:  score_l = 8
+        else:
+            # No momentum data — P/E quality proxy (neutral, reduced weight)
+            if 8 <= pe <= 22:  score_l = 10
+            elif pe > 0:       score_l = 5
 
         # Penalty: high leverage reduces quality
         penalty = min(10, de * 2) if de > 2.0 else 0

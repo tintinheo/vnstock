@@ -93,6 +93,18 @@ _AUDIT_DIR = _os_.path.join(_os_.path.dirname(_os_.path.abspath(__file__)),
                             "data", "Profiler")
 _os_.makedirs(_AUDIT_DIR, exist_ok=True)
 
+# ─── DuckDB persistence layer (optional — graceful no-op when unavailable) ───
+try:
+    from db_cache import get_ohlcv as _db_get_ohlcv, put_ohlcv as _db_put_ohlcv, \
+        put_scan_result as _db_put_scan, append_signal_history as _db_append_sig
+    _DB_CACHE_OK = True
+except Exception:
+    _DB_CACHE_OK = False
+    def _db_get_ohlcv(*a, **kw): return None
+    def _db_put_ohlcv(*a, **kw): pass
+    def _db_put_scan(*a, **kw):  pass
+    def _db_append_sig(*a, **kw): pass
+
 # ─── HTTP SESSION (shared for OHLCV fetches) ─────────────────────────────────
 _HTTP = requests.Session()
 _HTTP.headers.update({
@@ -103,11 +115,21 @@ _HTTP.headers.update({
 })
 
 # ─── SSI iboard-query headers (confirmed from HAR log 2026-03-14) ────────────
+try:
+    from qp_config import SSI_DEVICE_ID as _SSI_DEVICE_ID, VN30_TICKERS as _VN30_TICKERS
+except ImportError:
+    _SSI_DEVICE_ID = "6212D3CF-D972-4CFF-8B3D-67EF96A2FD89"
+    _VN30_TICKERS = [
+        "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
+        "MBB", "MSN", "MWG", "NVL", "PDR", "PLX", "POW", "SAB", "SSI", "STB",
+        "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+    ]
+
 _SSI_HDR = {
     "User-Agent":      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/145.0.0.0 Safari/537.36",
     "Origin":          "https://iboard.ssi.com.vn",
     "Referer":         "https://iboard.ssi.com.vn/",
-    "device-id":       "6212D3CF-D972-4CFF-8B3D-67EF96A2FD89",
+    "device-id":       _SSI_DEVICE_ID,
     "Accept-Language": "vi",
     "Accept":          "application/json, text/plain, */*",
 }
@@ -160,23 +182,32 @@ def _fetch_dnse(symbol: str, days: int = HISTORY_DAYS) -> pd.DataFrame:
         f"https://api.dnse.com.vn/chart-api/v2/ohlcs/stock"
         f"?symbol={symbol}&resolution=1D&from={from_ts}&to={to_ts}"
     )
-    try:
-        r = _HTTP.get(url, timeout=TIMEOUT)
-        r.raise_for_status()
-        raw = r.json()
-        if isinstance(raw, dict):
-            df = _parse_udf(raw, source=f"DNSE({symbol})")
-            if not df.empty:
-                _log.info("DNSE ✓ %s — %d bars", symbol, len(df))
-            else:
-                _log.debug("DNSE %s — empty response", symbol)
-            return df
-    except requests.exceptions.Timeout:
-        _log.warning("DNSE timeout %s", symbol)
-    except requests.exceptions.HTTPError as exc:
-        _log.warning("DNSE HTTP %s %s", symbol, exc)
-    except Exception as exc:
-        _log.debug("DNSE %s — %s", symbol, exc)
+    for _attempt in range(2):  # 1 retry on 429 rate-limit
+        try:
+            r = _HTTP.get(url, timeout=TIMEOUT)
+            if r.status_code == 429:
+                _log.warning("DNSE 429 rate-limit %s — retrying after 1s", symbol)
+                time.sleep(1.0)
+                continue
+            r.raise_for_status()
+            raw = r.json()
+            if isinstance(raw, dict):
+                df = _parse_udf(raw, source=f"DNSE({symbol})")
+                if not df.empty:
+                    _log.info("DNSE ✓ %s — %d bars", symbol, len(df))
+                else:
+                    _log.debug("DNSE %s — empty response", symbol)
+                return df
+            break
+        except requests.exceptions.Timeout:
+            _log.warning("DNSE timeout %s", symbol)
+            break
+        except requests.exceptions.HTTPError as exc:
+            _log.warning("DNSE HTTP %s %s", symbol, exc)
+            break
+        except Exception as exc:
+            _log.debug("DNSE %s — %s", symbol, exc)
+            break
     return pd.DataFrame()
 
 
@@ -213,56 +244,62 @@ def _fetch_ssi(symbol: str, days: int = HISTORY_DAYS) -> pd.DataFrame:
         ),
     ]
     for url, hdrs in endpoints:
-        try:
-            r = requests.get(url, headers=hdrs, timeout=TIMEOUT)
-            r.raise_for_status()
-            raw = r.json()
-            if not isinstance(raw, dict):
-                continue
-            inner = raw.get("data", raw)
-            # Format: list of OHLCV dicts
-            if isinstance(inner, list) and inner:
-                rows = []
-                for it in inner:
-                    try:
-                        ts = it.get("time", it.get("t", it.get("date")))
-                        cl = it.get("close", it.get("c", it.get("Close")))
-                        if ts is None or cl is None:
+        for _attempt in range(2):  # 1 retry on 429 rate-limit
+            try:
+                r = requests.get(url, headers=hdrs, timeout=TIMEOUT)
+                if r.status_code == 429:
+                    _log.warning("SSI 429 rate-limit %s — retrying after 1s", symbol)
+                    time.sleep(1.0)
+                    continue
+                r.raise_for_status()
+                raw = r.json()
+                if not isinstance(raw, dict):
+                    break
+                inner = raw.get("data", raw)
+                # Format: list of OHLCV dicts
+                if isinstance(inner, list) and inner:
+                    rows = []
+                    for it in inner:
+                        try:
+                            ts = it.get("time", it.get("t", it.get("date")))
+                            cl = it.get("close", it.get("c", it.get("Close")))
+                            if ts is None or cl is None:
+                                continue
+                            dt = (
+                                pd.Timestamp(ts, unit="s")
+                                if isinstance(ts, (int, float))
+                                else pd.Timestamp(ts)
+                            )
+                            rows.append({
+                                "Date":   dt,
+                                "Open":   float(it.get("open",   it.get("o",  cl)) or cl),
+                                "High":   float(it.get("high",   it.get("h",  cl)) or cl),
+                                "Low":    float(it.get("low",    it.get("l",  cl)) or cl),
+                                "Close":  float(cl),
+                                "Volume": float(it.get("volume", it.get("v",   0)) or 0),
+                            })
+                        except Exception:
                             continue
-                        dt = (
-                            pd.Timestamp(ts, unit="s")
-                            if isinstance(ts, (int, float))
-                            else pd.Timestamp(ts)
+                    if rows:
+                        df = (
+                            pd.DataFrame(rows)
+                            .set_index("Date")
+                            .sort_index()
                         )
-                        rows.append({
-                            "Date":   dt,
-                            "Open":   float(it.get("open",   it.get("o",  cl)) or cl),
-                            "High":   float(it.get("high",   it.get("h",  cl)) or cl),
-                            "Low":    float(it.get("low",    it.get("l",  cl)) or cl),
-                            "Close":  float(cl),
-                            "Volume": float(it.get("volume", it.get("v",   0)) or 0),
-                        })
-                    except Exception:
-                        continue
-                if rows:
-                    df = (
-                        pd.DataFrame(rows)
-                        .set_index("Date")
-                        .sort_index()
-                    )
-                    df = df[~df.index.duplicated(keep="last")]
-                    if not df.empty and df["Close"].dropna().median() < 1000:
-                        for c in ["Open", "High", "Low", "Close"]:
-                            df[c] *= 1000
+                        df = df[~df.index.duplicated(keep="last")]
+                        if not df.empty and df["Close"].dropna().median() < 1000:
+                            for c in ["Open", "High", "Low", "Close"]:
+                                df[c] *= 1000
+                        if len(df) >= 5:
+                            return df
+                # Format: UDF arrays
+                elif isinstance(inner, dict):
+                    df = _parse_udf(inner, source=f"SSI({symbol})")
                     if len(df) >= 5:
                         return df
-            # Format: UDF arrays
-            elif isinstance(inner, dict):
-                df = _parse_udf(inner, source=f"SSI({symbol})")
-                if len(df) >= 5:
-                    return df
-        except Exception:
-            continue
+                break  # success path — no retry needed
+            except Exception:
+                break  # non-retryable error for this endpoint
     return pd.DataFrame()
 
 
@@ -381,23 +418,32 @@ def _fetch_cafef(symbol: str, days: int = HISTORY_DAYS) -> pd.DataFrame:
 
 
 def fetch_ohlcv(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True):
-    """Cascade: DNSE → SSI → CafeF. Returns (df, source_name)."""
+    """Cascade: DB cache → DNSE → SSI → CafeF. Returns (df, source_name)."""
+    # ① Check DuckDB first (avoids redundant API calls for historical bars)
+    cached_df = _db_get_ohlcv(symbol, days)
+    if cached_df is not None and len(cached_df) >= max(10, days // 2):
+        if verbose: print(f"  🗄️  DB ({len(cached_df)} nến)")
+        return cached_df, "DB"
+
     if verbose: print(f"  📡 DNSE ...", end="", flush=True)
     df = _fetch_dnse(symbol, days)
     if not df.empty:
         if verbose: print(f" ✓ ({len(df)} nến)")
+        _db_put_ohlcv(symbol, df)
         return df, "DNSE"
 
     if verbose: print(f" ✗  →  SSI ...", end="", flush=True)
     df = _fetch_ssi(symbol, days)
     if not df.empty:
         if verbose: print(f" ✓ ({len(df)} nến)")
+        _db_put_ohlcv(symbol, df)
         return df, "SSI"
 
     if verbose: print(f" ✗  →  CafeF ...", end="", flush=True)
     df = _fetch_cafef(symbol, days)
     if not df.empty:
         if verbose: print(f" ✓ ({len(df)} nến)")
+        _db_put_ohlcv(symbol, df)
         return df, "CafeF"
 
     if verbose: print(f" ✗  KHÔNG LẤY ĐƯỢC DỮ LIỆU")
@@ -787,12 +833,11 @@ def detect_vwap_divergence(df: pd.DataFrame) -> str:
         typical = (high + low + close) / 3.0
         pv      = typical * volume
         n_bars  = len(close)
-        vwap_series = np.zeros(n_bars)
-        for i in range(n_bars):
-            start_i = max(0, i - 19)
-            sub_pv  = pv[start_i: i + 1]
-            sub_vol = volume[start_i: i + 1]
-            vwap_series[i] = sub_pv.sum() / max(sub_vol.sum(), 1)
+        # O(n) rolling 20-bar VWAP — replaces previous O(n²) loop
+        _pv_s        = pd.Series(pv)
+        _vol_s       = pd.Series(volume).clip(lower=1)
+        vwap_series  = (_pv_s.rolling(20, min_periods=1).sum() /
+                        _vol_s.rolling(20, min_periods=1).sum()).values
 
         def _swing_lows(arr, n):
             """Indices of swing lows within arr (excluding edges)."""
@@ -1035,24 +1080,28 @@ def _get_vnindex_df(max_age_seconds: float = 1800.0) -> pd.DataFrame:
     return _VNINDEX_CACHE["df"] if _VNINDEX_CACHE["df"] is not None else pd.DataFrame()
 
 
-def compute_rolling_beta_5d(df: pd.DataFrame, market_df: pd.DataFrame = None) -> float:
+def compute_rolling_beta_20d(df: pd.DataFrame, market_df: pd.DataFrame = None) -> float:
     """
-    VN-Swing Alpha Improvement: 5-day rolling Beta vs VNINDEX.
-    Beta = Cov(stock_5d_returns, market_5d_returns) / Var(market_5d_returns).
+    20-day rolling Beta vs VNINDEX.
+    Beta = Cov(stock_20d_returns, market_20d_returns) / Var(market_20d_returns).
+
+    Uses up to the last 20 trading days (≈ 4 calendar weeks), which gives
+    statistically stable estimates vs the previous 5-day window that was
+    dominated by single-session noise on HOSE.
 
     Interpretation:
         >1.2  — high-beta: amplifies market swings, crash-to-recovery candidate
         0.8–1.2 — neutral
         <0.8  — defensive / low-volatility stock
 
-    Falls back to ATR 5-day ratio proxy when VNINDEX data is unavailable.
+    Returns 1.0 (neutral) when VNINDEX data is unavailable.
     """
     try:
         if df is None or len(df) < 6:
             return 1.0
-        stock_rets = df["Close"].pct_change().dropna().iloc[-5:].values
+        stock_rets = df["Close"].pct_change().dropna().iloc[-20:].values
         if market_df is not None and not market_df.empty and len(market_df) >= 6:
-            market_rets = market_df["Close"].pct_change().dropna().iloc[-5:].values
+            market_rets = market_df["Close"].pct_change().dropna().iloc[-20:].values
             n = min(len(stock_rets), len(market_rets))
             if n >= 3:
                 sr = stock_rets[-n:]
@@ -1061,12 +1110,9 @@ def compute_rolling_beta_5d(df: pd.DataFrame, market_df: pd.DataFrame = None) ->
                 if var_m > 1e-12:
                     cov_mat = np.cov(sr, mr, ddof=0)
                     return float(round(cov_mat[0, 1] / var_m, 3))
-        # Fallback: ATR 5-day vs ATR full-period ratio (no external data needed)
-        if "ATR" in df.columns and len(df) >= 20:
-            atr_5d  = float(df["ATR"].iloc[-5:].mean())
-            atr_all = float(df["ATR"].mean())
-            if atr_all > 1e-9:
-                return float(round(atr_5d / atr_all, 3))
+        # No VNINDEX data available — return neutral beta (1.0).
+        # NOTE: ATR ratio is NOT a valid beta proxy (lacks market covariance)
+        # and was removed to prevent misleading position-sizing decisions.
     except Exception:
         pass
     return 1.0
@@ -1187,12 +1233,23 @@ def compute_t25_score(
     elif regime == "BEAR_TREND": w_m, w_s, w_c = 0.40, 0.30, 0.30
     else:                        w_m, w_s, w_c = 0.40, 0.35, 0.25
     t25 = round(w_m * (A / 20 * 100) + w_s * (B / 20 * 100) + w_c * (C / 10 * 100), 1)
-    _bear_adj    = 1.1 if regime == "BEAR_TREND" else 1.0
     _avoid_thresh = 28 if regime == "SIDEWAYS" else 32
-    if   t25 >= 68 * _bear_adj:    t25_sig = "T25_BUY"
-    elif t25 >= 55 * _bear_adj:    t25_sig = "T25_WATCH"
-    elif t25 <= _avoid_thresh:     t25_sig = "T25_AVOID"
-    else:                          t25_sig = "T25_NEUTRAL"
+    if regime == "BEAR_TREND":
+        # BEAR_TREND: tighten BUY/WATCH thresholds AND add a mid-tier WATCH
+        # zone to close the 28.5-pt gap between AVOID(≤32) and old WATCH(≥60.5).
+        # New bands:  BUY ≥74.8 | WATCH ≥46 | NEUTRAL [33,45] | AVOID ≤32
+        # Rationale: score 46–60 in a bear market = genuine oversold setup
+        # (strong structure + momentum recover) → worth watching, not ignoring.
+        if   t25 >= 74.8:  t25_sig = "T25_BUY"
+        elif t25 >= 46.0:  t25_sig = "T25_WATCH"
+        elif t25 <= 32:    t25_sig = "T25_AVOID"
+        else:              t25_sig = "T25_NEUTRAL"
+    else:
+        _bear_adj = 1.0
+        if   t25 >= 68:              t25_sig = "T25_BUY"
+        elif t25 >= 55:              t25_sig = "T25_WATCH"
+        elif t25 <= _avoid_thresh:   t25_sig = "T25_AVOID"
+        else:                        t25_sig = "T25_NEUTRAL"
     return {
         "t25_score":        t25,
         "t25_signal":       t25_sig,
@@ -1700,11 +1757,7 @@ def fetch_upcoming_dividend(ticker: str) -> dict:
 
 
 # ─── F7: Market Breadth (VN30 Advance / Decline) ─────────────────────────────
-_VN30_TICKERS = [
-    "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
-    "MBB", "MSN", "MWG", "NVL", "PDR", "PLX", "POW", "SAB", "SSI", "STB",
-    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
-]
+# _VN30_TICKERS is imported from qp_config (single source of truth — update there after HOSE rebalance)
 _BREADTH_CACHE: dict = {"data": None, "ts": 0.0}
 _BREADTH_CACHE_TTL = 300  # 5 minutes
 
@@ -1843,9 +1896,9 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
     _bt7    = backtest_ticker(df, forward_days=7,  key_prefix="bt7")
     _bt10   = backtest_ticker(df, forward_days=10, key_prefix="bt10")
 
-    # ③c VN-Swing Alpha Improvement: Rolling 5-day Beta vs VNINDEX ────────────
-    _vnidx_df        = _get_vnindex_df()  # cached, silent
-    _rolling_beta_5d = compute_rolling_beta_5d(df, _vnidx_df if not _vnidx_df.empty else None)
+    # ③c Rolling 20-day Beta vs VNINDEX (4-week window, statistically stable) ──
+    _vnidx_df         = _get_vnindex_df()  # cached, silent
+    _rolling_beta_20d = compute_rolling_beta_20d(df, _vnidx_df if not _vnidx_df.empty else None)
 
     # ④ Extract latest values ─────────────────────────────────────────────────
     price    = rt.get("price")    or _last(df, "Close")
@@ -2186,13 +2239,20 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
             _breakout = {"is_breakout": False, "pivot_price": None, "vol_ratio": None,
                          "false_breakout": False, "base_depth_pct": None}
         try:
-            # Build a lightweight financials dict from fields already in result
+            # Build a lightweight financials dict from fields already in result.
+            # L criterion uses 3m/6m price momentum as RS proxy (see screening.py).
+            # Full-universe RS Rating is unavailable in VN real-time data.
+            _price_now = float(df["Close"].iloc[-1]) if not df.empty else 0.0
+            _price_3m  = float(df["Close"].iloc[-63])  if len(df) >= 63  else _price_now
+            _price_6m  = float(df["Close"].iloc[-126]) if len(df) >= 126 else _price_now
             _fin_proxy = {
-                "roe":        None,   # fetched below if available
-                "pe":         None,
-                "eps":        None,
-                "eps_prev":   None,
-                "debt_equity": None,
+                "roe":             None,   # fetched below if available
+                "pe":              None,
+                "eps":             None,
+                "eps_prev":        None,
+                "debt_equity":     None,
+                "price_3m_return": (_price_now / _price_3m - 1.0) if _price_3m > 0 else None,
+                "price_6m_return": (_price_now / _price_6m - 1.0) if _price_6m > 0 else None,
             }
             _canslim = _filter_canslim(_fin_proxy)
         except Exception:
@@ -2365,7 +2425,7 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
             else "NONE"
         ),
         "high_vol":           _regime.get("high_vol", False),
-        "rolling_beta_5d":    round(_rolling_beta_5d, 3),
+        "rolling_beta_20d":    round(_rolling_beta_20d, 3),
         # ── F2: Price Structure ───────────────────────────────────────────────
         "is_hh":              _struct.get("is_hh", False),
         "is_hl":              _struct.get("is_hl", False),
@@ -2433,6 +2493,11 @@ def analyse_ticker(symbol: str, days: int = HISTORY_DAYS, verbose: bool = True, 
         "gk_lower_1sd":       _gk.get("gk_lower_1sd"),
         "algo_ref":           "VN-Swing Alpha",
     }
+
+    # Persist to DuckDB (non-blocking best-effort)
+    _db_put_scan(symbol, result)
+    _db_append_sig(symbol, result)
+
     if return_df:
         return result, df
     return result

@@ -3,8 +3,8 @@ Unit tests for VN-Swing Alpha Improvement features:
   - calculate_fractional_kelly (portfolio_engine)
   - T25ExitManager Kelly mode + kelly_mode in _out()
   - calculate_csad (Quant_Profiler)
-  - compute_rolling_beta_5d (Quant_Profiler)
-  - rolling_beta_5d field in analyse_ticker result dict
+  - compute_rolling_beta_20d (Quant_Profiler)
+  - rolling_beta_20d field in analyse_ticker result dict
 """
 import sys, os
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -80,13 +80,31 @@ def test_kelly_mode_in_daily_update_output():
     assert out["kelly_mode"] in ("Half-Kelly", "Quarter-Kelly"), f"Invalid kelly_mode: {out['kelly_mode']}"
 
 def test_rec_size_clamped():
-    """recommended_size_pct always in [5, 25]."""
+    """
+    recommended_size_pct must be in [0, 25].
+    - Negative-expectation setups (low win_prob) → 0% (don't trade).
+    - Positive-expectation setups (healthy win_prob) → (0, 25]%.
+    The old floor of 5% was removed (LOGIC-02 fix) because it forced
+    position sizing into trades with negative Kelly expectation.
+    """
     for wp in [0.10, 0.40, 0.60, 0.80, 0.99]:
         for atr in [10, 500, 5000]:
             m = T25ExitManager(20000, atr, wp)
-            assert 5.0 <= m.recommended_size_pct <= 25.0, (
+            assert 0.0 <= m.recommended_size_pct <= 25.0, (
                 f"size_pct={m.recommended_size_pct} out of bounds for wp={wp}, atr={atr}"
             )
+    # Negative-expectation win rates should give 0% (do not force a position)
+    for wp in [0.10, 0.40]:
+        m = T25ExitManager(20000, 500, wp)
+        assert m.recommended_size_pct == 0.0, (
+            f"Negative-expectation wp={wp} should return 0%, got {m.recommended_size_pct}%"
+        )
+    # Positive-expectation win rates should give a positive position size
+    for wp in [0.60, 0.80, 0.99]:
+        m = T25ExitManager(20000, 500, wp)
+        assert m.recommended_size_pct > 0.0, (
+            f"Positive-expectation wp={wp} should return >0%, got {m.recommended_size_pct}%"
+        )
 
 print("T2: T25ExitManager")
 test_kelly_mode_half()
@@ -147,7 +165,7 @@ print("  PASS (7/7)")
 # ─────────────────────────────────────────────────────────────────────────────
 # Test 4: compute_rolling_beta_5d
 # ─────────────────────────────────────────────────────────────────────────────
-from Quant_Profiler import compute_rolling_beta_5d, calculate_indicators
+from Quant_Profiler import compute_rolling_beta_20d, calculate_indicators
 
 def _make_df(closes, n=10):
     """Build minimal OHLCV DataFrame. Uses lists to avoid pd.Series index-alignment issues."""
@@ -166,7 +184,7 @@ def test_beta_identical():
     closes = [100, 102, 101, 104, 103, 106, 105, 108, 107, 110]
     df_s = _make_df(closes)
     df_m = _make_df(closes)
-    b = compute_rolling_beta_5d(df_s, df_m)
+    b = compute_rolling_beta_20d(df_s, df_m)
     assert abs(b - 1.0) < 1e-6, f"Expected beta=1.0, got {b}"
 
 def test_beta_double():
@@ -177,7 +195,7 @@ def test_beta_double():
     stk = np.concatenate([[100.0], 100.0 * np.cumprod(1 + stk_rets)])
     df_s = _make_df(stk.tolist())
     df_m = _make_df(mkt.tolist())
-    b = compute_rolling_beta_5d(df_s, df_m)
+    b = compute_rolling_beta_20d(df_s, df_m)
     assert abs(b - 2.0) < 0.05, f"Expected beta~2.0, got {b}"
 
 def test_beta_fallback_no_market():
@@ -185,17 +203,17 @@ def test_beta_fallback_no_market():
     closes = [float(100 + i + (i % 3 - 1)) for i in range(30)]
     df = _make_df(closes, n=30)
     df = calculate_indicators(df)
-    b = compute_rolling_beta_5d(df, None)
+    b = compute_rolling_beta_20d(df, None)
     assert b > 0, f"Fallback beta should be positive, got {b}"
 
 def test_beta_empty_df():
     """Empty input → returns 1.0."""
-    assert compute_rolling_beta_5d(pd.DataFrame(), None) == 1.0
+    assert compute_rolling_beta_20d(pd.DataFrame(), None) == 1.0
 
 def test_beta_too_short():
     """Fewer than 6 bars → returns 1.0."""
     df = _make_df([100, 101, 102, 103, 104], n=5)
-    assert compute_rolling_beta_5d(df, None) == 1.0
+    assert compute_rolling_beta_20d(df, None) == 1.0
 
 def test_beta_market_zero_variance():
     """Market has zero variance (flat) → fallback, no division by zero."""
@@ -203,10 +221,10 @@ def test_beta_market_zero_variance():
     flat_c  = [100] * 10
     df_s = _make_df(stock_c)
     df_m = _make_df(flat_c)
-    b = compute_rolling_beta_5d(df_s, df_m)  # var_m = 0 → should not crash
+    b = compute_rolling_beta_20d(df_s, df_m)  # var_m = 0 → should not crash
     assert isinstance(b, float), f"Should return float, got {type(b)}"
 
-print("T4: compute_rolling_beta_5d")
+print("T4: compute_rolling_beta_20d")
 test_beta_identical()
 test_beta_double()
 test_beta_fallback_no_market()
@@ -217,16 +235,16 @@ test_beta_zero_variance()
 print("  PASS (6/6)")
 
 # ─────────────────────────────────────────────────────────────────────────────
-# Test 5: rolling_beta_5d in analyse_ticker() result dict
+# Test 5: rolling_beta_20d in analyse_ticker() result dict
 # ─────────────────────────────────────────────────────────────────────────────
 from Quant_Profiler import analyse_ticker
 
-print("T5: analyse_ticker result dict contains rolling_beta_5d")
+print("T5: analyse_ticker result dict contains rolling_beta_20d")
 res = analyse_ticker("HPG", days=50, verbose=False)
-assert "rolling_beta_5d" in res, f"rolling_beta_5d missing. Keys: {list(res.keys())[:10]}"
-assert isinstance(res["rolling_beta_5d"], float), f"Wrong type: {type(res['rolling_beta_5d'])}"
-assert res["rolling_beta_5d"] > 0, f"Beta must be positive, got {res['rolling_beta_5d']}"
-print(f"  rolling_beta_5d = {res['rolling_beta_5d']}  (HPG, 50d)")
+assert "rolling_beta_20d" in res, f"rolling_beta_20d missing. Keys: {list(res.keys())[:10]}"
+assert isinstance(res["rolling_beta_20d"], float), f"Wrong type: {type(res['rolling_beta_20d'])}"
+assert res["rolling_beta_20d"] > 0, f"Beta must be positive, got {res['rolling_beta_20d']}"
+print(f"  rolling_beta_20d = {res['rolling_beta_20d']}  (HPG, 50d)")
 print("  PASS (1/1)")
 
 # ─────────────────────────────────────────────────────────────────────────────

@@ -34,6 +34,15 @@ import requests, logging, logging.handlers, os, json, warnings, time, io, re
 
 warnings.filterwarnings("ignore")
 
+# ── DuckDB persistence layer (optional — graceful no-op when unavailable) ──
+try:
+    from db_cache import get_ohlcv as _db_get_ohlcv, put_ohlcv as _db_put_ohlcv
+    _DB_CACHE_OK = True
+except Exception:
+    _DB_CACHE_OK = False
+    def _db_get_ohlcv(*a, **kw): return None
+    def _db_put_ohlcv(*a, **kw): pass
+
 # ── Optional ML/Stats libs
 try:
     import yfinance as yf
@@ -1652,7 +1661,8 @@ def _fetch_yfinance(symbol: str, days: int = 730) -> pd.DataFrame:
 
 def download_data(symbol: str, days: int = 730, min_rows: int = 40):
     """
-    Data pipeline v17.0: 7-source cascade
+    Data pipeline v17.1: DB cache → 7-source API cascade
+    0. DuckDB local cache  (avoids redundant API calls for historical bars)
     1. DNSE Entrade     (api.dnse.com.vn/chart-api/v2  — FIX-16 confirmed working)
     2. SSI iboard-api   (iboard-api.ssi.com.vn/statistics/charts/history)
     3. CafeF multi      (historial + AJAX + HisDanhMuc + LichSuGia HTML)
@@ -1669,6 +1679,11 @@ def download_data(symbol: str, days: int = 730, min_rows: int = 40):
     if not _re.fullmatch(r'[A-Z0-9]{2,10}', symbol):
         return pd.DataFrame(), "Invalid", f"Invalid ticker '{symbol}': must be 2-10 uppercase letters/digits."
     error_detail = {}
+
+    # ① DB cache read-through (historical bars are permanent; today re-fetched after 30 min)
+    cached_df = _db_get_ohlcv(symbol, days)
+    if cached_df is not None and len(cached_df) >= min_rows:
+        return cached_df, "DB", None
 
     # FIX-20: per-source min rows; FIX-21: skip VNDirect for UPCOM
     _SRC_MIN = {
@@ -1696,6 +1711,7 @@ def download_data(symbol: str, days: int = 730, min_rows: int = 40):
             src_min = _SRC_MIN.get(src_name, min_rows)
             if len(df) >= src_min:
                 _log.info(f"✅ {src_name} {symbol}: {len(df)} rows")
+                _db_put_ohlcv(symbol, df)   # write-back to DB cache
                 return df, src_name, None
             error_detail[src_name] = f"{len(df)} rows"
         except Exception as e:
@@ -2664,7 +2680,7 @@ def forecast_sklearn(prices, n_days, model_type="SVR"):
     except Exception as e:
         _log.warning(f"forecast_sklearn[{model_type}]: {e}"); return None
 
-@st.cache_data
+@st.cache_data(ttl=3600, max_entries=20)  # cap: 20 (symbol,horizon) combos × ~20 MB = ~400 MB limit
 def run_prophet_forecast(_df, n_days, symbol):
     if not PROPHET_AVAILABLE: raise ImportError("pip install prophet")
     dc=clean_data(_df.copy())
@@ -10457,6 +10473,7 @@ def render_top_forecast_tab():
             }
             if fc_log_key not in st.session_state: st.session_state[fc_log_key] = []
             st.session_state[fc_log_key].insert(0, log_entry)
+            st.session_state[fc_log_key] = st.session_state[fc_log_key][:100]  # cap at 100 entries
             st.success("✅ " + (f"{len(gainers)} mã tăng, {len(decliners)} mã giảm" if is_vi
                                   else f"{len(gainers)} gainers, {len(decliners)} decliners"))
 

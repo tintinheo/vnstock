@@ -28,6 +28,7 @@ from qp_config import (
     VWAP_INTRADAY_RESOLUTION,
     T25_WINDOW_START,
     T25_WINDOW_END,
+    SSI_DEVICE_ID as _SSI_DEVICE_ID,
 )
 
 _log = logging.getLogger("microstructure")
@@ -39,7 +40,7 @@ _SSI_HDR = {
     "Accept-Language": "vi",
     "Referer":         "https://iboard.ssi.com.vn/",
     "Origin":          "https://iboard.ssi.com.vn",
-    "device-id":       "0116B7B1-976D-437A-AA2C-C72FC3E6F956",
+    "device-id":       _SSI_DEVICE_ID,
 }
 
 # ── Micro-price ───────────────────────────────────────────────────────────────
@@ -272,9 +273,9 @@ def compute_vwap_intraday(
         vwap_last = float(df["vwap"].iloc[-1])
         price_now = float(df["close"].iloc[-1])
 
-        # T+2.5 position: use bar closest to 13:00
+        # T+2.5 position: use bar closest to 13:00 (window matches qp_config T25_WINDOW)
         t25_pos = "AT"
-        t25_bar = df.between_time("12:55", "13:05")
+        t25_bar = df.between_time("12:45", "13:15")
         if not t25_bar.empty:
             vwap_at_t25 = float(t25_bar["vwap"].iloc[-1])
             price_at_t25 = float(t25_bar["close"].iloc[-1])

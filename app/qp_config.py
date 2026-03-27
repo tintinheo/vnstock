@@ -29,3 +29,19 @@ VWAP_INTRADAY_RESOLUTION: str   = "5"  # SSI chart resolution for intraday VWAP
 # The critical 13:00 session: T+0 asset release creates predictable volatility.
 T25_WINDOW_START        : tuple = (12, 45)   # 12:45 local
 T25_WINDOW_END          : tuple = (13, 15)   # 13:15 local
+
+# ── SSI API device-id (shared across all modules) ────────────────────────────
+# Single source of truth — rotate here when SSI blocks the UUID.
+# To override at runtime set env var: SSI_DEVICE_ID=<new-uuid>
+import os as _os
+SSI_DEVICE_ID: str = _os.environ.get(
+    "SSI_DEVICE_ID", "6212D3CF-D972-4CFF-8B3D-67EF96A2FD89"
+)
+
+# ── VN30 component tickers ────────────────────────────────────────────────────
+# HOSE rebalances VN30 twice per year (Jan & Jul). Update this list after each rebalance.
+VN30_TICKERS: list = [
+    "ACB", "BCM", "BID", "BVH", "CTG", "FPT", "GAS", "GVR", "HDB", "HPG",
+    "MBB", "MSN", "MWG", "NVL", "PDR", "PLX", "POW", "SAB", "SSI", "STB",
+    "TCB", "TPB", "VCB", "VHM", "VIB", "VIC", "VJC", "VNM", "VPB", "VRE",
+]

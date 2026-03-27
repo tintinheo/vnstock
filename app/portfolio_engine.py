@@ -29,8 +29,9 @@ _VN_HOLIDAYS_2025_2026 = {
     date(2025, 1, 1),   # Tết Dương lịch
     date(2025, 1, 27),  date(2025, 1, 28),  date(2025, 1, 29),
     date(2025, 1, 30),  date(2025, 1, 31),  # Tết Nguyên Đán 2025
+    date(2025, 4, 7),   # Giỗ Tổ Hùng Vương 2025 (10/3 âm lịch)
     date(2025, 4, 30),  date(2025, 5, 1),   # 30/4 + 1/5
-    date(2025, 9, 1),   date(2025, 9, 2),   # Giỗ Tổ Hùng Vương + Quốc khánh
+    date(2025, 9, 2),   # Quốc khánh
     date(2026, 1, 1),   # Tết Dương lịch
     date(2026, 1, 26),  date(2026, 1, 27),  date(2026, 1, 28),
     date(2026, 1, 29),  date(2026, 1, 30),  # Tết Nguyên Đán 2026
@@ -193,6 +194,13 @@ def is_vn_trading_day(d: date) -> bool:
     """Return True if d is a Vietnam Stock Exchange trading day."""
     if d.weekday() >= 5:   # Saturday=5, Sunday=6
         return False
+    if d.year > 2026:
+        import warnings as _w
+        _w.warn(
+            f"VN holiday calendar only covers up to 2026; {d} may be incorrect. "
+            "Update _VN_HOLIDAYS_2025_2026 in portfolio_engine.py.",
+            stacklevel=2,
+        )
     if d in _VN_HOLIDAYS_2025_2026:
         return False
     return True
@@ -321,7 +329,7 @@ class T25ExitManager:
         glr        = avg_win / max(avg_loss, 1e-9)       # gain/loss ratio
         market_vol = self.atr / max(self.entry, 1e-9)    # daily vol proxy
         kelly_f    = calculate_fractional_kelly(self.win_rate, glr, market_vol)
-        self.recommended_size_pct = round(max(5.0, min(25.0, kelly_f * 100)), 1)
+        self.recommended_size_pct = round(max(0.0, min(25.0, kelly_f * 100)), 1)
         self.kelly_mode = "Quarter-Kelly" if market_vol > 0.03 else "Half-Kelly"
 
     def daily_update(
@@ -360,6 +368,8 @@ class T25ExitManager:
                 return self._out("HOLD", "Profitable on T+2, extending to T+3 — recommend by VN-Swing Alpha")
             if p < self.entry * 0.99:
                 return self._out("SELL_ALL", "Below entry on T+2 — exit before T+3 gap risk (VN-Swing Alpha)")
+            # Near-breakeven [0.99×, 1.01×] on T+2 in BEAR or flat regime — hold, reassess T+3
+            return self._out("HOLD", "Near breakeven on T+2, monitor T+3 momentum — VN-Swing Alpha")
 
         # ── T+3+: Extended hold or mandatory exit ─────────────────────────────
         if day_in_trade >= 3:
@@ -459,7 +469,7 @@ def generate_t_plus_recommendation(r: dict, fc: dict = None, cf_result: dict = N
     rsi_div    = r.get("rsi_divergence","NONE")
     at_ceiling = bool(r.get("at_ceiling", False))
     at_floor   = bool(r.get("at_floor",   False))
-    beta         = float(r.get("rolling_beta_5d", 1.0) or 1.0)
+    beta         = float(r.get("rolling_beta_20d", 1.0) or 1.0)
     kl_ratio     = float(r.get("kl_ratio", 1.0)  or 1.0)
     price        = float(r.get("price",    0.0)   or 0.0)
     sma20        = float(r.get("sma20",    0.0)   or 0.0)

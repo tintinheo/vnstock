@@ -334,7 +334,7 @@ def build_r_at(df: pd.DataFrame, i: int, ticker: str, t25: dict) -> dict:
         "rsi_divergence":   rsi_div,
         "at_ceiling":       bool(df["at_ceiling"].iloc[i]),
         "at_floor":         bool(df["at_floor"].iloc[i]),
-        "rolling_beta_5d":  float(df["beta5d"].iloc[i]) if not pd.isna(df["beta5d"].iloc[i]) else 1.0,
+        "rolling_beta_20d": float(df["beta5d"].iloc[i]) if not pd.isna(df["beta5d"].iloc[i]) else 1.0,
         "kl_ratio":         float(df["kl_ratio"].iloc[i]) if not pd.isna(df["kl_ratio"].iloc[i]) else 1.0,
         "rs_rating":        50,
         "sl":               atr_sl,

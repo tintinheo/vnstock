@@ -36,6 +36,19 @@ except Exception:
 _CACHE_DIR = Path(__file__).parent / "data"
 _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
+# In-memory BiLSTM model cache — avoids re-loading .keras from disk on every call.
+# Bounded at 10 models (LRU) since each BiLSTM is ~2–10 MB.
+from collections import OrderedDict as _OD
+_BILSTM_CACHE_MAX: int = 10
+_BILSTM_CACHE: _OD = _OD()
+
+
+def _bilstm_cache_put(key: str, model) -> None:
+    _BILSTM_CACHE.pop(key, None)
+    _BILSTM_CACHE[key] = model
+    while len(_BILSTM_CACHE) > _BILSTM_CACHE_MAX:
+        _BILSTM_CACHE.popitem(last=False)
+
 # ── BiLSTM hyperparams ────────────────────────────────────────────────────────
 _LOOKBACK_SEQ   = 20   # input sequence length (20 trading days ≈ 1 month)
 _FORECAST_HORIZ = 5    # predict 5-session forward direction
@@ -545,10 +558,18 @@ def get_or_train_bilstm(symbol: str, df: pd.DataFrame):
         return None
 
     model_path = _CACHE_DIR / f"bilstm_{symbol.upper()}.keras"
+    cache_key  = symbol.upper()
 
+    # 1. In-memory LRU cache (fastest — no disk I/O)
+    if cache_key in _BILSTM_CACHE:
+        return _BILSTM_CACHE[cache_key]
+
+    # 2. Load from disk
     if model_path.exists():
         try:
-            return load_model(str(model_path))
+            model = load_model(str(model_path))
+            _bilstm_cache_put(cache_key, model)
+            return model
         except Exception as e:
             _log.warning("Cannot load saved BiLSTM for %s: %s — retraining.", symbol, e)
             model_path.unlink(missing_ok=True)

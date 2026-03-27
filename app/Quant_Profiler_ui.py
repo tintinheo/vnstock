@@ -35,7 +35,7 @@ from Quant_Profiler import (
     async_fetch_many,
     save_profiler_audit,
     calculate_csad,
-    compute_rolling_beta_5d,
+    compute_rolling_beta_20d,
     compute_market_breadth,
     HISTORY_DAYS,
     _last,
@@ -4130,7 +4130,7 @@ def render_portfolio_hub() -> None:
                     else "#ef4444" if _out_v["action"] == "SELL_ALL"
                     else "#f97316")
         # Rolling 5-day beta from last audit record — VN-Swing Alpha Improvement
-        _beta_v   = float(_latest_a.get("rolling_beta_5d") or 1.0)
+        _beta_v   = float(_latest_a.get("rolling_beta_20d") or 1.0)
         _beta_c   = "#ef4444" if _beta_v > 1.2 else "#22c55e" if _beta_v < 0.8 else "#94a3b8"
         _kelly_lbl = _out_v.get("kelly_mode", _mgr_v.kelly_mode)
         _exit_rows += (
@@ -4768,15 +4768,19 @@ def render_sector_heatmap_page() -> None:
 
     refresh_col, _ = st.columns([1, 5])
     refresh = refresh_col.button("🔄 Cập nhật", key="sector_refresh")
-    cache_key = "sector_heatmap_cache"
-    if refresh or cache_key not in st.session_state:
+    cache_key    = "sector_heatmap_cache"
+    cache_ts_key = "sector_heatmap_ts"
+    _hm_now      = _time.time()
+    _hm_stale    = _hm_now - st.session_state.get(cache_ts_key, 0) > 1800  # 30-min TTL
+    if refresh or cache_key not in st.session_state or _hm_stale:
         with st.spinner("Đang tải dữ liệu ngành…"):
             all_tickers_sec = list(_SECTOR_MAP.keys())
             try:
                 res_map, _ = async_fetch_many(all_tickers_sec, days=15, max_workers=12, on_progress=None)
             except Exception:
                 res_map = {}
-        st.session_state[cache_key] = res_map
+        st.session_state[cache_key]    = res_map
+        st.session_state[cache_ts_key] = _hm_now
 
     res_map = st.session_state.get(cache_key, {})
 
@@ -5179,6 +5183,9 @@ def render_optimal_t_plus_page() -> None:
 
     # ── Auto-refresh real-time prices ─────────────────────────────────────────
     _rt_key = f"opt_rt_{_dt.now().strftime('%Y%m%d_%H%M')}"  # cache per-minute
+    # Evict stale per-minute keys (keep only current minute) to prevent session_state growth
+    for _stale in [k for k in list(st.session_state.keys()) if k.startswith("opt_rt_") and k != _rt_key]:
+        del st.session_state[_stale]
     if _rt_key not in st.session_state:
         with st.spinner("🔄 Đang cập nhật giá thời gian thực…"):
             def _rt_fetch(r):
@@ -5593,6 +5600,9 @@ def render_optimal_t_plus_page() -> None:
         )
         _rv_btn = st.button("🔄 Fetch Intraday RV", key="opt_rv_fetch", use_container_width=True)
         _rv_cache_key = f"rv_{_rv_tk}_{_dt.now().strftime('%Y%m%d_%H')}"
+        # Evict stale hourly rv_ keys (keep only current hour per ticker)
+        for _stale in [k for k in list(st.session_state.keys()) if k.startswith("rv_") and k != _rv_cache_key]:
+            del st.session_state[_stale]
 
         if _rv_btn or _rv_cache_key in st.session_state:
             if _rv_btn or _rv_cache_key not in st.session_state:
