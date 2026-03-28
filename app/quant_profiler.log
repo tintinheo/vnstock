@@ -4974,3 +4974,35 @@
 2026-03-27 18:21:58 INFO     quant_profiler │ YBM  price=10100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BULL_TREND  bull=6  bear=15  confirmed=False
 2026-03-27 18:22:26 INFO     quant_profiler │ YEG  price=10050  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=15  confirmed=True
 2026-03-27 18:27:25 WARNING  quant_profiler │ train_lstm_model KMT: insufficient training data (35 rows)
+2026-03-28 16:24:13 INFO     quant_profiler │ HPG  price=26500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-03-28 16:24:19 WARNING  quant_profiler │ train_lstm_model TINY: insufficient training data (5 rows)
+2026-03-28 16:24:19 INFO     quant_profiler │ train_lstm_model TRAINTEST: 95 samples — starting
+2026-03-28 16:24:21 INFO     quant_profiler │ train_lstm_model TRAINTEST: done in 3 epochs, val_mae=1.5031
+2026-03-28 16:24:21 INFO     quant_profiler │ train_lstm_model CBTEST: 95 samples — starting
+2026-03-28 16:24:24 INFO     quant_profiler │ train_lstm_model CBTEST: done in 3 epochs, val_mae=1.5147
+2026-03-28 16:24:24 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: 95 samples — starting
+2026-03-28 16:24:30 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: done in 35 epochs, val_mae=1.4499
+2026-03-28 16:25:01 INFO     quant_profiler │ HPG  price=26500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-03-28 16:25:05 WARNING  quant_profiler │ train_lstm_model TINY: insufficient training data (5 rows)
+2026-03-28 16:25:05 INFO     quant_profiler │ train_lstm_model TRAINTEST: 95 samples — starting
+2026-03-28 16:25:09 INFO     quant_profiler │ train_lstm_model TRAINTEST: done in 3 epochs, val_mae=1.5849
+2026-03-28 16:25:09 INFO     quant_profiler │ train_lstm_model CBTEST: 95 samples — starting
+2026-03-28 16:25:11 INFO     quant_profiler │ train_lstm_model CBTEST: done in 3 epochs, val_mae=1.6048
+2026-03-28 16:25:11 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: 95 samples — starting
+2026-03-28 16:25:16 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: done in 27 epochs, val_mae=1.1168
+2026-03-28 16:26:53 INFO     quant_profiler │ HPG  price=26500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-03-28 16:26:57 WARNING  quant_profiler │ train_lstm_model TINY: insufficient training data (5 rows)
+2026-03-28 16:26:57 INFO     quant_profiler │ train_lstm_model TRAINTEST: 95 samples — starting
+2026-03-28 16:27:00 INFO     quant_profiler │ train_lstm_model TRAINTEST: done in 3 epochs, val_mae=1.5438
+2026-03-28 16:27:00 INFO     quant_profiler │ train_lstm_model CBTEST: 95 samples — starting
+2026-03-28 16:27:02 INFO     quant_profiler │ train_lstm_model CBTEST: done in 3 epochs, val_mae=1.5872
+2026-03-28 16:27:02 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: 95 samples — starting
+2026-03-28 16:27:09 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: done in 41 epochs, val_mae=1.1694
+2026-03-28 16:27:41 INFO     quant_profiler │ HPG  price=26500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-03-28 16:27:45 WARNING  quant_profiler │ train_lstm_model TINY: insufficient training data (5 rows)
+2026-03-28 16:27:45 INFO     quant_profiler │ train_lstm_model TRAINTEST: 95 samples — starting
+2026-03-28 16:27:47 INFO     quant_profiler │ train_lstm_model TRAINTEST: done in 3 epochs, val_mae=1.5729
+2026-03-28 16:27:47 INFO     quant_profiler │ train_lstm_model CBTEST: 95 samples — starting
+2026-03-28 16:27:50 INFO     quant_profiler │ train_lstm_model CBTEST: done in 3 epochs, val_mae=1.5195
+2026-03-28 16:27:50 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: 95 samples — starting
+2026-03-28 16:27:55 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: done in 26 epochs, val_mae=1.3185
