@@ -5006,3 +5006,19 @@
 2026-03-28 16:27:50 INFO     quant_profiler │ train_lstm_model CBTEST: done in 3 epochs, val_mae=1.5195
 2026-03-28 16:27:50 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: 95 samples — starting
 2026-03-28 16:27:55 INFO     quant_profiler │ train_lstm_model AUTOTRAIN: done in 26 epochs, val_mae=1.3185
+2026-03-28 16:32:29 INFO     quant_profiler │ VPB  price=26450  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=14  confirmed=False
+2026-03-28 16:32:34 INFO     quant_profiler │ DCM  price=48500  signal=MUA  VSA=NO_DEMAND  regime=BULL_TREND  bull=18  bear=5  confirmed=False
+2026-03-28 16:32:38 INFO     quant_profiler │ DPM  price=30800  signal=MUA  VSA=NO_DEMAND  regime=BULL_TREND  bull=21  bear=7  confirmed=False
+2026-03-28 16:32:42 INFO     quant_profiler │ PVS  price=42800  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=9  bear=12  confirmed=True
+2026-03-28 16:32:46 INFO     quant_profiler │ VIX  price=16750  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-03-28 16:32:59 INFO     quant_profiler │ MBS  price=23900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=15  confirmed=True
+2026-03-28 16:33:13 INFO     quant_profiler │ HHV  price=12200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=9  confirmed=True
+2026-03-28 16:33:32 INFO     quant_profiler │ POW  price=13050  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-03-28 16:33:48 INFO     quant_profiler │ GEG  price=16950  signal=MUA  VSA=NO_DEMAND  regime=HIGH_VOL  bull=13  bear=6  confirmed=True
+2026-03-28 16:34:03 INFO     quant_profiler │ PC1  price=29100  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=25  bear=0  confirmed=True
+2026-03-28 16:34:25 INFO     quant_profiler │ TV1  price=38500  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=0  confirmed=True
+2026-03-28 16:34:25 INFO     quant_profiler │ train_lstm_model TV1: 383 samples — starting
+2026-03-28 16:34:30 INFO     quant_profiler │ train_lstm_model TV1: done in 14 epochs, val_mae=7.2412
+2026-03-28 16:34:34 INFO     quant_profiler │ CII  price=19100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=12  confirmed=True
+2026-03-28 16:34:53 INFO     quant_profiler │ TCH  price=16700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-03-28 16:35:07 INFO     quant_profiler │ PDR  price=16400  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=18  confirmed=True
