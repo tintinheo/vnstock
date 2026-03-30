@@ -2063,6 +2063,8 @@ def risk_adjusted_weights(signals: list, max_single_pct: float = 0.25) -> dict:
 ```python
 class VNBacktestConstraints:
     T0_SAME_DAY_SELL    = False   # Default False; True nếu broker hỗ trợ T+0
+    # [H2] T+0 speculative (lướt sóng nội ngày) OUT OF SCOPE Phase 1–4.
+    # T+0 protective (cắt lỗ trong ngày khi SL trigger) = IN SCOPE cần account_has_t0=True.
     T2_SELL_START       = "13:00" # Chỉ bán từ phiên chiều T+2
     MIN_LOT_SIZE        = 100     # Bội số 100 cổ phiếu
     BUY_COMMISSION      = 0.0015  # 0.15% (SSI standard — broker-dependent)
@@ -2073,7 +2075,8 @@ class VNBacktestConstraints:
     ATC_SLIPPAGE_VN30      = 0.001  # 0.1%  — liquid blue-chip (top 30)
     ATC_SLIPPAGE_MIDCAP    = 0.003  # 0.3%  — midcap (500tỷ–2000tỷ vốn hóa)
     ATC_SLIPPAGE_SMALLCAP  = 0.007  # 0.7%  — smallcap, spread rộng, low float
-    LOCK_SAN_PROB       = 0.02    # 2% xác suất lock sàn khi hit SL
+    LOCK_SAN_PROB       = 0.02    # [M4] SYNTHETIC STRESS TEST parameter (không empirical)
+    # TODO: tier-dependent: large_cap=0.005, mid_cap=0.02, small_cap=0.05
 
 class BacktestResult:
     total_return         : float
@@ -2398,8 +2401,11 @@ pytest tests/unit/ -v --tb=short
 | Scanner | `ui/pages/scanner.py` | Universe 200+ mã; MFPM ranked table; FOL flags; HMM state badge; click → Profiler |
 | Profiler | `ui/pages/profiler.py` | Chart: SMA50/200, VWAP, RSI, Z-vol; SL/TP lines; Wyckoff label; VCP overlay; Hurst gauge |
 | Backtest | `ui/pages/backtest.py` | Date range; equity curve; metrics table; VN-constraint summary |
-| Realtime | `ui/pages/realtime.py` | VN30 quote table; market stat; T+2.5 countdown; ATC ECP display; GMO status |
-| Portfolio | `ui/pages/portfolio.py` | Active positions; trailing stop update; T+2.5 danger alerts; P&L |
+| Money Flow | `ui/pages/money_flow.py` | DTL Dashboard: SMS, M-CVD, Sector Rotation, Stealth Accum |
+| Audit | `ui/pages/audit.py` | Signal history; drill-down; audit log 24 months |
+| Settings | `ui/pages/settings.py` | strategy.yaml editor; watchlist mgmt |
+| Realtime | ~~`ui/pages/realtime.py`~~ | **[Beta]** VN30 quote; T+2.5 countdown; ATC ECP; GMO status |
+| Portfolio | ~~`ui/pages/portfolio.py`~~ | **[Beta]** Active positions; trailing stop; P&L |
 | App | `ui/app.py` | `st.navigation()`; sidebar: HMM state, GMO Ω, DuckDB stats, VN market time |
 | CLI | `src/tradingos/cli.py` | `tradingos serve \| scan \| backfill \| scan-atc` |
 
@@ -2740,91 +2746,70 @@ TradingOS/
 
 ---
 
-## PHỤ LỤC E — TỔNG HỢP MERGE: v1.0 + Proposal v5
-
-> *So sánh và kết hợp hai tài liệu đề xuất để tạo ra bản hoàn chỉnh nhất.*
-
-### E.1 Delta Analysis: v1.0 vs Proposal v5
-
-| # | Nội dung từ Proposal v5 | Đánh giá | Quyết định | Module |
-|---|---|---|---|---|
-| E-01 | **AMD Cycle** (Accumulation→Manipulation→Distribution) | ✅ Bổ sung quan trọng — đọc ý đồ tay to theo thời gian | **Tích hợp** làm Module 2.10.1 | 2.10 |
-| E-02 | **VSA No Demand / No Supply Bar** (Tom Williams) | ✅ Bổ sung tốt — đọc từng phiên micro-structure | **Tích hợp** làm Module 2.10.2 | 2.10 |
-| E-03 | **CVD Cumulative Volume Delta** (tick-level) | ✅ Vượt trội OFI về độ chính xác — phát hiện whale | **Tích hợp** làm Module 2.10.3 (Phase 3 tick) | 2.10 |
-| E-04 | **Order Block** detection | ✅ Bổ sung vùng hỗ trợ/kháng cự tổ chức — chưa có trong v1.0 | **Tích hợp** làm Module 3.6 | 3.6 |
-| E-05 | **Cup with Handle** (O'Neil CAN SLIM) | ✅ Classic O'Neil setup — tỷ lệ thắng cao tại pivot | **Tích hợp** làm Module 3.7 | 3.7 |
-| E-06 | **SHAP Explainability** cho MFPM reasons | ✅ Tăng transparency, user trust, post-trade learning | **Tích hợp** làm Module 7.2 | 7.2 |
-| E-07 | **Progressive Exposure 6.25%→12.5%→6.25%** | ✅ Bổ sung cho 50%+50% — phù hợp môi trường bất định | **Tích hợp** kết hợp: mode-dependent selection | 6 |
-| E-08 | **Risk-Adjusted Momentum Weighting** portfolio | ✅ Phân bổ tốt hơn equal-weight — có cơ sở toán học | **Tích hợp** làm Module 8.1 | 8.1 |
-| E-09 | **PhoBERT sentiment score** trong advisory | ✅ Đã có trong v1.0 scaffold; v5 thêm field `phobert_sentiment` | **Tích hợp** thêm vào Signal Schema 9 | 9 |
-| E-10 | **XGBoost 96.67% accuracy** claim | ❌ Đã bác bỏ trong Round 1 audit — single model, overfitting, không có OOS | **Loại** — giữ hệ thống ensemble không phụ thuộc 1 model | — |
-| E-11 | **Top 15 portfolio cụ thể** (VCB 12%, FPT 10%...) | ⚠️ Data point-in-time (Q1/2026) — không phù hợp framework | **Loại** — `risk_adjusted_weights()` tự tính trọng số từ real RS+sigma | 8.1 |
-| E-12 | **gRPC FastConnect** cho tick data | ✅ Phase 3 infrastructure dependency — cần cho CVD full | **Backlog #14** trong PHẦN VIII | VIII |
-
-### E.2 Các Thay Đổi Nhờ Merge
-
-| Thành phần | Trước merge (v1.0 only) | Sau merge (v1.0 + v5) |
-|---|---|---|
-| Modules phân tích | 2.1–2.9 (9 modules) | 2.1–2.10 (10 modules, thêm AMD+VSA+CVD) |
-| Patterns nhận diện | 5 patterns (Spring, VCP, FVG, Weis, RSI Div) | 7 patterns (+Order Block, +Cup with Handle) |
-| MFPM scoring factors | ~15 factors, max ~143 ref | ~22 factors, STRONG_BUY ≥ 70 vẫn giữ nguyên |
-| Signal Schema fields | 16 fields | 22 fields (+AMD phase, VSA, CVD, OB, SHAP top5) |
-| Portfolio allocation | Equal weight / Kelly per trade | Risk-Adjusted Momentum Weighting |
-| Position building | 50%+50% only | 50%+50% (STRONG_BUY+MARKUP) hoặc 6.25%→25% (BUY+ACCUMULATION) |
-| NLP Advisory | Text generation only | Text + SHAP top-5 reasoning explanations |
-| Architecture diagram | 8 core modules | 10 core modules (AMD+VSA+CVD in Advanced Analytics) |
-
-### E.3 Tự Phản Biện — Lỗ Hổng Sau Merge
-
-| Lỗ hổng | Mức độ | Ghi chú |
-|---|---|---|
-| CVD tick-level phụ thuộc SSI FastConnect (có phí) | 🔴 Critical | Dùng proxy OFI trong Phase 1–2; CVD thật là Phase 3+ |
-| `classify_amd_phase()` với lookback=60 có thể lag | 🟡 Important | Trong uptrend mạnh, phase có thể báo MARKUP muộn 5–10 phiên |
-| Order Block "mitigated" check chưa implement | 🟡 Important | OB sau khi giá đã vào và ra thường không còn hiệu lực — cần `ob_mitigated` flag |
-| Cup with Handle `cup_max_bars=120` có thể miss large cups | 🟡 Important | VCB, VHM hay có Cup 6–9 tháng (>120 phiên) — cần `cup_max_bars` configurable |
-| SHAP explanation không phải SHAP thật (chỉ sort by magnitude) | 🟡 Important | SHAP thật cần `shap` library với XGBoost model — hiện tại là heuristic approximation |
-
----
-*End of TradingOS Alpha Proposal v1.0*
-
----
-
 ## PHỤ LỤC F — ĐÁNH GIÁ VÀ ĐIỀU CHỈNH THEO BOARD EVALUATION (2026-03-30)
 
-> *Phân tích, chấp thuận, hoặc bác bỏ các kiến nghị từ “Final SRS Evaluation & Strategic Insights”*
+> *Phân tích, chấp thuận, hoặc bác bỏ các kiến nghị từ "Final SRS Evaluation & Strategic Insights"*
+> *Cập nhật v1.1 (2026-03-30): tích hợp Academic & Technical Review — 14 điểm fix.*
 
-### F.1 Bảng Đánh Giá Từng Hạng Mục
+### F.1 Bảng Đánh Giá Từng Hạng Mục — Board Eval Round 1
 
 | # | Claim | Quyết định | Lý do | Triển khai |
 |---|---|---|---|---|
-| F-01 | MTL thay thế MP trên HOSE (KRX) | ✅ **CHẤP THUẬN** | Thực tế kỹ thuật đúng — KRX rollout. Proposal đã có MTL reference (line 46, 231). | Bổ sung logic partial fill vào `smart_atc_router()` — Module 2.7 |
-| F-02 | KRX ATO/ATC priority | ✅ **CHẤP THUẬN (có hiệu chỉnh)** | ATO/ATC chạy trong auction phase riêng, không cạnh tranh time-priority với LO continuous. Claim ban đầu pờ hướng dẫn. | Thêm note rõ ràng trong ATC Router code — Module 2.7 |
-| F-03 | PCA cho cổ phiếu bị hạn chế (KRX) | ✅ **CHẤP THUẬN** | Đúng — KRX thêm PCA mechanism cho mã cảnh báo. Cần loại khỏi auto-signal. | Thêm Step 5b vào `build_universe()` — Module 2.8 |
-| F-04 | NPF settlement failure (Thông tư 08/2026) | ✅ **CHẤP THUẬN (có điều kiện)** | Cơ chế NPF là thực và liên quan. Số hiệu Thông tư chưa kiểm chứng được — ghi chú *pending verification*. | Thêm `check_npf_flag()` vào Module 2.6; mark pending |
-| F-05 | Lưu trữ audit ≥ 24 tháng (Nghị định 53/2022) | ✅ **CHẤP THUẬN** | SRS đã có cold archive 2 năm. Thêm cite rõ ràng. | Cập nhật SRS NFR 9.2 |
-| F-06 | XBRL/IDS filings cho NLP | ✅ **CHẤP THUẬN (Phase 3+)** | Nguồn dữ liệu có cấu trúc chính thức hơn SSI EP-10. Phụ thuộc SSC API availability. | Thêm Module 7.3 + Backlog #15 |
-| F-07 | Kiến trúc Rust + io_uring/DPDK | ✅ **CHẤP THUẬN (điều chỉnh scope)** | Áp dụng cho **data ingestion daemon** (`data/collector_daemon/` — Rust binary), tách biệt khỏi Python core analytics. Rust + io_uring xử lý async network I/O: SSI poll → DuckDB write. Python app chỉ đọc từ DuckDB đã populated. | Thêm Module 0 spec + `data/collector_daemon/` crate |
-| F-08 | Target 3.9 ms / < 100 ms data refresh | ✅ **CHẤP THUẬN (điều chỉnh scope)** | 3.9 ms = P50 network hop SSI server → Rust daemon; < 100 ms = end-to-end SSI response → DuckDB write. Áp dụng cho data ingestion layer — analytics SLA (2–5s P50) không thay đổi. | Thêm NFR rows vào SRS 9.5.1 + 6.5 |
-| F-09 | T+0 8–10× capital turnover backtest | ❌ **BÁC Bỏ** | Swing trading system. T+0 intraday explicitly out-of-scope Phase 1–4. | Out-of-scope |
-| F-10 | FIX 4.4 API standard | ⚠️ **Phase 5+ only** | Broker OMS order routing. TradingOS chỉ đưa ra khúyến nghị, không đặt lệnh. | Backlog Phase 5+ |
+| F-01 | MTL thay thế MP trên HOSE (KRX) | ✅ **CHẤP THUẬN** | KRX rollout đúng. | Partial fill vào `smart_atc_router()` — Module 2.7 |
+| F-02 | KRX ATO/ATC priority | ✅ **CHẤP THUẬN (có hiệu chỉnh)** | ATO/ATC auction phase riêng. | Note trong ATC Router — Module 2.7 |
+| F-03 | PCA cho cổ phiếu bị hạn chế (KRX) | ✅ **CHẤP THUẬN** | KRX PCA mechanism đúng. | Step 5b `build_universe()` — Module 2.8 |
+| F-04 | NPF settlement failure (TT 08/2026) | ✅ **CHẤP THUẬN (pending verify)** | Số hiệu TT chưa verify. | `check_npf_flag()` Module 2.6 |
+| F-05 | Lưu trữ audit ≥ 24 tháng (NĐ 53) | ✅ **CHẤP THUẬN (internal control)** | Enterprise control; legal review required. | SRS NFR 9.2 updated |
+| F-06 | XBRL/IDS filings cho NLP | ✅ **CHẤP THUẬN (Phase 3+)** | Nguồn dữ liệu cấu trúc chính thức. | Module 7.3 + Backlog #15 |
+| F-07 | Kiến trúc Rust + io_uring/DPDK | ✅ **CHẤP THUẬN (re-scoped)** | Data ingestion daemon riêng; Python core không đổi. | Module 0 spec |
+| F-08 | Target 3.9 ms / < 100 ms latency | ✅ **CHẤP THUẬN (re-scoped)** | 3.9ms=network hop; <100ms=E2E→DuckDB. | SRS 9.5.1 + 6.5 |
+| F-09 | T+0 8–10× capital turnover backtest | ❌ **BÁC BỎ** | T+0 speculative OUT OF SCOPE Phase 1–4. | Xem H2 |
+| F-10 | FIX 4.4 API standard | ⚠️ **Phase 5+ only** | Advisory only, không đặt lệnh. | Backlog #17 |
 
-### F.2 Tóm Tắt Thay Đổi Vào Proposal
+### F.1.A Academic & Technical Review Round 2 — Fixes (v1.1, 2026-03-30)
+
+| Code | Issue | Mức độ | Quyết định | Triển khai |
+|---|---|---|---|---|
+| **C1** | SMS_raw / ModeW_score / Action / Confidence bị trộn lẫn | 🔴 CRITICAL | ✅ **ĐÃ SỬA** | SRS §1.3 Definitions: 4 terms tách biệt; §3.7 rewritten 4-layer mapping |
+| **C2** | TradingSignal "22→30 fields" đếm sai | 🔴 CRITICAL | ✅ **ĐÃ SỬA** | SRS TickerProfile 34 fields numbered; TradingSignal 26+8=34 |
+| **C3** | `whale_tick_threshold` comment sai toán (50K shares × 10k = 0.5 tỷ) | 🔴 CRITICAL | ✅ **ĐÃ SỬA** | Comment fix + `whale_notional_thresholds` tier trong strategy.yaml |
+| **C4** | M-CVD slope normalization sai dimension (VND ÷ cổ phần) | 🔴 CRITICAL | ✅ **ĐÃ SỬA** | `avg_daily_vol = close × 500_000` → `avg_daily_shares = volume.mean()` |
+| **C5** | `no_spike` không bắt buộc trong `detected` | 🔴 CRITICAL | ✅ **ĐÃ SỬA** | `detected = ...and no_spike and amd_ok`; HIGH=score==5, MEDIUM=score≥4 |
+| **H1** | Ranh giới analytics vs execution không rõ | 🟠 HIGH | ✅ **ĐÃ SỬA** | Rename `atc_router.py` → `execution_advisory.py`; SRS §2.1 scope note |
+| **H2** | T+0 protective vs T+0 speculative chưa tách bạch | 🟠 HIGH | ✅ **ĐÃ SỬA** | SRS §1.3 Definitions: 2 dòng riêng; Proposal VNBacktestConstraints comment |
+| **H3** | UI scope mâu thuẫn Proposal ≠ SRS | 🟠 HIGH | ✅ **ĐÃ SỬA** | Alpha MVP = 6 pages frozen; Realtime + Portfolio → [Beta] |
+| **H4** | Action taxonomy không nhất quán | 🟠 HIGH | ✅ **ĐÃ SỬA** | Unified: NO_ACTION/WATCH/BUY/STRONG_BUY/EXIT/FORCED_EXIT — toàn SRS |
+| **M1** | NĐ 53/2022 dùng quá rộng | 🟡 MEDIUM | ✅ **ĐÃ SỬA** | SRS §9.2 + §9.5.1: internal enterprise control; legal review required |
+| **M2** | TT 08/2026 NPF chưa verify | 🟡 MEDIUM | ✅ **GIỮ NGUYÊN** | Label pending verification đủ; không hardcode. |
+| **M3** | SLA không có acceptance criteria per FR | 🟡 MEDIUM | ✅ **ĐÃ SỬA** | SRS §6.6 mới: SLA Acceptance Criteria 6 rows |
+| **M4** | `LOCK_SAN_PROB=0.02` quá thô | 🟡 MEDIUM | ✅ **ĐÃ SỬA** | Label SYNTHETIC STRESS TEST; TODO tier — Proposal + SRS §7.3 |
+| **4.3** | Proxy confidence penalty chưa spec | 🟡 MEDIUM | ✅ **ĐÃ SỬA** | SRS §9.4: `proxy_confidence_penalty` + `proxy_data_quality_grade` |
+
+### F.2 Tóm Tắt Thay Đổi Vào Tài Liệu (Round 1 + Round 2)
 
 | File | Section | Thay đổi |
 |---|---|---|
-| Proposal | Module 2.6 FOL | Thêm `check_npf_flag()` function + implementation note |
-| Proposal | Module 2.7 ATC Router | Thêm MTL partial fill logic + KRX priority clarification + fat-finger protection |
-| Proposal | Module 2.8 Universe | Thêm Step 5b: PCA exclusion (`fetch_pca_restricted_tickers()`) |
-| Proposal | Module 7 NLP | Thêm Section 7.3: XBRL data source (Phase 3+) + Backlog #15 |
-| Proposal | Module 0 (mới) | Data Ingestion Daemon: Rust + io_uring, pipeline diagram, performance targets, impl sketch |
-| SRS | Section 7.3 | Thêm 3 hàng: MTL partial fill simulation, PCA exclusion, KRX auction priority |
-| SRS | Section 9.1 | Thêm KRX compliance NFR |
-| SRS | Section 9.2 | Đổi tên thành “Security & Compliance”; thêm audit retention + NPF flag rows |
-| SRS | Section 9.5 (mới) | Bảng chính thức: accepted/rejected items |
-| SRS | Section 9.5.1 | Thêm 3 hàng: Rust daemon, ≤ 3.9 ms hop, < 100 ms refresh |
-| SRS | Section 6.5 | Thêm 2 data ingestion SLA rows |
-| SRS | Week 1 table | Thêm `data/collector_daemon/` scaffold task |
-| SRS | File structure | Update `atc_router.py` comment → MTL/KRX mention |
+| Proposal | Module 2.6 FOL | `check_npf_flag()` + pending note |
+| Proposal | Module 2.7 ATC Router | MTL partial fill + KRX priority + fat-finger |
+| Proposal | Module 2.8 Universe | Step 5b PCA exclusion |
+| Proposal | Module 7 NLP | Section 7.3 XBRL + Backlog #15 |
+| Proposal | Module 0 (mới) | Rust data ingestion daemon spec |
+| Proposal | VNBacktestConstraints | T0_SAME_DAY_SELL H2 note; LOCK_SAN_PROB SYNTHETIC label |
+| Proposal | UI page table | Alpha MVP=6 pages; Realtime+Portfolio → [Beta] |
+| SRS | §1.3 Definitions | +7 rows: SMS_raw, ModeW_score, STRONG_BUY (fixed), BUY, T+0 speculative, T+0 protective, Execution Advisory |
+| SRS | §2.1 Architecture | Scope boundary note; arch diagram 6-page label |
+| SRS | §3.4 TickerProfile | 34 fields numbered; sms_raw + mode_w_score; data_quality |
+| SRS | §3.7 Action & Confidence | Complete rewrite: 4-layer model |
+| SRS | §6.6 (new) | SLA Acceptance Criteria per FR |
+| SRS | §7.3 Simulation | LOCK_SAN_PROB SYNTHETIC STRESS TEST |
+| SRS | §8.2 M-CVD | avg_daily_shares replaces avg_daily_vol |
+| SRS | §8.3 Stealth | no_spike mandatory; HIGH=5/5, MEDIUM=4/5 |
+| SRS | §9.2 Security | NĐ 53 → internal control + legal review note |
+| SRS | §9.4 strategy.yaml | whale_notional_thresholds; proxy_confidence_penalty; proxy_data_quality_grade |
+| SRS | §9.5.1 | F-05 updated; Rust/latency rows added |
+| SRS | §9 TradingSignal | 26+8=34 fields canonical; unified action enum |
+| SRS | §6 FR-3 | SELL_SIGNAL → EXIT/FORCED_EXIT |
+| SRS | File structure | atc_router.py → execution_advisory.py |
 
 ### F.3 Backlog mới sau đánh giá
 
@@ -2834,3 +2819,11 @@ TradingOS/
 | Backlog #16 | `fetch_pca_restricted_tickers()` SSI EP-2/exchange bulletin | Week 3/P1 |
 | Backlog #17 | Broker FIX 4.4 integration (nếu có order routing) | Phase 5+ |
 | Backlog #18 | Rust data ingestion daemon (`data/collector_daemon/`) — io_uring + DuckDB WAL | Phase 2 |
+| Backlog #19 | Whale notional threshold calibration từ empirical tick data (large/mid/small cap) | Phase 2 |
+| Backlog #20 | Lock sàn probability tier calibration per liquidity tier (thay SYNTHETIC 2%) | Phase 3 |
+| Backlog #21 | Legal review: NĐ 53/2022 scope + TT 08/2026 NPF penalty verification | Pre-production |
+
+### F.4 Status Tổng Thể v1.1
+
+> Sau reconciliation v1.1: **13/14 issues đã được xử lý trong tài liệu** (M2 giữ nguyên có lý do).
+> Board decision: **PROCEED to implementation** — tài liệu đủ điều kiện production-grade SRS.

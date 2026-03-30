@@ -56,15 +56,21 @@ Proposal v1.0 đã có CVD/whale tracking **ở mức phòng thủ** (block mani
 | MFPM | Multi-Factor Pullback & Momentum scoring engine |
 | Mode A | Pullback entry (RSI cross-up từ vùng ≤50) |
 | Mode B | Breakout entry (Close > Pivot high + Volume surge) |
-| Mode W | **Follow-the-Whale** — entry basis SMS ≥ 60 (NEW) |
-| STRONG_BUY | MFPM score ≥ 70 hoặc SMS ≥ 75 |
+| Mode W | **Follow-the-Whale** — entry khi `SMS_raw ≥ 60` (gate) + `ModeW_score ≥ 80` (confirm) |
+| SMS_raw | Smart Money Score thô, range 0–100. Không trực tiếp quyết định action. |
+| ModeW_score | Score tổng hợp cho Mode W: `MFPM_base + SMS_bonus`. Range 0–115. Quyết định action. |
+| STRONG_BUY | `ModeW_score ≥ 95` **VÀ** `AMF=PASS` **VÀ** `MC ≥ 0.60`. Không thể trigger chỉ từ SMS_raw. |
+| BUY | `ModeW_score 80–94` hoặc `MFPM ≥ 70 + AMF=PASS + MC ≥ 0.55` |
 | VQS | Volume Quality Score |
 | CVD | Cumulative Volume Delta (intraday whale tracker) |
 | M-CVD | Multi-day Rolling CVD (new) |
-| SMS | Smart Money Score — composite dòng tiền tổng hợp (new) |
+| SMS | Smart Money Score — xem `SMS_raw`. Shorthand cho UI display. |
 | AMD | Accumulation→Markup→Distribution cycle |
 | AMF | Anti-Manipulation Filter (4-layer pipeline, phòng thủ) |
 | DTL | Dòng Tiền Lớn — Large Money Flow module (tấn công) |
+| T+0 speculative | Mua sáng bán chiều để lướt sóng nội ngày. **NGOÀI SCOPE** Phase 1–4. |
+| T+0 protective | Bán cắt lỗ trong ngày nếu Spring fail / SL trigger (risk control). **TRONG SCOPE** (optional, broker-dependent). |
+| Execution Advisory | Alpha đưa ra *khuyến nghị* thực thi, không kết nối trực tiếp broker/OMS. |
 
 ---
 
@@ -72,10 +78,15 @@ Proposal v1.0 đã có CVD/whale tracking **ở mức phòng thủ** (block mani
 
 ### 2.1 Kiến Trúc
 
+> **Scope boundary (H1):** TradingOS Alpha là **decision-support & execution-advisory system**. `execution_advisory.py` (trước gọi `atc_router.py`) tạo ra *khuyến nghị* lệnh — không kết nối Broker API / OMS trực tiếp. FIX/broker integration là Phase 5+.
+
+> **Alpha MVP UI scope (H3):** 6 pages chính thức. `Realtime` và `Portfolio` defer sang Beta.
+
 ```
 ┌───────────────────────────────────────────────────────────────────────┐
 │                       STREAMLIT UI LAYER                              │
 │  [Profiler] [Scanner] [Money Flow] [Backtest] [Audit] [Settings]     │
+│  ← Alpha MVP: 6 pages above. [Realtime] [Portfolio] deferred → Beta  │
 └──────────────────────────────┬────────────────────────────────────────┘
                                │
 ┌──────────────────────────────┴────────────────────────────────────────┐
@@ -88,7 +99,8 @@ Proposal v1.0 đã có CVD/whale tracking **ở mức phòng thủ** (block mani
 │                       CORE ENGINE LAYER                               │
 │  gmo.py        │ indicators.py  │ anti_manip.py  │ patterns.py       │
 │  mfpm.py       │ sizing.py      │ t25_engine.py  │ exit_engine.py    │
-│  nlp.py        │ backtest.py    │ universe.py    │ atc_router.py     │
+│  nlp.py        │ backtest.py    │ universe.py    │ execution_advisory.py │
+│  ← renamed from atc_router.py (H1: advisory only, no broker connector) │
 │  money_flow.py ← NEW: SMS, M-CVD, Stealth Accum, Sector Rotation    │
 └──────────────────────────────┬────────────────────────────────────────┘
                                │
@@ -157,8 +169,11 @@ class TickerProfile:
     current_price   : float
 
     # Signal summary
-    overall_signal  : str           # STRONG_BUY|BUY|WATCH|NO_SIGNAL|SELL_SIGNAL
+    # [C1] Unified action taxonomy (4 layers, không trộn SMS_raw với action)
+    overall_signal  : str           # NO_ACTION|WATCH|BUY|STRONG_BUY|EXIT|FORCED_EXIT
     signal_mode     : str           # MODE_A|MODE_B|MODE_W|MIXED
+    sms_raw         : int           # SMS_raw 0–100 (input, không quyết định action trực tiếp)
+    mode_w_score    : int | None    # ModeW_score 0–115 (None nếu SMS_raw < 60)
     mfpm_score      : int
     hmm_state       : str           # STEADY_BULL|TRANSITIONAL|STEADY_BEAR
     gmo_omega       : float
@@ -173,23 +188,23 @@ class TickerProfile:
     hurst_exp       : float
     mc_win_prob     : float
 
-    # Large Money Flow (NEW in FR-6)
-    sms             : int           # Smart Money Score 0–100
-    sms_label       : str           # WHALE_BUYING|WHALE_DISTRIBUTING|MIXED|RETAIL_DRIVEN
-    mcvd_5d         : int           # Multi-day CVD 5 sessions (shares net)
-    mcvd_trend      : str           # UP|DOWN|FLAT
-    stealth_accum   : bool          # Silent accumulation detected
-    sector_flow     : str           # INFLOW|NEUTRAL|OUTFLOW for this ticker's sector
-    fol_net_5d      : int           # Foreign net buy/sell rolling 5 days
-    whale_pct_vol   : float         # % of daily volume from whale ticks
+    # Large Money Flow / FR-6 (8 fields)
+    sms             : int           # 21 Smart Money Score 0–100 (alias SMS_raw for UI)
+    sms_label       : str           # 22 WHALE_BUYING|WHALE_DISTRIBUTING|MIXED|RETAIL_DRIVEN
+    mcvd_5d         : int           # 23 Multi-day CVD 5 sessions (shares net)
+    mcvd_trend      : str           # 24 UP|DOWN|FLAT
+    stealth_accum   : bool          # 25 Silent accumulation detected
+    sector_flow     : str           # 26 INFLOW|NEUTRAL|OUTFLOW for this ticker’s sector
+    fol_net_5d      : int           # 27 Foreign net buy/sell rolling 5 days
+    whale_pct_vol   : float         # 28 % of daily volume from whale ticks
 
-    # Explanation
-    horizons        : list[HorizonRecommendation]
-    shap_top5       : list[str]
-    advisory_vn     : str
-    advisory_en     : str
-    chart_data      : ChartPayload | None
-    audit_id        : str
+    # Explanation (6 fields)
+    horizons        : list[HorizonRecommendation]  # 29
+    shap_top5       : list[str]     # 30
+    advisory_vn     : str           # 31
+    advisory_en     : str           # 32
+    chart_data      : ChartPayload | None  # 33
+    audit_id        : str           # 34
 ```
 
 ### 3.5 Horizon Recommendation Schema
@@ -198,7 +213,7 @@ class TickerProfile:
 class HorizonRecommendation:
     horizon_days       : int        # 2,3,4,5,7,10,15
     period_label       : str        # "Ngắn hạn (T+2–T+5)" | "Trung hạn" | "Dài hạn"
-    action             : str        # BUY|HOLD|SELL|NO_ACTION
+    action             : str        # NO_ACTION|WATCH|BUY|STRONG_BUY|EXIT|FORCED_EXIT
     confidence         : str        # HIGH|MEDIUM|LOW
     entry_price        : float | None
     entry_window       : str | None # "09:30–10:00"|"14:05–14:20"|"ATC 14:43"
@@ -224,15 +239,44 @@ class HorizonRecommendation:
 | T+7–T+10 | Trung hạn | Progressive exit 40+40+20%; trailing stop | Mode B hoặc W |
 | T+12–T+15 | Dài hạn | Trailing; H ≥ 0.60 + SMS ≥ 60 bắt buộc | Mode W + Cup&Handle |
 
-### 3.7 Confidence Mapping (Updated for SMS)
+### 3.7 Action & Confidence Mapping (v1.1 — 4 layers)
 
+> **Quy tắc quan trọng:** `SMS_raw` là *input* để tính `ModeW_score`, không trực tiếp ánh xạ sang Action.
+> Action chỉ được xác định từ `ModeW_score` (Mode W path) hoặc `MFPM_score` (Mode A/B path).
+
+#### Layer 1 — ModeW_score computation
+```
+ModeW_score = MFPM_base
+            + (15 nếu SMS_raw ≥ 75)
+            + (10 nếu SMS_raw ≥ 60 và < 75)
+            + (5  nếu stealth_accum = True)
+            + (5  nếu sector_flow = INFLOW)
+```
+
+#### Layer 2 — Action decision
+| Điều kiện | Action |
+|---|---|
+| `ModeW_score ≥ 95` + AMF=PASS + MC ≥ 0.60 | **STRONG_BUY** |
+| `ModeW_score 80–94` hoặc `MFPM ≥ 70 + AMF=PASS + MC ≥ 0.55` | **BUY** |
+| `ModeW_score 60–79` hoặc `MFPM 50–69 + AMF≠BLOCK` | **WATCH** |
+| `MFPM < 50 + SMS_raw < 40` hoặc AMF=BLOCK | **NO_ACTION** |
+| distribution_warning = CAUTION/SELL_SIGNAL override | **EXIT** |
+| AMF=BLOCK + distribution_warning = SELL_SIGNAL + vị thế đang mở | **FORCED_EXIT** |
+
+#### Layer 3 — Confidence
 | Điều kiện | Confidence |
 |---|---|
-| MFPM ≥ 70 + AMF=PASS + MC ≥ 0.60 + HMM=STEADY_BULL | HIGH |
-| MFPM 50–69 + AMF≠BLOCK + MC ≥ 0.50 | MEDIUM |
-| MFPM 35–49 nhưng SMS ≥ 75 + AMF=PASS | MEDIUM (Mode W override) |
-| MFPM 35–49 hoặc AMF=WARN | LOW |
-| AMF=BLOCK hoặc MFPM < 35 + SMS < 50 | — (NO_ACTION) |
+| `ModeW_score ≥ 95` + HMM=STEADY_BULL + MC ≥ 0.65 | **HIGH** |
+| `ModeW_score 80–94` + AMF=PASS + MC ≥ 0.55 | **MEDIUM** |
+| `ModeW_score 60–79` hoặc MFPM 50–69 | **LOW** |
+| Action = NO_ACTION / EXIT / FORCED_EXIT | **—** |
+
+#### Layer 4 — Proxy penalty
+| data_source | confidence_penalty |
+|---|---|
+| TICK_REAL | 0 |
+| PROXY_OHLCV | -1 bậc (HIGH→MEDIUM, MEDIUM→LOW) |
+| PARTIAL_PROXY | -0.5 bậc (MEDIUM→LOW nếu ≥2 components là proxy) |
 
 ### 3.8 Advisory Template
 
@@ -498,6 +542,19 @@ def parallel_mfpm_score(tickers: list[str], df_map: dict) -> list[dict]:
 | **Data ingestion: network hop** (SSI → Rust daemon) | ≤ 3.9 ms | 8 ms | 20 ms |
 | **Data ingestion: end-to-end** (SSI response → DuckDB write) | < 100 ms | 200 ms | 500 ms |
 
+### 6.6 SLA Acceptance Criteria (M3)
+
+> Acceptance test dataset: 200 mã HOSE/HNX; 3 năm lịch sử (2022–2024); rún trên Windows 11 / 16 GB RAM / Python 3.11. Mỗi FR có pass/fail criteria riêng:
+
+| FR | Test dataset | Fallback mode | Pass threshold | Degradation được phép |
+|---|---|---|---|---|
+| FR-1 Profiler (full) | 1 mã, 500 ngày | QUICK mode | P50 ≤ 3s | P99 ≤ 12s; không crash |
+| FR-2 Scanner (200 mã) | 200 mã, 365 ngày | Skip SMS (proxy only) | P50 ≤ 35s | P99 ≤ 100s |
+| FR-3 Money Flow refresh | 1 mã | SMS vớ proxy flag | P50 ≤ 5s | P95 ≤ 12s |
+| FR-4 Performance opt | 200 mã scan | N/A | P95 ≤ 75s | P99 ≤ 100s |
+| FR-5 Backtest | 1 mã × 3 năm | N/A | P50 ≤ 5s | P95 ≤ 15s |
+| FR-6 DTL Dashboard | 50 mã | Proxy flow | P50 ≤ 10s | P99 ≤ 35s |
+
 ---
 
 ## 7. FR-5: Backtesting Engine
@@ -575,7 +632,7 @@ class BacktestTrade:
 | Lot size | Round down to 100-share lots; reject qty < 100 |
 | Commission | Buy 0.15%, Sell 0.25%, min 1,000 VND; Sell tax 0.1% |
 | Slippage | VN30 0.1% / Midcap 0.3% / Smallcap 0.7% |
-| Lock sàn | 2% probability on close = floor price |
+| Lock sàn | [M4] **SYNTHETIC STRESS TEST** — 2% probability on close = floor price. Không empirical; TODO: tier-dependent (large=0.5%, mid=2%, small=5%). |
 | Point-in-time | EPS available only after `report_date + 45d` |
 | Ex-dividend | Price adjusted via EP-11 corporate actions |
 | Circuit breaker | Close ≥ ceiling×0.99 → reject buy |
@@ -651,8 +708,10 @@ def compute_multiday_whale_flow(
     # Linear regression slope of whale_net over lookback
     x = np.arange(len(whale_series))
     slope, _ = np.polyfit(x, whale_series.values, 1)
-    avg_daily_vol = recent['close'].mean() * 500_000   # rough avg turnover
-    slope_normalized = slope / max(avg_daily_vol / lookback_days, 1)
+    # [C4 FIX] Normalize slope bằng rolling average volume THEO CỔ PHẦN (không phải turnover tiền tệ)
+    # Cũ (sai dimension): avg_daily_vol = recent['close'].mean() * 500_000  # đv VND ≠ đv cỷa slope
+    avg_daily_shares = recent['volume'].mean()          # cổ phần/ngày — same unit as whale_net
+    slope_normalized = slope / max(avg_daily_shares / lookback_days, 1)
 
     if slope_normalized > 0.01:
         mcvd_trend = "UP"
@@ -879,7 +938,7 @@ def detect_stealth_accumulation(
                  max(abs(recent['OBV'].iloc[0]), 1)
     obv_rising = obv_change > 0.03
 
-    # Cond 4: No volume spike = no pump
+    # Cond 4: No volume spike = no pump (stealth định nghĩa: không có spike)
     z_vol_max = recent['Z_vol'].max() if 'Z_vol' in recent.columns else 1.0
     no_spike = z_vol_max < 1.5
 
@@ -888,11 +947,13 @@ def detect_stealth_accumulation(
              in ("ACCUMULATION", "RANGING") \
              if hasattr(daily_flow_df, 'get') else True
 
-    detected = tight_range and whale_accumulating and obv_rising and amd_ok
+    # [C5 FIX] no_spike bắt buộc trong detected — stealth by definition = no volume spike
+    # Cũ (sai): detected = tight_range and whale_accumulating and obv_rising and amd_ok
+    detected = tight_range and whale_accumulating and obv_rising and no_spike and amd_ok
 
     if detected:
         score = sum([tight_range, whale_accumulating, obv_rising, no_spike, amd_ok])
-        confidence = "HIGH" if score == 5 else ("MEDIUM" if score >= 3 else "LOW")
+        confidence = "HIGH" if score == 5 else ("MEDIUM" if score >= 4 else "LOW")
 
         # Rough target: previous swing high or ATR × 8 projection
         est_target = df['high'].tail(60).max() if len(df) >= 60 else None
@@ -1108,7 +1169,7 @@ def detect_whale_distribution(
       5. FOL 5d: foreign net sell > -2% daily volume
 
     Returns:
-      warning_level: str — NONE|WATCH|CAUTION|SELL_SIGNAL
+      warning_level: str — NONE|WATCH|CAUTION|EXIT|FORCED_EXIT
       flags        : list[str]
       explanation  : str
     """
@@ -1141,7 +1202,7 @@ def detect_whale_distribution(
         score += 1
 
     if score >= 5:
-        level = "SELL_SIGNAL"
+        level = "EXIT"
     elif score >= 3:
         level = "CAUTION"
     elif score >= 1:
@@ -1160,7 +1221,7 @@ def detect_whale_distribution(
 
 **Distribution Warning Integration:**
 
-- Nếu `warning_level=SELL_SIGNAL` → override tất cả BUY signals → hiện **SELL/EXIT ALERT** trên UI
+- Nếu `warning_level=EXIT` → override tất cả BUY signals → hiện **EXIT ALERT** trên UI
 - Nếu `warning_level=CAUTION` → downgrade STRONG_BUY → BUY; hiển thị banner cảnh báo
 - Nếu `warning_level=WATCH` → thêm vào advisory note
 
@@ -1197,14 +1258,14 @@ def detect_whale_distribution(
 ### 8.9 FR-6.8 — Updated Signal Schema (22 → 30 Fields)
 
 ```python
-class TradingSignal:
-    # == Original 22 fields (unchanged) ==
+class TradingSignal:  # [C2] 34 fields total: 26 original (corrected count) + 8 FR-6
+    # == 26 original fields ==
     signal_id       : str
     timestamp       : datetime
     ticker          : str
     exchange        : str
-    action          : str            # STRONG_BUY|BUY|WATCH|NO_SIGNAL|SELL_SIGNAL
-    mode            : str            # MODE_A|MODE_B|MODE_W  ← updated
+    action          : str            # NO_ACTION|WATCH|BUY|STRONG_BUY|EXIT|FORCED_EXIT
+    mode            : str            # MODE_A|MODE_B|MODE_W
     entry_price     : float
     stop_loss       : float
     tp1             : float
@@ -1233,14 +1294,14 @@ class TradingSignal:
     advisory_vn     : str
     advisory_en     : str
 
-    # == NEW 8 fields (FR-6) ==
-    sms             : int            # Smart Money Score 0–100
+    # == 8 NEW fields (FR-6) ==
+    sms             : int            # Smart Money Score 0–100 (= SMS_raw)
     sms_label       : str            # WHALE_BUYING|WHALE_DISTRIBUTING|MIXED|RETAIL_DRIVEN
     mcvd_5d         : int            # Multi-day CVD 5 sessions (shares net)
     mcvd_trend      : str            # UP|DOWN|FLAT
     stealth_accum   : bool           # Stealth accumulation detected
     sector_flow     : str            # INFLOW|NEUTRAL|OUTFLOW
-    whale_dist_warning: str          # NONE|WATCH|CAUTION|SELL_SIGNAL
+    whale_dist_warning: str          # NONE|WATCH|CAUTION|EXIT|FORCED_EXIT
     sms_components  : dict           # {mcvd:int, vqs:int, fol:int, obv:int, amd:int}
 ```
 
@@ -1266,7 +1327,7 @@ class TradingSignal:
 | Device-ID | UUID4 random; rotation khi bị block |
 | Audit | Không lưu personal data |
 | No telemetry | Xử lý 100% local |
-| Audit retention | ≥ 24 tháng: hot 30d (DuckDB) + 6 tháng (Parquet) + cold zip per month — tuân thủ Nghị định 53/2022/NĐ-CP về an ninh mạng và lưu trú dữ liệu tài chính tại VN |
+| Audit retention | ≥ 24 tháng: hot 30d (DuckDB) + 6 tháng (Parquet) + cold zip per month. **[M1] Internal enterprise control** — không mặc định apply cho mọi entity. Legal review cần thiết trước production deploy để xác định phạm vi áp dụng cụ thể của Nghị định 53/2022/NĐ-CP. |
 | NPF flag | Nếu tổ chức NN fail-to-settle: FOL_FOREIGN_BUY signal penalized -10 MFPM trong 7 phiên (Circular 08/2026/TT-BTC — *pending final regulatory verification*) |
 
 ### 9.3 Maintainability
@@ -1285,8 +1346,14 @@ money_flow:
   mcvd_lookback_days: 20
   mcvd_slope_threshold: 0.01      # |slope| < this → FLAT
   mcvd_consistency_high: 0.60     # ≥ 60% phiên whale positive = consistent UP
-  whale_tick_threshold: 50000     # shares per tick = WHALE (≥50K = 50 tỷ @ 10k)
-  mid_tick_threshold: 5000        # MID size
+  whale_tick_threshold: 50000     # shares per tick → validate by NOTIONAL (see tier below)
+  # [C3 FIX] Threshold đúng theo giá trị: 50K cổ @ 10,000 VND = 0.5 tỷ VND (không phải 50 tỷ)
+  # Sử dụng tier notional bên dưới theo market_cap_tier từ sector_map
+  whale_notional_thresholds:
+    large_cap:  500_000_000   # 500 triệu VND/tick (VCB, HPG, VHM, VIC)
+    mid_cap:    200_000_000   # 200 triệu VND/tick
+    small_cap:  100_000_000   # 100 triệu VND/tick
+  mid_tick_threshold: 5000        # MID size (cổ phần) — keep for backward compat proxy
 
   # SMS thresholds
   sms_strong_buy: 70
@@ -1313,6 +1380,16 @@ money_flow:
   dist_fol_net_5d_threshold: -0.02  # % daily vol
   dist_obv_slope_negative: -0.03
 
+  # Proxy confidence penalty (điểm 4.3)
+  proxy_confidence_penalty:
+    PROXY_OHLCV:    1        # -1 bậc: HIGH→MEDIUM, MEDIUM→LOW
+    PARTIAL_PROXY:  0.5      # -0.5 bậc: MEDIUM→LOW nếu ≥2 components proxy
+    TICK_REAL:      0        # không penalty
+  proxy_data_quality_grade:  # gán vào TickerProfile.data_quality
+    TICK_REAL:      "A"      # full tick data
+    PARTIAL_PROXY:  "B"      # 1 component proxy
+    PROXY_OHLCV:    "C"      # toàn proxy (không có tick)
+
   # Proxy (khi không có tick data)
   proxy_z_vol_threshold: 0.5
   proxy_range_pct_threshold: 0.5  # close > 50% of range = buy proxy
@@ -1329,7 +1406,7 @@ money_flow:
 | Order type on HOSE | **MTL** (Market-to-Limit) — MP orders deprecated under KRX. Remainder after partial fill converts to LO at last matched price. | KRX rollout |
 | Restricted stock trading | **PCA** (Periodic Continuous Auction): 15 rounds × 15 min. Auto-signals blocked during active PCA rounds; cancellation/edit blocked in final 5 min of each round. | KRX/HOSE rules |
 | ATO/ATC session isolation | ATO/ATC run in **separate auction phases** — do not compete with LO time-priority in continuous session. | KRX matching spec |
-| Audit retention | **≥ 24 months** — Nghị định 53/2022/NĐ-CP cybersecurity + financial data localization. | VN Decree 53/2022 |
+| Audit retention | **≥ 24 months** — Internal enterprise control. **[M1] Legal review required** before production: NĐ 53/2022/NĐ-CP applies to specific entity categories; applicability to a local analytics app must be confirmed by counsel. | Internal control |
 | NPF settlement flag | Foreign institutional fail-to-settle triggers 7-day FOL signal penalty. Circular 08/2026/TT-BTC — *verify before production*. | TT 08/2026 (pending) |
 | XBRL fundamental data | SSC IDS XBRL-formatted filings as supplementary input for NLP/fundamental accuracy. **Phase 3+** — requires SSC portal API access. | SSC disclosure portal |
 | **Rust + io_uring** data ingestion daemon | Separate Rust binary (`data/collector_daemon/`) handles SSI market data polling → DuckDB hot path. Linux: io_uring zero-copy recv (kernel ≥ 5.1); Windows dev: Tokio IOCP fallback. Tách biệt hoàn toàn khỏi Python analytics layer. | Board Eval F-07 (re-scoped) |
@@ -1387,7 +1464,7 @@ CREATE TABLE distribution_alerts (
     alert_id        VARCHAR   PRIMARY KEY,
     ticker          VARCHAR   NOT NULL,
     alert_date      DATE      NOT NULL,
-    warning_level   VARCHAR,             -- WATCH|CAUTION|SELL_SIGNAL
+    warning_level   VARCHAR,             -- NONE|WATCH|CAUTION|EXIT|FORCED_EXIT
     flags           VARCHAR,             -- JSON array
     score           INTEGER,
     explanation     TEXT,
@@ -1423,7 +1500,7 @@ src/tradingos/
 │   ├── nlp.py              # Module 7: Advisory generation, SHAP
 │   ├── backtest.py         # Module 8: VN-constrained backtest + walk-forward
 │   ├── universe.py         # build_universe, CAN SLIM, RS Rating
-│   └── atc_router.py       # Smart ATC/MTL router (KRX: MTL partial fill → LO remainder, ATC imbalance, anti-manip gate)
+│   └── execution_advisory.py  # [H1 ADVISORY ONLY — no broker API] Smart ATC/MTL advisor (KRX: MTL partial fill → LO remainder, ATC imbalance, anti-manip gate)
 ├── data/
 │   ├── fetcher.py          # Async SSI EP-1..14 + DNSE
 │   ├── cache.py            # DuckDB TTL management
@@ -1576,7 +1653,7 @@ class BacktestService:
 │                                                                 │
 │  CẢNH BÁO PHÂN PHỐI ─────────────────────────────────────────  │
 │  ⚠️  PDR — CAUTION: Delta Diverge Bearish + OBV off │Score: 5  │
-│  ⚡  NVL — SELL_SIGNAL: AMD Distrib + NN bán ròng  │Score: 7  │
+│  ⚡  NVL — EXIT: AMD Distrib + NN bán ròng  │Score: 7  │
 │  [Xem chi tiết] [Notify]                                       │
 │                                                                 │
 │  DÒNG TIỀN NGOẠI (5d) ────── DÒNG TIỀN NỘI (5d) ──────────── │
