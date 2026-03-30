@@ -1,0 +1,25 @@
+﻿# tradingos — Environment Configuration
+# Copy to config/local.toml and fill in secrets (never commit local.toml)
+
+[api]
+ssi_device_id   = ""        # SSI iboard device UUID — rotate when blocked
+dnse_api_base   = "https://api.dnse.com.vn/chart-api/v2"
+ssi_api_base    = "https://iboard-api.ssi.com.vn"
+cafef_api_base  = "https://historial.cafef.vn"
+
+[data]
+history_days    = 400       # Default OHLCV lookback (trading days)
+ohlcv_ttl_today = 1800      # Seconds before today's bar is re-fetched
+scan_result_ttl = 900       # Seconds before scan result is stale
+db_path         = "data/vn_cache.duckdb"
+
+[strategy]
+kelly_max_pct   = 25.0      # Maximum position size (% of portfolio)
+default_atr_mult_sl  = 1.5  # Stop-loss ATR multiplier
+default_atr_mult_tp1 = 2.0  # TP1 ATR multiplier
+default_atr_mult_tp2 = 3.5  # TP2 ATR multiplier
+
+[ui]
+port_profiler   = 8501
+port_dashboard  = 8502
+theme           = "dark"    # "dark" | "light"

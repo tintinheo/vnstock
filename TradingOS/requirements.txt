@@ -1,0 +1,12 @@
+# Runtime
+streamlit>=1.35
+pandas>=2.0
+numpy>=1.26
+requests>=2.31
+duckdb>=0.10
+plotly>=5.20
+
+# ML (optional — comment out if not needed)
+# tensorflow>=2.15
+# scikit-learn>=1.4
+# prophet>=1.1
