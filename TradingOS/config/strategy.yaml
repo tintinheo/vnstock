@@ -1,0 +1,102 @@
+# TradingOS Alpha — Strategy Configuration v1.1
+# Canonical source-of-truth for all thresholds (SRS §9.4)
+# All prose sections reference these values; do not hardcode elsewhere.
+
+# ── MFPM Scoring ─────────────────────────────────────────────────────────────
+mfpm:
+  min_score_buy:       50     # Below this → NO_ACTION
+  min_score_watch:     35
+  mode_a_weight:       1.0
+  mode_b_weight:       1.0
+  mode_w_sms_gate:     60     # SMS_raw must be >= this to activate Mode W gate
+  mc_min_prob_buy:     0.55   # Min Monte-Carlo win probability for BUY
+  mc_min_prob_strong:  0.60   # Min MC for STRONG_BUY
+
+# ── Mode W Thresholds (ModeW_score) ─────────────────────────────────────────
+mode_w:
+  strong_buy_score:    95     # ModeW_score >= 95 AND AMF=PASS AND MC>=0.60
+  buy_score:           80     # 80-94
+  watch_score:         60     # 60-79
+  sms_raw_gate:        60     # SMS_raw gate to enter Mode W path
+
+# ── Anti-Manipulation Filter ──────────────────────────────────────────────────
+amf:
+  open_spike_threshold:  0.06  # > ±6% at open → flag
+  wash_sale_volume_mult: 3.0   # Volume > 3× avg → suspect
+  bid_ask_imbalance:     0.70  # > 70% one-sided order book
+  vwap_deviation:        0.03  # > 3% from VWAP → alert
+
+# ── Whale / Large Money Flow ──────────────────────────────────────────────────
+whale:
+  # [C3 FIX] threshold bằng notional value, không phải số cổ
+  # Nếu không có tick data, dùng proxy_whale_net_from_daily()
+  whale_tick_threshold_notional:  500_000_000  # 500 triệu VND/tick default
+  whale_notional_thresholds:
+    large_cap:   500_000_000   # 500 triệu VND/tick — VCB, HPG, BID...
+    mid_cap:     200_000_000   # 200 triệu VND/tick — FPT, MWG...
+    small_cap:   100_000_000   # 100 triệu VND/tick — các mã còn lại
+
+  mcvd_lookback_days:   20
+  mcvd_flat_threshold:  0.01   # |slope_normalized| < 0.01 → FLAT
+  stealth_max_atr_pct:  0.015  # Giá hẹp: ATR/Price < 1.5%
+  stealth_obv_min_chg:  0.03   # OBV tăng >= 3%
+  stealth_z_vol_max:    1.5    # Z_vol < 1.5 (no spike)
+
+# ── Proxy Data Quality (4.3 FIX) ─────────────────────────────────────────────
+proxy_confidence_penalty:
+  PROXY_OHLCV:     1      # HIGH→MEDIUM, MEDIUM→LOW
+  PARTIAL_PROXY:   0.5    # MEDIUM→LOW nếu ≥ 2 components là proxy
+  TICK_REAL:       0      # No penalty
+
+proxy_data_quality_grade:
+  TICK_REAL:       "A"
+  PARTIAL_PROXY:   "B"
+  PROXY_OHLCV:     "C"
+
+# ── Entry / Exit Params ───────────────────────────────────────────────────────
+entry_exit:
+  atr_sl_mult:     1.5    # SL = Entry - 1.5 × ATR14
+  atr_tp1_mult:    4.0    # TP1 = Entry + 4 × ATR14
+  atr_tp2_mult:    8.0    # TP2 = Entry + 8 × ATR14
+  t25_window_open:  "09:30"
+  t25_window_close: "10:00"
+  atc_window_start: "14:43"
+
+# ── Position Sizing ───────────────────────────────────────────────────────────
+sizing:
+  kelly_max_pct:   25.0   # Hard cap: max 25% of portfolio per position
+  kelly_fraction:  0.3    # Fractional Kelly (use 30% of full Kelly)
+  min_position_pct: 3.0   # Do not open position < 3% portfolio
+  max_positions:   10     # Max concurrent open positions
+
+# ── Backtesting ───────────────────────────────────────────────────────────────
+backtest:
+  commission_bps:   15    # 15 bps per side (0.15%)
+  slippage_bps:     5     # 5 bps average slippage
+  tax_sell_bps:     10    # 0.1% tax on sell (VN regulation)
+  t2_settlement:    True  # T+2 settlement; cannot sell same day (speculative T+0 blocked)
+  lock_san_prob:    0.02  # ← SYNTHETIC STRESS TEST param; TODO: calibrate per liquidity tier
+  margin_rate:      0.0   # Alpha = no margin
+  walk_forward_is_days: 252   # In-sample: 1 year
+  walk_forward_oos_days: 63   # Out-of-sample: 1 quarter
+
+# ── Universe Filters ──────────────────────────────────────────────────────────
+universe:
+  min_price:        5_000    # VND
+  max_price:        500_000  # VND
+  min_avg_vol_20d:  100_000  # shares/day
+  min_market_cap:   500_000_000_000   # 500 tỷ VND
+  exchanges:        ["HOSE", "HNX"]
+
+# ── CAN SLIM Thresholds ───────────────────────────────────────────────────────
+canslim:
+  eps_growth_min_pct:    25  # EPS growth >= 25% YoY
+  revenue_growth_min_pct: 20
+  rs_rating_min:         70  # Relative Strength rating
+  institutional_support:  True
+
+# ── Sectors ───────────────────────────────────────────────────────────────────
+sectors:
+  mapping_file: "data/sector_map.json"
+  inflow_threshold:   20    # sector inflow_score >= 20 → INFLOW
+  outflow_threshold: -20    # sector inflow_score <= -20 → OUTFLOW

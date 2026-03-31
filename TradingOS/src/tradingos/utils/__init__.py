@@ -1,9 +1,7 @@
-"""
-utils/ — Shared utilities.
+"""utils/ — Shared utilities."""
+from .config import cfg
+from .logging import get_logger, log
+from .dates import is_trading_day, prev_trading_day, trading_day_offset
 
-Modules:
-    logging.py      — Rotating file + console logger factory
-    datetime_vn.py  — VN timezone helpers, trading-day checks
-    math_utils.py   — Tick rounding, price scale detection
-    http.py         — Shared requests.Session with retry/backoff
-"""
+__all__ = ["cfg", "get_logger", "log", "is_trading_day", "prev_trading_day", "trading_day_offset"]
+

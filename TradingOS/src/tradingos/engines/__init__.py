@@ -1,10 +1,17 @@
-"""
-engines/ — Analysis engine wrappers.
+"""TradingOS service engines."""
+from .profiler_service import ProfilerService
+from .scanner_service import ScannerService
+from .money_flow_service import MoneyFlowService
+from .audit_service import AuditService
+from .backtest_service import BacktestService
+from .portfolio_service import PortfolioService, Position
 
-Modules:
-    technical.py    — Indicators: SMA/EMA, RSI, MACD, BB, ADX, VSA, T+2.5
-    forecast.py     — LSTM, Ridge, SARIMA, Prophet, Monte Carlo
-    screening.py    — CANSLIM filter, pivot breakout, pump-dump detection
-    microstructure.py — Intraday VWAP, OFI, Garman-Klass volatility
-    smart_money.py  — Wyckoff phase, BiLSTM weekly direction
-"""
+__all__ = [
+    "ProfilerService",
+    "ScannerService",
+    "MoneyFlowService",
+    "AuditService",
+    "BacktestService",
+    "PortfolioService",
+    "Position",
+]
