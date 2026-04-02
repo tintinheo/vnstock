@@ -117,6 +117,28 @@ class TickerProfile(BaseModel):
     entry_window    : str = "—"
     horizons        : list[dict] = Field(default_factory=list)
 
+    # Phase 1 — put-through integration
+    pt_net_5d       : float = 0.0
+    pt_ratio_5d     : float = 0.0
+
+    # Phase 2 — Macro Regime (macro.py)
+    macro_score     : Optional[float] = None   # -100 to +100; None = data unavailable
+    macro_regime    : str             = ""     # ACCOMMODATIVE | NEUTRAL | RESTRICTIVE | ""
+    macro_confidence: str             = ""     # HIGH | MEDIUM | LOW | ""
+    macro_staleness_days: int         = 0      # days since macro data was refreshed
+
+    # Phase 2 — Earnings / BCTC Risk (earnings.py)
+    earnings_risk   : str             = "SAFE"  # SAFE | CAUTION | HIGH_RISK
+    days_to_earnings: Optional[int]   = None    # calendar days to next pub date
+    next_earnings_date: str           = ""      # ISO date string, "" if unknown
+
+    # Phase 3 — Fundamentals (fundamental.py)
+    fundamental_score   : Optional[float] = None  # 0-100; None if insufficient data
+    eps_growth_yoy      : Optional[float] = None  # net-income YoY %
+    revenue_growth_yoy  : Optional[float] = None  # revenue YoY %
+    roe                 : Optional[float] = None  # Return on Equity %
+    debt_to_equity      : Optional[float] = None  # Leverage ratio
+
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
 
@@ -150,6 +172,11 @@ class ScanResultItem(BaseModel):
     amf_decision    : str
     best_pattern    : str
     hmm_state       : HMM_STATE
+    sector_flow     : str = "NEUTRAL"
+    earnings_risk   : str = "SAFE"
+    fundamental_score: Optional[float] = None
+    macro_regime    : str = ""     # ACCOMMODATIVE | NEUTRAL | RESTRICTIVE | ""
+    macro_score     : Optional[float] = None
 
 
 class ScanResult(BaseModel):
@@ -273,3 +300,6 @@ class TradingSignal(BaseModel):
     stealth_confidence : str = "LOW"
     sector_flow     : SECTOR_FLOW = "NEUTRAL"
     advisory_text   : str = ""
+    # Phase 1 — put-through integration
+    pt_net_5d       : float = 0.0
+    pt_ratio_5d     : float = 0.0

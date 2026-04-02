@@ -68,4 +68,4 @@ def render() -> None:
             with st.spinner("Đang phân tích sector..."):
                 rotation = svc.get_sector_flows()
             render_sector_heatmap(rotation)
-            st.markdown(f"**Market Mode:** `{rotation.get('market_mode', '—')}`")
+            st.markdown(f"**Market Mode:** `{rotation.get('rotation_phase', '—')}`")

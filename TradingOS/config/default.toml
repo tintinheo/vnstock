@@ -15,9 +15,10 @@ db_path         = "data/vn_cache.duckdb"
 
 [strategy]
 kelly_max_pct   = 25.0      # Maximum position size (% of portfolio)
-default_atr_mult_sl  = 1.5  # Stop-loss ATR multiplier
-default_atr_mult_tp1 = 2.0  # TP1 ATR multiplier
-default_atr_mult_tp2 = 3.5  # TP2 ATR multiplier
+# ATR multipliers — must match entry_exit section in strategy.yaml
+default_atr_mult_sl  = 1.5  # Stop-loss ATR multiplier (= strategy.yaml entry_exit.atr_sl_mult)
+default_atr_mult_tp1 = 4.0  # TP1 ATR multiplier     (= strategy.yaml entry_exit.atr_tp1_mult)
+default_atr_mult_tp2 = 8.0  # TP2 ATR multiplier     (= strategy.yaml entry_exit.atr_tp2_mult)
 
 [ui]
 port_profiler   = 8501

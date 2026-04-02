@@ -37,7 +37,7 @@ def render() -> None:
             new_ticker = st.text_input("Thêm mã:", max_chars=10).upper()
             add = st.form_submit_button("➕ Thêm")
             if add and new_ticker:
-                cache.add_watchlist(new_ticker)
+                cache.add_to_watchlist(new_ticker)
                 st.success(f"Đã thêm {new_ticker}")
                 st.rerun()
 

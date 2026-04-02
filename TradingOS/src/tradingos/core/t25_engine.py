@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 
 from ..utils.config import cfg
+from ..utils.dates import vn_now, vn_is_atc_time
 
 
 @dataclass
@@ -27,12 +28,11 @@ class T25ExitAdvisory:
 
 
 def _is_atc_time() -> bool:
-    now = datetime.now().time()
-    return time(14, 43) <= now <= time(14, 45)
+    return vn_is_atc_time()
 
 
 def _session_phase() -> str:
-    now = datetime.now().time()
+    now = vn_now().time()
     if now < time(9, 15):
         return "PRE_OPEN"
     elif now < time(9, 30):

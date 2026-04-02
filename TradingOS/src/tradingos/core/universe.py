@@ -95,8 +95,8 @@ def canslim_filters(df: pd.DataFrame, ticker: str) -> dict:
         details["price_reject"] = cur_price
         return {"passed": False, "score": score, "details": details}
 
-    # Minimum avg daily volume
-    min_vol = float(cfg.strategy("universe", "min_avg_daily_vol", default=100_000))
+    # Minimum avg daily volume — YAML key is min_avg_vol_20d
+    min_vol = float(cfg.strategy("universe", "min_avg_vol_20d", default=100_000))
     if vol_50 < min_vol:
         score = 0
         details["vol_reject"] = vol_50

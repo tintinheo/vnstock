@@ -26,7 +26,10 @@ def kelly_fraction(win_prob: float, rr: float, fraction: float = 0.5) -> float:
 def bootstrap_win_prob(df: pd.DataFrame, sl_pct: float, tp_pct: float, n: int = 500) -> float:
     """
     Bootstrap win probability from historical H-day returns.
-    Matches distribution_of_max_gain / distribution_of_max_loss approach.
+    Win probability = wins / (wins + losses) among conclusive paths.
+    Non-conclusive paths (neither TP nor SL hit within the horizon) are
+    excluded from the denominator — they do not count as wins or losses.
+    Falls back to 0.5 when fewer than 20 bars or no conclusive paths.
     """
     returns = df["close"].pct_change().dropna().values
     if len(returns) < 20:
@@ -35,6 +38,7 @@ def bootstrap_win_prob(df: pd.DataFrame, sl_pct: float, tp_pct: float, n: int = 
     rng = np.random.default_rng(42)
     horizons = [5, 7, 10]
     wins = 0
+    losses = 0
 
     for _ in range(n):
         h = rng.choice(horizons)
@@ -48,9 +52,12 @@ def bootstrap_win_prob(df: pd.DataFrame, sl_pct: float, tp_pct: float, n: int = 
         if max_gain >= tp_pct:
             wins += 1
         elif max_loss <= -sl_pct:
-            pass  # loss
+            losses += 1
+        # else: non-conclusive — excluded from denominator
 
-    return round(wins / n, 3)
+    if wins + losses == 0:
+        return 0.5
+    return round(wins / (wins + losses), 3)
 
 
 def compute_position_size(
@@ -60,7 +67,8 @@ def compute_position_size(
     win_prob: float = 0.55,
     rr: float = 2.0,
     max_position_pct: float = 0.10,
-    kelly_fraction_: float = 0.5,
+    kelly_fraction_: float | None = None,
+    macro_multiplier: float = 1.0,
 ) -> dict:
     """
     Returns:
@@ -72,9 +80,16 @@ def compute_position_size(
     if entry <= 0 or sl >= entry:
         return {"size_pct": 0.0, "shares": 0, "risk_amount": 0, "lot_size": 100}
 
+    # Read kelly_fraction from strategy.yaml (0.3 = 30% fractional Kelly per spec).
+    # Only fall back to the function parameter when explicitly overridden by caller.
+    if kelly_fraction_ is None:
+        kelly_fraction_ = float(cfg.strategy("sizing", "kelly_fraction", default=0.3))
+
     k = kelly_fraction(win_prob, rr, kelly_fraction_)
 
-    max_pct = float(cfg.strategy("sizing", "max_single_position_pct", default=max_position_pct))
+    max_pct = float(cfg.strategy("sizing", "kelly_max_pct", default=max_position_pct * 100)) / 100
+    # Apply macro regime multiplier (0.32–1.0 from macro engine)
+    max_pct = max_pct * float(macro_multiplier)
     # Floor and ceiling
     size_pct = float(np.clip(k, 0.02, max_pct))
 

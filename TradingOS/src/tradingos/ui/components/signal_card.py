@@ -58,6 +58,10 @@ def render_signal_card(profile) -> None:
             st.markdown(f"**AMD Phase:** {profile.amd_phase}")
             st.markdown(f"**AMF:** {profile.amf_decision}")
             st.markdown(f"**Pattern:** {profile.best_pattern}")
+            st.markdown(f"**Sector Flow:** {getattr(profile, 'sector_flow', 'NEUTRAL')}")
+            st.markdown(f"**Macro:** {getattr(profile, 'macro_regime', '—')} ({getattr(profile, 'macro_score', '—')})")
+            st.markdown(f"**BCTC Risk:** {getattr(profile, 'earnings_risk', 'SAFE')}")
+            st.markdown(f"**Fundamental:** {getattr(profile, 'fundamental_score', '—')}")
 
     if profile.advisory_text:
         st.markdown(profile.advisory_text)

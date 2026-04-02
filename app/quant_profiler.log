@@ -5035,3 +5035,19 @@
 2026-03-31 13:47:00 INFO     quant_profiler │ BKG  price=2600  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BULL_TREND  bull=10  bear=13  confirmed=False
 2026-03-31 13:47:15 INFO     quant_profiler │ BMC  price=13550  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
 2026-03-31 13:47:31 INFO     quant_profiler │ DC4  price=9100  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=11  bear=10  confirmed=False
+2026-04-01 12:49:26 INFO     quant_profiler │ TOT  price=15900  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=14  bear=10  confirmed=True
+2026-04-01 12:49:30 INFO     quant_profiler │ SAF  price=54000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-01 12:49:36 INFO     quant_profiler │ DAT  price=8020  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=11  confirmed=True
+2026-04-01 12:49:41 INFO     quant_profiler │ UIC  price=60100  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=13  bear=6  confirmed=True
+2026-04-01 12:49:49 INFO     quant_profiler │ HPG  price=27300  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-01 12:50:09 INFO     quant_profiler │ DSC  price=13050  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=14  confirmed=True
+2026-04-01 12:50:25 INFO     quant_profiler │ TDW  price=46000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=3  confirmed=True
+2026-04-01 12:50:37 INFO     quant_profiler │ TN1  price=16300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=8  confirmed=False
+2026-04-01 12:50:58 INFO     quant_profiler │ HU1  price=6280  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-01 12:51:13 INFO     quant_profiler │ VAF  price=20400  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=16  bear=5  confirmed=True
+2026-04-01 12:51:34 INFO     quant_profiler │ SFC  price=19000  signal=THEO DÕI–GIẢM  VSA=DISTRIB  regime=SIDEWAYS  bull=8  bear=13  confirmed=False
+2026-04-01 12:51:54 INFO     quant_profiler │ DCL  price=59600  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=11  confirmed=True
+2026-04-01 12:52:09 INFO     quant_profiler │ MDG  price=42400  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BULL_TREND  bull=15  bear=13  confirmed=True
+2026-04-01 12:52:27 INFO     quant_profiler │ CTB  price=16700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=11  confirmed=False
+2026-04-01 12:52:46 INFO     quant_profiler │ GMX  price=16200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=16  confirmed=False
+2026-04-01 12:52:57 INFO     quant_profiler │ TVB  price=7430  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=17  confirmed=True

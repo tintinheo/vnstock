@@ -18,6 +18,9 @@ from .nlp import generate_signal_text, generate_exit_advisory_text
 from .backtest import run_backtest, compare_modes
 from .universe import build_universe, compute_universe_rs
 from .execution_advisory import advise_entry_window, advise_exit_window
+from .macro import compute_macro_regime, macro_sizing_multiplier, macro_score_gate_adjustment
+from .earnings import compute_earnings_risk, earnings_stop_tightener, earnings_gate_adjustment
+from .fundamental import compute_fundamental_snapshot, canslim_fundamental_override
 
 __all__ = [
     "compute_indicators",
@@ -34,4 +37,7 @@ __all__ = [
     "run_backtest", "compare_modes",
     "build_universe", "compute_universe_rs",
     "advise_entry_window", "advise_exit_window",
+    "compute_macro_regime", "macro_sizing_multiplier", "macro_score_gate_adjustment",
+    "compute_earnings_risk", "earnings_stop_tightener", "earnings_gate_adjustment",
+    "compute_fundamental_snapshot", "canslim_fundamental_override",
 ]

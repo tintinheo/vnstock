@@ -48,9 +48,20 @@ def obv(df: pd.DataFrame) -> pd.Series:
 
 # ── VWAP ──────────────────────────────────────────────────────────────────────
 
-def vwap_daily(df: pd.DataFrame) -> pd.Series:
-    """Daily reference VWAP = (H+L+C)/3 (typical price × 1)."""
-    return (df["high"] + df["low"] + df["close"]) / 3
+def vwap_daily(df: pd.DataFrame, window: int = 20) -> pd.Series:
+    """
+    Rolling volume-weighted average price (true VWAP for daily bars).
+
+    Uses a `window`-bar rolling sum so each day's value reflects the
+    volume-weighted price over the recent window — a meaningful reference
+    for detecting price manipulation vs. actual traded value.
+    For the first `window-1` bars, falls back to the typical price to
+    avoid NaN propagation.
+    """
+    tp = (df["high"] + df["low"] + df["close"]) / 3
+    rolling_tpvol = (tp * df["volume"]).rolling(window, min_periods=1).sum()
+    rolling_vol   = df["volume"].rolling(window, min_periods=1).sum().replace(0, 1)
+    return rolling_tpvol / rolling_vol
 
 
 def vwap_intraday(df_5m: pd.DataFrame) -> pd.Series:
@@ -72,8 +83,13 @@ def bollinger(series: pd.Series, period: int = 20, num_std: float = 2.0) -> tupl
 
 # ── Hurst Exponent ────────────────────────────────────────────────────────────
 
-def hurst_exponent(series: pd.Series, max_lag: int = 20) -> float:
-    """Approximate Hurst exponent via R/S analysis."""
+def hurst_exponent(series: pd.Series, max_lag: int = 40) -> float:
+    """
+    Approximate Hurst exponent via R/S analysis.
+    Requires at least max_lag*2 samples for a statistically reliable estimate.
+    Increased default max_lag from 20→40 (needs ≥80 bars) to reduce estimation
+    noise, and minimum series length requirement now enforces this.
+    """
     if len(series) < max_lag * 2:
         return 0.5
     lags = range(2, max_lag)
@@ -161,9 +177,9 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
 
     df["VWAP_daily"] = vwap_daily(df)
 
-    # Hurst — compute on last 100 bars
-    if len(df) >= 50:
-        h = hurst_exponent(df["close"].tail(100))
+    # Hurst — compute on last 200 bars for reliable R/S statistics (needs ≥80)
+    if len(df) >= 80:
+        h = hurst_exponent(df["close"].tail(200))
         df["Hurst"] = h  # scalar broadcast
     else:
         df["Hurst"] = 0.5

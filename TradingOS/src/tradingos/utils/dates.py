@@ -1,7 +1,40 @@
 """Utility: Vietnamese trading calendar helpers."""
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+
+
+# ── Vietnam timezone (UTC+7) ──────────────────────────────────────────────────
+
+VN_TZ = timezone(timedelta(hours=7))
+
+
+def vn_now() -> datetime:
+    """Return the current datetime in Vietnam timezone (UTC+7)."""
+    return datetime.now(VN_TZ)
+
+
+def vn_session_phase() -> str:
+    """
+    Return the current HOSE/HNX trading session phase based on Vietnam time.
+    Phases: PRE_MARKET | PRE_ATO | ATO | MORNING | LUNCH | AFTERNOON | NEAR_ATC | ATC | CLOSED
+    """
+    now = vn_now().time()
+    if now < time(9, 0):      return "PRE_MARKET"
+    elif now < time(9, 15):   return "PRE_ATO"
+    elif now < time(9, 30):   return "ATO"
+    elif now < time(11, 30):  return "MORNING"
+    elif now < time(13, 0):   return "LUNCH"
+    elif now < time(14, 30):  return "AFTERNOON"
+    elif now < time(14, 43):  return "NEAR_ATC"
+    elif now <= time(14, 45): return "ATC"
+    else:                     return "CLOSED"
+
+
+def vn_is_atc_time() -> bool:
+    """Return True when currently inside the ATC window (14:43–14:45 Vietnam time)."""
+    now = vn_now().time()
+    return time(14, 43) <= now <= time(14, 45)
 
 
 # VN public holidays 2025-2026 (static; extend as needed)

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 import json
-from datetime import date, datetime, timedelta
+import threading
+from datetime import date, datetime, timedelta, timezone
 from typing import Any
 
 import duckdb
@@ -105,6 +106,23 @@ CREATE TABLE IF NOT EXISTS backtest_results (
     created_at  TIMESTAMP
 );
 
+-- Paper Trading Ledger
+CREATE TABLE IF NOT EXISTS trade_ledger (
+    trade_id    VARCHAR PRIMARY KEY,
+    ticker      VARCHAR NOT NULL,
+    entry_date  DATE NOT NULL,
+    entry_price DOUBLE,
+    initial_sl  DOUBLE,
+    signal_mode VARCHAR,
+    mfpm_score  INTEGER,
+    mc_prob     DOUBLE,
+    status      VARCHAR DEFAULT 'OPEN', -- OPEN, CLOSED
+    exit_date   DATE,
+    exit_price  DOUBLE,
+    pnl_pct     DOUBLE,
+    created_at  TIMESTAMP
+);
+
 -- Sector map
 CREATE TABLE IF NOT EXISTS sector_map (
     ticker      VARCHAR PRIMARY KEY,
@@ -160,28 +178,44 @@ CREATE TABLE IF NOT EXISTS distribution_alerts (
 
 
 class Cache:
-    """Thread-local DuckDB connection wrapper with TTL management."""
+    """
+    DuckDB cache with per-thread connections.
+
+    DuckDB file connections are NOT safe to share across threads — concurrent
+    writes from the scanner's thread pool cause 'unsuccessful/closed pending
+    query' errors.  Each thread opens its own connection to the same file, which
+    DuckDB supports via its built-in multi-writer WAL.
+    """
 
     def __init__(self) -> None:
         self._db_path = str(cfg.db_path)
-        self._con: duckdb.DuckDBPyConnection | None = None
+        self._local = threading.local()
 
     @property
     def con(self) -> duckdb.DuckDBPyConnection:
-        if self._con is None:
+        """Return a per-thread connection, creating it on first access."""
+        conn = getattr(self._local, "conn", None)
+        if conn is None:
             try:
-                self._con = duckdb.connect(self._db_path)
-                self._con.execute(_DDL)
-            except Exception:
-                # File locked by another process — fall back to in-memory DB
-                self._con = duckdb.connect(":memory:")
-                self._con.execute(_DDL)
-        return self._con
+                conn = duckdb.connect(self._db_path, read_only=False)
+                conn.execute(_DDL)
+            except duckdb.ConnectionException:
+                # File locked by another process or config mismatch —
+                # fall back to in-memory DB so the UI stays functional.
+                import logging as _logging
+                _logging.getLogger("tradingos").warning(
+                    "DuckDB file connection failed — using in-memory fallback for this thread"
+                )
+                conn = duckdb.connect(":memory:")
+                conn.execute(_DDL)
+            self._local.conn = conn
+        return conn
 
     def close(self) -> None:
-        if self._con:
-            self._con.close()
-            self._con = None
+        conn = getattr(self._local, "conn", None)
+        if conn:
+            conn.close()
+            self._local.conn = None
 
     # ── OHLCV ────────────────────────────────────────────────────────────────
 
@@ -194,7 +228,7 @@ class Cache:
     def put_ohlcv(self, ticker: str, df: pd.DataFrame) -> None:
         df = df.copy()
         df["ticker"] = ticker
-        df["fetched_at"] = datetime.utcnow()
+        df["fetched_at"] = datetime.now(timezone.utc)
         if "trade_date" not in df.columns and "date" in df.columns:
             df = df.rename(columns={"date": "trade_date"})
         self.con.execute(
@@ -209,7 +243,7 @@ class Cache:
         ).fetchone()
         if not row:
             return False
-        age = (datetime.utcnow() - row[0]).total_seconds()
+        age = (datetime.now(timezone.utc) - row[0].replace(tzinfo=timezone.utc)).total_seconds()
         return age < ttl
 
     # ── Money Flow Daily ──────────────────────────────────────────────────────
@@ -233,7 +267,7 @@ class Cache:
                 record.get("fol_net"), record.get("cvd_end"),
                 record.get("sms"), record.get("sms_label"),
                 record.get("stealth_accum", False), record.get("sector_flow"),
-                datetime.utcnow(),
+                datetime.now(timezone.utc),
             ],
         )
 
@@ -247,7 +281,7 @@ class Cache:
         ).fetchone()
         if not row:
             return None
-        age = (datetime.utcnow() - row[1]).total_seconds()
+        age = (datetime.now(timezone.utc) - row[1].replace(tzinfo=timezone.utc)).total_seconds()
         if age > ttl:
             return None
         return json.loads(row[0])
@@ -255,7 +289,7 @@ class Cache:
     def put_scan_result(self, scan_id: str, scan_type: str, scan_date: date, data: dict) -> None:
         self.con.execute(
             "INSERT OR REPLACE INTO scan_results (scan_id,scan_date,scan_type,results_json,created_at) VALUES (?,?,?,?,?)",
-            [scan_id, scan_date, scan_type, json.dumps(data, default=str), datetime.utcnow()],
+            [scan_id, scan_date, scan_type, json.dumps(data, default=str), datetime.now(timezone.utc)],
         )
 
     # ── Audit Log ────────────────────────────────────────────────────────────
@@ -270,7 +304,7 @@ class Cache:
                VALUES (?,?,?,?,?,?,?,?,?,?,?)""",
             [
                 audit_id, record["event_type"], record.get("ticker"),
-                record.get("timestamp", datetime.utcnow()),
+                record.get("timestamp") or datetime.now(timezone.utc),
                 record.get("signal_id"), record.get("action"),
                 record.get("mfpm_score"), record.get("sms_raw"),
                 record.get("amf_decision"), record.get("rejected_reason"),
@@ -286,7 +320,7 @@ class Cache:
         limit: int = 200,
     ) -> pd.DataFrame:
         from datetime import timedelta
-        start = datetime.utcnow() - timedelta(days=days_back)
+        start = datetime.now(timezone.utc) - timedelta(days=days_back)
         event_types = [event_type] if event_type else None
         clauses = ["timestamp>=?"]
         params: list[Any] = [start]
@@ -315,7 +349,7 @@ class Cache:
                 alert["alert_id"], alert["ticker"], alert["alert_date"],
                 alert["warning_level"], json.dumps(alert.get("flags", [])),
                 alert.get("score", 0), alert.get("explanation", ""),
-                alert.get("resolved", False), datetime.utcnow(),
+                alert.get("resolved", False), datetime.now(timezone.utc),
             ],
         )
 
@@ -336,7 +370,7 @@ class Cache:
                 sector, flow_date,
                 record.get("inflow_score"), record.get("sms_avg"),
                 record.get("momentum_5d"), record.get("flow_status"),
-                json.dumps(record.get("hot_tickers", [])), datetime.utcnow(),
+                json.dumps(record.get("hot_tickers", [])), datetime.now(timezone.utc),
             ],
         )
 
@@ -357,6 +391,57 @@ class Cache:
             "INSERT OR REPLACE INTO watchlist (ticker,added_at,notes) VALUES (?,?,?)",
             [ticker, date.today(), notes],
         )
+
+    # ── Paper Trading Ledger ──────────────────────────────────────────────────
+
+    def log_paper_trade(self, trade_data: dict) -> None:
+        """Log a new hypothetical trade to the ledger."""
+        import uuid
+        trade_id = trade_data.get("trade_id") or str(uuid.uuid4())
+        self.con.execute(
+            """INSERT OR REPLACE INTO trade_ledger
+               (trade_id, ticker, entry_date, entry_price, initial_sl,
+                signal_mode, mfpm_score, mc_prob, created_at)
+               VALUES (?,?,?,?,?,?,?,?,?)""",
+            [
+                trade_id,
+                trade_data["ticker"],
+                trade_data["entry_date"],
+                trade_data.get("entry_price"),
+                trade_data.get("initial_sl"),
+                trade_data.get("signal_mode"),
+                trade_data.get("mfpm_score"),
+                trade_data.get("mc_prob"),
+                datetime.now(timezone.utc),
+            ],
+        )
+
+    def close_paper_trade(self, ticker: str, exit_price: float, exit_date: date | None = None) -> int:
+        """
+        Mark the most recent OPEN trade for *ticker* as CLOSED.
+        Returns the number of rows updated (0 if none found).
+        """
+        exit_date = exit_date or date.today()
+        row = self.con.execute(
+            "SELECT trade_id, entry_price FROM trade_ledger WHERE ticker=? AND status='OPEN' ORDER BY entry_date DESC LIMIT 1",
+            [ticker],
+        ).fetchone()
+        if not row:
+            return 0
+        trade_id, entry_price = row
+        pnl_pct = ((exit_price - entry_price) / max(entry_price, 1e-9)) * 100
+        self.con.execute(
+            "UPDATE trade_ledger SET status='CLOSED', exit_date=?, exit_price=?, pnl_pct=? WHERE trade_id=?",
+            [exit_date, exit_price, round(pnl_pct, 4), trade_id],
+        )
+        return 1
+
+    def get_trade_ledger(self, only_open: bool = False) -> pd.DataFrame:
+        """Return the full trade ledger as a DataFrame."""
+        where = "WHERE status='OPEN'" if only_open else ""
+        return self.con.execute(
+            f"SELECT * FROM trade_ledger {where} ORDER BY entry_date DESC"
+        ).df()
 
     # ── Sector Map ────────────────────────────────────────────────────────────
 

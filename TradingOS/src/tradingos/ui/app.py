@@ -43,7 +43,7 @@ with st.sidebar:
 
     page = st.radio(
         "Navigation",
-        options=["🔍 Profiler", "📡 Scanner", "🐳 Dòng tiền", "📊 Backtest", "🗂 Audit", "⚙️ Cài đặt"],
+        options=["🔍 Profiler", "📡 Scanner", "🏆 Performance", "🐳 Dòng tiền", "📊 Backtest", "🗂 Audit", "⚙️ Cài đặt"],
         key="nav",
     )
 
@@ -53,12 +53,14 @@ with st.sidebar:
     st.caption("v1.1 Alpha")
 
 # ── Route to pages ────────────────────────────────────────────────────────────
-from tradingos.ui.pages import profiler, scanner, money_flow, backtest, audit, settings
+from tradingos.ui.pages import profiler, scanner, money_flow, backtest, audit, settings, performance
 
 if page == "🔍 Profiler":
     profiler.render()
 elif page == "📡 Scanner":
     scanner.render()
+elif page == "🏆 Performance":
+    performance.render()
 elif page == "🐳 Dòng tiền":
     money_flow.render()
 elif page == "📊 Backtest":

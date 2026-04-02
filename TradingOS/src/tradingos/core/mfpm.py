@@ -9,8 +9,12 @@ import numpy as np
 import pandas as pd
 
 from ..utils.config import cfg
+from .earnings import earnings_gate_adjustment
+from .fundamental import canslim_fundamental_override
 from .indicators import rsi as compute_rsi
 from .money_flow import compute_smart_money_score, mode_w_entry_params
+from .macro import macro_score_gate_adjustment
+from .patterns import second_mouse_gate
 
 
 # ── Mode A Score (Pullback entry) ─────────────────────────────────────────────
@@ -60,29 +64,42 @@ def score_mode_a(df: pd.DataFrame) -> int:
 
 # ── Mode B Score (Breakout entry) ─────────────────────────────────────────────
 
-def score_mode_b(df: pd.DataFrame) -> int:
+def score_mode_b(df: pd.DataFrame, pattern_result: dict) -> int:
     """
     Mode B: Close > Pivot high + Volume surge.
     Max score contribution: 60.
+    [C7] Adds Second Mouse Gate confirmation.
     """
     if len(df) < 20:
         return 0
     score = 0
 
     last = df.iloc[-1]
-    pivot_high = float(df["high"].tail(20).iloc[:-1].max())
+    # Use pattern pivot if available (e.g. VCP, CwH), else use 20d high
+    pivot_high = pattern_result.get("pivot", float(df["high"].tail(20).iloc[:-1].max()))
     avg_vol = df["volume"].tail(20).mean()
 
     # Breakout above pivot
-    if float(last["close"]) > pivot_high:
+    is_breakout = float(last["close"]) > pivot_high
+    if is_breakout:
         score += 25
+
+    # [C7] Second Mouse Gate confirmation
+    if is_breakout:
+        gate_result = second_mouse_gate(df, breakout_level=pivot_high, lookback=10)
+        if gate_result.get("confirmed"):
+            score += 15 # Major bonus for confirmed retest
+        else:
+            # Penalize if it's a fresh breakout without retest yet
+            if gate_result.get("days_since_breakout", 10) <= 2:
+                score -= 10
 
     # Volume surge
     vol_ratio = float(last["volume"]) / max(avg_vol, 1)
     if vol_ratio > 1.5:
-        score += 20
+        score += 15 # Weight reduced from 20
     elif vol_ratio > 1.2:
-        score += 10
+        score += 8  # Weight reduced from 10
 
     # ATR expansion (momentum)
     if "ATR14" in df.columns:
@@ -97,7 +114,8 @@ def score_mode_b(df: pd.DataFrame) -> int:
         if 55 <= rsi_now <= 75:
             score += 5
 
-    return min(score, 60)
+    # Floor at 0: penalties from Second Mouse Gate veto must not produce negative
+    return max(0, min(score, 60))
 
 
 # ── Mode W Score (Follow-the-Whale) ───────────────────────────────────────────
@@ -147,26 +165,27 @@ def monte_carlo_win_prob(
     horizon: int = 10,
 ) -> float:
     """
-    Quick Monte Carlo: simulate price paths using historical returns.
-    Returns probability that price reaches TP before SL.
+    Bootstrap Monte Carlo: resample actual historical returns (not Gaussian).
+    VN stocks have fat tails and crash-clustering that a Normal distribution
+    grossly underestimates.  Drawing from the empirical distribution preserves
+    those extremes and gives a more conservative, realistic win probability.
+    Returns probability that price reaches TP before SL within `horizon` bars.
     """
     if df.empty or entry <= 0 or sl >= entry or tp <= entry:
         return 0.5
 
-    returns = df["close"].pct_change().dropna().tail(252)
+    returns = df["close"].pct_change().dropna().tail(252).values
     if len(returns) < 30:
         return 0.5
-
-    mu = float(returns.mean())
-    sigma = float(returns.std())
 
     wins = 0
     rng = np.random.default_rng(42)
     for _ in range(n_sim):
         price = entry
-        for _ in range(horizon):
-            r = rng.normal(mu, sigma)
-            price *= (1 + r)
+        # Bootstrap: resample from actual return distribution (fat-tails included)
+        path = rng.choice(returns, size=horizon, replace=True)
+        for r in path:
+            price *= (1 + float(r))
             if price <= sl:
                 break
             if price >= tp:
@@ -222,6 +241,9 @@ def compute_mfpm(
     amd_phase: str = "RANGING",
     sector_flow: str = "NEUTRAL",
     horizons: list[int] | None = None,
+    macro_result=None,
+    earnings_risk=None,
+    fundamental_snapshot=None,
 ) -> dict:
     """
     Full MFPM scoring pipeline.
@@ -236,7 +258,7 @@ def compute_mfpm(
 
     # Base scores
     a = score_mode_a(df)
-    b = score_mode_b(df)
+    b = score_mode_b(df, pattern_result) # [C7] Pass pattern result
     pattern_bonus = pattern_result.get("pattern_bonus", 0)
 
     # SMS bonus for Mode A/B
@@ -255,7 +277,24 @@ def compute_mfpm(
     if mcvd_detail.get("mcvd_vs_price") == "DIVERGE_BEARISH":
         sms_bonus = -25
 
-    base_mfpm = max(a, b) + sms_bonus + pattern_bonus
+    technical_score = max(a, b)
+    blended_canslim = technical_score
+    if fundamental_snapshot is not None:
+        blended_canslim = canslim_fundamental_override(fundamental_snapshot, technical_score)
+
+    fundamental_bonus = 0
+    if fundamental_snapshot is not None and getattr(fundamental_snapshot, "fundamental_score", None) is not None:
+        f_score = float(fundamental_snapshot.fundamental_score)
+        if f_score >= 75:
+            fundamental_bonus = 12
+        elif f_score >= 60:
+            fundamental_bonus = 6
+        elif f_score < 35:
+            fundamental_bonus = -10
+        elif f_score < 45:
+            fundamental_bonus = -4
+
+    base_mfpm = blended_canslim + sms_bonus + pattern_bonus + fundamental_bonus
 
     # Mode W
     stealth_det = sms_result.get("stealth_detail", {})
@@ -297,6 +336,9 @@ def compute_mfpm(
     mode_w_strong = int(cfg.strategy("mode_w", "strong_buy_score", default=95))
     mode_w_buy = int(cfg.strategy("mode_w", "buy_score", default=80))
     mode_w_watch = int(cfg.strategy("mode_w", "watch_score", default=60))
+    gate_delta = int(macro_score_gate_adjustment(macro_result))
+    if earnings_risk is not None:
+        gate_delta += int(earnings_gate_adjustment(earnings_risk))
 
     # Determine entry params first (for MC calc)
     params = mode_w_entry_params(df, sms_result)
@@ -310,6 +352,8 @@ def compute_mfpm(
     # Distribution warning override
     dist_warning = sms_result.get("distribution_warning", "NONE")
 
+    sms_label = sms_result.get("sms_label", "RETAIL_DRIVEN")
+
     if dist_warning in ("EXIT", "FORCED_EXIT"):
         action = dist_warning
         confidence = "—"
@@ -317,23 +361,30 @@ def compute_mfpm(
         action = "FORCED_EXIT"
         confidence = "—"
     elif signal_mode == "MODE_W":
-        if w >= mode_w_strong and amf_decision == "PASS" and mc_prob >= mc_prob_strong:
+        if w >= mode_w_strong + gate_delta and amf_decision == "PASS" and mc_prob >= mc_prob_strong:
             action = "STRONG_BUY"
-        elif w >= mode_w_buy:
+        elif w >= mode_w_buy + gate_delta:
             action = "BUY"
-        elif w >= mode_w_watch:
+        elif w >= mode_w_watch + max(gate_delta, 0):
             action = "WATCH"
         else:
             action = "NO_ACTION"
+        # Override: WHALE_DISTRIBUTING negates any WATCH signal — whales are exiting
+        if action == "WATCH" and sms_label == "WHALE_DISTRIBUTING":
+            action = "NO_ACTION"
     else:
-        min_score = int(cfg.strategy("mfpm", "min_score_buy", default=50))
-        if mfpm_score >= 70 and amf_decision == "PASS" and mc_prob >= mc_prob_buy:
+        min_buy   = int(cfg.strategy("mfpm", "min_score_strong_buy", default=70)) + gate_delta
+        min_watch = int(cfg.strategy("mfpm", "min_score_watch",       default=50)) + max(gate_delta, 0)
+        if mfpm_score >= min_buy and amf_decision == "PASS" and mc_prob >= mc_prob_buy:
             action = "BUY"
-        elif mfpm_score >= min_score:
+        elif mfpm_score >= min_watch:
             action = "WATCH"
         elif amf_decision == "BLOCK":
             action = "NO_ACTION"
         else:
+            action = "NO_ACTION"
+        # Override: WHALE_DISTRIBUTING negates any WATCH signal — whales are exiting
+        if action == "WATCH" and sms_label == "WHALE_DISTRIBUTING":
             action = "NO_ACTION"
 
     # ── Layer 3: Confidence ────────────────────────────────────────────────
@@ -372,6 +423,9 @@ def compute_mfpm(
         "mode_b_score": b,
         "mode_w_score": w,
         "mfpm_score": mfpm_score,
+        "gate_delta": gate_delta,
+        "blended_canslim_score": round(float(blended_canslim), 1),
+        "fundamental_bonus": fundamental_bonus,
         "action": action,
         "confidence": confidence,
         "signal_mode": signal_mode,

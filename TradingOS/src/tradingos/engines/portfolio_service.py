@@ -134,6 +134,13 @@ class PortfolioService:
                     "entry_window": exec_adv.get("window", "—"),
                 })
 
+                # ── Close paper trade in ledger when exit is triggered ─────
+                if t25.action in ("SELL_FULL_ATC", "SELL_PARTIAL"):
+                    from datetime import date as _date
+                    closed = cache.close_paper_trade(ticker, current_price, _date.today())
+                    if closed:
+                        log.info(f"Paper trade closed: {ticker} @ {current_price:.2f} ({t25.action})")
+
             except Exception as e:
                 log.warning(f"Exit advisory error {ticker}: {e}")
 

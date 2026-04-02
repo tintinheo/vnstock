@@ -4,13 +4,15 @@
 
 # ── MFPM Scoring ─────────────────────────────────────────────────────────────
 mfpm:
-  min_score_buy:       50     # Below this → NO_ACTION
-  min_score_watch:     35
-  mode_a_weight:       1.0
-  mode_b_weight:       1.0
-  mode_w_sms_gate:     60     # SMS_raw must be >= this to activate Mode W gate
-  mc_min_prob_buy:     0.55   # Min Monte-Carlo win probability for BUY
-  mc_min_prob_strong:  0.60   # Min MC for STRONG_BUY
+  # Gate thresholds in compute_mfpm() Layer 2:
+  min_score_strong_buy: 70   # mfpm_score >= this (+ AMF PASS + MC >= mc_min_prob_buy) → BUY
+  min_score_watch:      50   # min_score_buy in YAML was previously semantically wrong;
+                             # this key is the WATCH gate (mfpm_score >= 50 → WATCH)
+  mode_a_weight:        1.0
+  mode_b_weight:        1.0
+  mode_w_sms_gate:      60   # SMS_raw must be >= this to activate Mode W gate
+  mc_min_prob_buy:      0.55 # Min Monte-Carlo win probability for BUY
+  mc_min_prob_strong:   0.60 # Min MC for STRONG_BUY
 
 # ── Mode W Thresholds (ModeW_score) ─────────────────────────────────────────
 mode_w:
@@ -75,7 +77,13 @@ backtest:
   slippage_bps:     5     # 5 bps average slippage
   tax_sell_bps:     10    # 0.1% tax on sell (VN regulation)
   t2_settlement:    True  # T+2 settlement; cannot sell same day (speculative T+0 blocked)
-  lock_san_prob:    0.02  # ← SYNTHETIC STRESS TEST param; TODO: calibrate per liquidity tier
+  lock_san_prob:    0.02  # default (large-cap); overridden per liquidity tier below
+  # Tiered lock_san (limit-down) probability by 20-day avg daily volume
+  # Small-caps experience lock_san 5–15× more frequently than large-caps.
+  lock_san_by_liquidity:
+    liquid:    0.01   # avg_vol_20d > 1_000_000 shares (VCB, HPG, BID, …)
+    normal:    0.03   # avg_vol_20d  100_000 – 1_000_000 shares
+    illiquid:  0.08   # avg_vol_20d <  100_000 shares (small-caps, penny stocks)
   margin_rate:      0.0   # Alpha = no margin
   walk_forward_is_days: 252   # In-sample: 1 year
   walk_forward_oos_days: 63   # Out-of-sample: 1 quarter
@@ -95,8 +103,49 @@ canslim:
   rs_rating_min:         70  # Relative Strength rating
   institutional_support:  True
 
+# ── Scanner ───────────────────────────────────────────────────────────────────
+scanner:
+  per_ticker_timeout_s: 60   # 3 API calls per ticker now (OHLCV + PT + FOL); was 25
+
 # ── Sectors ───────────────────────────────────────────────────────────────────
 sectors:
   mapping_file: "data/sector_map.json"
   inflow_threshold:   20    # sector inflow_score >= 20 → INFLOW
   outflow_threshold: -20    # sector inflow_score <= -20 → OUTFLOW
+
+# ── Macro Regime Engine ───────────────────────────────────────────────────────
+macro:
+  sbv_usdvnd_ceiling:    26000   # SBV managed ceiling (VND per 1 USD)
+  # Score bands → regime (with hysteresis ±10)
+  accommodative_min:     15      # score >= +15 → ACCOMMODATIVE
+  restrictive_max:      -15      # score <= -15 → RESTRICTIVE
+  # Sizing multipliers per regime (applied to kelly_max_pct)
+  sizing_accommodative:  1.00    # full Kelly in accommodative regime
+  sizing_neutral:        0.65    # 65% Kelly when neutral
+  sizing_restrictive:    0.32    # 32% Kelly when restrictive
+  # Gate delta: additive offset on BUY SMS threshold
+  gate_delta_accommodative: -5.0  # lower the bar (easier entry)
+  gate_delta_neutral:        0.0
+  gate_delta_restrictive:   10.0  # raise the bar (harder entry)
+  # Data staleness: penalty 5 pts/day after grace_days
+  staleness_grace_days:   3
+  staleness_pts_per_day:  5
+  staleness_cap_pts:     40
+
+# ── Earnings / BCTC Risk ──────────────────────────────────────────────────────
+earnings:
+  caution_days_before:         14    # ≤14 days before pub → CAUTION
+  high_risk_days_before:        5    # ≤5 days before pub → HIGH_RISK
+  caution_stop_tightener:      0.80  # multiply trailing-stop ATR mult
+  high_risk_stop_tightener:    0.60
+  caution_gate_delta:           5.0  # raise SMS entry gate by 5 pts
+  high_risk_gate_delta:        10.0  # raise SMS entry gate by 10 pts
+
+# ── Fundamental Scoring ───────────────────────────────────────────────────────
+fundamental:
+  eps_growth_min_pct:      25.0  # net-income YoY growth threshold (CANSLIM C)
+  revenue_growth_min_pct:  20.0  # revenue YoY growth threshold
+  roe_min_pct:             15.0  # ROE threshold for profitability score
+  fol_institutional_thr:   20.0  # FOL% assumed to reflect institutional interest
+  # Blend weight for canslim_fundamental_override()
+  real_data_weight:        0.70  # 70% real fundamental, 30% technical proxy

@@ -198,6 +198,73 @@ def detect_rsi_divergence(df: pd.DataFrame) -> dict:
     return {"detected": False, "type": "NONE"}
 
 
+# ── Second Mouse Gate (Breakout Confirmation) ───────────────────────────────
+
+def second_mouse_gate(df: pd.DataFrame, breakout_level: float, lookback: int = 5) -> dict:
+    """
+    [C7 NEW] Confirms a breakout by checking for a successful retest.
+    "The first mouse gets the trap, the second mouse gets the cheese."
+
+    Looks for:
+    1. Price breaks above `breakout_level`.
+    2. A small pullback (1-3 bars) that holds ABOVE the `breakout_level`.
+    3. The pullback occurs on lower volume.
+    4. Price starts to recover from the pullback.
+
+    Returns:
+        - confirmed (bool): True if the retest is successful.
+        - retest_low (float): The low price of the retest.
+        - days_since_breakout (int): How many bars ago the initial breakout happened.
+    """
+    if len(df) < lookback + 2:
+        return {"confirmed": False, "reason": "Insufficient data"}
+
+    recent = df.tail(lookback).copy()
+    avg_vol = recent["volume"].mean()
+
+    # Find the first bar that broke and closed above the level
+    breakout_bar_idx = -1
+    for i in range(len(recent)):
+        if recent["close"].iloc[i] > breakout_level and recent["low"].iloc[i-1] < breakout_level:
+            breakout_bar_idx = i
+            break
+
+    if breakout_bar_idx == -1 or breakout_bar_idx >= len(recent) - 2:
+        return {"confirmed": False, "reason": "No recent breakout or breakout is too new"}
+
+    # Slice from the breakout bar onwards
+    post_breakout_df = recent.iloc[breakout_bar_idx:]
+
+    # Check for a pullback (a low after the breakout bar's high)
+    breakout_high = post_breakout_df["high"].iloc[0]
+    pullback_low = post_breakout_df["low"].iloc[1:].min()
+    pullback_bar_idx = post_breakout_df["low"].iloc[1:].idxmin()
+
+    if pd.isna(pullback_low):
+        return {"confirmed": False, "reason": "No pullback after breakout"}
+
+    # 1. Retest holds above breakout level
+    retest_holds = pullback_low > breakout_level
+
+    # 2. Pullback volume is lower than average and breakout volume
+    pullback_volume = df.loc[pullback_bar_idx, "volume"]
+    breakout_volume = post_breakout_df["volume"].iloc[0]
+    volume_confirms = (pullback_volume < avg_vol * 0.9) and (pullback_volume < breakout_volume)
+
+    # 3. Price is recovering from the pullback
+    last_close = recent["close"].iloc[-1]
+    recovering = last_close > pullback_low
+
+    confirmed = retest_holds and volume_confirms and recovering
+
+    return {
+        "confirmed": confirmed,
+        "retest_low": float(pullback_low) if confirmed else 0.0,
+        "days_since_breakout": len(recent) - breakout_bar_idx,
+        "reason": "OK" if confirmed else "Retest failed conditions",
+    }
+
+
 # ── Detect All Patterns ───────────────────────────────────────────────────────
 
 def detect_all(df: pd.DataFrame) -> dict:

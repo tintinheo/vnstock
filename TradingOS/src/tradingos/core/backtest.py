@@ -7,13 +7,17 @@ from typing import Literal
 import numpy as np
 import pandas as pd
 
+from ..data.fetcher import fetch_earnings_calendar, fetch_financial_statements
 from ..utils.config import cfg
+from .earnings import compute_earnings_risk
+from .fundamental import compute_fundamental_snapshot
 from .indicators import rsi as compute_rsi, atr as compute_atr
 from .mfpm import compute_mfpm
 
 
-T3_SETTLE = 3          # T+3 settlement (cash available)
-LOCK_SAN_PROB = 0.05   # [SYNTHETIC] probability of không khớp (circuit breaker / liquidity)
+# Settlement and LOCK_SAN are read from config at runtime; these are fallbacks.
+_T_SETTLE_DEFAULT = 3
+_LOCK_SAN_DEFAULT = 0.02
 
 
 @dataclass
@@ -56,26 +60,53 @@ def _simulate_single_trade(
     tp2_pct: float,
     max_hold: int = 15,
     mode: str = "MODE_A",
+    avg_vol_20d: float | None = None,
 ) -> BacktestTrade | None:
     """
     Simulate one trade from entry_idx with SL/TP.
-    VN constraints: T+3 settlement, random LOCK_SAN.
+    VN constraints: T+2/T+3 settlement, LOCK_SAN, commission+slippage+tax costs.
+    avg_vol_20d: used to select the correct tiered lock_san probability.
     """
+    # Load cost params from config
+    commission_bps = float(cfg.strategy("backtest", "commission_bps", default=15)) / 10000
+    slippage_bps   = float(cfg.strategy("backtest", "slippage_bps",   default=5))  / 10000
+    tax_sell_bps   = float(cfg.strategy("backtest", "tax_sell_bps",   default=10)) / 10000
+    t2_settlement  = bool(cfg.strategy("backtest", "t2_settlement",   default=False))
+    t_settle = 2 if t2_settlement else _T_SETTLE_DEFAULT  # noqa: F841 (used in run_backtest)
+
+    # Tiered lock_san probability by liquidity (small-caps lock-san far more often)
+    tiers = cfg.strategy("backtest", "lock_san_by_liquidity", default={})
+    if avg_vol_20d is not None and isinstance(tiers, dict):
+        if avg_vol_20d > 1_000_000:
+            lock_san_prob = float(tiers.get("liquid",   0.01))
+        elif avg_vol_20d > 100_000:
+            lock_san_prob = float(tiers.get("normal",   0.03))
+        else:
+            lock_san_prob = float(tiers.get("illiquid", 0.08))
+    else:
+        lock_san_prob = float(cfg.strategy("backtest", "lock_san_prob", default=_LOCK_SAN_DEFAULT))
+
+    # Round-trip cost: buy cost (entry side) + sell cost (exit side)
+    entry_cost_pct  = commission_bps + slippage_bps
+    exit_cost_pct   = commission_bps + slippage_bps + tax_sell_bps
+
     rng = np.random.default_rng(entry_idx)
 
     if entry_idx >= len(df) - 2:
         return None
 
     entry_row = df.iloc[entry_idx]
-    entry_price = float(entry_row["close"])
-    entry_date = str(entry_row.name)[:10]
+    raw_entry   = float(entry_row["close"])
+    entry_price = raw_entry * (1 + entry_cost_pct)   # effective cost basis
+    # H2: prefer the 'date' column (real ISO date after run_backtest preserves it)
+    entry_date  = str(entry_row.get("date", entry_row.name))[:10]
 
-    sl = entry_price * (1 - sl_pct)
-    tp1 = entry_price * (1 + tp1_pct)
-    tp2 = entry_price * (1 + tp2_pct)
+    sl  = raw_entry * (1 - sl_pct)
+    tp1 = raw_entry * (1 + tp1_pct)
+    tp2 = raw_entry * (1 + tp2_pct)
 
-    # Simulate LOCK_SAN [SYNTHETIC]
-    locked = rng.random() < LOCK_SAN_PROB
+    # Simulate LOCK_SAN [SYNTHETIC — calibration: strategy.yaml lock_san_prob]
+    locked = rng.random() < lock_san_prob
 
     exit_price = entry_price
     exit_reason = "MAX_HOLD"
@@ -90,7 +121,11 @@ def _simulate_single_trade(
         cl = float(row["close"])
 
         if lo <= sl:
-            exit_price = sl
+            # HOSE ±7% circuit breaker: real fill can be no worse than -7% from prev close.
+            # On a gap-down day the floor is prev_close * 0.93, not an arbitrary SL price.
+            prev_close = float(df.iloc[i - 1]["close"]) if i > 0 else raw_entry
+            hose_floor = prev_close * 0.93
+            exit_price = max(sl, hose_floor)
             exit_reason = "SL"
             exit_idx = i
             break
@@ -114,13 +149,14 @@ def _simulate_single_trade(
         exit_reason = "PARTIAL_TP1_THEN_HOLD"
 
     hold_days = exit_idx - entry_idx
-    pnl_pct = (exit_price - entry_price) / entry_price
-    pnl = pnl_pct * entry_price  # per share
+    effective_exit = exit_price * (1 - exit_cost_pct)
+    pnl_pct = (effective_exit - entry_price) / entry_price
+    pnl = pnl_pct * raw_entry  # per share (notional)
 
     return BacktestTrade(
         ticker=str(df.iloc[0].get("ticker", "—")) if "ticker" in df.columns else "—",
         entry_date=entry_date,
-        exit_date=str(df.iloc[exit_idx].name)[:10],
+        exit_date=str(df.iloc[exit_idx].get("date", df.iloc[exit_idx].name))[:10],
         entry_price=entry_price,
         exit_price=exit_price,
         shares=100,
@@ -156,14 +192,26 @@ def run_backtest(
             avg_pnl_pct=0.0, max_drawdown=0.0, sharpe=0.0, total_return=0.0,
         )
 
+    # H2: preserve date column before reset_index so trade dates remain ISO strings
+    _date_col: pd.Series | None = None
+    if "date" in df.columns:
+        _date_col = df["date"].copy()
     df = df.copy().reset_index(drop=True)
+    if _date_col is not None:
+        df["date"] = _date_col.values
+
+    # C3: compute per-ticker avg volume for tiered lock-san selection
+    avg_vol_20d = float(df["volume"].tail(20).mean()) if "volume" in df.columns else None
+
     max_hold = int(cfg.strategy("backtest", "max_hold_days", default=15))
+    t2_settlement = bool(cfg.strategy("backtest", "t2_settlement", default=False))
+    t_settle = 2 if t2_settlement else _T_SETTLE_DEFAULT
 
     # ── Generate entry signals ─────────────────────────────────────────────
     if signal_col and signal_col in df.columns:
         entry_indices = df.index[df[signal_col] == 1].tolist()
     else:
-        # Default: RSI crosses up from ≤50
+        # Default: RSI crosses up from ≤50 (Mode A)
         rsi = compute_rsi(df["close"], 14)
         crosses = (rsi.shift(1) <= 50) & (rsi > 50)
         entry_indices = df.index[crosses].tolist()
@@ -173,9 +221,12 @@ def run_backtest(
     last_exit = 0
 
     for idx in entry_indices:
-        if idx < last_exit + T3_SETTLE:  # T+3 capital lockup
+        if idx < last_exit + t_settle:  # T+2 or T+3 capital lockup (from config)
             continue
-        trade = _simulate_single_trade(df, idx, sl_pct, tp1_pct, tp2_pct, max_hold, mode)
+        trade = _simulate_single_trade(
+            df, idx, sl_pct, tp1_pct, tp2_pct, max_hold, mode,
+            avg_vol_20d=avg_vol_20d,  # C3: wire tiered lock-san
+        )
         if trade is None:
             continue
         trade.ticker = ticker
@@ -183,11 +234,18 @@ def run_backtest(
         last_exit = idx + trade.hold_days
 
     # ── Metrics ───────────────────────────────────────────────────────────
+    # Helper: extract a date string regardless of .name type or 'date' column
+    def _date_str(row_idx: int) -> str:
+        row = df.iloc[row_idx]
+        if "date" in df.columns:
+            return str(row["date"])[:10]
+        return str(row.name)[:10]  # fallback (may be int after reset_index)
+
     if not trades:
         return BacktestResult(
             ticker=ticker, mode=mode,
-            start_date=str(df.iloc[0].name)[:10],
-            end_date=str(df.iloc[-1].name)[:10],
+            start_date=_date_str(0),
+            end_date=_date_str(len(df) - 1),
             n_trades=0, win_rate=0.0,
             avg_pnl_pct=0.0, max_drawdown=0.0, sharpe=0.0, total_return=0.0,
         )
@@ -208,29 +266,38 @@ def run_backtest(
     sharpe = (avg_ret * trades_per_year) / (std_ret * np.sqrt(trades_per_year) + 1e-9)
     sharpe = float(np.clip(sharpe, -20, 20))  # cap extreme values (1 trade edge case)
 
-    # ── Walk-forward windows ───────────────────────────────────────────────
+    # ── Walk-forward windows (H1: non-overlapping IS/OOS) ───────────────────────────
+    # Layout: data is split into (walk_forward_windows + 1) equal blocks.
+    # Block 0..W-1 = IS for window W; block W = OOS for window W.  No overlap.
     wf_results = []
     n = len(df)
-    window_size = n // (walk_forward_windows + 1)
+    n_blocks = walk_forward_windows + 1
+    block = n // n_blocks
     for w in range(walk_forward_windows):
-        start_i = w * window_size
-        end_i = start_i + window_size + window_size // 2  # 50% OOS
-        window_df = df.iloc[start_i : min(end_i, n)]
-        wf_bt = run_backtest(window_df, ticker, mode, sl_pct, tp1_pct, tp2_pct, walk_forward_windows=0)
+        is_start = 0
+        is_end   = (w + 1) * block          # IS: blocks 0 … w (inclusive)
+        oos_start = is_end
+        oos_end   = min(oos_start + block, n)  # OOS: block w+1 exclusively
+        if oos_start >= n:
+            break
+        oos_df = df.iloc[oos_start:oos_end]
+        if len(oos_df) < 10:
+            break
+        wf_bt = run_backtest(oos_df, ticker, mode, sl_pct, tp1_pct, tp2_pct, walk_forward_windows=0)
         wf_results.append({
-            "window": w + 1,
-            "start": str(window_df.iloc[0].name)[:10],
-            "end": str(window_df.iloc[-1].name)[:10],
-            "n_trades": wf_bt.n_trades,
-            "win_rate": wf_bt.win_rate,
-            "total_return": wf_bt.total_return,
+            "window":  w + 1,
+            "start":   _date_str(oos_start),
+            "end":     _date_str(min(oos_end, n) - 1),
+            "n_trades":    wf_bt.n_trades,
+            "win_rate":    wf_bt.win_rate,
+            "total_return":wf_bt.total_return,
         })
 
     return BacktestResult(
         ticker=ticker,
         mode=mode,
-        start_date=str(df.iloc[0].name)[:10],
-        end_date=str(df.iloc[-1].name)[:10],
+        start_date=_date_str(0),
+        end_date=_date_str(len(df) - 1),
         n_trades=len(trades),
         win_rate=round(wins / len(trades), 3),
         avg_pnl_pct=round(avg_ret, 4),
@@ -270,6 +337,62 @@ def _build_mode_signal_col(df: pd.DataFrame, mode: str) -> pd.DataFrame:
     return out
 
 
+def _apply_overlay_signal_filters(df: pd.DataFrame, ticker: str) -> pd.DataFrame:
+    """Apply earnings and fundamental overlays to the generated entry signal column."""
+    out = df.copy()
+    if "_signal" not in out.columns or "date" not in out.columns:
+        return out
+
+    try:
+        earnings_df = fetch_earnings_calendar(ticker, lookforward_days=365)
+    except Exception:
+        earnings_df = pd.DataFrame()
+
+    try:
+        statements = fetch_financial_statements(ticker, quarters=8)
+    except Exception:
+        statements = {}
+
+    row_dates = pd.to_datetime(out["date"], errors="coerce").dt.date
+    filtered_signal: list[int] = []
+    for idx, raw_signal in enumerate(out["_signal"].tolist()):
+        if not raw_signal:
+            filtered_signal.append(0)
+            continue
+
+        current_date = row_dates.iloc[idx]
+        if current_date is None:
+            filtered_signal.append(int(raw_signal))
+            continue
+
+        macro_regime = str(out.iloc[idx].get("macro_regime", "")).upper()
+        if macro_regime == "RESTRICTIVE":
+            filtered_signal.append(0)
+            continue
+
+        earnings_risk = compute_earnings_risk(ticker, current_date=current_date, earnings_df=earnings_df)
+        if earnings_risk.rollover_risk.value == "HIGH_RISK":
+            filtered_signal.append(0)
+            continue
+
+        fundamental_snapshot = compute_fundamental_snapshot(
+            ticker,
+            current_date=current_date,
+            statements=statements,
+        )
+        if (
+            fundamental_snapshot.fundamental_score is not None
+            and fundamental_snapshot.fundamental_score < 35
+        ):
+            filtered_signal.append(0)
+            continue
+
+        filtered_signal.append(int(raw_signal))
+
+    out["_signal"] = filtered_signal
+    return out
+
+
 def compare_modes(
     df: pd.DataFrame,
     ticker: str = "N/A",
@@ -281,6 +404,7 @@ def compare_modes(
     results = {}
     for mode in ("MODE_A", "MODE_B", "MODE_W"):
         df_with_sig = _build_mode_signal_col(df, mode)
+        df_with_sig = _apply_overlay_signal_filters(df_with_sig, ticker)
         results[mode] = run_backtest(
             df_with_sig, ticker, mode, sl_pct, tp1_pct, tp2_pct,
             signal_col="_signal",

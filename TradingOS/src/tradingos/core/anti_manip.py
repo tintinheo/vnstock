@@ -69,11 +69,20 @@ def detect_amd_phase(df: pd.DataFrame, lookback: int = 60) -> str:
 
     # OBV trend
     if "OBV" in recent.columns:
-        obv_change = (recent["OBV"].iloc[-1] - recent["OBV"].iloc[0]) / max(abs(recent["OBV"].iloc[0]), 1)
+        obv_first = recent["OBV"].iloc[0]
+        obv_last  = recent["OBV"].iloc[-1]
+        # H4: guard near-zero denominator — use range-based normalisation when
+        # abs(OBV[0]) is too small relative to the series range, to avoid
+        # obv_change blowing up to raw-share-count magnitudes.
+        obv_range = recent["OBV"].abs().max()
+        denominator = max(abs(obv_first), obv_range * 0.05, 1)
+        obv_change = (obv_last - obv_first) / denominator
     else:
         from .indicators import obv as compute_obv
         obv_s = compute_obv(recent)
-        obv_change = (obv_s.iloc[-1] - obv_s.iloc[0]) / max(abs(obv_s.iloc[0]), 1)
+        obv_range = obv_s.abs().max()
+        denominator = max(abs(obv_s.iloc[0]), obv_range * 0.05, 1)
+        obv_change = (obv_s.iloc[-1] - obv_s.iloc[0]) / denominator
 
     # Volume on down vs up days
     up_days = recent[recent["close"] > recent["close"].shift()]
@@ -82,11 +91,19 @@ def detect_amd_phase(df: pd.DataFrame, lookback: int = 60) -> str:
     dn_vol = dn_days["volume"].mean() if not dn_days.empty else 0
 
     # Classification rules
+    # MARKUP: strong: price > 5% AND OBV > 5%; early: price > 1% AND OBV > 2%
     if price_change > 0.05 and obv_change > 0.05 and up_vol > dn_vol:
+        return "MARKUP"
+    # Early-stage markup: price rising modestly with positive OBV confirmation
+    elif price_change > 0.01 and obv_change > 0.02 and up_vol > dn_vol:
         return "MARKUP"
     elif price_change < -0.05 and obv_change < -0.05 and dn_vol > up_vol:
         return "MARKDOWN"
-    elif abs(price_change) <= 0.05 and obv_change > 0.02:
+    # ACCUMULATION: price flat (|change| ≤ 1%) but OBV rising — stealth buying
+    elif abs(price_change) <= 0.01 and obv_change > 0.02:
+        return "ACCUMULATION"
+    # Broader accumulation: price range-bound (≤ 5%) with positive OBV divergence
+    elif abs(price_change) <= 0.05 and obv_change > 0.02 and up_vol >= dn_vol:
         return "ACCUMULATION"
     elif abs(price_change) <= 0.05 and obv_change < -0.02:
         return "DISTRIBUTION"
@@ -100,6 +117,9 @@ def compute_cvd_intraday(df_5m: pd.DataFrame) -> int:
     """
     Compute end-of-session Cumulative Volume Delta from 5-minute bars.
     Proxy: positive delta = bullish (close > open), negative = bearish.
+    NOTE: This is a PROXY_CVD estimate.  Close-vs-open bar classification
+    mis-attributes volume on shooting-star / hammer candles.  Treat the
+    result as directional guidance only, not a precise tick-level CVD.
     Returns net signed volume (shares).
     """
     if df_5m.empty:
@@ -108,6 +128,11 @@ def compute_cvd_intraday(df_5m: pd.DataFrame) -> int:
     bull = df_5m["volume"].where(delta > 0, 0)
     bear = df_5m["volume"].where(delta < 0, 0)
     return int((bull - bear).sum())
+
+
+def cvd_data_quality() -> str:
+    """Return data quality label for CVD intraday (always a proxy without tick feed)."""
+    return "PROXY_CVD"
 
 
 # ── AMF — Anti-Manipulation Filter ───────────────────────────────────────────

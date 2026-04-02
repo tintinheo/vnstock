@@ -7,18 +7,11 @@ from __future__ import annotations
 
 from datetime import datetime, time
 
+from ..utils.dates import vn_now, vn_session_phase
+
 
 def _session_phase() -> str:
-    now = datetime.now().time()
-    if now < time(9, 0):     return "PRE_MARKET"
-    elif now < time(9, 15):  return "PRE_ATO"
-    elif now < time(9, 30):  return "ATO"
-    elif now < time(11, 30): return "MORNING"
-    elif now < time(13, 0):  return "LUNCH"
-    elif now < time(14, 30): return "AFTERNOON"
-    elif now < time(14, 43): return "NEAR_ATC"
-    elif now <= time(14, 45): return "ATC"
-    else:                    return "CLOSED"
+    return vn_session_phase()
 
 
 def advise_entry_window(

@@ -10,6 +10,7 @@ Implements:
 """
 from __future__ import annotations
 
+import math
 import numpy as np
 import pandas as pd
 
@@ -45,7 +46,65 @@ def proxy_whale_net_from_daily(df: pd.DataFrame) -> pd.DataFrame:
         axis=1,
     )
     c["whale_net"] = c["whale_net_proxy"]
-    return c[["whale_net_proxy", "whale_net", "close", "volume"]]
+    # Include date column so callers can merge foreign-flow data by date
+    cols = ["whale_net_proxy", "whale_net", "close", "volume"]
+    if "date" in c.columns:
+        cols = ["date"] + cols
+    return c[cols]
+
+
+def compute_whale_net_from_pt_deals(
+    pt_deals_df: pd.DataFrame,
+    df_ohlcv: pd.DataFrame,
+) -> pd.DataFrame:
+    """
+    Upgrade whale_net estimate using real put-through (block) deal data.
+
+    Put-through deals are directly observable institutional transactions, making
+    this a PARTIAL_PROXY (penalty=0.5) vs pure OHLCV proxy (penalty=1.0).
+
+    Expected pt_deals_df columns: date, value, volume  (positive = buy, negative = sell)
+    Returns a DataFrame compatible with proxy_whale_net_from_daily():
+      [whale_net_proxy, whale_net, close, volume, data_source]
+    """
+    if pt_deals_df is None or pt_deals_df.empty:
+        result = proxy_whale_net_from_daily(df_ohlcv)
+        result["data_source"] = "PROXY_OHLCV"
+        return result
+
+    base = proxy_whale_net_from_daily(df_ohlcv).copy()
+
+    # Aggregate PT deals by date, map to OHLCV index
+    pt = pt_deals_df.copy()
+    if "date" in pt.columns:
+        pt["date"] = pd.to_datetime(pt["date"]).dt.date
+
+    if "value" not in pt.columns and "volume" in pt.columns and "price" in pt.columns:
+        pt["value"] = pt["volume"] * pt["price"]
+
+    if "date" in pt.columns and "value" in pt.columns:
+        pt_daily = pt.groupby("date")["value"].sum()
+        # Align to base index: use the "date" column if present (clean_ohlcv always
+        # produces it), otherwise fall back to the DataFrame's DatetimeIndex.
+        if "date" in df_ohlcv.columns:
+            base_dates = pd.to_datetime(df_ohlcv["date"])
+        elif df_ohlcv.index.dtype != "int64":
+            base_dates = pd.to_datetime(df_ohlcv.index)
+        else:
+            # No date info available — cannot align; skip blending
+            base_dates = pd.Series([], dtype="datetime64[ns]")
+        for i, row_date in enumerate(base_dates):
+            d = row_date.date() if hasattr(row_date, "date") else row_date
+            if d in pt_daily.index:
+                pt_val = pt_daily[d]
+                # Convert VND value to share-equivalent using the day's close price
+                close_price = float(df_ohlcv.iloc[i]["close"])
+                pt_shares = int(pt_val / max(close_price, 1))
+                # Blend: use PT net as the whale_net signal (more reliable than proxy)
+                base.iloc[i, base.columns.get_loc("whale_net")] = pt_shares
+
+    base["data_source"] = "PARTIAL_PROXY"
+    return base
 
 
 # ── FR-6.1: M-CVD ────────────────────────────────────────────────────────────
@@ -71,16 +130,25 @@ def compute_multiday_whale_flow(
 
     recent = daily_flow_df.tail(lookback_days).copy()
 
-    # Use whale_net if present, else proxy
+    # Respect .data_source column forwarded by proxy functions; only fall back to
+    # column-presence heuristic when the column is absent.  "whale_net" being
+    # present does NOT mean the data is real tick-data — it is also set by the
+    # OHLCV proxy functions, so naively labelling it TICK_REAL is wrong.
+    if "data_source" in recent.columns:
+        data_source = str(recent["data_source"].iloc[-1])
+    elif "whale_net_proxy" not in recent.columns and "whale_net" in recent.columns:
+        # Only a genuine non-proxy feed omits whale_net_proxy
+        data_source = "TICK_REAL"
+    else:
+        data_source = "PROXY_OHLCV"
+
+    # Select the best available whale series
     if "whale_net" in recent.columns and recent["whale_net"].notna().any():
         whale_series = recent["whale_net"].fillna(0)
-        data_source = "TICK_REAL"
     elif "whale_net_proxy" in recent.columns:
         whale_series = recent["whale_net_proxy"].fillna(0)
-        data_source = "PROXY_OHLCV"
     else:
         whale_series = pd.Series(np.zeros(len(recent)), index=recent.index)
-        data_source = "PROXY_OHLCV"
 
     mcvd_5d = int(whale_series.tail(5).sum())
     mcvd_20d = int(whale_series.sum())
@@ -136,6 +204,7 @@ def compute_smart_money_score(
     ticker: str,
     df: pd.DataFrame,
     daily_flow_df: pd.DataFrame,
+    pt_deals_df: pd.DataFrame | None = None,  # [C6] Add put-through data
     order_book: dict | None = None,
     quote: dict | None = None,
     amd_phase: str = "RANGING",
@@ -145,21 +214,22 @@ def compute_smart_money_score(
     Composite Smart Money Score 0–100 (SRS §8.3).
 
     Components (max 100):
-      1. M-CVD Trend  0-25
-      2. VQS          0-20
-      3. FOL Net 5d   0-20
+      1. M-CVD Trend  0-20
+      2. VQS          0-15
+      3. FOL Net 5d   0-15
       4. OBV Slope    0-15
       5. AMD Align    0-10
       6. Intraday CVD 0-10
+      7. PT Flow      0-15 [C6]
     """
     comps: dict[str, int] = {}
 
-    # 1. M-CVD Trend (0–25)
+    # 1. M-CVD Trend (0–20) - [C6] Weight reduced from 25
     mcvd = compute_multiday_whale_flow(daily_flow_df, lookback_days=20)
     if mcvd["mcvd_trend"] == "UP" and mcvd["consistency"] >= 0.60:
-        comps["mcvd"] = 25
+        comps["mcvd"] = 20
     elif mcvd["mcvd_trend"] == "UP":
-        comps["mcvd"] = 15
+        comps["mcvd"] = 12
     elif mcvd["mcvd_trend"] == "FLAT":
         comps["mcvd"] = 5
     elif mcvd["mcvd_vs_price"] == "DIVERGE_BEARISH":
@@ -167,27 +237,31 @@ def compute_smart_money_score(
     else:
         comps["mcvd"] = 0
 
-    # 2. VQS (0–20)
+    # 2. VQS (0–15) - [C6] Weight reduced from 20
     vqs_result = volume_quality_score(df, order_book or {})
     vqs = vqs_result["vqs_score"]
-    comps["vqs"] = max(0, int((vqs + 1.0) / 2.0 * 20))
+    comps["vqs"] = max(0, int((vqs + 1.0) / 2.0 * 15))
 
-    # 3. FOL Net 5-day (0–20)
+    # 3. FOL Net 5-day (0–15) - [C6] Weight reduced from 20
     fol_net_5d = 0
-    if "fol_net" in daily_flow_df.columns:
+    has_fol_data = "fol_net" in daily_flow_df.columns
+    if has_fol_data:
         fol_net_5d = int(daily_flow_df["fol_net"].tail(5).sum())
     avg_vol = df["volume"].tail(20).mean() if not df.empty else 1
     fol_ratio = fol_net_5d / max(avg_vol * 5, 1)
-    if fol_ratio > 0.05:
-        comps["fol"] = 20
+    # [BUG3 FIX] No fol_net column → no information; score 0 not 3
+    if not has_fol_data:
+        comps["fol"] = 0
+    elif fol_ratio > 0.05:
+        comps["fol"] = 15
     elif fol_ratio > 0.02:
-        comps["fol"] = 12
+        comps["fol"] = 10
     elif fol_ratio > 0:
-        comps["fol"] = 6
+        comps["fol"] = 5
     elif fol_ratio < -0.02:
         comps["fol"] = 0
     else:
-        comps["fol"] = 4
+        comps["fol"] = 0  # exactly zero net — neutral, no edge signal
 
     # 4. OBV Slope (0–15)
     if "OBV" in df.columns and len(df) >= 10:
@@ -218,15 +292,33 @@ def compute_smart_money_score(
     else:
         comps["cvd_today"] = 5
 
+    # 7. Put-through Flow (0-15) [C6 NEW]
+    pt_net_5d = 0
+    pt_ratio = 0.0
+    if pt_deals_df is not None and not pt_deals_df.empty:
+        pt_net_5d = pt_deals_df["value"].sum()
+        avg_val_5d = (df["volume"] * df["close"]).tail(5).mean()
+        pt_ratio = pt_net_5d / max(avg_val_5d * 5, 1)
+        if pt_ratio > 0.1:  # PT net buy > 10% of 5d avg value
+            comps["pt_flow"] = 15
+        elif pt_ratio > 0.03: # PT net buy > 3% of 5d avg value
+            comps["pt_flow"] = 10
+        elif pt_ratio > 0:
+            comps["pt_flow"] = 5
+        else: # Net selling or insignificant
+            comps["pt_flow"] = 0
+    else:
+        comps["pt_flow"] = 0 # No data
+
     sms = sum(comps.values())
     sms = max(0, min(100, sms))
 
     # Label
-    if sms >= 70 and comps["mcvd"] >= 20:
+    if sms >= 70 and (comps.get("mcvd", 0) >= 15 or comps.get("pt_flow", 0) >= 10):
         label = "WHALE_BUYING"
-    elif sms <= 25 or (mcvd["mcvd_vs_price"] == "DIVERGE_BEARISH" and comps["mcvd"] == 0):
+    elif sms <= 30 or (mcvd["mcvd_vs_price"] == "DIVERGE_BEARISH" and comps["mcvd"] == 0):
         label = "WHALE_DISTRIBUTING"
-    elif comps.get("vqs", 0) >= 15 and comps.get("obv", 0) >= 8:
+    elif comps.get("vqs", 0) >= 12 and comps.get("obv", 0) >= 8:
         label = "MIXED"
     else:
         label = "RETAIL_DRIVEN"
@@ -237,6 +329,9 @@ def compute_smart_money_score(
         "components": comps,
         "mcvd_detail": mcvd,
         "fol_net_5d": fol_net_5d,
+        "fol_pct": round(max(0.0, fol_ratio) * 100, 2),
+        "pt_net_5d": pt_net_5d,
+        "pt_ratio_5d": round(pt_ratio, 3),
         "whale_pct_vol": round(max(0, fol_ratio) * 100, 1),
     }
 
@@ -358,7 +453,7 @@ def detect_sector_rotation(
         sms_avg = float(np.mean(sms_scores)) if sms_scores else 50.0
 
         inflow_score = (mom_5d * 40) + (obv_slope * 30) + ((sms_avg - 50) / 50 * 30)
-        inflow_score = float(np.clip(inflow_score * 100, -100, 100))
+        inflow_score = float(np.clip(inflow_score, -100, 100))
 
         if inflow_score >= inflow_thr:
             flow_status = "INFLOW"
@@ -416,23 +511,29 @@ def mode_w_entry_params(df: pd.DataFrame, sms_result: dict) -> dict:
     tp1_mult = float(cfg.strategy("entry_exit", "atr_tp1_mult", default=4.0))
     tp2_mult = float(cfg.strategy("entry_exit", "atr_tp2_mult", default=8.0))
 
-    entry = float(last["close"])
+    close = float(last["close"])
+    entry = close
     ema9 = float(last.get("EMA9", entry))
     if entry > ema9 * 1.01:  # rebalance entry toward EMA9
-        entry = round(ema9 * 1.005 / 100) * 100
+        ema9_entry = round(ema9 * 1.005, 1)
+        # Cap pullback to 2% below close — prevents un-actionable entries on EMA9 lag
+        entry = round(max(ema9_entry, close * 0.98), 1)
 
-    sl = round((entry - atr * sl_mult) / 100) * 100
+    # Minimum SL distance: 3% of entry (prevents noise-level SL on sub-5K VND stocks)
+    sl_dist = max(atr * sl_mult, entry * 0.03)
+    # Floor-round SL so tick rounding never shrinks the gap below the minimum distance
+    sl = math.floor(round(entry - sl_dist, 4) * 10) / 10
     sl_pct = (sl - entry) / max(entry, 1) * 100
 
     # Use stealth target if available
     stealth = sms_result.get("stealth_detail", {})
     est_target = stealth.get("est_target")
     if isinstance(est_target, float) and est_target > entry * 1.05:
-        tp1 = round((entry + (est_target - entry) * 0.5) / 100) * 100
-        tp2 = round(est_target / 100) * 100
+        tp1 = round(entry + (est_target - entry) * 0.5, 1)
+        tp2 = round(est_target, 1)
     else:
-        tp1 = round((entry + atr * tp1_mult) / 100) * 100
-        tp2 = round((entry + atr * tp2_mult) / 100) * 100
+        tp1 = round(entry + atr * tp1_mult, 1)
+        tp2 = round(entry + atr * tp2_mult, 1)
 
     rr = abs((tp1 - entry) / (sl - entry)) if sl != entry else 0
 

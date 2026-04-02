@@ -64,7 +64,6 @@ def progressive_exit_plan(
 
     # ── Stage 1: TP1 ──────────────────────────────────────────────────────
     if current_price >= tp1 and hold_days >= 2:
-        exit_shares_1 = int(shares_held * 0.40 // 100 * 100)
         stages.append(ExitStage(
             stage=1,
             action="PARTIAL_EXIT",

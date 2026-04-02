@@ -3,9 +3,10 @@ from __future__ import annotations
 
 import pandas as pd
 
-from ..data.fetcher import fetch_ohlcv
+from ..data.fetcher import fetch_ohlcv, fetch_usdvnd, fetch_vn10y_bond_yield
 from ..core import compute_indicators
 from ..core.backtest import run_backtest, compare_modes, BacktestResult
+from ..core.macro import build_macro_regime_series
 from ..data.schemas import BacktestRequest
 from ..data.cache import cache
 from ..utils.logging import get_logger
@@ -28,17 +29,48 @@ class BacktestService:
             log.warning(f"No data for {ticker}")
             return {}
 
-        # Date filter
-        if request.start_date:
-            df = df[df.index >= request.start_date]
-        if request.end_date:
-            df = df[df.index <= request.end_date]
+        # Date filter — reset index to ensure we can compare dates regardless
+        # of whether the index is a DatetimeIndex or a RangeIndex
+        if "date" not in df.columns and df.index.dtype != "int64":
+            df = df.copy()
+            df.index = pd.to_datetime(df.index)
+        elif "date" not in df.columns:
+            df = df.reset_index()
+            if "index" in df.columns:
+                df = df.rename(columns={"index": "date"})
+
+        if "date" in df.columns:
+            df["date"] = pd.to_datetime(df["date"])
+            if request.start_date:
+                df = df[df["date"] >= pd.to_datetime(request.start_date)]
+            if request.end_date:
+                df = df[df["date"] <= pd.to_datetime(request.end_date)]
+        else:
+            # DatetimeIndex path
+            if request.start_date:
+                df = df[df.index >= pd.to_datetime(request.start_date)]
+            if request.end_date:
+                df = df[df.index <= pd.to_datetime(request.end_date)]
 
         if len(df) < 40:
             log.warning(f"Insufficient data for backtest {ticker}")
             return {}
 
         df = compute_indicators(df)
+
+        try:
+            macro_days = max(len(df) + 30, 90)
+            macro_series = build_macro_regime_series(
+                trading_dates=df["date"] if "date" in df.columns else df.index,
+                usdvnd_df=fetch_usdvnd(days=macro_days),
+                bond_yield_df=fetch_vn10y_bond_yield(days=macro_days),
+            )
+            if not macro_series.empty and "date" in df.columns:
+                macro_series["date"] = pd.to_datetime(macro_series["date"])
+                df = df.merge(macro_series, on="date", how="left")
+                df["macro_regime"] = df["macro_regime"].ffill().fillna("NEUTRAL")
+        except Exception as e:
+            log.debug(f"Macro series build skipped for {ticker}: {e}")
 
         sl_pct = request.sl_pct or float(cfg.strategy("entry_exit", "initial_sl_pct", default=0.06))
         tp1_pct = sl_pct * float(cfg.strategy("entry_exit", "tp1_rr", default=1.5))

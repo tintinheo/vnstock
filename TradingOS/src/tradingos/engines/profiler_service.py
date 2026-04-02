@@ -6,7 +6,9 @@ from datetime import datetime
 
 import pandas as pd
 
-from ..data.fetcher import fetch_ohlcv, fetch_foreign_flow
+from ..data.fetcher import fetch_ohlcv, fetch_foreign_flow, fetch_put_through_deals, fetch_quote
+from ..data.fetcher import fetch_usdvnd, fetch_vn10y_bond_yield, fetch_sbv_omo_net
+from ..data.fetcher import fetch_earnings_calendar, fetch_financial_statements
 from ..data.cache import cache
 from ..data.schemas import TickerProfile, ProfilerRequest, TradingSignal
 from ..core import (
@@ -20,11 +22,25 @@ from ..core import (
     compute_position_size,
     generate_signal_text,
     advise_entry_window,
+    compute_macro_regime, macro_sizing_multiplier, macro_score_gate_adjustment,
+    compute_earnings_risk,
+    compute_fundamental_snapshot, canslim_fundamental_override,
 )
-from ..core.money_flow import compute_multiday_whale_flow, proxy_whale_net_from_daily
+from ..core.money_flow import compute_multiday_whale_flow, proxy_whale_net_from_daily, compute_whale_net_from_pt_deals
+from .money_flow_service import MoneyFlowService, sector_flow_lookup
 from ..utils.logging import get_logger
 
 log = get_logger("profiler_service")
+
+
+def _extract_exchange(quote: dict) -> str:
+    for key in ("exchange", "Exchange", "market", "Market", "boardId", "board"):
+        value = str(quote.get(key, "")).upper()
+        if value in ("HOSE", "HNX", "UPCOM"):
+            return value
+        if value == "MAIN":
+            return "HOSE"
+    return "HOSE"
 
 
 class ProfilerService:
@@ -49,6 +65,9 @@ class ProfilerService:
         if df.empty or len(df) < 30:
             return self._error_profile(ticker, "Insufficient data")
 
+        quote = fetch_quote(ticker)
+        exchange = _extract_exchange(quote)
+
         # ── 2. Compute indicators ──────────────────────────────────────────
         df = compute_indicators(df)
 
@@ -66,9 +85,32 @@ class ProfilerService:
         vqs = float(vqs_result.get("vqs_score", 0.0))
 
         # ── 4. Money flow (FR-6) ─────────────────────────────────────────
-        daily_flow_df = proxy_whale_net_from_daily(df)
+        pt_deals_df = fetch_put_through_deals(ticker, days=5)
+        # Use PT deal data when available to upgrade from PROXY_OHLCV → PARTIAL_PROXY,
+        # which reduces the Layer 4 confidence penalty (1.0 → 0.5).
+        daily_flow_df = compute_whale_net_from_pt_deals(pt_deals_df, df)
+
+        # Merge foreign investor net-flow (fol_net) into daily_flow_df so that
+        # SMS component 3 receives real data instead of permanently scoring neutral.
+        try:
+            fol_df = fetch_foreign_flow(ticker, days=30)
+            if (not fol_df.empty
+                    and "fol_net" in fol_df.columns
+                    and "date" in fol_df.columns
+                    and "date" in daily_flow_df.columns):
+                fol_df["date"] = pd.to_datetime(fol_df["date"]).dt.date
+                daily_flow_df["date"] = pd.to_datetime(daily_flow_df["date"]).dt.date
+                daily_flow_df = daily_flow_df.merge(
+                    fol_df[["date", "fol_net"]], on="date", how="left"
+                )
+                daily_flow_df["fol_net"] = daily_flow_df["fol_net"].fillna(0)
+        except Exception as _fol_err:
+            log.debug(f"FOL merge skipped for {ticker}: {_fol_err}")
+
         mcvd_detail = compute_multiday_whale_flow(daily_flow_df)
-        sms_result = compute_smart_money_score(ticker, df, daily_flow_df, None, None, amd_phase)
+        sms_result = compute_smart_money_score(
+            ticker, df, daily_flow_df, pt_deals_df, None, None, amd_phase
+        )
         stealth = detect_stealth_accumulation(df, daily_flow_df, amd_phase=amd_phase)
         dist_warning_obj = detect_whale_distribution(df, daily_flow_df)
         dist_warning = dist_warning_obj.get("level", "NONE")
@@ -83,8 +125,48 @@ class ProfilerService:
         hmm_state = detect_hmm_state(df)
         omega = compute_omega(df, None)      # SRS §3.4 gmo_omega
 
+        # ── 6b. Macro regime ─────────────────────────────────────────────
+        # Fetch once; use cached result if fresh from same scan batch
+        macro_result = None
+        try:
+            usdvnd_df    = fetch_usdvnd(days=60)
+            bond_df      = fetch_vn10y_bond_yield(days=60)
+            sbv_data     = fetch_sbv_omo_net(days=30)
+            macro_result = compute_macro_regime(
+                usdvnd_df=usdvnd_df,
+                bond_yield_df=bond_df,
+                sbv_net_injection_7d=sbv_data.get("net_7d"),
+                sbv_avg_vol_ref=sbv_data.get("avg_ref", 10_000.0),
+            )
+        except Exception as _macro_err:
+            log.debug(f"Macro regime skipped for {ticker}: {_macro_err}")
+
+        # ── 6c. Earnings risk ─────────────────────────────────────────────
+        earnings_risk_result = None
+        try:
+            earnings_df       = fetch_earnings_calendar(ticker, lookforward_days=30)
+            earnings_risk_result = compute_earnings_risk(ticker, earnings_df=earnings_df)
+        except Exception as _earn_err:
+            log.debug(f"Earnings risk skipped for {ticker}: {_earn_err}")
+
+        # ── 6d. Fundamental snapshot ──────────────────────────────────────
+        fund_snap = None
+        try:
+            stmts    = fetch_financial_statements(ticker, quarters=8)
+            fol_pct  = float(sms_result.get("fol_pct", 0.0))
+            fund_snap = compute_fundamental_snapshot(
+                ticker=ticker, statements=stmts, fol_pct=fol_pct
+            )
+        except Exception as _fund_err:
+            log.debug(f"Fundamental snapshot skipped for {ticker}: {_fund_err}")
+
         # ── 7. MFPM scoring ───────────────────────────────────────────────
-        sector_flow = sms_result.get("sector_flow", "NEUTRAL")
+        try:
+            sector_rotation = MoneyFlowService().get_sector_flows()
+            sector_flow = sector_flow_lookup(sector_rotation, ticker)
+        except Exception:
+            sector_flow = sms_result.get("sector_flow", "NEUTRAL")
+        sms_result["sector_flow"] = sector_flow
         mfpm_result = compute_mfpm(
             df=df,
             sms_result={
@@ -102,6 +184,9 @@ class ProfilerService:
             amd_phase=amd_phase,
             sector_flow=sector_flow,
             horizons=request.horizons or [2, 3, 5, 7, 10],
+            macro_result=macro_result,
+            earnings_risk=earnings_risk_result,
+            fundamental_snapshot=fund_snap,
         )
 
         action = mfpm_result["action"]
@@ -115,12 +200,14 @@ class ProfilerService:
         mc_prob = mfpm_result["mc_win_prob"]
 
         # ── 8. Position sizing ────────────────────────────────────────────
+        macro_mult = macro_sizing_multiplier(macro_result) if macro_result else 1.0
         sizing = compute_position_size(
             portfolio_value=self.portfolio_value,
             entry=entry,
             sl=sl,
             win_prob=mc_prob,
             rr=rr,
+            macro_multiplier=macro_mult,
         )
 
         # ── 9. Execution advisory ─────────────────────────────────────────
@@ -136,6 +223,18 @@ class ProfilerService:
             entry=entry, sl=sl, tp1=tp1, tp2=tp2, rr=rr, mc_prob=mc_prob,
             distribution_warning=dist_warning,
             mode_w_conditions_failed=mfpm_result.get("mode_w_failed_conditions", []),
+            mode_a_score=mfpm_result.get("mode_a_score", 0),
+            mode_b_score=mfpm_result.get("mode_b_score", 0),
+            amd_phase=mfpm_result.get("amd_phase", "RANGING"),
+            best_pattern=pattern_result.get("best_pattern", "NONE") if pattern_result else "NONE",
+            amf_decision=amf_result.get("decision", "PASS") if amf_result else "PASS",
+            stealth_accum=bool((stealth or {}).get("detected", False)),
+            stealth_confidence=(stealth or {}).get("confidence", "LOW"),
+            mcvd_trend=(mcvd_detail or {}).get("mcvd_trend", "FLAT"),
+            mcvd_5d=float((mcvd_detail or {}).get("mcvd_5d", 0.0)),
+            pt_net_5d=float(sms_result.get("pt_net_5d", 0.0)),
+            rsi14=float(last.get("RSI14", 50.0)),
+            close=close,
             lang="vi",
         )
 
@@ -152,7 +251,7 @@ class ProfilerService:
         profile = TickerProfile(
             # Identity
             ticker=ticker,
-            exchange="HOSE",
+            exchange=exchange,
             sector=sms_result.get("sector", ""),
             last_updated=datetime.now().isoformat(),
             # Signal output
@@ -189,6 +288,8 @@ class ProfilerService:
             stealth_accum=bool(stealth.get("detected")),
             stealth_confidence=stealth.get("confidence", "LOW"),
             distribution_warning=dist_warning,
+            pt_net_5d=sms_result.get("pt_net_5d", 0),
+            pt_ratio_5d=sms_result.get("pt_ratio_5d", 0.0),
             # Explanation
             amd_phase=amd_phase,
             hmm_state=hmm_state,
@@ -205,9 +306,26 @@ class ProfilerService:
             advisory_text=advisory_vi,
             entry_window=exec_adv.get("window", "—"),
             horizons=mfpm_result.get("horizons", []),
+            # Phase 2 — Macro
+            macro_score      = macro_result.macro_score      if macro_result else None,
+            macro_regime     = macro_result.macro_regime      if macro_result else "",
+            macro_confidence = macro_result.macro_confidence  if macro_result else "",
+            macro_staleness_days = macro_result.macro_staleness_days if macro_result else 0,
+            # Phase 2 — Earnings
+            earnings_risk    = earnings_risk_result.rollover_risk.value if earnings_risk_result else "SAFE",
+            days_to_earnings = earnings_risk_result.days_to_next_event if earnings_risk_result else None,
+            next_earnings_date = str(earnings_risk_result.next_pub_date) if (earnings_risk_result and earnings_risk_result.next_pub_date) else "",
+            # Phase 3 — Fundamentals
+            fundamental_score  = fund_snap.fundamental_score  if fund_snap else None,
+            eps_growth_yoy     = fund_snap.eps_growth_yoy     if fund_snap else None,
+            revenue_growth_yoy = fund_snap.revenue_growth_yoy if fund_snap else None,
+            roe                = fund_snap.roe                 if fund_snap else None,
+            debt_to_equity     = fund_snap.debt_to_equity      if fund_snap else None,
         )
 
         # ── 12. Audit log ─────────────────────────────────────────────────
+        vwap_daily = float(last.get("VWAP_daily", 0))
+        fvgs = (pattern_result or {}).get("fvgs", [])
         cache.put_audit({
             "event_type": "PROFILE",
             "ticker": ticker,
@@ -215,27 +333,64 @@ class ProfilerService:
             "mfpm_score": mfpm_result["mfpm_score"],
             "sms_raw": sms_raw,
             "confidence": confidence,
+            "payload": {
+                # Score breakdown
+                "mode_a_score":  mfpm_result.get("mode_a_score", 0),
+                "mode_b_score":  mfpm_result.get("mode_b_score", 0),
+                "mode_w_score":  mfpm_result.get("mode_w_score", 0),
+                "mc_prob":       round(mc_prob, 3),
+                # Signal context
+                "signal_mode":   signal_mode,
+                "amd_phase":     amd_phase,
+                "hmm_state":     hmm_state,
+                "amf_decision":  amf_result.get("decision", "PASS"),
+                "amf_flags":     amf_result.get("flags", []),
+                "best_pattern":  (pattern_result or {}).get("best_pattern", "NONE"),
+                "stealth_accum": bool(stealth.get("detected")),
+                "stealth_conf":  stealth.get("confidence", "LOW"),
+                "dist_warning":  dist_warning,
+                # Levels
+                "close":         close,
+                "entry":         entry,
+                "sl":            sl,
+                "tp1":           tp1,
+                "tp2":           tp2,
+                "rr":            round(rr, 2),
+                # Money flow
+                "mcvd_trend":    mcvd_detail.get("mcvd_trend", "FLAT"),
+                "mcvd_5d":       mcvd_detail.get("mcvd_5d", 0),
+                "pt_net_5d":     sms_result.get("pt_net_5d", 0),
+                "sector_flow":   sms_result.get("sector_flow", "NEUTRAL"),
+                "whale_pct_vol": float(sms_result.get("whale_pct_vol", 0.0)),
+                # Technical indicators
+                "rsi14":         float(last.get("RSI14", 50)),
+                "sma20":         float(last.get("SMA20", 0)),
+                "sma50":         float(last.get("SMA50", 0)),
+                "atr14":         float(last.get("ATR14", 0)),
+                "vwap_daily":    vwap_daily,
+                "obv":           float(last.get("OBV", 0)),
+                "vqs":           float(vqs),
+                "gmo_omega":     float(omega),
+                # FVG zones (last 3)
+                "fvg_zones":     fvgs[-3:] if fvgs else [],
+                # Sizing
+                "sizing_pct":    sizing.get("size_pct", 0.0),
+                "sector":        sms_result.get("sector", ""),
+            },
         })
 
         return profile
 
-    def _error_profile(self, ticker: str, reason: str) -> TickerProfile:
+    def _error_profile(self, ticker: str, error: str) -> TickerProfile:
+        """Return a TickerProfile indicating an error."""
+        cache.put_audit({
+            "event_type": "ERROR",
+            "ticker": ticker,
+            "rejected_reason": error,
+        })
         return TickerProfile(
-            ticker=ticker, exchange="HOSE", sector="", last_updated=datetime.now().isoformat(),
-            action="NO_ACTION", confidence="—", signal_mode="—",
-            mfpm_score=0, mode_w_score=0, mc_win_prob=0.0,
-            entry_price=0, stop_loss=0, sl_pct=0, tp1=0, tp2=0, rr_ratio=0,
-            close=0, volume=0, avg_volume_20d=0,
-            sma20=0, sma50=0, sma200=0, rsi14=0, atr14=0, obv=0, macd=0,
-            sms_raw=0, sms_label="RETAIL_DRIVEN",
-            mcvd_5d=0, mcvd_20d=0, mcvd_trend="FLAT",
-            stealth_accum=False, stealth_confidence="LOW",
-            distribution_warning="NONE",
-            amd_phase="RANGING", hmm_state="TRANSITIONAL",
-            gmo_omega=0.0, vqs=0.0, amf_decision="PASS", amf_flags=[],
-            best_pattern="NONE", sector_flow="NEUTRAL",
-            fol_net_5d=0, whale_pct_vol=0.0,
-            sizing_pct=0.0, sizing_shares=0,
-            advisory_text=f"Error: {reason}",
-            entry_window="—", horizons=[],
+            ticker=ticker,
+            action="ERROR",
+            advisory_text=f"Lỗi xử lý {ticker}: {error}",
+            last_updated=datetime.now().isoformat(),
         )
