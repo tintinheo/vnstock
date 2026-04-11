@@ -563,3 +563,305 @@ class TestConfigConsistency:
         toml_tp2 = float(cfg.get("strategy", "default_atr_mult_tp2", default=8.0))
         yaml_tp2 = float(cfg.strategy("entry_exit", "atr_tp2_mult",  default=8.0))
         assert toml_tp2 == yaml_tp2, f"TP2 mismatch: toml={toml_tp2}, yaml={yaml_tp2}"
+
+
+# ── NLP: generate_indicator_explanation ──────────────────────────────────────
+
+class TestGenerateIndicatorExplanation:
+    """Tests for the new indicator-level NLP function."""
+
+    def _call(self, **kwargs):
+        from tradingos.core.nlp import generate_indicator_explanation
+        defaults = dict(
+            rsi14=50.0, close=25_000, sma20=24_800, sma50=23_500,
+            sma200=22_000, atr14=600, volume=1_500_000, avg_volume_20d=1_000_000,
+        )
+        defaults.update(kwargs)
+        return generate_indicator_explanation(**defaults)
+
+    def test_returns_list_of_strings(self):
+        result = self._call()
+        assert isinstance(result, list)
+        assert all(isinstance(s, str) for s in result)
+
+    def test_rsi_oversold_detected(self):
+        result = self._call(rsi14=25.0)
+        assert any("quá bán" in s for s in result)
+
+    def test_rsi_overbought_detected(self):
+        result = self._call(rsi14=78.0)
+        assert any("quá mua" in s for s in result)
+
+    def test_below_sma50_warning_present(self):
+        result = self._call(close=20_000, sma50=25_000)
+        assert any("Dưới SMA50" in s for s in result)
+
+    def test_above_sma50_positive(self):
+        result = self._call(close=30_000, sma50=25_000, sma200=22_000)
+        assert any("Trên SMA50" in s for s in result)
+
+    def test_volume_spike_flagged(self):
+        result = self._call(volume=4_000_000, avg_volume_20d=1_000_000)
+        assert any("đột biến" in s or "3" in s or "4" in s for s in result)
+
+    def test_low_volume_flagged(self):
+        result = self._call(volume=300_000, avg_volume_20d=1_000_000)
+        assert any("thấp" in s for s in result)
+
+    def test_high_atr_volatility_flagged(self):
+        result = self._call(close=10_000, atr14=600)  # 6% ATR
+        assert any("cao" in s.lower() for s in result)
+
+    def test_low_atr_stable_flagged(self):
+        result = self._call(close=100_000, atr14=1_000)  # 1% ATR
+        assert any("thấp" in s.lower() or "ổn định" in s for s in result)
+
+    def test_sma200_below_flagged(self):
+        result = self._call(close=20_000, sma200=25_000, sma50=21_000)
+        assert any("SMA200" in s and "dưới" in s.lower() for s in result)
+
+    def test_pullback_to_sma20_detected(self):
+        # close within 2% of sma20
+        result = self._call(close=25_000, sma20=25_100, sma50=23_000)
+        assert any("SMA20" in s for s in result)
+
+    def test_zero_avg_volume_no_crash(self):
+        result = self._call(avg_volume_20d=0)
+        assert isinstance(result, list)
+
+
+# ── NLP: generate_summary_headline ───────────────────────────────────────────
+
+class TestGenerateSummaryHeadline:
+    """Tests for the scanner one-liner NLP headline function."""
+
+    def _call(self, **kwargs):
+        from tradingos.core.nlp import generate_summary_headline
+        defaults = dict(
+            ticker="VCB", action="BUY", mfpm_score=75,
+            signal_mode="MODE_A", rsi14=45.0, sms_raw=30,
+            stealth_accum=False, best_pattern="NONE",
+            distribution_warning="NONE", hmm_state="TRENDING_UP",
+        )
+        defaults.update(kwargs)
+        return generate_summary_headline(**defaults)
+
+    def test_returns_string(self):
+        assert isinstance(self._call(), str)
+
+    def test_includes_mode_pullback(self):
+        h = self._call(signal_mode="MODE_A")
+        assert "Pullback" in h
+
+    def test_includes_mode_breakout(self):
+        h = self._call(signal_mode="MODE_B")
+        assert "Breakout" in h
+
+    def test_includes_mode_whale(self):
+        h = self._call(signal_mode="MODE_W")
+        assert "Whale" in h
+
+    def test_includes_mfpm_score(self):
+        h = self._call(mfpm_score=88)
+        assert "88" in h
+
+    def test_stealth_flag_present(self):
+        h = self._call(stealth_accum=True)
+        assert "Stealth" in h
+
+    def test_high_sms_flag_present(self):
+        h = self._call(sms_raw=70)
+        assert "SMS" in h and "70" in h
+
+    def test_vcp_pattern_present(self):
+        h = self._call(best_pattern="VCP")
+        assert "VCP" in h
+
+    def test_distribution_exit_override(self):
+        h = self._call(distribution_warning="EXIT")
+        assert "Phân phối" in h
+
+    def test_distribution_forced_exit(self):
+        h = self._call(distribution_warning="FORCED_EXIT")
+        assert "cực mạnh" in h
+
+    def test_rsi_oversold_tagged(self):
+        h = self._call(rsi14=28.0)
+        assert "quá bán" in h
+
+    def test_rsi_overbought_tagged(self):
+        h = self._call(rsi14=75.0)
+        assert "quá mua" in h
+
+    def test_hmm_emoji_present(self):
+        h = self._call(hmm_state="STEADY_BEAR")
+        assert "🔴" in h
+
+    def test_no_pattern_none_not_shown(self):
+        h = self._call(best_pattern="NONE")
+        assert "NONE" not in h
+
+
+# ── NLP: generate_f0_explanation ─────────────────────────────────────────────
+
+class TestGenerateF0Explanation:
+    """Tests for the F0 beginner-mode narrative function (6 sections)."""
+
+    _DEFAULTS = dict(
+        ticker="VCB", action="BUY", mfpm_score=75, signal_mode="MODE_A",
+        confidence="HIGH", close=25_000, entry_price=24_800, stop_loss=23_000,
+        sl_pct=0.074, tp1=28_000, tp2=32_000, rr_ratio=1.8,
+        rsi14=42.0, sms_raw=60, sms_label="WHALE_BUYING",
+        stealth_accum=False, distribution_warning="NONE",
+        hmm_state="TRENDING_UP", amd_phase="ACCUMULATION",
+        amf_decision="PASS", best_pattern="VCP", mcvd_trend="UP",
+        mc_win_prob=0.58, mode_w_score=0, mode_a_score=55, mode_b_score=0,
+        macro_regime="ACCOMMODATIVE", earnings_risk="SAFE",
+        sma20=24_800, sma50=23_000, sma200=21_000,
+        volume=1_500_000, avg_volume_20d=900_000, atr14=600,
+        mode_w_conditions_failed=[],
+    )
+
+    def _call(self, **kwargs):
+        from tradingos.core.nlp import generate_f0_explanation
+        params = {**self._DEFAULTS, **kwargs}
+        return generate_f0_explanation(**params)
+
+    # ── Return type ──────────────────────────────────────────────────────────
+
+    def test_returns_string(self):
+        assert isinstance(self._call(), str)
+
+    def test_has_all_six_section_headers(self):
+        r = self._call()
+        assert "Kết luận" in r
+        assert "Tại sao" in r
+        assert "Tín hiệu" in r or "ủng hộ" in r
+        assert "Rủi ro" in r
+        assert "Kế hoạch" in r
+        assert "Bạn nên" in r
+
+    # ── Section 1: verdict / action label ────────────────────────────────────
+
+    def test_strong_buy_verdict(self):
+        r = self._call(action="STRONG_BUY", mfpm_score=95)
+        assert "MUA MẠNH" in r or "rất mạnh" in r
+
+    def test_no_action_verdict_text(self):
+        r = self._call(action="NO_ACTION", mfpm_score=30)
+        assert "CHƯA CÓ TÍN HIỆU" in r or "chưa có tín hiệu" in r.lower()
+
+    def test_watch_action_label(self):
+        r = self._call(action="WATCH", mfpm_score=55)
+        assert "THEO DÕI" in r
+
+    def test_exit_action_label(self):
+        r = self._call(action="EXIT", mfpm_score=40)
+        assert "THOÁT" in r or "EXIT" in r
+
+    # ── Section 2: score / mode explanation ──────────────────────────────────
+
+    def test_mfpm_score_appears_in_section2(self):
+        r = self._call(mfpm_score=88)
+        assert "88" in r
+
+    def test_mode_a_explanation_present(self):
+        r = self._call(signal_mode="MODE_A")
+        assert "pullback" in r.lower() or "MODE_A" in r or "điều chỉnh" in r.lower()
+
+    def test_mode_b_explanation_present(self):
+        r = self._call(signal_mode="MODE_B")
+        assert "breakout" in r.lower() or "MODE_B" in r or "bứt phá" in r.lower()
+
+    def test_mode_w_explanation_present(self):
+        r = self._call(signal_mode="MODE_W", mode_w_score=60)
+        assert "tiền cá mập" in r.lower() or "whale" in r.lower() or "MODE_W" in r
+
+    # ── Section 3: supporting signals ────────────────────────────────────────
+
+    def test_rsi_oversold_in_supports(self):
+        r = self._call(rsi14=25.0, action="BUY")
+        assert "quá bán" in r.lower() or "RSI" in r
+
+    def test_whale_sms_in_supports(self):
+        r = self._call(sms_raw=72, sms_label="WHALE_BUYING")
+        assert "cá mập" in r.lower() or "SMS" in r or "72" in r
+
+    def test_stealth_accum_in_supports(self):
+        r = self._call(stealth_accum=True, action="BUY")
+        assert "stealth" in r.lower() or "ngầm" in r.lower()
+
+    def test_vcp_pattern_in_supports(self):
+        r = self._call(best_pattern="VCP", action="BUY")
+        assert "VCP" in r
+
+    def test_above_sma50_in_supports(self):
+        r = self._call(close=30_000, sma50=25_000, action="BUY")
+        assert "SMA50" in r or "MA50" in r
+
+    # ── Section 4: risks ─────────────────────────────────────────────────────
+
+    def test_distribution_exit_in_risks(self):
+        r = self._call(distribution_warning="EXIT", action="EXIT")
+        assert "phân phối" in r.lower() or "EXIT" in r
+
+    def test_distribution_forced_exit_in_risks(self):
+        r = self._call(distribution_warning="FORCED_EXIT", action="FORCED_EXIT")
+        assert "FORCED" in r or "mạnh" in r.lower() or "phân phối" in r.lower()
+
+    def test_amf_block_in_risks(self):
+        r = self._call(amf_decision="BLOCK", action="WATCH")
+        assert "BLOCK" in r or "chặn" in r.lower() or "AMF" in r
+
+    def test_rsi_overbought_in_risks(self):
+        r = self._call(rsi14=78.0, action="WATCH")
+        assert "quá mua" in r.lower() or "RSI" in r
+
+    def test_hmm_bear_in_risks(self):
+        r = self._call(hmm_state="STEADY_BEAR", action="WATCH")
+        assert "gấu" in r.lower() or "bear" in r.lower() or "HMM" in r
+
+    def test_earnings_risk_in_risks(self):
+        r = self._call(earnings_risk="HIGH_RISK", action="WATCH")
+        assert "kết quả kinh doanh" in r.lower() or "earnings" in r.lower() or "HIGH_RISK" in r
+
+    def test_macro_restrictive_in_risks(self):
+        r = self._call(macro_regime="RESTRICTIVE", action="WATCH")
+        assert "thắt chặt" in r.lower() or "RESTRICTIVE" in r
+
+    # ── Section 5: trading plan ───────────────────────────────────────────────
+
+    def test_trading_plan_has_entry_and_sl_and_tp(self):
+        r = self._call(entry_price=24_800, stop_loss=23_000, tp1=28_000)
+        assert "24,800" in r or "24800" in r or "24.800" in r
+        assert "23,000" in r or "23000" in r or "23.000" in r
+        assert "28,000" in r or "28000" in r or "28.000" in r
+
+    def test_trading_plan_missing_when_no_entry_price(self):
+        r = self._call(entry_price=0, stop_loss=0, tp1=0, tp2=0, action="NO_ACTION")
+        assert "Chưa đủ điều kiện" in r or "chưa" in r.lower()
+
+    def test_rr_ratio_appears_in_plan(self):
+        r = self._call(rr_ratio=2.5)
+        assert "2.5" in r or "R:R" in r or "tỉ lệ" in r.lower()
+
+    # ── Section 6: upgrade advice ─────────────────────────────────────────────
+
+    def test_forced_exit_section6_thoat_ngay(self):
+        r = self._call(action="FORCED_EXIT", distribution_warning="FORCED_EXIT")
+        assert "THOÁT NGAY" in r or "thoát ngay" in r.lower()
+
+    def test_watch_section6_shows_mfpm_threshold(self):
+        r = self._call(action="WATCH", mfpm_score=55)
+        # Should tell user how many points needed to reach BUY (70)
+        assert "70" in r or "điểm" in r.lower()
+
+    def test_no_action_section6_shows_50_threshold(self):
+        r = self._call(action="NO_ACTION", mfpm_score=30)
+        # Should mention the 50-point WATCH threshold
+        assert "50" in r or "điểm" in r.lower()
+
+    def test_buy_section6_has_concrete_advice(self):
+        r = self._call(action="BUY", mfpm_score=75)
+        # Must have some actionable Vietnamese text in section 6
+        assert "vào lệnh" in r.lower() or "mua" in r.lower() or "lệnh" in r.lower()

@@ -116,7 +116,8 @@ class TestUISourceWiring:
         import tradingos.ui.pages.scanner as scanner
 
         src = inspect.getsource(scanner.render)
-        assert 'selectbox("Sàn", ["HOSE", "HNX", "UPCOM", "ALL"]' in src
+        # UPCOM removed; list should contain HOSE, HNX, ALL
+        assert 'selectbox("S\u00e0n", ["HOSE", "HNX", "ALL"]' in src
         assert 'exchange=exchange' in src
 
     def test_signal_card_shows_overlay_details(self):
@@ -202,4 +203,5 @@ class TestScannerServiceExchangeWiring:
         src = inspect.getsource(ScannerService.scan)
         assert 'exchange = str(request.exchange or "HOSE").upper()' in src
         assert 'if exchange == "ALL":' in src
-        assert 'fetch_universe("UPCOM")' in src
+        # UPCOM removed from ALL branch
+        assert 'fetch_universe("UPCOM")' not in src

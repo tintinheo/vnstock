@@ -70,6 +70,13 @@ def clean_ohlcv(df: pd.DataFrame) -> pd.DataFrame:
     for col in ["open", "high", "low", "close"]:
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
+    # Normalise from thousands-VND (e.g. 57.7) to full VND (57 700).
+    # SSI iboard-api returns prices in thousands; this converts once at the
+    # data boundary so all downstream code works in full VND.
+    for col in ["open", "high", "low", "close"]:
+        if col in df.columns:
+            df[col] = normalize_price_series(df[col])
+
     df["volume"] = pd.to_numeric(df["volume"], errors="coerce").fillna(0).astype(int)
     df = df.dropna(subset=["close"])
     return df

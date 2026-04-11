@@ -1,6 +1,6 @@
 ﻿# tradingos
 
-Vietnamese stock market automated trading operating system.
+Vietnamese stock market trading intelligence — advisory signals only, does not place orders.
 
 ## Project Structure
 

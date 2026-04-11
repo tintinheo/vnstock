@@ -72,9 +72,9 @@ class BacktestService:
         except Exception as e:
             log.debug(f"Macro series build skipped for {ticker}: {e}")
 
-        sl_pct = request.sl_pct or float(cfg.strategy("entry_exit", "initial_sl_pct", default=0.06))
-        tp1_pct = sl_pct * float(cfg.strategy("entry_exit", "tp1_rr", default=1.5))
-        tp2_pct = sl_pct * float(cfg.strategy("entry_exit", "tp2_rr", default=2.5))
+        sl_pct  = request.sl_pct or float(cfg.strategy("entry_exit", "initial_sl_pct", default=0.06))
+        tp1_pct = sl_pct * float(getattr(request, "tp1_mult", None) or cfg.strategy("entry_exit", "tp1_rr", default=1.5))
+        tp2_pct = sl_pct * float(getattr(request, "tp2_mult", None) or cfg.strategy("entry_exit", "tp2_rr", default=2.5))
 
         results = compare_modes(df, ticker=ticker, sl_pct=sl_pct, tp1_pct=tp1_pct, tp2_pct=tp2_pct)
 

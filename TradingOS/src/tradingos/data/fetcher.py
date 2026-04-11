@@ -432,7 +432,75 @@ def fetch_quote(ticker: str, exchange: str | None = None) -> dict:
     return {}
 
 
-# ── Put-through / Deal data (Phase 1) ────────────────────────────────────────
+def fetch_realtime(ticker: str) -> dict:
+    """
+    Return a normalised real-time price snapshot for *ticker*.
+
+    Wraps :func:`fetch_quote` (SSI iboard-query) and post-processes the
+    raw response into a stable dict.  Applies the same ×1000 scale fix
+    used by ``normalize_price_series`` (SSI returns prices in thousands
+    VND on some boards).
+
+    Returns an empty dict ``{}`` on any failure so the profiler pipeline
+    remains non-blocking.
+
+    Keys returned:
+        rt_price        float   — last matched / close price (VND)
+        rt_pct_change   float   — (price - reference) / reference × 100
+        rt_reference    float   — reference / prior close price (VND)
+        rt_ceiling      float   — limit-up price (VND)
+        rt_floor        float   — limit-down price (VND)
+        rt_at_ceiling   bool    — price within 0.5% of ceiling
+        rt_at_floor     bool    — price within 0.5% of floor
+        rt_volume_today float   — matched volume so far today
+        rt_source       str     — "SSI-RT"
+    """
+    try:
+        raw = fetch_quote(ticker)
+        if not raw:
+            return {}
+
+        def _price(key1: str, key2: str = "") -> float:
+            """Try key1, fallback key2, scale if < 500."""
+            v = raw.get(key1) or (raw.get(key2) if key2 else None)
+            if v is None:
+                return 0.0
+            val = float(v)
+            if 0 < val < 500:   # SSI thousands-VND artefact
+                val *= 1_000
+            return val
+
+        rt_price    = _price("matchedPrice", "lastPrice") or _price("close", "c")
+        rt_reference= _price("referencePrice", "priorClosePrice")
+        rt_ceiling  = _price("ceilingPrice", "ceiling")
+        rt_floor    = _price("floorPrice", "floor")
+        vol         = float(raw.get("matchedVolume") or raw.get("totalVolume") or 0)
+
+        if rt_price == 0.0 and rt_reference == 0.0:
+            return {}
+
+        ref_safe = rt_reference if rt_reference > 0 else (rt_price or 1.0)
+        pct_change = (rt_price - ref_safe) / ref_safe * 100 if ref_safe else 0.0
+
+        at_ceiling = (rt_ceiling > 0 and rt_price > 0
+                      and abs(rt_price - rt_ceiling) / rt_ceiling < 0.005)
+        at_floor   = (rt_floor > 0 and rt_price > 0
+                      and abs(rt_price - rt_floor) / rt_floor < 0.005)
+
+        return {
+            "rt_price":        round(rt_price,     0),
+            "rt_pct_change":   round(pct_change,   2),
+            "rt_reference":    round(rt_reference,  0),
+            "rt_ceiling":      round(rt_ceiling,    0),
+            "rt_floor":        round(rt_floor,      0),
+            "rt_at_ceiling":   at_ceiling,
+            "rt_at_floor":     at_floor,
+            "rt_volume_today": vol,
+            "rt_source":       "SSI-RT",
+        }
+    except Exception as e:
+        log.debug(f"fetch_realtime failed for {ticker}: {e}")
+        return {}
 
 def fetch_put_through_deals(ticker: str, days: int = 5) -> pd.DataFrame:
     """

@@ -30,6 +30,8 @@ def render() -> None:
             start_date=start,
             end_date=end,
             sl_pct=sl_pct,
+            tp1_mult=tp1_mult,
+            tp2_mult=tp2_mult,
         )
 
         with st.spinner(f"Đang backtest {ticker}..."):

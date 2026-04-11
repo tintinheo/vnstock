@@ -140,6 +140,68 @@ def ofi(df: pd.DataFrame) -> pd.Series:
     return (buy_vol - sell_vol).cumsum()
 
 
+# ── MACD components ───────────────────────────────────────────────────────────
+
+def macd_components(
+    series: pd.Series, fast: int = 12, slow: int = 26, signal_p: int = 9
+) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Returns (macd_line, signal_line, histogram)."""
+    fast_ema = ema(series, fast)
+    slow_ema = ema(series, slow)
+    macd_line = fast_ema - slow_ema
+    signal_line = ema(macd_line, signal_p)
+    return macd_line, signal_line, macd_line - signal_line
+
+
+# ── Stochastic Oscillator ─────────────────────────────────────────────────────
+
+def stochastic(df: pd.DataFrame, k_period: int = 14, d_period: int = 3) -> tuple[pd.Series, pd.Series]:
+    """Returns (%K, %D)."""
+    low_min  = df["low"].rolling(k_period).min()
+    high_max = df["high"].rolling(k_period).max()
+    k = 100 * (df["close"] - low_min) / (high_max - low_min).replace(0, 1e-9)
+    return k, k.rolling(d_period).mean()
+
+
+# ── Williams %R ───────────────────────────────────────────────────────────────
+
+def williams_r(df: pd.DataFrame, period: int = 14) -> pd.Series:
+    """Williams %R oscillator (−100 to 0)."""
+    high_max = df["high"].rolling(period).max()
+    low_min  = df["low"].rolling(period).min()
+    return -100 * (high_max - df["close"]) / (high_max - low_min).replace(0, 1e-9)
+
+
+# ── CCI ───────────────────────────────────────────────────────────────────────
+
+def cci(df: pd.DataFrame, period: int = 20) -> pd.Series:
+    """Commodity Channel Index."""
+    tp = (df["high"] + df["low"] + df["close"]) / 3
+    mad = tp.rolling(period).apply(lambda x: np.mean(np.abs(x - x.mean())), raw=True)
+    return (tp - tp.rolling(period).mean()) / (0.015 * mad.replace(0, 1e-9))
+
+
+# ── ADX / DI ──────────────────────────────────────────────────────────────────
+
+def adx_di(df: pd.DataFrame, period: int = 14) -> tuple[pd.Series, pd.Series, pd.Series]:
+    """Returns (ADX, DI_plus, DI_minus)."""
+    high, low, close = df["high"], df["low"], df["close"]
+    plus_dm  = (high - high.shift()).clip(lower=0)
+    minus_dm = (low.shift() - low).clip(lower=0)
+    # Directional: only the dominant side contributes
+    plus_dm  = plus_dm.where(plus_dm >= minus_dm, 0.0)
+    minus_dm = minus_dm.where(minus_dm > plus_dm, 0.0)
+    tr = pd.concat(
+        [high - low, (high - close.shift()).abs(), (low - close.shift()).abs()], axis=1
+    ).max(axis=1)
+    a = 1.0 / period
+    atr_s    = tr.ewm(alpha=a, adjust=False).mean()
+    di_plus  = 100 * plus_dm.ewm(alpha=a, adjust=False).mean()  / atr_s.replace(0, 1e-9)
+    di_minus = 100 * minus_dm.ewm(alpha=a, adjust=False).mean() / atr_s.replace(0, 1e-9)
+    dx = 100 * (di_plus - di_minus).abs() / (di_plus + di_minus).replace(0, 1e-9)
+    return dx.ewm(alpha=a, adjust=False).mean(), di_plus, di_minus
+
+
 # ── Compute All Indicators ────────────────────────────────────────────────────
 
 def compute_all(df: pd.DataFrame) -> pd.DataFrame:
@@ -158,11 +220,17 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
         df.index = pd.to_datetime(df.index)
         df = df.sort_index()
 
+    df["SMA3"]   = sma(df["close"], 3)
+    df["SMA5"]   = sma(df["close"], 5)
+    df["SMA7"]   = sma(df["close"], 7)
+    df["SMA10"]  = sma(df["close"], 10)
     df["SMA20"]  = sma(df["close"], 20)
     df["SMA50"]  = sma(df["close"], 50)
     df["SMA200"] = sma(df["close"], 200)
     df["EMA9"]   = ema(df["close"], 9)
     df["EMA21"]  = ema(df["close"], 21)
+    df["EMA50"]  = ema(df["close"], 50)
+    df["EMA200"] = ema(df["close"], 200)
 
     df["RSI14"]  = rsi(df["close"], 14)
     df["ATR14"]  = atr(df, 14)
@@ -186,5 +254,16 @@ def compute_all(df: pd.DataFrame) -> pd.DataFrame:
 
     # Volume-price correlation proxy
     df["VP_corr"] = df["close"].rolling(20).corr(df["volume"])
+
+    # ── Extended indicators (T+2.5, Gap, VWAP support) ───────────────────
+    _ml, _ms, _mh = macd_components(df["close"])
+    df["MACD_line"]   = _ml
+    df["MACD_signal"] = _ms
+    df["MACD_hist"]   = _mh
+
+    df["STOCH_K"], df["STOCH_D"] = stochastic(df)
+    df["WILLIAMS_R"]             = williams_r(df)
+    df["CCI"]                    = cci(df)
+    df["ADX"], df["DI_plus"], df["DI_minus"] = adx_di(df)
 
     return df

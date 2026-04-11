@@ -28,11 +28,11 @@ import pytest
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestD1OHLCVWindow:
-    def test_score_ticker_fetches_260_days(self):
+    def test_score_ticker_fetches_1000_days(self):
         from tradingos.engines.scanner_service import ScannerService
         src = inspect.getsource(ScannerService._score_ticker)
-        assert "days=260" in src, (
-            "_score_ticker must fetch 260 days (not 120) so SMA200/ATR/AMD are reliable"
+        assert "days=1000" in src, (
+            "_score_ticker must fetch 1000 days so SMA200/ATR/AMD are reliable"
         )
         assert "days=120" not in src, (
             "old days=120 fetch must be removed from _score_ticker"

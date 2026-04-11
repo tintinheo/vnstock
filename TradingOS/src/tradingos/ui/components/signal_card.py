@@ -3,6 +3,8 @@ from __future__ import annotations
 
 import streamlit as st
 
+from tradingos.core.nlp import generate_indicator_explanation, generate_f0_explanation
+
 
 _ACTION_COLOR = {
     "STRONG_BUY": "#00c851",
@@ -63,8 +65,48 @@ def render_signal_card(profile) -> None:
             st.markdown(f"**BCTC Risk:** {getattr(profile, 'earnings_risk', 'SAFE')}")
             st.markdown(f"**Fundamental:** {getattr(profile, 'fundamental_score', '—')}")
 
-    if profile.advisory_text:
-        st.markdown(profile.advisory_text)
-
     if profile.entry_window and profile.entry_window != "—":
         st.info(f"⏰ Cửa sổ vào lệnh khuyến nghị: **{profile.entry_window}**")
+
+    if profile.advisory_text:
+        _nlp_expanded = profile.action in ("STRONG_BUY", "BUY")
+        with st.expander("📝 Phân tích & Lý giải tín hiệu (NLP)", expanded=_nlp_expanded):
+            st.markdown(profile.advisory_text)
+
+    with st.expander("🔰 Giải thích dành cho nhà đầu tư mới (F0)", expanded=False):
+        st.caption("Ngôn ngữ đơn giản — 6 mục: Kết luận, Lý do, Tín hiệu ủng hộ, Rủi ro, Kế hoạch, Khuyến nghị.")
+        f0_text = generate_f0_explanation(
+            ticker=profile.ticker,
+            action=profile.action,
+            mfpm_score=profile.mfpm_score,
+            signal_mode=profile.signal_mode,
+            confidence=profile.confidence,
+            close=profile.close,
+            entry_price=profile.entry_price,
+            stop_loss=profile.stop_loss,
+            sl_pct=profile.sl_pct,
+            tp1=profile.tp1,
+            tp2=profile.tp2,
+            rr_ratio=profile.rr_ratio,
+            rsi14=profile.rsi14,
+            sms_raw=profile.sms_raw,
+            sms_label=profile.sms_label,
+            stealth_accum=profile.stealth_accum,
+            distribution_warning=profile.distribution_warning,
+            hmm_state=profile.hmm_state,
+            amd_phase=profile.amd_phase,
+            amf_decision=profile.amf_decision,
+            best_pattern=profile.best_pattern,
+            mcvd_trend=profile.mcvd_trend,
+            mc_win_prob=profile.mc_win_prob,
+            mode_w_score=profile.mode_w_score,
+            macro_regime=getattr(profile, "macro_regime", ""),
+            earnings_risk=getattr(profile, "earnings_risk", "SAFE"),
+            sma20=profile.sma20,
+            sma50=profile.sma50,
+            sma200=profile.sma200,
+            volume=profile.volume,
+            avg_volume_20d=profile.avg_volume_20d,
+            atr14=profile.atr14,
+        )
+        st.markdown(f0_text)

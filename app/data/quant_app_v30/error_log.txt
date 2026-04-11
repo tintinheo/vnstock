@@ -36432,3 +36432,944 @@
 2026-04-02 16:36:43,556 [WARNING] in _fetch_tcbs: TCBS HTTP error VXB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VXB&type=stock&resolution=D&from=1740562602&to=1775122602
 2026-04-02 16:36:45,763 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VXB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VXB?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
 2026-04-02 16:36:59,176 [ERROR] in download_data: Cannot load VXB. Exchange:HOSE. Sources tried: SSI:14 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:36:56,373 [WARNING] in fetch_stooq: Stooq GC.F failed: Stooq no data for GC.F — trying yFinance fallback
+2026-04-05 13:36:57,798 [WARNING] in fetch_stooq: Stooq CL.F failed: Stooq no data for CL.F — trying yFinance fallback
+2026-04-05 13:36:59,199 [WARNING] in fetch_stooq: Stooq NG.F failed: Stooq no data for NG.F — trying yFinance fallback
+2026-04-05 13:37:00,620 [WARNING] in fetch_stooq: Stooq DXY failed: Stooq bad columns for DXY: ['Write To Www@Stooq.Com If You Want To Use Our Data', 'Describing Your Project', 'The Types Of Instruments Needed', 'And Optionally Providing The Name Of The Website Where The Data Would Be Published.'] — trying yFinance fallback
+2026-04-05 13:37:01,924 [WARNING] in fetch_stooq: Stooq ^SPX failed: Stooq bad columns for ^SPX: ['Write To Www@Stooq.Com If You Want To Use Our Data', 'Describing Your Project', 'The Types Of Instruments Needed', 'And Optionally Providing The Name Of The Website Where The Data Would Be Published.'] — trying yFinance fallback
+2026-04-05 13:37:03,953 [WARNING] in fetch_stooq: Stooq ^VNI failed: Stooq bad columns for ^VNI: ['Write To Www@Stooq.Com If You Want To Use Our Data', 'Describing Your Project', 'The Types Of Instruments Needed', 'And Optionally Providing The Name Of The Website Where The Data Would Be Published.'] — trying yFinance fallback
+2026-04-05 13:37:30,925 [WARNING] in _fetch_ssi: SSI HTTP error PME [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&resolution=D&from=1771483048&to=1775371048
+2026-04-05 13:37:38,336 [WARNING] in _fetch_cafef: CafeF ❌ PME: all strategies failed
+2026-04-05 13:37:38,995 [WARNING] in _fetch_tcbs: TCBS HTTP error PME: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=PME&type=stock&resolution=D&from=1771483058&to=1775371058
+2026-04-05 13:37:41,230 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused PME: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/PME?type=5&count=45 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:37:41,230 [ERROR] in download_data: Cannot load PME. Exchange:UPCOM. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:skipped(UPCOM) | yFinance:0 rows
+2026-04-05 13:37:42,145 [INFO] in fetch_ssi_market_group: SSI group/VN30: 30 tickers loaded
+2026-04-05 13:37:51,312 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ACB: price=23,500 ref=23,600 ceil=0 floor=0
+2026-04-05 13:37:52,544 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ACV: price=45,800 ref=46,400 ceil=0 floor=0
+2026-04-05 13:37:53,991 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AGR: price=14,600 ref=14,650 ceil=0 floor=0
+2026-04-05 13:37:55,683 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ANV: price=23,600 ref=23,750 ceil=0 floor=0
+2026-04-05 13:37:56,975 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AAA: price=6,940 ref=7,000 ceil=0 floor=0
+2026-04-05 13:37:57,107 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BAF: price=34,950 ref=34,950 ceil=0 floor=0
+2026-04-05 13:37:58,585 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BCC: price=7,200 ref=7,300 ceil=0 floor=0
+2026-04-05 13:37:58,716 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AAM: price=6,200 ref=6,300 ceil=0 floor=0
+2026-04-05 13:38:00,396 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AAT: price=2,930 ref=2,930 ceil=0 floor=0
+2026-04-05 13:38:01,457 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AAV: price=9,000 ref=8,800 ceil=0 floor=0
+2026-04-05 13:38:02,629 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ABR: price=12,200 ref=12,200 ceil=0 floor=0
+2026-04-05 13:38:03,120 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BCM: price=53,200 ref=53,600 ceil=0 floor=0
+2026-04-05 13:38:03,862 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ABS: price=3,110 ref=3,250 ceil=0 floor=0
+2026-04-05 13:38:05,168 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ABT: price=60,000 ref=60,500 ceil=0 floor=0
+2026-04-05 13:38:05,600 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BIC: price=24,200 ref=24,400 ceil=0 floor=0
+2026-04-05 13:38:06,638 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ACC: price=13,100 ref=13,400 ceil=0 floor=0
+2026-04-05 13:38:07,468 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ACG: price=33,500 ref=34,800 ceil=0 floor=0
+2026-04-05 13:38:08,419 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ACL: price=12,800 ref=12,750 ceil=0 floor=0
+2026-04-05 13:38:09,153 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BID: price=39,050 ref=39,700 ceil=0 floor=0
+2026-04-05 13:38:10,380 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ADG: price=8,520 ref=8,600 ceil=0 floor=0
+2026-04-05 13:38:11,411 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ADP: price=22,900 ref=22,950 ceil=0 floor=0
+2026-04-05 13:38:11,539 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BMI: price=17,250 ref=17,450 ceil=0 floor=0
+2026-04-05 13:38:12,451 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ADS: price=8,540 ref=8,560 ceil=0 floor=0
+2026-04-05 13:38:13,385 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BSR: price=26,350 ref=25,900 ceil=0 floor=0
+2026-04-05 13:38:13,433 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AFX: price=10,650 ref=10,600 ceil=0 floor=0
+2026-04-05 13:38:14,255 [INFO] in fetch_ssi_market_group: SSI group/VN30: 30 tickers loaded
+2026-04-05 13:38:14,467 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AGG: price=12,550 ref=12,850 ceil=0 floor=0
+2026-04-05 13:38:15,710 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BVH: price=85,000 ref=82,500 ceil=0 floor=0
+2026-04-05 13:38:16,718 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AMC: price=12,700 ref=12,700 ceil=0 floor=0
+2026-04-05 13:38:18,440 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BWE: price=43,000 ref=43,000 ceil=0 floor=0
+2026-04-05 13:38:19,399 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AMV: price=1,800 ref=1,800 ceil=0 floor=0
+2026-04-05 13:38:20,796 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ANT: price=36,200 ref=36,000 ceil=0 floor=0
+2026-04-05 13:38:21,943 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CII: price=18,000 ref=18,500 ceil=0 floor=0
+2026-04-05 13:38:22,395 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ APC: price=5,900 ref=6,100 ceil=0 floor=0
+2026-04-05 13:38:23,793 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ APG: price=5,640 ref=5,740 ceil=0 floor=0
+2026-04-05 13:38:24,456 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CMG: price=28,450 ref=28,800 ceil=0 floor=0
+2026-04-05 13:38:25,034 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ APH: price=5,530 ref=5,550 ceil=0 floor=0
+2026-04-05 13:38:26,279 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ API: price=5,700 ref=5,900 ceil=0 floor=0
+2026-04-05 13:38:26,850 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CNG: price=23,250 ref=23,950 ceil=0 floor=0
+2026-04-05 13:38:27,673 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ APS: price=6,000 ref=6,100 ceil=0 floor=0
+2026-04-05 13:38:29,843 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CSV: price=27,550 ref=28,300 ceil=0 floor=0
+2026-04-05 13:38:30,963 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ASG: price=16,800 ref=16,800 ceil=0 floor=0
+2026-04-05 13:38:32,655 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ASM: price=5,590 ref=5,640 ceil=0 floor=0
+2026-04-05 13:38:32,982 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTD: price=80,000 ref=82,000 ceil=0 floor=0
+2026-04-05 13:38:34,378 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ASP: price=5,150 ref=5,040 ceil=0 floor=0
+2026-04-05 13:38:36,114 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ AST: price=70,000 ref=68,900 ceil=0 floor=0
+2026-04-05 13:38:36,304 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTG: price=33,800 ref=34,300 ceil=0 floor=0
+2026-04-05 13:38:39,353 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DBD: price=50,800 ref=51,100 ceil=0 floor=0
+2026-04-05 13:38:41,490 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BCE: price=11,200 ref=11,200 ceil=0 floor=0
+2026-04-05 13:38:42,346 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DCM: price=44,350 ref=46,000 ceil=0 floor=0
+2026-04-05 13:38:43,430 [INFO] in _fetch_ssi: SSI ✅ BED: 5 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:38:45,249 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DGC: price=56,500 ref=54,000 ceil=0 floor=0
+2026-04-05 13:38:48,255 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHG: price=100,700 ref=100,500 ceil=0 floor=0
+2026-04-05 13:38:50,717 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DIG: price=14,150 ref=14,250 ceil=0 floor=0
+2026-04-05 13:38:52,449 [WARNING] in _fetch_ssi: SSI HTTP error BED [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=BED&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=BED&resolution=D&from=1740811129&to=1775371129
+2026-04-05 13:38:53,055 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DPM: price=28,800 ref=29,500 ceil=0 floor=0
+2026-04-05 13:38:54,393 [WARNING] in _fetch_cafef: CafeF ❌ BED: all strategies failed
+2026-04-05 13:38:54,797 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DVN: price=20,700 ref=20,800 ceil=0 floor=0
+2026-04-05 13:38:55,306 [WARNING] in _fetch_tcbs: TCBS HTTP error BED: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=BED&type=stock&resolution=D&from=1712299134&to=1775371134
+2026-04-05 13:38:56,773 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DVP: price=71,000 ref=70,700 ceil=0 floor=0
+2026-04-05 13:38:57,487 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused BED: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/BED?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:38:58,965 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXG: price=14,400 ref=14,450 ceil=0 floor=0
+2026-04-05 13:39:01,376 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXS: price=7,470 ref=7,550 ceil=0 floor=0
+2026-04-05 13:39:02,013 [WARNING] in _fetch_cafef: CafeF ❌ BED: all strategies failed
+2026-04-05 13:39:02,965 [WARNING] in _fetch_tcbs: TCBS HTTP error BED: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=BED&type=stock&resolution=D&from=1740811142&to=1775371142
+2026-04-05 13:39:03,778 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EIB: price=22,150 ref=22,850 ceil=0 floor=0
+2026-04-05 13:39:05,147 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused BED: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/BED?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:39:05,882 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EVE: price=10,450 ref=10,500 ceil=0 floor=0
+2026-04-05 13:39:08,046 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FCN: price=12,900 ref=12,900 ceil=0 floor=0
+2026-04-05 13:39:09,530 [ERROR] in download_data: Cannot load BED. Exchange:HOSE. Sources tried: SSI:5 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:39:10,301 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FPT: price=74,000 ref=74,700 ceil=0 floor=0
+2026-04-05 13:39:10,489 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BFC: price=55,400 ref=57,200 ceil=0 floor=0
+2026-04-05 13:39:11,509 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BHN: price=29,500 ref=29,500 ceil=0 floor=0
+2026-04-05 13:39:12,530 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GAS: price=79,700 ref=78,700 ceil=0 floor=0
+2026-04-05 13:39:12,745 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BIC: price=24,200 ref=24,400 ceil=0 floor=0
+2026-04-05 13:39:13,902 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BID: price=39,050 ref=39,700 ceil=0 floor=0
+2026-04-05 13:39:14,484 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GEG: price=15,850 ref=16,300 ceil=0 floor=0
+2026-04-05 13:39:15,026 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BKC: price=21,600 ref=22,100 ceil=0 floor=0
+2026-04-05 13:39:15,979 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BKG: price=2,610 ref=2,600 ceil=0 floor=0
+2026-04-05 13:39:16,793 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GEX: price=35,300 ref=36,150 ceil=0 floor=0
+2026-04-05 13:39:16,961 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BMC: price=13,300 ref=13,300 ceil=0 floor=0
+2026-04-05 13:39:17,154 [ERROR] in download_data: Cannot load BED. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:39:18,042 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BMI: price=17,250 ref=17,450 ceil=0 floor=0
+2026-04-05 13:39:19,006 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BMP: price=126,100 ref=129,500 ceil=0 floor=0
+2026-04-05 13:39:19,153 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GMD: price=70,700 ref=74,000 ceil=0 floor=0
+2026-04-05 13:39:21,206 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BRC: price=12,100 ref=12,200 ceil=0 floor=0
+2026-04-05 13:39:22,330 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BSI: price=35,850 ref=36,800 ceil=0 floor=0
+2026-04-05 13:39:23,488 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BTP: price=8,450 ref=8,480 ceil=0 floor=0
+2026-04-05 13:39:24,149 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GVR: price=32,050 ref=32,100 ceil=0 floor=0
+2026-04-05 13:39:24,417 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BTS: price=5,100 ref=5,100 ceil=0 floor=0
+2026-04-05 13:39:26,373 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BVH: price=85,000 ref=82,500 ceil=0 floor=0
+2026-04-05 13:39:26,398 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAG: price=15,950 ref=16,250 ceil=0 floor=0
+2026-04-05 13:39:27,566 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BVS: price=26,300 ref=26,900 ceil=0 floor=0
+2026-04-05 13:39:28,598 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAH: price=54,600 ref=54,600 ceil=0 floor=0
+2026-04-05 13:39:28,690 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BWE: price=43,000 ref=43,000 ceil=0 floor=0
+2026-04-05 13:39:29,788 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ BXH: price=12,300 ref=12,300 ceil=0 floor=0
+2026-04-05 13:39:30,870 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAX: price=10,450 ref=10,450 ceil=0 floor=0
+2026-04-05 13:39:30,983 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ C32: price=10,750 ref=10,450 ceil=0 floor=0
+2026-04-05 13:39:31,986 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ C47: price=9,630 ref=9,600 ceil=0 floor=0
+2026-04-05 13:39:33,140 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HBC: price=5,100 ref=5,200 ceil=0 floor=0
+2026-04-05 13:39:34,237 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CAP: price=46,100 ref=46,000 ceil=0 floor=0
+2026-04-05 13:39:35,532 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HCM: price=24,150 ref=23,600 ceil=0 floor=0
+2026-04-05 13:39:36,626 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CCI: price=19,300 ref=20,000 ceil=0 floor=0
+2026-04-05 13:39:37,704 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CCL: price=4,950 ref=4,960 ceil=0 floor=0
+2026-04-05 13:39:37,793 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HDB: price=25,600 ref=25,600 ceil=0 floor=0
+2026-04-05 13:39:38,692 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CDC: price=22,400 ref=21,900 ceil=0 floor=0
+2026-04-05 13:39:40,073 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HDG: price=29,000 ref=29,600 ceil=0 floor=0
+2026-04-05 13:39:40,892 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CEO: price=16,500 ref=16,800 ceil=0 floor=0
+2026-04-05 13:39:41,854 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CIG: price=6,250 ref=6,220 ceil=0 floor=0
+2026-04-05 13:39:42,914 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CII: price=18,000 ref=18,500 ceil=0 floor=0
+2026-04-05 13:39:43,396 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HPG: price=26,650 ref=27,350 ceil=0 floor=0
+2026-04-05 13:39:45,685 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HSG: price=14,800 ref=14,950 ceil=0 floor=0
+2026-04-05 13:39:47,378 [WARNING] in _fetch_ssi: SSI HTTP error CJC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CJC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CJC&resolution=D&from=1712299182&to=1775371182
+2026-04-05 13:39:48,018 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HT1: price=14,950 ref=15,150 ceil=0 floor=0
+2026-04-05 13:39:50,026 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HVN: price=21,600 ref=22,100 ceil=0 floor=0
+2026-04-05 13:39:51,907 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDC: price=46,800 ref=48,000 ceil=0 floor=0
+2026-04-05 13:39:54,422 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDI: price=6,610 ref=6,700 ceil=0 floor=0
+2026-04-05 13:39:56,439 [WARNING] in _fetch_cafef: CafeF ❌ CJC: all strategies failed
+2026-04-05 13:39:56,830 [WARNING] in _fetch_ssi: SSI HTTP error CJC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CJC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CJC&resolution=D&from=1740811193&to=1775371193
+2026-04-05 13:39:57,094 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IMP: price=55,700 ref=55,600 ceil=0 floor=0
+2026-04-05 13:39:57,444 [WARNING] in _fetch_tcbs: TCBS HTTP error CJC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=CJC&type=stock&resolution=D&from=1712299196&to=1775371196
+2026-04-05 13:39:59,217 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KBC: price=32,000 ref=32,150 ceil=0 floor=0
+2026-04-05 13:39:59,608 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused CJC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/CJC?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:40:02,264 [WARNING] in _fetch_ssi: SSI HTTP error KDF [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=KDF&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=KDF&resolution=D&from=1740811199&to=1775371199
+2026-04-05 13:40:05,845 [WARNING] in _fetch_cafef: CafeF ❌ CJC: all strategies failed
+2026-04-05 13:40:06,657 [WARNING] in _fetch_tcbs: TCBS HTTP error CJC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=CJC&type=stock&resolution=D&from=1740811205&to=1775371205
+2026-04-05 13:40:08,801 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused CJC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/CJC?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:40:10,853 [WARNING] in _fetch_cafef: CafeF ❌ KDF: all strategies failed
+2026-04-05 13:40:11,603 [WARNING] in _fetch_tcbs: TCBS HTTP error KDF: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=KDF&type=stock&resolution=D&from=1740811210&to=1775371210
+2026-04-05 13:40:11,611 [ERROR] in download_data: Cannot load CJC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:40:12,400 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CKG: price=8,600 ref=8,970 ceil=0 floor=0
+2026-04-05 13:40:13,768 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused KDF: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/KDF?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:40:14,239 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CLC: price=55,900 ref=55,900 ceil=0 floor=0
+2026-04-05 13:40:15,114 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CLL: price=29,700 ref=29,700 ceil=0 floor=0
+2026-04-05 13:40:17,565 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CMG: price=28,450 ref=28,800 ceil=0 floor=0
+2026-04-05 13:40:18,285 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CMS: price=6,900 ref=6,900 ceil=0 floor=0
+2026-04-05 13:40:19,030 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CMX: price=5,980 ref=5,980 ceil=0 floor=0
+2026-04-05 13:40:19,752 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CNG: price=23,250 ref=23,950 ceil=0 floor=0
+2026-04-05 13:40:20,810 [ERROR] in download_data: Cannot load CJC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:40:21,345 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CPC: price=17,400 ref=17,500 ceil=0 floor=0
+2026-04-05 13:40:23,607 [WARNING] in _fetch_ssi: SSI HTTP error CPH [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CPH&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CPH&resolution=D&from=1712299221&to=1775371221
+2026-04-05 13:40:25,777 [ERROR] in download_data: Cannot load KDF. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:40:28,017 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KDH: price=25,300 ref=26,150 ceil=0 floor=0
+2026-04-05 13:40:30,923 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KSB: price=16,100 ref=16,000 ceil=0 floor=0
+2026-04-05 13:40:33,088 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LPB: price=43,100 ref=41,800 ceil=0 floor=0
+2026-04-05 13:40:33,140 [WARNING] in _fetch_cafef: CafeF ❌ CPH: all strategies failed
+2026-04-05 13:40:34,075 [WARNING] in _fetch_tcbs: TCBS HTTP error CPH: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=CPH&type=stock&resolution=D&from=1712299233&to=1775371233
+2026-04-05 13:40:35,077 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LTG: price=6,200 ref=6,400 ceil=0 floor=0
+2026-04-05 13:40:36,737 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MBB: price=25,950 ref=26,300 ceil=0 floor=0
+2026-04-05 13:40:38,910 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MBS: price=20,000 ref=20,200 ceil=0 floor=0
+2026-04-05 13:40:40,081 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused CPH: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/CPH?type=5&count=500 (Caused by ConnectTimeoutError(<HTTPSConnection(host='api.cafef.vn', port=443) at 0x1eacb184050>, 'Connection to api.cafef.vn timed out. (connect timeout=6)'))
+2026-04-05 13:40:41,154 [WARNING] in _fetch_ssi: SSI HTTP error CPH [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CPH&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=CPH&resolution=D&from=1740811238&to=1775371238
+2026-04-05 13:40:41,259 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MCH: price=140,700 ref=141,000 ceil=0 floor=0
+2026-04-05 13:40:43,124 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MIG: price=19,650 ref=19,450 ceil=0 floor=0
+2026-04-05 13:40:44,973 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MSB: price=11,500 ref=11,400 ceil=0 floor=0
+2026-04-05 13:40:47,209 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MSN: price=75,300 ref=76,100 ceil=0 floor=0
+2026-04-05 13:40:49,262 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MWG: price=79,300 ref=81,800 ceil=0 floor=0
+2026-04-05 13:40:49,624 [WARNING] in _fetch_cafef: CafeF ❌ CPH: all strategies failed
+2026-04-05 13:40:50,384 [WARNING] in _fetch_tcbs: TCBS HTTP error CPH: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=CPH&type=stock&resolution=D&from=1740811249&to=1775371249
+2026-04-05 13:40:51,226 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NKG: price=13,600 ref=13,800 ceil=0 floor=0
+2026-04-05 13:40:52,090 [ERROR] in download_data: Cannot load CPH. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:40:52,537 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused CPH: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/CPH?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:40:53,025 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CRC: price=10,100 ref=10,150 ceil=0 floor=0
+2026-04-05 13:40:53,177 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NLG: price=28,100 ref=29,500 ceil=0 floor=0
+2026-04-05 13:40:53,999 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CRE: price=7,600 ref=7,900 ceil=0 floor=0
+2026-04-05 13:40:54,939 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CSC: price=14,900 ref=15,000 ceil=0 floor=0
+2026-04-05 13:40:55,273 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NSC: price=73,400 ref=73,700 ceil=0 floor=0
+2026-04-05 13:40:55,959 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CSM: price=12,300 ref=12,350 ceil=0 floor=0
+2026-04-05 13:40:56,984 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CSV: price=27,550 ref=28,300 ceil=0 floor=0
+2026-04-05 13:40:57,381 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NT2: price=26,000 ref=27,000 ceil=0 floor=0
+2026-04-05 13:40:57,917 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTB: price=16,200 ref=16,900 ceil=0 floor=0
+2026-04-05 13:40:58,905 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTD: price=80,000 ref=82,000 ceil=0 floor=0
+2026-04-05 13:40:59,276 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NTL: price=16,000 ref=16,250 ceil=0 floor=0
+2026-04-05 13:40:59,986 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTG: price=33,800 ref=34,300 ceil=0 floor=0
+2026-04-05 13:41:00,990 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTI: price=22,550 ref=22,650 ceil=0 floor=0
+2026-04-05 13:41:01,550 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NVL: price=14,300 ref=13,900 ceil=0 floor=0
+2026-04-05 13:41:02,147 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTR: price=84,900 ref=84,900 ceil=0 floor=0
+2026-04-05 13:41:03,074 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CTS: price=27,200 ref=27,900 ceil=0 floor=0
+2026-04-05 13:41:03,403 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ OCB: price=11,000 ref=11,200 ceil=0 floor=0
+2026-04-05 13:41:04,067 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ CVT: price=25,550 ref=24,500 ceil=0 floor=0
+2026-04-05 13:41:04,546 [ERROR] in download_data: Cannot load CPH. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:41:05,298 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ OIL: price=15,100 ref=15,100 ceil=0 floor=0
+2026-04-05 13:41:06,321 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ D11: price=10,900 ref=10,700 ceil=0 floor=0
+2026-04-05 13:41:07,275 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ D2D: price=36,400 ref=36,500 ceil=0 floor=0
+2026-04-05 13:41:07,458 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PAN: price=31,450 ref=31,650 ceil=0 floor=0
+2026-04-05 13:41:08,332 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DAD: price=15,500 ref=15,500 ceil=0 floor=0
+2026-04-05 13:41:09,644 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PC1: price=26,700 ref=27,800 ceil=0 floor=0
+2026-04-05 13:41:11,451 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DAH: price=3,000 ref=2,990 ceil=0 floor=0
+2026-04-05 13:41:11,929 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PDR: price=15,900 ref=16,100 ceil=0 floor=0
+2026-04-05 13:41:12,586 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DAT: price=8,490 ref=8,490 ceil=0 floor=0
+2026-04-05 13:41:13,645 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DBC: price=22,800 ref=23,150 ceil=0 floor=0
+2026-04-05 13:41:14,140 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGI: price=19,700 ref=19,700 ceil=0 floor=0
+2026-04-05 13:41:14,661 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DBD: price=50,800 ref=51,100 ceil=0 floor=0
+2026-04-05 13:41:15,985 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGV: price=23,500 ref=23,800 ceil=0 floor=0
+2026-04-05 13:41:16,938 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DC2: price=6,300 ref=6,200 ceil=0 floor=0
+2026-04-05 13:41:17,816 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PHP: price=32,900 ref=33,900 ceil=0 floor=0
+2026-04-05 13:41:17,907 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DC4: price=9,050 ref=9,110 ceil=0 floor=0
+2026-04-05 13:41:18,911 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DCM: price=44,350 ref=46,000 ceil=0 floor=0
+2026-04-05 13:41:19,901 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PLX: price=40,200 ref=40,400 ceil=0 floor=0
+2026-04-05 13:41:19,901 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DDG: price=800 ref=900 ceil=0 floor=0
+2026-04-05 13:41:21,147 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DGC: price=56,500 ref=54,000 ceil=0 floor=0
+2026-04-05 13:41:22,112 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DGW: price=43,900 ref=45,950 ceil=0 floor=0
+2026-04-05 13:41:23,289 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHA: price=45,600 ref=47,300 ceil=0 floor=0
+2026-04-05 13:41:23,979 [WARNING] in _fetch_ssi: SSI HTTP error PME [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=PME&resolution=D&from=1740811279&to=1775371279
+2026-04-05 13:41:24,613 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHC: price=34,550 ref=34,850 ceil=0 floor=0
+2026-04-05 13:41:25,648 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHG: price=100,700 ref=100,500 ceil=0 floor=0
+2026-04-05 13:41:26,652 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHM: price=6,550 ref=6,670 ceil=0 floor=0
+2026-04-05 13:41:28,532 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DHT: price=68,800 ref=68,800 ceil=0 floor=0
+2026-04-05 13:41:29,596 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DIG: price=14,150 ref=14,250 ceil=0 floor=0
+2026-04-05 13:41:30,679 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DIH: price=9,500 ref=9,600 ceil=0 floor=0
+2026-04-05 13:41:31,745 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DL1: price=4,400 ref=4,400 ceil=0 floor=0
+2026-04-05 13:41:32,830 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DLG: price=2,880 ref=2,890 ceil=0 floor=0
+2026-04-05 13:41:33,858 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DMC: price=59,000 ref=59,000 ceil=0 floor=0
+2026-04-05 13:41:34,533 [WARNING] in _fetch_cafef: CafeF ❌ PME: all strategies failed
+2026-04-05 13:41:35,412 [WARNING] in _fetch_tcbs: TCBS HTTP error PME: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=PME&type=stock&resolution=D&from=1740811294&to=1775371294
+2026-04-05 13:41:36,600 [WARNING] in _fetch_ssi: SSI HTTP error DMP [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMP&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMP&resolution=D&from=1712299293&to=1775371293
+2026-04-05 13:41:41,063 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused PME: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/PME?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:41:41,064 [ERROR] in download_data: Cannot load PME. Exchange:UPCOM. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:skipped(UPCOM) | yFinance:0 rows
+2026-04-05 13:41:43,376 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PNJ: price=108,800 ref=108,900 ceil=0 floor=0
+2026-04-05 13:41:45,669 [WARNING] in _fetch_cafef: CafeF ❌ DMP: all strategies failed
+2026-04-05 13:41:45,689 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ POW: price=12,650 ref=12,850 ceil=0 floor=0
+2026-04-05 13:41:46,684 [WARNING] in _fetch_tcbs: TCBS HTTP error DMP: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=DMP&type=stock&resolution=D&from=1712299305&to=1775371305
+2026-04-05 13:41:48,062 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVD: price=33,600 ref=34,450 ceil=0 floor=0
+2026-04-05 13:41:48,852 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused DMP: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/DMP?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:41:50,030 [WARNING] in _fetch_ssi: SSI HTTP error DMP [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMP&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMP&resolution=D&from=1740811307&to=1775371307
+2026-04-05 13:41:50,050 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVS: price=40,400 ref=40,200 ceil=0 floor=0
+2026-04-05 13:41:52,088 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVT: price=21,150 ref=21,550 ceil=0 floor=0
+2026-04-05 13:41:54,123 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ QNS: price=47,400 ref=47,200 ceil=0 floor=0
+2026-04-05 13:41:56,232 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ REE: price=64,400 ref=66,300 ceil=0 floor=0
+2026-04-05 13:41:58,268 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SAB: price=44,100 ref=44,200 ceil=0 floor=0
+2026-04-05 13:41:58,598 [WARNING] in _fetch_cafef: CafeF ❌ DMP: all strategies failed
+2026-04-05 13:41:59,369 [WARNING] in _fetch_tcbs: TCBS HTTP error DMP: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=DMP&type=stock&resolution=D&from=1740811318&to=1775371318
+2026-04-05 13:42:00,460 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SBT: price=21,900 ref=22,000 ceil=0 floor=0
+2026-04-05 13:42:00,857 [ERROR] in download_data: Cannot load DMP. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:42:01,380 [INFO] in _fetch_ssi: SSI ✅ SCC: 25 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:42:01,381 [INFO] in download_data: ✅ SSI SCC: 25 rows
+2026-04-05 13:42:01,529 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused DMP: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/DMP?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:42:03,396 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCG: price=61,300 ref=62,000 ceil=0 floor=0
+2026-04-05 13:42:03,700 [WARNING] in _fetch_ssi: SSI HTTP error DMT [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMT&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMT&resolution=D&from=1712299320&to=1775371320
+2026-04-05 13:42:05,290 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCS: price=53,900 ref=54,400 ceil=0 floor=0
+2026-04-05 13:42:06,925 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGP: price=24,200 ref=24,000 ceil=0 floor=0
+2026-04-05 13:42:09,303 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHB: price=14,900 ref=14,850 ceil=0 floor=0
+2026-04-05 13:42:11,383 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SMC: price=12,600 ref=12,800 ceil=0 floor=0
+2026-04-05 13:42:12,106 [WARNING] in _fetch_cafef: CafeF ❌ DMT: all strategies failed
+2026-04-05 13:42:13,539 [ERROR] in download_data: Cannot load DMP. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:42:14,465 [WARNING] in _fetch_tcbs: TCBS HTTP error DMT: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=DMT&type=stock&resolution=D&from=1712299332&to=1775371332
+2026-04-05 13:42:15,477 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SSB: price=16,800 ref=16,900 ceil=0 floor=0
+2026-04-05 13:42:16,645 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused DMT: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/DMT?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:42:17,225 [WARNING] in _fetch_ssi: SSI HTTP error DMT [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMT&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=DMT&resolution=D&from=1740811333&to=1775371333
+2026-04-05 13:42:17,385 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SSI: price=27,000 ref=27,550 ceil=0 floor=0
+2026-04-05 13:42:19,465 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ STB: price=60,800 ref=61,100 ceil=0 floor=0
+2026-04-05 13:42:21,359 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SZC: price=28,150 ref=28,650 ceil=0 floor=0
+2026-04-05 13:42:23,470 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TBC: price=34,600 ref=35,000 ceil=0 floor=0
+2026-04-05 13:42:25,483 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCB: price=29,750 ref=30,350 ceil=0 floor=0
+2026-04-05 13:42:25,612 [WARNING] in _fetch_cafef: CafeF ❌ DMT: all strategies failed
+2026-04-05 13:42:26,468 [WARNING] in _fetch_tcbs: TCBS HTTP error DMT: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=DMT&type=stock&resolution=D&from=1740811345&to=1775371345
+2026-04-05 13:42:27,572 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCH: price=16,500 ref=17,200 ceil=0 floor=0
+2026-04-05 13:42:28,624 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused DMT: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/DMT?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:42:28,652 [ERROR] in download_data: Cannot load DMT. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:42:29,549 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCM: price=22,550 ref=22,800 ceil=0 floor=0
+2026-04-05 13:42:31,542 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDH: price=3,640 ref=3,650 ceil=0 floor=0
+2026-04-05 13:42:31,596 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DPM: price=28,800 ref=29,500 ceil=0 floor=0
+2026-04-05 13:42:32,660 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DPR: price=40,700 ref=40,500 ceil=0 floor=0
+2026-04-05 13:42:33,697 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DQC: price=9,300 ref=9,220 ceil=0 floor=0
+2026-04-05 13:42:33,702 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TLH: price=4,510 ref=4,570 ceil=0 floor=0
+2026-04-05 13:42:34,842 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DRC: price=13,300 ref=13,400 ceil=0 floor=0
+2026-04-05 13:42:35,808 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DRH: price=2,500 ref=2,530 ceil=0 floor=0
+2026-04-05 13:42:36,227 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TNG: price=22,600 ref=24,000 ceil=0 floor=0
+2026-04-05 13:42:36,878 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DRL: price=45,500 ref=45,500 ceil=0 floor=0
+2026-04-05 13:42:37,805 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DSN: price=38,600 ref=38,900 ceil=0 floor=0
+2026-04-05 13:42:38,614 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TPB: price=16,000 ref=16,000 ceil=0 floor=0
+2026-04-05 13:42:39,106 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DST: price=8,000 ref=7,800 ceil=0 floor=0
+2026-04-05 13:42:40,096 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DTA: price=3,600 ref=3,630 ceil=0 floor=0
+2026-04-05 13:42:40,472 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TVN: price=8,300 ref=8,300 ceil=0 floor=0
+2026-04-05 13:42:40,636 [ERROR] in download_data: Cannot load DMT. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:42:41,216 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DTL: price=11,450 ref=11,150 ceil=0 floor=0
+2026-04-05 13:42:42,788 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCB: price=57,700 ref=58,200 ceil=0 floor=0
+2026-04-05 13:42:43,277 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DVP: price=71,000 ref=70,700 ceil=0 floor=0
+2026-04-05 13:42:44,324 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXG: price=14,400 ref=14,450 ceil=0 floor=0
+2026-04-05 13:42:44,716 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCG: price=21,400 ref=22,200 ceil=0 floor=0
+2026-04-05 13:42:45,389 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXP: price=13,000 ref=13,000 ceil=0 floor=0
+2026-04-05 13:42:46,278 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXS: price=7,470 ref=7,550 ceil=0 floor=0
+2026-04-05 13:42:46,858 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCI: price=26,500 ref=26,950 ceil=0 floor=0
+2026-04-05 13:42:47,372 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ DXV: price=3,700 ref=3,790 ceil=0 floor=0
+2026-04-05 13:42:48,660 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VEA: price=32,900 ref=33,200 ceil=0 floor=0
+2026-04-05 13:42:50,905 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VGC: price=44,850 ref=45,450 ceil=0 floor=0
+2026-04-05 13:42:50,937 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EIB: price=22,150 ref=22,850 ceil=0 floor=0
+2026-04-05 13:42:51,948 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EID: price=22,500 ref=22,600 ceil=0 floor=0
+2026-04-05 13:42:52,804 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VGT: price=11,900 ref=12,000 ceil=0 floor=0
+2026-04-05 13:42:52,982 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ELC: price=18,150 ref=18,550 ceil=0 floor=0
+2026-04-05 13:42:54,977 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VHC: price=57,400 ref=58,600 ceil=0 floor=0
+2026-04-05 13:42:55,363 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EVE: price=10,450 ref=10,500 ceil=0 floor=0
+2026-04-05 13:42:56,445 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ EVG: price=6,320 ref=6,300 ceil=0 floor=0
+2026-04-05 13:42:57,191 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VHM: price=119,200 ref=117,900 ceil=0 floor=0
+2026-04-05 13:42:57,605 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FCM: price=3,260 ref=3,260 ceil=0 floor=0
+2026-04-05 13:42:58,648 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FCN: price=12,900 ref=12,900 ceil=0 floor=0
+2026-04-05 13:42:59,290 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIB: price=16,650 ref=16,900 ceil=0 floor=0
+2026-04-05 13:43:00,880 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FIR: price=5,100 ref=5,250 ceil=0 floor=0
+2026-04-05 13:43:01,362 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIC: price=141,000 ref=139,900 ceil=0 floor=0
+2026-04-05 13:43:01,873 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FIT: price=4,230 ref=4,270 ceil=0 floor=0
+2026-04-05 13:43:03,928 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FMC: price=38,250 ref=38,400 ceil=0 floor=0
+2026-04-05 13:43:04,962 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FPT: price=74,000 ref=74,700 ceil=0 floor=0
+2026-04-05 13:43:06,023 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FRT: price=152,000 ref=154,000 ceil=0 floor=0
+2026-04-05 13:43:06,473 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIX: price=16,200 ref=16,600 ceil=0 floor=0
+2026-04-05 13:43:07,161 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ FTS: price=27,550 ref=28,100 ceil=0 floor=0
+2026-04-05 13:43:08,596 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VJC: price=161,100 ref=165,500 ceil=0 floor=0
+2026-04-05 13:43:09,069 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GAS: price=79,700 ref=78,700 ceil=0 floor=0
+2026-04-05 13:43:10,055 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GDT: price=18,950 ref=19,100 ceil=0 floor=0
+2026-04-05 13:43:10,583 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VKC: price=1,000 ref=900 ceil=0 floor=0
+2026-04-05 13:43:11,090 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GEG: price=15,850 ref=16,300 ceil=0 floor=0
+2026-04-05 13:43:12,153 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GEX: price=35,300 ref=36,150 ceil=0 floor=0
+2026-04-05 13:43:12,466 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNA: price=15,000 ref=16,000 ceil=0 floor=0
+2026-04-05 13:43:13,234 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GIL: price=13,350 ref=13,500 ceil=0 floor=0
+2026-04-05 13:43:14,321 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GLT: price=29,800 ref=32,600 ceil=0 floor=0
+2026-04-05 13:43:14,667 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VND: price=15,650 ref=15,900 ceil=0 floor=0
+2026-04-05 13:43:15,413 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GMC: price=4,500 ref=4,700 ceil=0 floor=0
+2026-04-05 13:43:16,403 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GMD: price=70,700 ref=74,000 ceil=0 floor=0
+2026-04-05 13:43:16,884 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNM: price=60,000 ref=60,800 ceil=0 floor=0
+2026-04-05 13:43:17,374 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GSP: price=11,250 ref=11,300 ceil=0 floor=0
+2026-04-05 13:43:18,386 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GTA: price=8,610 ref=8,700 ceil=0 floor=0
+2026-04-05 13:43:19,096 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPB: price=25,800 ref=26,250 ceil=0 floor=0
+2026-04-05 13:43:19,438 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ GVR: price=32,050 ref=32,100 ceil=0 floor=0
+2026-04-05 13:43:20,408 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAG: price=15,950 ref=16,250 ceil=0 floor=0
+2026-04-05 13:43:21,431 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAH: price=54,600 ref=54,600 ceil=0 floor=0
+2026-04-05 13:43:21,709 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VRE: price=26,500 ref=27,200 ceil=0 floor=0
+2026-04-05 13:43:23,947 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSC: price=23,800 ref=24,300 ceil=0 floor=0
+2026-04-05 13:43:24,594 [WARNING] in _fetch_ssi: SSI HTTP error HAI [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HAI&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HAI&resolution=D&from=1712299401&to=1775371401
+2026-04-05 13:43:26,172 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSH: price=43,300 ref=43,450 ceil=0 floor=0
+2026-04-05 13:43:27,782 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTG: price=4,100 ref=4,800 ceil=0 floor=0
+2026-04-05 13:43:29,632 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTP: price=93,600 ref=98,300 ceil=0 floor=0
+2026-04-05 13:43:30,674 [INFO] in fetch_ssi_market_group: SSI group/VN30: 30 tickers loaded
+2026-04-05 13:43:34,305 [WARNING] in _fetch_cafef: CafeF ❌ HAI: all strategies failed
+2026-04-05 13:43:35,204 [WARNING] in _fetch_tcbs: TCBS HTTP error HAI: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HAI&type=stock&resolution=D&from=1712299414&to=1775371414
+2026-04-05 13:43:36,034 [WARNING] in _fetch_ssi: SSI HTTP error HAI [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HAI&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HAI&resolution=D&from=1740811413&to=1775371413
+2026-04-05 13:43:37,465 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HAI: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HAI?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:43:43,578 [WARNING] in _fetch_cafef: CafeF ❌ HAI: all strategies failed
+2026-04-05 13:43:44,313 [WARNING] in _fetch_tcbs: TCBS HTTP error HAI: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HAI&type=stock&resolution=D&from=1740811423&to=1775371423
+2026-04-05 13:43:46,616 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HAI: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HAI?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:43:49,515 [ERROR] in download_data: Cannot load HAI. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:43:50,220 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAM: price=80,500 ref=70,000 ceil=0 floor=0
+2026-04-05 13:43:51,749 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HAX: price=10,450 ref=10,450 ceil=0 floor=0
+2026-04-05 13:43:52,561 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HBC: price=5,100 ref=5,200 ceil=0 floor=0
+2026-04-05 13:43:53,431 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HBS: price=4,400 ref=4,400 ceil=0 floor=0
+2026-04-05 13:43:54,282 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HCC: price=24,700 ref=24,600 ceil=0 floor=0
+2026-04-05 13:43:55,202 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HCD: price=7,760 ref=7,900 ceil=0 floor=0
+2026-04-05 13:43:56,045 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HCM: price=24,150 ref=23,600 ceil=0 floor=0
+2026-04-05 13:43:57,032 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HDB: price=25,600 ref=25,600 ceil=0 floor=0
+2026-04-05 13:43:57,876 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HDC: price=18,500 ref=18,500 ceil=0 floor=0
+2026-04-05 13:43:58,634 [ERROR] in download_data: Cannot load HAI. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:43:58,729 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HDG: price=29,000 ref=29,600 ceil=0 floor=0
+2026-04-05 13:43:59,725 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HEV: price=7,000 ref=7,100 ceil=0 floor=0
+2026-04-05 13:44:00,751 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HGM: price=189,700 ref=190,000 ceil=0 floor=0
+2026-04-05 13:44:02,808 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HHP: price=12,200 ref=12,100 ceil=0 floor=0
+2026-04-05 13:44:03,779 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HHS: price=13,350 ref=13,550 ceil=0 floor=0
+2026-04-05 13:44:04,817 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HHV: price=11,850 ref=12,100 ceil=0 floor=0
+2026-04-05 13:44:05,818 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HID: price=4,760 ref=5,050 ceil=0 floor=0
+2026-04-05 13:44:06,867 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HII: price=5,290 ref=5,380 ceil=0 floor=0
+2026-04-05 13:44:08,908 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HKT: price=20,400 ref=20,900 ceil=0 floor=0
+2026-04-05 13:44:10,005 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HLC: price=12,800 ref=13,000 ceil=0 floor=0
+2026-04-05 13:44:11,113 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HLD: price=17,000 ref=16,900 ceil=0 floor=0
+2026-04-05 13:44:12,316 [INFO] in _fetch_ssi: SSI ✅ HLY: 35 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:44:12,318 [INFO] in download_data: ✅ SSI HLY: 35 rows
+2026-04-05 13:44:13,698 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HMC: price=11,900 ref=11,800 ceil=0 floor=0
+2026-04-05 13:44:14,795 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HMS: price=39,500 ref=40,000 ceil=0 floor=0
+2026-04-05 13:44:15,911 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HNG: price=6,100 ref=6,200 ceil=0 floor=0
+2026-04-05 13:44:18,097 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HNP: price=14,900 ref=13,000 ceil=0 floor=0
+2026-04-05 13:44:19,126 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HOM: price=4,200 ref=4,200 ceil=0 floor=0
+2026-04-05 13:44:21,846 [INFO] in _fetch_ssi: SSI ✅ HLY: 23 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:44:21,848 [INFO] in download_data: ✅ SSI HLY: 23 rows
+2026-04-05 13:44:21,884 [WARNING] in _fetch_ssi: SSI HTTP error HPC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HPC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HPC&resolution=D&from=1712299459&to=1775371459
+2026-04-05 13:44:30,092 [WARNING] in _fetch_cafef: CafeF ❌ HPC: all strategies failed
+2026-04-05 13:44:30,939 [WARNING] in _fetch_tcbs: TCBS HTTP error HPC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HPC&type=stock&resolution=D&from=1712299470&to=1775371470
+2026-04-05 13:44:30,998 [WARNING] in _fetch_ssi: SSI HTTP error HPC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HPC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HPC&resolution=D&from=1740811468&to=1775371468
+2026-04-05 13:44:33,111 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HPC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HPC?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:44:37,935 [WARNING] in _fetch_cafef: CafeF ❌ HPC: all strategies failed
+2026-04-05 13:44:38,574 [WARNING] in _fetch_tcbs: TCBS HTTP error HPC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HPC&type=stock&resolution=D&from=1740811477&to=1775371477
+2026-04-05 13:44:40,742 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HPC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HPC?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:44:45,165 [ERROR] in download_data: Cannot load HPC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:44:45,873 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HPG: price=26,650 ref=27,350 ceil=0 floor=0
+2026-04-05 13:44:47,277 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HQC: price=2,560 ref=2,580 ceil=0 floor=0
+2026-04-05 13:44:49,448 [WARNING] in _fetch_ssi: SSI HTTP error HQS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HQS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HQS&resolution=D&from=1712299487&to=1775371487
+2026-04-05 13:44:52,747 [ERROR] in download_data: Cannot load HPC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:44:57,288 [WARNING] in _fetch_cafef: CafeF ❌ HQS: all strategies failed
+2026-04-05 13:44:58,130 [WARNING] in _fetch_tcbs: TCBS HTTP error HQS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HQS&type=stock&resolution=D&from=1712299497&to=1775371497
+2026-04-05 13:44:58,399 [WARNING] in _fetch_ssi: SSI HTTP error HQS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HQS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=HQS&resolution=D&from=1740811495&to=1775371495
+2026-04-05 13:45:00,325 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HQS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HQS?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:45:05,741 [WARNING] in _fetch_cafef: CafeF ❌ HQS: all strategies failed
+2026-04-05 13:45:06,437 [WARNING] in _fetch_tcbs: TCBS HTTP error HQS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=HQS&type=stock&resolution=D&from=1740811505&to=1775371505
+2026-04-05 13:45:08,615 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused HQS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/HQS?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:45:12,329 [ERROR] in download_data: Cannot load HQS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:45:13,022 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HRC: price=47,100 ref=50,400 ceil=0 floor=0
+2026-04-05 13:45:13,841 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HSG: price=14,800 ref=14,950 ceil=0 floor=0
+2026-04-05 13:45:14,635 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HSL: price=5,000 ref=5,000 ceil=0 floor=0
+2026-04-05 13:45:16,309 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HT1: price=14,950 ref=15,150 ceil=0 floor=0
+2026-04-05 13:45:17,073 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HTG: price=41,650 ref=41,750 ceil=0 floor=0
+2026-04-05 13:45:17,940 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HTI: price=24,700 ref=24,800 ceil=0 floor=0
+2026-04-05 13:45:18,759 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HTL: price=22,000 ref=22,600 ceil=0 floor=0
+2026-04-05 13:45:19,604 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HTN: price=7,130 ref=7,300 ceil=0 floor=0
+2026-04-05 13:45:20,508 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HTP: price=1,100 ref=1,200 ceil=0 floor=0
+2026-04-05 13:45:20,632 [ERROR] in download_data: Cannot load HQS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:45:23,436 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HU3: price=3,000 ref=3,100 ceil=0 floor=0
+2026-04-05 13:45:24,454 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HUB: price=13,900 ref=14,000 ceil=0 floor=0
+2026-04-05 13:45:25,779 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HUT: price=16,600 ref=16,700 ceil=0 floor=0
+2026-04-05 13:45:26,750 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HVH: price=11,850 ref=11,950 ceil=0 floor=0
+2026-04-05 13:45:27,739 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HVN: price=21,600 ref=22,100 ceil=0 floor=0
+2026-04-05 13:45:28,982 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ HVX: price=2,300 ref=2,400 ceil=0 floor=0
+2026-04-05 13:45:30,252 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ICT: price=17,800 ref=17,800 ceil=0 floor=0
+2026-04-05 13:45:31,308 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDC: price=46,800 ref=48,000 ceil=0 floor=0
+2026-04-05 13:45:32,311 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDI: price=6,610 ref=6,700 ceil=0 floor=0
+2026-04-05 13:45:33,234 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDJ: price=3,900 ref=4,000 ceil=0 floor=0
+2026-04-05 13:45:34,238 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IDV: price=23,200 ref=23,300 ceil=0 floor=0
+2026-04-05 13:45:35,296 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IJC: price=10,100 ref=10,100 ceil=0 floor=0
+2026-04-05 13:45:36,251 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ILB: price=21,600 ref=21,600 ceil=0 floor=0
+2026-04-05 13:45:38,278 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ IMP: price=55,700 ref=55,600 ceil=0 floor=0
+2026-04-05 13:45:39,343 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ INN: price=38,900 ref=39,500 ceil=0 floor=0
+2026-04-05 13:45:42,760 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ITC: price=11,600 ref=11,550 ceil=0 floor=0
+2026-04-05 13:45:43,769 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ITD: price=16,300 ref=16,350 ceil=0 floor=0
+2026-04-05 13:45:45,431 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ITQ: price=2,900 ref=2,800 ceil=0 floor=0
+2026-04-05 13:45:46,570 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ JVC: price=4,280 ref=4,400 ceil=0 floor=0
+2026-04-05 13:45:47,520 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KBC: price=32,000 ref=32,150 ceil=0 floor=0
+2026-04-05 13:45:48,632 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KDC: price=48,950 ref=48,800 ceil=0 floor=0
+2026-04-05 13:45:49,992 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KDH: price=25,300 ref=26,150 ceil=0 floor=0
+2026-04-05 13:45:50,956 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KDM: price=29,700 ref=28,800 ceil=0 floor=0
+2026-04-05 13:45:51,894 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KHP: price=10,700 ref=10,700 ceil=0 floor=0
+2026-04-05 13:45:53,184 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KHS: price=15,500 ref=15,600 ceil=0 floor=0
+2026-04-05 13:45:54,198 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KMR: price=2,730 ref=2,720 ceil=0 floor=0
+2026-04-05 13:45:55,194 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KMT: price=10,800 ref=11,900 ceil=0 floor=0
+2026-04-05 13:45:56,170 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KOS: price=38,500 ref=38,600 ceil=0 floor=0
+2026-04-05 13:45:58,067 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KSB: price=16,100 ref=16,000 ceil=0 floor=0
+2026-04-05 13:46:00,978 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ KVC: price=1,300 ref=1,300 ceil=0 floor=0
+2026-04-05 13:46:01,922 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ L10: price=25,200 ref=25,200 ceil=0 floor=0
+2026-04-05 13:46:02,857 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ L14: price=23,000 ref=23,500 ceil=0 floor=0
+2026-04-05 13:46:03,838 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ L18: price=23,400 ref=23,900 ceil=0 floor=0
+2026-04-05 13:46:06,701 [WARNING] in _fetch_ssi: SSI HTTP error L33 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=L33&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=L33&resolution=D&from=1712299563&to=1775371563
+2026-04-05 13:46:15,080 [WARNING] in _fetch_ssi: SSI HTTP error L33 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=L33&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=L33&resolution=D&from=1740811572&to=1775371572
+2026-04-05 13:46:16,350 [WARNING] in _fetch_cafef: CafeF ❌ L33: all strategies failed
+2026-04-05 13:46:17,079 [WARNING] in _fetch_tcbs: TCBS HTTP error L33: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=L33&type=stock&resolution=D&from=1712299576&to=1775371576
+2026-04-05 13:46:19,271 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused L33: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/L33?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:46:23,082 [WARNING] in _fetch_cafef: CafeF ❌ L33: all strategies failed
+2026-04-05 13:46:23,787 [WARNING] in _fetch_tcbs: TCBS HTTP error L33: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=L33&type=stock&resolution=D&from=1740811583&to=1775371583
+2026-04-05 13:46:25,956 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused L33: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/L33?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:46:31,275 [ERROR] in download_data: Cannot load L33. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:46:33,912 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ L62: price=2,600 ref=2,300 ceil=0 floor=0
+2026-04-05 13:46:34,870 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LAF: price=17,000 ref=16,800 ceil=0 floor=0
+2026-04-05 13:46:35,837 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LAS: price=16,800 ref=17,000 ceil=0 floor=0
+2026-04-05 13:46:36,769 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LBE: price=31,900 ref=32,900 ceil=0 floor=0
+2026-04-05 13:46:37,676 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LBM: price=29,500 ref=30,300 ceil=0 floor=0
+2026-04-05 13:46:37,958 [ERROR] in download_data: Cannot load L33. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:46:38,743 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LCG: price=9,550 ref=9,670 ceil=0 floor=0
+2026-04-05 13:46:39,811 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LCM: price=800 ref=700 ceil=0 floor=0
+2026-04-05 13:46:40,847 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LDP: price=8,000 ref=8,100 ceil=0 floor=0
+2026-04-05 13:46:41,788 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LGC: price=60,900 ref=60,900 ceil=0 floor=0
+2026-04-05 13:46:42,838 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LGL: price=4,840 ref=4,940 ceil=0 floor=0
+2026-04-05 13:46:45,924 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LHG: price=28,050 ref=28,250 ceil=0 floor=0
+2026-04-05 13:46:46,924 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LIX: price=33,350 ref=33,000 ceil=0 floor=0
+2026-04-05 13:46:47,927 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LMH: price=1,300 ref=1,300 ceil=0 floor=0
+2026-04-05 13:46:48,941 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LO5: price=500 ref=400 ceil=0 floor=0
+2026-04-05 13:46:49,822 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LSS: price=8,430 ref=8,580 ceil=0 floor=0
+2026-04-05 13:46:50,766 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ LTC: price=1,600 ref=1,600 ceil=0 floor=0
+2026-04-05 13:46:51,738 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MAC: price=11,900 ref=12,500 ceil=0 floor=0
+2026-04-05 13:46:52,689 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MAS: price=35,500 ref=35,000 ceil=0 floor=0
+2026-04-05 13:46:53,703 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MBB: price=25,950 ref=26,300 ceil=0 floor=0
+2026-04-05 13:46:54,712 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MBG: price=2,800 ref=2,800 ceil=0 floor=0
+2026-04-05 13:46:55,720 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MBS: price=20,000 ref=20,200 ceil=0 floor=0
+2026-04-05 13:46:58,465 [WARNING] in _fetch_ssi: SSI HTTP error MCC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MCC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MCC&resolution=D&from=1712299615&to=1775371615
+2026-04-05 13:47:06,965 [WARNING] in _fetch_cafef: CafeF ❌ MCC: all strategies failed
+2026-04-05 13:47:07,112 [WARNING] in _fetch_ssi: SSI HTTP error MCC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MCC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MCC&resolution=D&from=1740811624&to=1775371624
+2026-04-05 13:47:07,733 [WARNING] in _fetch_tcbs: TCBS HTTP error MCC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=MCC&type=stock&resolution=D&from=1712299626&to=1775371626
+2026-04-05 13:47:09,912 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused MCC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/MCC?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:47:14,618 [WARNING] in _fetch_cafef: CafeF ❌ MCC: all strategies failed
+2026-04-05 13:47:15,353 [WARNING] in _fetch_tcbs: TCBS HTTP error MCC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=MCC&type=stock&resolution=D&from=1740811634&to=1775371634
+2026-04-05 13:47:17,540 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused MCC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/MCC?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:47:21,910 [ERROR] in download_data: Cannot load MCC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:47:22,634 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MCF: price=7,500 ref=7,500 ceil=0 floor=0
+2026-04-05 13:47:23,438 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MCG: price=2,300 ref=2,400 ceil=0 floor=0
+2026-04-05 13:47:24,266 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MCO: price=5,200 ref=5,100 ceil=0 floor=0
+2026-04-05 13:47:25,134 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MCP: price=27,200 ref=27,100 ceil=0 floor=0
+2026-04-05 13:47:25,976 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MDG: price=41,000 ref=43,200 ceil=0 floor=0
+2026-04-05 13:47:26,832 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MHC: price=9,050 ref=9,400 ceil=0 floor=0
+2026-04-05 13:47:29,318 [WARNING] in _fetch_ssi: SSI HTTP error MHL [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MHL&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MHL&resolution=D&from=1712299646&to=1775371646
+2026-04-05 13:47:29,557 [ERROR] in download_data: Cannot load MCC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:47:35,495 [WARNING] in _fetch_cafef: CafeF ❌ MHL: all strategies failed
+2026-04-05 13:47:36,192 [WARNING] in _fetch_tcbs: TCBS HTTP error MHL: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=MHL&type=stock&resolution=D&from=1712299655&to=1775371655
+2026-04-05 13:47:37,318 [WARNING] in _fetch_ssi: SSI HTTP error MHL [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MHL&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=MHL&resolution=D&from=1740811655&to=1775371655
+2026-04-05 13:47:38,364 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused MHL: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/MHL?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:47:42,432 [WARNING] in _fetch_cafef: CafeF ❌ MHL: all strategies failed
+2026-04-05 13:47:42,945 [WARNING] in _fetch_tcbs: TCBS HTTP error MHL: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=MHL&type=stock&resolution=D&from=1740811662&to=1775371662
+2026-04-05 13:47:45,121 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused MHL: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/MHL?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:47:50,373 [ERROR] in download_data: Cannot load MHL. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:47:51,016 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MSB: price=11,500 ref=11,400 ceil=0 floor=0
+2026-04-05 13:47:51,701 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MSN: price=75,300 ref=76,100 ceil=0 floor=0
+2026-04-05 13:47:52,309 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MST: price=9,000 ref=8,900 ceil=0 floor=0
+2026-04-05 13:47:53,546 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ MWG: price=79,300 ref=81,800 ceil=0 floor=0
+2026-04-05 13:47:54,176 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NAF: price=49,050 ref=48,900 ceil=0 floor=0
+2026-04-05 13:47:54,797 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NAV: price=16,000 ref=16,500 ceil=0 floor=0
+2026-04-05 13:47:55,459 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NBB: price=17,950 ref=18,350 ceil=0 floor=0
+2026-04-05 13:47:56,106 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NBC: price=10,800 ref=10,700 ceil=0 floor=0
+2026-04-05 13:47:56,720 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NBP: price=7,700 ref=7,700 ceil=0 floor=0
+2026-04-05 13:47:57,138 [ERROR] in download_data: Cannot load MHL. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:47:57,321 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NCT: price=90,900 ref=90,700 ceil=0 floor=0
+2026-04-05 13:47:58,054 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NDN: price=10,100 ref=10,300 ceil=0 floor=0
+2026-04-05 13:47:58,700 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NET: price=66,300 ref=67,800 ceil=0 floor=0
+2026-04-05 13:47:59,974 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NHA: price=13,050 ref=13,100 ceil=0 floor=0
+2026-04-05 13:48:00,634 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NHH: price=10,000 ref=10,100 ceil=0 floor=0
+2026-04-05 13:48:01,395 [INFO] in _fetch_ssi: SSI ✅ NHP: 9 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:48:03,167 [WARNING] in _fetch_ssi: SSI HTTP error NHP [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=NHP&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=NHP&resolution=D&from=1740811681&to=1775371681
+2026-04-05 13:48:07,388 [WARNING] in _fetch_cafef: CafeF ❌ NHP: all strategies failed
+2026-04-05 13:48:08,057 [WARNING] in _fetch_tcbs: TCBS HTTP error NHP: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=NHP&type=stock&resolution=D&from=1712299687&to=1775371687
+2026-04-05 13:48:09,524 [WARNING] in _fetch_cafef: CafeF ❌ NHP: all strategies failed
+2026-04-05 13:48:10,123 [WARNING] in _fetch_tcbs: TCBS HTTP error NHP: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=NHP&type=stock&resolution=D&from=1740811689&to=1775371689
+2026-04-05 13:48:10,236 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused NHP: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/NHP?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:48:12,299 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused NHP: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/NHP?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:48:22,240 [ERROR] in download_data: Cannot load NHP. Exchange:HOSE. Sources tried: SSI:9 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:48:22,786 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NHT: price=12,450 ref=12,450 ceil=0 floor=0
+2026-04-05 13:48:23,411 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NKG: price=13,600 ref=13,800 ceil=0 floor=0
+2026-04-05 13:48:24,203 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NLG: price=28,100 ref=29,500 ceil=0 floor=0
+2026-04-05 13:48:24,306 [ERROR] in download_data: Cannot load NHP. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:48:24,911 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NNC: price=50,000 ref=51,000 ceil=0 floor=0
+2026-04-05 13:48:25,610 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NRC: price=5,700 ref=5,800 ceil=0 floor=0
+2026-04-05 13:48:26,287 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NSC: price=73,400 ref=73,700 ceil=0 floor=0
+2026-04-05 13:48:26,971 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NST: price=12,100 ref=12,400 ceil=0 floor=0
+2026-04-05 13:48:27,628 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NT2: price=26,000 ref=27,000 ceil=0 floor=0
+2026-04-05 13:48:28,469 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NTC: price=142,100 ref=142,100 ceil=0 floor=0
+2026-04-05 13:48:30,044 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NTL: price=16,000 ref=16,250 ceil=0 floor=0
+2026-04-05 13:48:30,870 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NTP: price=55,800 ref=56,200 ceil=0 floor=0
+2026-04-05 13:48:31,626 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NVB: price=10,700 ref=10,800 ceil=0 floor=0
+2026-04-05 13:48:32,637 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NVL: price=14,300 ref=13,900 ceil=0 floor=0
+2026-04-05 13:48:33,719 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ NVT: price=7,990 ref=7,700 ceil=0 floor=0
+2026-04-05 13:48:34,584 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ OCB: price=11,000 ref=11,200 ceil=0 floor=0
+2026-04-05 13:48:35,624 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ONE: price=10,500 ref=10,500 ceil=0 floor=0
+2026-04-05 13:48:37,739 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ORS: price=13,200 ref=13,700 ceil=0 floor=0
+2026-04-05 13:48:38,823 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PAC: price=25,000 ref=25,050 ceil=0 floor=0
+2026-04-05 13:48:39,845 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PAN: price=31,450 ref=31,650 ceil=0 floor=0
+2026-04-05 13:48:41,044 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PBP: price=12,200 ref=12,600 ceil=0 floor=0
+2026-04-05 13:48:42,053 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PC1: price=26,700 ref=27,800 ceil=0 floor=0
+2026-04-05 13:48:42,998 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PCE: price=19,600 ref=19,600 ceil=0 floor=0
+2026-04-05 13:48:43,983 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PCG: price=2,800 ref=3,100 ceil=0 floor=0
+2026-04-05 13:48:45,014 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PCH: price=20,200 ref=20,100 ceil=0 floor=0
+2026-04-05 13:48:46,118 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PDB: price=23,400 ref=23,900 ceil=0 floor=0
+2026-04-05 13:48:48,018 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PDN: price=107,300 ref=107,100 ceil=0 floor=0
+2026-04-05 13:48:48,879 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PDR: price=15,900 ref=16,100 ceil=0 floor=0
+2026-04-05 13:48:50,782 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PET: price=49,600 ref=48,500 ceil=0 floor=0
+2026-04-05 13:48:51,692 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGC: price=13,850 ref=13,950 ceil=0 floor=0
+2026-04-05 13:48:52,544 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGD: price=23,500 ref=23,500 ceil=0 floor=0
+2026-04-05 13:48:53,419 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGI: price=19,700 ref=19,700 ceil=0 floor=0
+2026-04-05 13:48:54,185 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGN: price=6,400 ref=5,900 ceil=0 floor=0
+2026-04-05 13:48:55,889 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PGV: price=23,500 ref=23,800 ceil=0 floor=0
+2026-04-05 13:48:56,717 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PHC: price=4,590 ref=4,550 ceil=0 floor=0
+2026-04-05 13:48:57,570 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PHP: price=32,900 ref=33,900 ceil=0 floor=0
+2026-04-05 13:48:58,319 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PHR: price=62,800 ref=63,000 ceil=0 floor=0
+2026-04-05 13:48:59,675 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PIT: price=8,050 ref=8,370 ceil=0 floor=0
+2026-04-05 13:49:01,155 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PJT: price=8,900 ref=8,900 ceil=0 floor=0
+2026-04-05 13:49:01,861 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PLC: price=22,900 ref=23,000 ceil=0 floor=0
+2026-04-05 13:49:02,577 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PLX: price=40,200 ref=40,400 ceil=0 floor=0
+2026-04-05 13:49:03,261 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PMB: price=10,800 ref=10,800 ceil=0 floor=0
+2026-04-05 13:49:04,691 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PMG: price=6,900 ref=6,700 ceil=0 floor=0
+2026-04-05 13:49:06,307 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PMS: price=37,000 ref=37,000 ceil=0 floor=0
+2026-04-05 13:49:07,888 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PNC: price=27,950 ref=29,950 ceil=0 floor=0
+2026-04-05 13:49:08,769 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PND: price=7,500 ref=7,700 ceil=0 floor=0
+2026-04-05 13:49:09,727 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PNJ: price=108,800 ref=108,900 ceil=0 floor=0
+2026-04-05 13:49:10,575 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ POM: price=4,000 ref=4,000 ceil=0 floor=0
+2026-04-05 13:49:11,387 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ POW: price=12,650 ref=12,850 ceil=0 floor=0
+2026-04-05 13:49:12,204 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PPC: price=10,250 ref=10,300 ceil=0 floor=0
+2026-04-05 13:49:12,993 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PPY: price=8,700 ref=8,700 ceil=0 floor=0
+2026-04-05 13:49:13,863 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PRC: price=11,800 ref=12,000 ceil=0 floor=0
+2026-04-05 13:49:14,827 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PRE: price=22,400 ref=22,400 ceil=0 floor=0
+2026-04-05 13:49:15,552 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PSC: price=12,000 ref=12,200 ceil=0 floor=0
+2026-04-05 13:49:16,341 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PSD: price=16,800 ref=16,900 ceil=0 floor=0
+2026-04-05 13:49:18,773 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PSI: price=7,800 ref=8,000 ceil=0 floor=0
+2026-04-05 13:49:19,539 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PSW: price=8,000 ref=8,100 ceil=0 floor=0
+2026-04-05 13:49:20,327 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PTB: price=47,700 ref=48,500 ceil=0 floor=0
+2026-04-05 13:49:21,131 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PTC: price=7,270 ref=7,000 ceil=0 floor=0
+2026-04-05 13:49:23,670 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PTL: price=2,830 ref=2,760 ceil=0 floor=0
+2026-04-05 13:49:24,405 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PTS: price=9,100 ref=9,200 ceil=0 floor=0
+2026-04-05 13:49:25,144 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVB: price=28,700 ref=28,500 ceil=0 floor=0
+2026-04-05 13:49:25,874 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVC: price=17,000 ref=17,500 ceil=0 floor=0
+2026-04-05 13:49:26,726 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVD: price=33,600 ref=34,450 ceil=0 floor=0
+2026-04-05 13:49:27,477 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVG: price=6,700 ref=6,700 ceil=0 floor=0
+2026-04-05 13:49:28,182 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVI: price=81,200 ref=81,200 ceil=0 floor=0
+2026-04-05 13:49:28,900 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVP: price=14,650 ref=14,900 ceil=0 floor=0
+2026-04-05 13:49:29,642 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVS: price=40,400 ref=40,200 ceil=0 floor=0
+2026-04-05 13:49:30,383 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVT: price=21,150 ref=21,550 ceil=0 floor=0
+2026-04-05 13:49:31,073 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PVX: price=1,900 ref=1,900 ceil=0 floor=0
+2026-04-05 13:49:31,805 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PXA: price=800 ref=800 ceil=0 floor=0
+2026-04-05 13:49:32,532 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ PXT: price=1,500 ref=1,500 ceil=0 floor=0
+2026-04-05 13:49:33,337 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ QBS: price=600 ref=500 ceil=0 floor=0
+2026-04-05 13:49:34,237 [INFO] in _fetch_ssi: SSI ✅ QHD: 29 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:49:34,239 [INFO] in download_data: ✅ SSI QHD: 29 rows
+2026-04-05 13:49:35,199 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ RAL: price=86,600 ref=86,600 ceil=0 floor=0
+2026-04-05 13:49:35,881 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ REE: price=64,400 ref=66,300 ceil=0 floor=0
+2026-04-05 13:49:36,651 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ RIC: price=11,000 ref=11,400 ceil=0 floor=0
+2026-04-05 13:49:37,266 [INFO] in _fetch_ssi: SSI ✅ QHD: 23 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:49:37,268 [INFO] in download_data: ✅ SSI QHD: 23 rows
+2026-04-05 13:49:38,748 [WARNING] in _fetch_ssi: SSI HTTP error ROS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ROS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ROS&resolution=D&from=1712299776&to=1775371776
+2026-04-05 13:49:41,337 [WARNING] in _fetch_ssi: SSI HTTP error ROS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ROS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=ROS&resolution=D&from=1740811779&to=1775371779
+2026-04-05 13:49:45,877 [WARNING] in _fetch_cafef: CafeF ❌ ROS: all strategies failed
+2026-04-05 13:49:46,524 [WARNING] in _fetch_tcbs: TCBS HTTP error ROS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=ROS&type=stock&resolution=D&from=1712299785&to=1775371785
+2026-04-05 13:49:48,430 [WARNING] in _fetch_cafef: CafeF ❌ ROS: all strategies failed
+2026-04-05 13:49:48,763 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused ROS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/ROS?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:49:48,944 [WARNING] in _fetch_tcbs: TCBS HTTP error ROS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=ROS&type=stock&resolution=D&from=1740811788&to=1775371788
+2026-04-05 13:49:51,155 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused ROS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/ROS?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:50:00,818 [ERROR] in download_data: Cannot load ROS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:50:01,406 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ S4A: price=33,700 ref=33,500 ceil=0 floor=0
+2026-04-05 13:50:02,697 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ S99: price=9,400 ref=9,300 ceil=0 floor=0
+2026-04-05 13:50:03,171 [ERROR] in download_data: Cannot load ROS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:50:03,387 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SAB: price=44,100 ref=44,200 ceil=0 floor=0
+2026-04-05 13:50:04,079 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SAF: price=53,900 ref=54,000 ceil=0 floor=0
+2026-04-05 13:50:04,823 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SAM: price=6,800 ref=6,800 ceil=0 floor=0
+2026-04-05 13:50:05,487 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SAV: price=13,550 ref=13,550 ceil=0 floor=0
+2026-04-05 13:50:06,162 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SBA: price=28,250 ref=28,400 ceil=0 floor=0
+2026-04-05 13:50:06,869 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SBT: price=21,900 ref=22,000 ceil=0 floor=0
+2026-04-05 13:50:07,574 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SBV: price=7,150 ref=7,150 ceil=0 floor=0
+2026-04-05 13:50:08,224 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SC5: price=15,450 ref=15,000 ceil=0 floor=0
+2026-04-05 13:50:08,836 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCD: price=12,800 ref=15,000 ceil=0 floor=0
+2026-04-05 13:50:09,521 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCI: price=10,400 ref=10,200 ceil=0 floor=0
+2026-04-05 13:50:10,225 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCR: price=6,220 ref=6,220 ceil=0 floor=0
+2026-04-05 13:50:10,928 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SCS: price=53,900 ref=54,400 ceil=0 floor=0
+2026-04-05 13:50:11,520 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SD4: price=1,600 ref=1,600 ceil=0 floor=0
+2026-04-05 13:50:12,188 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SD5: price=7,500 ref=7,500 ceil=0 floor=0
+2026-04-05 13:50:13,217 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SD6: price=2,100 ref=2,000 ceil=0 floor=0
+2026-04-05 13:50:13,936 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SD9: price=11,100 ref=11,100 ceil=0 floor=0
+2026-04-05 13:50:14,601 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SDA: price=2,000 ref=1,900 ceil=0 floor=0
+2026-04-05 13:50:16,562 [WARNING] in _fetch_ssi: SSI HTTP error SDB [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SDB&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SDB&resolution=D&from=1712299814&to=1775371814
+2026-04-05 13:50:19,526 [WARNING] in _fetch_ssi: SSI HTTP error SDB [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SDB&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SDB&resolution=D&from=1740811817&to=1775371817
+2026-04-05 13:50:22,912 [WARNING] in _fetch_cafef: CafeF ❌ SDB: all strategies failed
+2026-04-05 13:50:23,533 [WARNING] in _fetch_tcbs: TCBS HTTP error SDB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SDB&type=stock&resolution=D&from=1712299822&to=1775371822
+2026-04-05 13:50:25,716 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SDB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SDB?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:50:26,730 [WARNING] in _fetch_cafef: CafeF ❌ SDB: all strategies failed
+2026-04-05 13:50:27,506 [WARNING] in _fetch_tcbs: TCBS HTTP error SDB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SDB&type=stock&resolution=D&from=1740811826&to=1775371826
+2026-04-05 13:50:29,696 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SDB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SDB?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:50:37,733 [ERROR] in download_data: Cannot load SDB. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:50:39,674 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SDT: price=4,600 ref=4,600 ceil=0 floor=0
+2026-04-05 13:50:41,046 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SEB: price=46,500 ref=46,500 ceil=0 floor=0
+2026-04-05 13:50:41,702 [ERROR] in download_data: Cannot load SDB. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:50:41,734 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SED: price=18,100 ref=18,300 ceil=0 floor=0
+2026-04-05 13:50:43,434 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SFG: price=10,500 ref=10,700 ceil=0 floor=0
+2026-04-05 13:50:46,142 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGC: price=80,900 ref=81,000 ceil=0 floor=0
+2026-04-05 13:50:47,888 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGH: price=19,500 ref=19,200 ceil=0 floor=0
+2026-04-05 13:50:48,828 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGN: price=52,500 ref=52,500 ceil=0 floor=0
+2026-04-05 13:50:49,650 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGR: price=15,750 ref=15,800 ceil=0 floor=0
+2026-04-05 13:50:50,408 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SGT: price=15,500 ref=15,500 ceil=0 floor=0
+2026-04-05 13:50:51,147 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHA: price=3,980 ref=3,910 ceil=0 floor=0
+2026-04-05 13:50:51,979 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHB: price=14,900 ref=14,850 ceil=0 floor=0
+2026-04-05 13:50:52,722 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHI: price=14,250 ref=14,350 ceil=0 floor=0
+2026-04-05 13:50:53,490 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHP: price=34,500 ref=34,500 ceil=0 floor=0
+2026-04-05 13:50:54,360 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SHS: price=16,900 ref=17,100 ceil=0 floor=0
+2026-04-05 13:50:56,012 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SJD: price=14,000 ref=13,950 ceil=0 floor=0
+2026-04-05 13:50:56,793 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SJE: price=16,400 ref=16,400 ceil=0 floor=0
+2026-04-05 13:50:59,223 [WARNING] in _fetch_ssi: SSI HTTP error SJF [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SJF&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SJF&resolution=D&from=1712299856&to=1775371856
+2026-04-05 13:51:05,977 [WARNING] in _fetch_cafef: CafeF ❌ SJF: all strategies failed
+2026-04-05 13:51:06,730 [WARNING] in _fetch_tcbs: TCBS HTTP error SJF: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SJF&type=stock&resolution=D&from=1712299865&to=1775371865
+2026-04-05 13:51:08,919 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SJF: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SJF?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:51:10,530 [WARNING] in _fetch_ssi: SSI HTTP error SJF [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SJF&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SJF&resolution=D&from=1740811868&to=1775371868
+2026-04-05 13:51:16,982 [WARNING] in _fetch_cafef: CafeF ❌ SJF: all strategies failed
+2026-04-05 13:51:17,476 [WARNING] in _fetch_tcbs: TCBS HTTP error SJF: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SJF&type=stock&resolution=D&from=1740811876&to=1775371876
+2026-04-05 13:51:19,637 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SJF: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SJF?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:51:20,935 [ERROR] in download_data: Cannot load SJF. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:51:21,500 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SJS: price=48,350 ref=49,500 ceil=0 floor=0
+2026-04-05 13:51:22,222 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SKG: price=9,150 ref=9,150 ceil=0 floor=0
+2026-04-05 13:51:24,421 [WARNING] in _fetch_ssi: SSI HTTP error SKS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SKS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SKS&resolution=D&from=1712299882&to=1775371882
+2026-04-05 13:51:30,379 [WARNING] in _fetch_cafef: CafeF ❌ SKS: all strategies failed
+2026-04-05 13:51:30,875 [WARNING] in _fetch_tcbs: TCBS HTTP error SKS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SKS&type=stock&resolution=D&from=1712299890&to=1775371890
+2026-04-05 13:51:31,656 [ERROR] in download_data: Cannot load SJF. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:51:33,045 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SKS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SKS?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:51:35,241 [WARNING] in _fetch_ssi: SSI HTTP error SKS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SKS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SKS&resolution=D&from=1740811893&to=1775371893
+2026-04-05 13:51:41,040 [WARNING] in _fetch_cafef: CafeF ❌ SKS: all strategies failed
+2026-04-05 13:51:41,546 [WARNING] in _fetch_tcbs: TCBS HTTP error SKS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SKS&type=stock&resolution=D&from=1740811901&to=1775371901
+2026-04-05 13:51:43,722 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SKS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SKS?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:51:45,061 [ERROR] in download_data: Cannot load SKS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:51:45,653 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SLS: price=161,000 ref=162,000 ceil=0 floor=0
+2026-04-05 13:51:46,917 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SMB: price=38,550 ref=39,000 ceil=0 floor=0
+2026-04-05 13:51:47,658 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SMC: price=12,600 ref=12,800 ceil=0 floor=0
+2026-04-05 13:51:51,037 [WARNING] in _fetch_ssi: SSI HTTP error SNG [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SNG&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SNG&resolution=D&from=1712299909&to=1775371909
+2026-04-05 13:51:55,734 [ERROR] in download_data: Cannot load SKS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:51:57,472 [WARNING] in _fetch_cafef: CafeF ❌ SNG: all strategies failed
+2026-04-05 13:51:58,130 [WARNING] in _fetch_tcbs: TCBS HTTP error SNG: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SNG&type=stock&resolution=D&from=1712299917&to=1775371917
+2026-04-05 13:52:00,297 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SNG: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SNG?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:52:01,165 [WARNING] in fetch_cafef_shareholders: CafeF CoCauSoHuu SND: 'NoneType' object is not subscriptable
+2026-04-05 13:52:03,635 [WARNING] in _fetch_ssi: SSI HTTP error SNG [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SNG&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=SNG&resolution=D&from=1740811921&to=1775371921
+2026-04-05 13:52:09,915 [WARNING] in _fetch_cafef: CafeF ❌ SNG: all strategies failed
+2026-04-05 13:52:10,500 [WARNING] in _fetch_tcbs: TCBS HTTP error SNG: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=SNG&type=stock&resolution=D&from=1740811929&to=1775371929
+2026-04-05 13:52:12,312 [ERROR] in download_data: Cannot load SNG. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:52:12,690 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused SNG: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/SNG?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:52:14,047 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SRA: price=2,000 ref=2,100 ceil=0 floor=0
+2026-04-05 13:52:14,892 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SRF: price=6,820 ref=6,840 ceil=0 floor=0
+2026-04-05 13:52:16,729 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SSI: price=27,000 ref=27,550 ceil=0 floor=0
+2026-04-05 13:52:17,677 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ ST8: price=3,280 ref=3,300 ceil=0 floor=0
+2026-04-05 13:52:18,610 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ STB: price=60,800 ref=61,100 ceil=0 floor=0
+2026-04-05 13:52:20,345 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ STG: price=30,350 ref=30,350 ceil=0 floor=0
+2026-04-05 13:52:21,218 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ STK: price=13,800 ref=13,950 ceil=0 floor=0
+2026-04-05 13:52:22,292 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SVC: price=18,200 ref=18,800 ceil=0 floor=0
+2026-04-05 13:52:23,262 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SVD: price=3,420 ref=3,300 ceil=0 floor=0
+2026-04-05 13:52:24,694 [ERROR] in download_data: Cannot load SNG. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:52:25,251 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SVT: price=11,500 ref=11,500 ceil=0 floor=0
+2026-04-05 13:52:26,189 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SZC: price=28,150 ref=28,650 ceil=0 floor=0
+2026-04-05 13:52:27,145 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ SZL: price=50,000 ref=50,300 ceil=0 floor=0
+2026-04-05 13:52:28,103 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TA9: price=11,600 ref=11,500 ceil=0 floor=0
+2026-04-05 13:52:29,059 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TAR: price=3,400 ref=3,600 ceil=0 floor=0
+2026-04-05 13:52:29,977 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TBC: price=34,600 ref=35,000 ceil=0 floor=0
+2026-04-05 13:52:32,441 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCB: price=29,750 ref=30,350 ceil=0 floor=0
+2026-04-05 13:52:34,128 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCH: price=16,500 ref=17,200 ceil=0 floor=0
+2026-04-05 13:52:35,100 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCL: price=33,850 ref=33,750 ceil=0 floor=0
+2026-04-05 13:52:36,090 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCM: price=22,550 ref=22,800 ceil=0 floor=0
+2026-04-05 13:52:37,079 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCO: price=13,450 ref=13,950 ceil=0 floor=0
+2026-04-05 13:52:40,471 [WARNING] in _fetch_ssi: SSI HTTP error TCS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TCS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TCS&resolution=D&from=1712299957&to=1775371957
+2026-04-05 13:52:48,601 [WARNING] in _fetch_cafef: CafeF ❌ TCS: all strategies failed
+2026-04-05 13:52:49,349 [WARNING] in _fetch_tcbs: TCBS HTTP error TCS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TCS&type=stock&resolution=D&from=1712299968&to=1775371968
+2026-04-05 13:52:51,543 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TCS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TCS?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:52:53,658 [WARNING] in _fetch_ssi: SSI HTTP error TCS [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TCS&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TCS&resolution=D&from=1740811971&to=1775371971
+2026-04-05 13:52:59,893 [WARNING] in _fetch_cafef: CafeF ❌ TCS: all strategies failed
+2026-04-05 13:53:00,423 [WARNING] in _fetch_tcbs: TCBS HTTP error TCS: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TCS&type=stock&resolution=D&from=1740811979&to=1775371979
+2026-04-05 13:53:02,626 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TCS: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TCS?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:53:03,547 [ERROR] in download_data: Cannot load TCS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:53:04,201 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TCT: price=19,650 ref=19,800 ceil=0 floor=0
+2026-04-05 13:53:04,949 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDC: price=10,950 ref=10,950 ceil=0 floor=0
+2026-04-05 13:53:05,752 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDG: price=2,550 ref=2,650 ceil=0 floor=0
+2026-04-05 13:53:06,534 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDH: price=3,640 ref=3,650 ceil=0 floor=0
+2026-04-05 13:53:07,296 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDM: price=57,300 ref=56,900 ceil=0 floor=0
+2026-04-05 13:53:08,845 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDP: price=29,500 ref=29,400 ceil=0 floor=0
+2026-04-05 13:53:09,578 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDT: price=7,800 ref=7,800 ceil=0 floor=0
+2026-04-05 13:53:10,361 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TDW: price=47,900 ref=47,900 ceil=0 floor=0
+2026-04-05 13:53:11,059 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TEG: price=5,960 ref=5,960 ceil=0 floor=0
+2026-04-05 13:53:13,253 [WARNING] in _fetch_ssi: SSI HTTP error TGG [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TGG&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TGG&resolution=D&from=1712299991&to=1775371991
+2026-04-05 13:53:14,643 [ERROR] in download_data: Cannot load TCS. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:53:20,714 [WARNING] in _fetch_cafef: CafeF ❌ TGG: all strategies failed
+2026-04-05 13:53:21,517 [WARNING] in _fetch_tcbs: TCBS HTTP error TGG: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TGG&type=stock&resolution=D&from=1712300000&to=1775372000
+2026-04-05 13:53:23,705 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TGG: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TGG?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:53:26,764 [WARNING] in _fetch_ssi: SSI HTTP error TGG [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TGG&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TGG&resolution=D&from=1740812004&to=1775372004
+2026-04-05 13:53:34,858 [WARNING] in _fetch_cafef: CafeF ❌ TGG: all strategies failed
+2026-04-05 13:53:35,647 [WARNING] in _fetch_tcbs: TCBS HTTP error TGG: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TGG&type=stock&resolution=D&from=1740812014&to=1775372014
+2026-04-05 13:53:35,723 [ERROR] in download_data: Cannot load TGG. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:53:37,466 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ THG: price=44,000 ref=43,800 ceil=0 floor=0
+2026-04-05 13:53:39,941 [WARNING] in _fetch_ssi: SSI HTTP error THI [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=THI&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=THI&resolution=D&from=1712300017&to=1775372017
+2026-04-05 13:53:41,658 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TGG: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TGG?type=5&count=400 (Caused by ConnectTimeoutError(<HTTPSConnection(host='api.cafef.vn', port=443) at 0x1eacb185f90>, 'Connection to api.cafef.vn timed out. (connect timeout=6)'))
+2026-04-05 13:53:47,728 [WARNING] in _fetch_cafef: CafeF ❌ THI: all strategies failed
+2026-04-05 13:53:48,421 [WARNING] in _fetch_tcbs: TCBS HTTP error THI: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=THI&type=stock&resolution=D&from=1712300027&to=1775372027
+2026-04-05 13:53:50,590 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused THI: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/THI?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:53:53,676 [ERROR] in download_data: Cannot load TGG. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:53:58,896 [WARNING] in _fetch_ssi: SSI HTTP error THI [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=THI&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=THI&resolution=D&from=1740812036&to=1775372036
+2026-04-05 13:54:02,604 [ERROR] in download_data: Cannot load THI. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:54:04,615 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ THT: price=9,200 ref=9,200 ceil=0 floor=0
+2026-04-05 13:54:05,557 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TID: price=21,300 ref=21,600 ceil=0 floor=0
+2026-04-05 13:54:06,661 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TIP: price=18,500 ref=18,500 ceil=0 floor=0
+2026-04-05 13:54:07,681 [WARNING] in _fetch_cafef: CafeF ❌ THI: all strategies failed
+2026-04-05 13:54:07,686 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TIX: price=41,000 ref=43,500 ceil=0 floor=0
+2026-04-05 13:54:08,678 [WARNING] in _fetch_tcbs: TCBS HTTP error THI: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=THI&type=stock&resolution=D&from=1740812047&to=1775372047
+2026-04-05 13:54:09,706 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TKU: price=15,600 ref=15,800 ceil=0 floor=0
+2026-04-05 13:54:10,885 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused THI: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/THI?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:54:12,252 [WARNING] in _fetch_ssi: SSI HTTP error TLC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TLC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TLC&resolution=D&from=1712300049&to=1775372049
+2026-04-05 13:54:19,575 [WARNING] in _fetch_cafef: CafeF ❌ TLC: all strategies failed
+2026-04-05 13:54:20,322 [WARNING] in _fetch_tcbs: TCBS HTTP error TLC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TLC&type=stock&resolution=D&from=1712300059&to=1775372059
+2026-04-05 13:54:22,495 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TLC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TLC?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:54:22,892 [ERROR] in download_data: Cannot load THI. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:54:30,675 [WARNING] in _fetch_ssi: SSI HTTP error TLC [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TLC&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TLC&resolution=D&from=1740812068&to=1775372068
+2026-04-05 13:54:34,504 [ERROR] in download_data: Cannot load TLC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:54:35,285 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TLD: price=8,260 ref=8,220 ceil=0 floor=0
+2026-04-05 13:54:35,974 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TLG: price=48,450 ref=48,050 ceil=0 floor=0
+2026-04-05 13:54:36,682 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TLH: price=4,510 ref=4,570 ceil=0 floor=0
+2026-04-05 13:54:37,198 [WARNING] in _fetch_cafef: CafeF ❌ TLC: all strategies failed
+2026-04-05 13:54:37,351 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TMB: price=55,900 ref=57,600 ceil=0 floor=0
+2026-04-05 13:54:37,701 [WARNING] in _fetch_tcbs: TCBS HTTP error TLC: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TLC&type=stock&resolution=D&from=1740812077&to=1775372077
+2026-04-05 13:54:39,211 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TMT: price=11,450 ref=11,450 ceil=0 floor=0
+2026-04-05 13:54:39,833 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TN1: price=15,700 ref=15,700 ceil=0 floor=0
+2026-04-05 13:54:39,890 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TLC: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TLC?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:54:42,483 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TNG: price=22,600 ref=24,000 ceil=0 floor=0
+2026-04-05 13:54:43,135 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TNH: price=10,050 ref=10,050 ceil=0 floor=0
+2026-04-05 13:54:44,108 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TNI: price=4,940 ref=4,620 ceil=0 floor=0
+2026-04-05 13:54:44,831 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TNV: price=16,500 ref=16,800 ceil=0 floor=0
+2026-04-05 13:54:45,510 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TPB: price=16,000 ref=16,000 ceil=0 floor=0
+2026-04-05 13:54:46,879 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TPP: price=10,400 ref=10,500 ceil=0 floor=0
+2026-04-05 13:54:47,491 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TSB: price=19,700 ref=19,500 ceil=0 floor=0
+2026-04-05 13:54:48,201 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TSC: price=2,420 ref=2,440 ceil=0 floor=0
+2026-04-05 13:54:48,830 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TTA: price=11,850 ref=11,750 ceil=0 floor=0
+2026-04-05 13:54:50,894 [WARNING] in _fetch_ssi: SSI HTTP error TTB [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTB&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTB&resolution=D&from=1712300088&to=1775372088
+2026-04-05 13:54:51,893 [ERROR] in download_data: Cannot load TLC. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:54:57,669 [WARNING] in _fetch_cafef: CafeF ❌ TTB: all strategies failed
+2026-04-05 13:54:58,181 [WARNING] in _fetch_tcbs: TCBS HTTP error TTB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TTB&type=stock&resolution=D&from=1712300097&to=1775372097
+2026-04-05 13:55:00,412 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TTB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TTB?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:55:12,472 [ERROR] in download_data: Cannot load TTB. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:55:14,107 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TTD: price=125,000 ref=119,000 ceil=0 floor=0
+2026-04-05 13:55:16,004 [WARNING] in _fetch_ssi: SSI HTTP error TTB [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTB&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTB&resolution=D&from=1740812113&to=1775372113
+2026-04-05 13:55:16,091 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TTF: price=2,620 ref=2,650 ceil=0 floor=0
+2026-04-05 13:55:18,846 [WARNING] in _fetch_ssi: SSI HTTP error TTZ [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTZ&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTZ&resolution=D&from=1712300116&to=1775372116
+2026-04-05 13:55:23,092 [WARNING] in _fetch_cafef: CafeF ❌ TTB: all strategies failed
+2026-04-05 13:55:23,811 [WARNING] in _fetch_tcbs: TCBS HTTP error TTB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TTB&type=stock&resolution=D&from=1740812123&to=1775372123
+2026-04-05 13:55:25,626 [WARNING] in _fetch_cafef: CafeF ❌ TTZ: all strategies failed
+2026-04-05 13:55:26,013 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TTB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TTB?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:55:26,203 [WARNING] in _fetch_tcbs: TCBS HTTP error TTZ: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TTZ&type=stock&resolution=D&from=1712300125&to=1775372125
+2026-04-05 13:55:28,381 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TTZ: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TTZ?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:55:38,029 [ERROR] in download_data: Cannot load TTB. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:55:40,387 [ERROR] in download_data: Cannot load TTZ. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:55:41,242 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TV2: price=37,150 ref=38,000 ceil=0 floor=0
+2026-04-05 13:55:42,173 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TV3: price=16,500 ref=18,000 ceil=0 floor=0
+2026-04-05 13:55:43,063 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TV4: price=15,300 ref=15,300 ceil=0 floor=0
+2026-04-05 13:55:43,920 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TVB: price=7,460 ref=7,410 ceil=0 floor=0
+2026-04-05 13:55:44,743 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TVD: price=11,000 ref=11,200 ceil=0 floor=0
+2026-04-05 13:55:45,505 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TVS: price=13,400 ref=13,400 ceil=0 floor=0
+2026-04-05 13:55:45,820 [WARNING] in _fetch_ssi: SSI HTTP error TTZ [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTZ&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=TTZ&resolution=D&from=1740812143&to=1775372143
+2026-04-05 13:55:46,935 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TXM: price=4,600 ref=4,900 ceil=0 floor=0
+2026-04-05 13:55:47,572 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ TYA: price=17,600 ref=17,800 ceil=0 floor=0
+2026-04-05 13:55:48,166 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ UDC: price=3,400 ref=3,400 ceil=0 floor=0
+2026-04-05 13:55:49,666 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ UNI: price=7,700 ref=7,700 ceil=0 floor=0
+2026-04-05 13:55:50,374 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VAF: price=20,000 ref=21,350 ceil=0 floor=0
+2026-04-05 13:55:52,670 [WARNING] in _fetch_cafef: CafeF ❌ TTZ: all strategies failed
+2026-04-05 13:55:52,716 [WARNING] in _fetch_ssi: SSI HTTP error VAT [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VAT&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VAT&resolution=D&from=1712300150&to=1775372150
+2026-04-05 13:55:53,156 [WARNING] in _fetch_tcbs: TCBS HTTP error TTZ: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=TTZ&type=stock&resolution=D&from=1740812152&to=1775372152
+2026-04-05 13:55:55,349 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused TTZ: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/TTZ?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:55:58,702 [WARNING] in _fetch_cafef: CafeF ❌ VAT: all strategies failed
+2026-04-05 13:55:59,236 [WARNING] in _fetch_tcbs: TCBS HTTP error VAT: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VAT&type=stock&resolution=D&from=1712300158&to=1775372158
+2026-04-05 13:56:01,416 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VAT: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VAT?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:56:07,358 [ERROR] in download_data: Cannot load TTZ. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:56:13,431 [ERROR] in download_data: Cannot load VAT. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:56:14,730 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VC2: price=4,900 ref=4,900 ceil=0 floor=0
+2026-04-05 13:56:15,471 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VC3: price=26,600 ref=26,500 ceil=0 floor=0
+2026-04-05 13:56:16,079 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VC7: price=8,100 ref=8,200 ceil=0 floor=0
+2026-04-05 13:56:16,752 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VC9: price=5,400 ref=5,900 ceil=0 floor=0
+2026-04-05 13:56:17,488 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCA: price=7,070 ref=7,220 ceil=0 floor=0
+2026-04-05 13:56:18,186 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCB: price=57,700 ref=58,200 ceil=0 floor=0
+2026-04-05 13:56:18,809 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCC: price=10,100 ref=10,000 ceil=0 floor=0
+2026-04-05 13:56:19,510 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCF: price=304,900 ref=304,900 ceil=0 floor=0
+2026-04-05 13:56:20,094 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCG: price=21,400 ref=22,200 ceil=0 floor=0
+2026-04-05 13:56:21,748 [WARNING] in _fetch_ssi: SSI HTTP error VAT [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VAT&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VAT&resolution=D&from=1740812178&to=1775372178
+2026-04-05 13:56:22,162 [WARNING] in _fetch_ssi: SSI HTTP error VCH [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCH&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCH&resolution=D&from=1712300180&to=1775372180
+2026-04-05 13:56:28,413 [WARNING] in _fetch_cafef: CafeF ❌ VAT: all strategies failed
+2026-04-05 13:56:28,632 [WARNING] in _fetch_cafef: CafeF ❌ VCH: all strategies failed
+2026-04-05 13:56:29,079 [WARNING] in _fetch_tcbs: TCBS HTTP error VAT: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VAT&type=stock&resolution=D&from=1740812188&to=1775372188
+2026-04-05 13:56:29,247 [WARNING] in _fetch_tcbs: TCBS HTTP error VCH: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VCH&type=stock&resolution=D&from=1712300188&to=1775372188
+2026-04-05 13:56:31,249 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VAT: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VAT?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:56:31,436 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VCH: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VCH?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:56:43,252 [ERROR] in download_data: Cannot load VAT. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:56:43,442 [ERROR] in download_data: Cannot load VCH. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:56:44,147 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCI: price=26,500 ref=26,950 ceil=0 floor=0
+2026-04-05 13:56:46,922 [WARNING] in _fetch_ssi: SSI HTTP error VCL [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCL&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCL&resolution=D&from=1712300204&to=1775372204
+2026-04-05 13:56:54,563 [WARNING] in _fetch_ssi: SSI HTTP error VCH [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCH&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCH&resolution=D&from=1740812211&to=1775372211
+2026-04-05 13:56:55,503 [WARNING] in _fetch_cafef: CafeF ❌ VCL: all strategies failed
+2026-04-05 13:56:56,158 [WARNING] in _fetch_tcbs: TCBS HTTP error VCL: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VCL&type=stock&resolution=D&from=1712300215&to=1775372215
+2026-04-05 13:56:58,333 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VCL: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VCL?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:57:01,699 [WARNING] in _fetch_cafef: CafeF ❌ VCH: all strategies failed
+2026-04-05 13:57:02,327 [WARNING] in _fetch_tcbs: TCBS HTTP error VCH: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VCH&type=stock&resolution=D&from=1740812221&to=1775372221
+2026-04-05 13:57:04,492 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VCH: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VCH?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:57:10,345 [ERROR] in download_data: Cannot load VCL. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:57:11,013 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VCS: price=40,300 ref=40,700 ceil=0 floor=0
+2026-04-05 13:57:11,767 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VDL: price=13,800 ref=12,800 ceil=0 floor=0
+2026-04-05 13:57:13,206 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VDS: price=14,450 ref=14,750 ceil=0 floor=0
+2026-04-05 13:57:13,854 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VE1: price=3,300 ref=3,200 ceil=0 floor=0
+2026-04-05 13:57:15,829 [WARNING] in _fetch_ssi: SSI HTTP error VE2 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE2&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE2&resolution=D&from=1712300233&to=1775372233
+2026-04-05 13:57:16,511 [ERROR] in download_data: Cannot load VCH. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:57:18,571 [WARNING] in _fetch_ssi: SSI HTTP error VCL [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCL&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VCL&resolution=D&from=1740812236&to=1775372236
+2026-04-05 13:57:23,151 [WARNING] in _fetch_cafef: CafeF ❌ VE2: all strategies failed
+2026-04-05 13:57:23,934 [WARNING] in _fetch_tcbs: TCBS HTTP error VE2: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VE2&type=stock&resolution=D&from=1712300243&to=1775372243
+2026-04-05 13:57:26,096 [WARNING] in _fetch_cafef: CafeF ❌ VCL: all strategies failed
+2026-04-05 13:57:26,127 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VE2: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VE2?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:57:26,660 [WARNING] in _fetch_tcbs: TCBS HTTP error VCL: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VCL&type=stock&resolution=D&from=1740812246&to=1775372246
+2026-04-05 13:57:28,842 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VCL: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VCL?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:57:38,132 [ERROR] in download_data: Cannot load VE2. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:57:40,852 [ERROR] in download_data: Cannot load VCL. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:57:41,522 [WARNING] in _fetch_ssi: SSI HTTP error VE4 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE4&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE4&resolution=D&from=1712300258&to=1775372258
+2026-04-05 13:57:49,379 [WARNING] in _fetch_cafef: CafeF ❌ VE4: all strategies failed
+2026-04-05 13:57:49,536 [WARNING] in _fetch_ssi: SSI HTTP error VE2 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE2&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE2&resolution=D&from=1740812266&to=1775372266
+2026-04-05 13:57:50,048 [WARNING] in _fetch_tcbs: TCBS HTTP error VE4: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VE4&type=stock&resolution=D&from=1712300269&to=1775372269
+2026-04-05 13:57:52,251 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VE4: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VE4?type=5&count=500 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:57:57,400 [WARNING] in _fetch_cafef: CafeF ❌ VE2: all strategies failed
+2026-04-05 13:57:58,091 [WARNING] in _fetch_tcbs: TCBS HTTP error VE2: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VE2&type=stock&resolution=D&from=1740812277&to=1775372277
+2026-04-05 13:58:00,313 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VE2: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VE2?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:58:04,258 [ERROR] in download_data: Cannot load VE4. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:58:04,915 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VE8: price=2,200 ref=2,500 ceil=0 floor=0
+2026-04-05 13:58:05,644 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VE9: price=3,900 ref=3,900 ceil=0 floor=0
+2026-04-05 13:58:06,349 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VFG: price=50,000 ref=49,750 ceil=0 floor=0
+2026-04-05 13:58:07,745 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VGS: price=23,400 ref=24,300 ceil=0 floor=0
+2026-04-05 13:58:08,402 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VHC: price=57,400 ref=58,600 ceil=0 floor=0
+2026-04-05 13:58:09,043 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VHE: price=3,500 ref=3,400 ceil=0 floor=0
+2026-04-05 13:58:10,447 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VHM: price=119,200 ref=117,900 ceil=0 floor=0
+2026-04-05 13:58:11,130 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIB: price=16,650 ref=16,900 ceil=0 floor=0
+2026-04-05 13:58:11,845 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIC: price=141,000 ref=139,900 ceil=0 floor=0
+2026-04-05 13:58:12,324 [ERROR] in download_data: Cannot load VE2. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:58:12,538 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VID: price=4,950 ref=4,950 ceil=0 floor=0
+2026-04-05 13:58:13,283 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIG: price=4,700 ref=4,700 ceil=0 floor=0
+2026-04-05 13:58:14,041 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIP: price=11,700 ref=11,750 ceil=0 floor=0
+2026-04-05 13:58:14,815 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VIX: price=16,200 ref=16,600 ceil=0 floor=0
+2026-04-05 13:58:15,576 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VJC: price=161,100 ref=165,500 ceil=0 floor=0
+2026-04-05 13:58:15,972 [WARNING] in _fetch_ssi: SSI HTTP error VE4 [https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE4&reso]: 404 Client Error: Not Found for url: https://fc-data.ssi.com.vn/api/v2/stock/ohlc?symbol=VE4&resolution=D&from=1740812293&to=1775372293
+2026-04-05 13:58:17,043 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VMC: price=4,300 ref=4,400 ceil=0 floor=0
+2026-04-05 13:58:19,205 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNC: price=35,400 ref=36,100 ceil=0 floor=0
+2026-04-05 13:58:20,026 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VND: price=15,650 ref=15,900 ceil=0 floor=0
+2026-04-05 13:58:20,871 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNE: price=3,990 ref=3,990 ceil=0 floor=0
+2026-04-05 13:58:21,822 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNG: price=6,850 ref=6,710 ceil=0 floor=0
+2026-04-05 13:58:22,714 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNI: price=7,500 ref=7,500 ceil=0 floor=0
+2026-04-05 13:58:22,856 [WARNING] in _fetch_cafef: CafeF ❌ VE4: all strategies failed
+2026-04-05 13:58:23,601 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNL: price=19,400 ref=19,400 ceil=0 floor=0
+2026-04-05 13:58:23,604 [WARNING] in _fetch_tcbs: TCBS HTTP error VE4: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VE4&type=stock&resolution=D&from=1740812302&to=1775372302
+2026-04-05 13:58:24,463 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNM: price=60,000 ref=60,800 ceil=0 floor=0
+2026-04-05 13:58:25,123 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNR: price=20,700 ref=20,700 ceil=0 floor=0
+2026-04-05 13:58:25,784 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VE4: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VE4?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:58:25,834 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VNS: price=8,260 ref=8,250 ceil=0 floor=0
+2026-04-05 13:58:27,207 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VOS: price=12,500 ref=12,650 ceil=0 floor=0
+2026-04-05 13:58:27,858 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPB: price=25,800 ref=26,250 ceil=0 floor=0
+2026-04-05 13:58:28,524 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPD: price=23,800 ref=23,850 ceil=0 floor=0
+2026-04-05 13:58:29,189 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPG: price=4,020 ref=4,150 ceil=0 floor=0
+2026-04-05 13:58:29,868 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPH: price=3,760 ref=3,800 ceil=0 floor=0
+2026-04-05 13:58:30,854 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPI: price=58,000 ref=58,200 ceil=0 floor=0
+2026-04-05 13:58:31,490 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VPS: price=8,450 ref=8,500 ceil=0 floor=0
+2026-04-05 13:58:32,113 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VRC: price=13,000 ref=13,200 ceil=0 floor=0
+2026-04-05 13:58:32,801 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VRE: price=26,500 ref=27,200 ceil=0 floor=0
+2026-04-05 13:58:33,446 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSA: price=19,900 ref=19,900 ceil=0 floor=0
+2026-04-05 13:58:34,108 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSC: price=23,800 ref=24,300 ceil=0 floor=0
+2026-04-05 13:58:34,753 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSH: price=43,300 ref=43,450 ceil=0 floor=0
+2026-04-05 13:58:35,418 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VSI: price=28,000 ref=28,000 ceil=0 floor=0
+2026-04-05 13:58:36,074 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTB: price=14,300 ref=14,250 ceil=0 floor=0
+2026-04-05 13:58:36,792 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTC: price=12,100 ref=12,400 ceil=0 floor=0
+2026-04-05 13:58:37,465 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTH: price=8,700 ref=8,700 ceil=0 floor=0
+2026-04-05 13:58:37,799 [ERROR] in download_data: Cannot load VE4. Exchange:HOSE. Sources tried: SSI:0 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:58:38,924 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTO: price=11,600 ref=11,700 ceil=0 floor=0
+2026-04-05 13:58:39,744 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTV: price=14,800 ref=14,900 ceil=0 floor=0
+2026-04-05 13:58:40,422 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ VTZ: price=20,100 ref=20,200 ceil=0 floor=0
+2026-04-05 13:58:41,337 [INFO] in _fetch_ssi: SSI ✅ VXB: 27 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:58:41,338 [INFO] in download_data: ✅ SSI VXB: 27 rows
+2026-04-05 13:58:43,264 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ WSS: price=6,300 ref=6,400 ceil=0 floor=0
+2026-04-05 13:58:44,110 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ YBM: price=10,350 ref=10,300 ceil=0 floor=0
+2026-04-05 13:58:45,206 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ YEG: price=9,940 ref=10,000 ceil=0 floor=0
+2026-04-05 13:58:54,391 [INFO] in fetch_ssi_market_group: SSI group/VN30: 30 tickers loaded
+2026-04-05 13:59:21,153 [INFO] in _fetch_ssi: SSI ✅ VXB: 14 rows via https://iboard-api.ssi.com.vn/statistics/charts/history?resolution=1D&
+2026-04-05 13:59:28,807 [WARNING] in _fetch_cafef: CafeF ❌ VXB: all strategies failed
+2026-04-05 13:59:29,527 [WARNING] in _fetch_tcbs: TCBS HTTP error VXB: 404 Client Error: Not Found for url: https://apipubaws.tcbs.com.vn/stock-insight/v1/stock/ohlc?ticker=VXB&type=stock&resolution=D&from=1740812368&to=1775372368
+2026-04-05 13:59:31,692 [WARNING] in _fetch_cafef_v2: CafeF-v2 connection refused VXB: HTTPSConnectionPool(host='api.cafef.vn', port=443): Max retries exceeded with url: /api/historyprice/VXB?type=5&count=400 (Caused by NewConnectionError("HTTPSConnection(host='api.cafef.vn', port=443): Failed to establish a new connection: [WinError 10061] No connection could be made because the target machine actively refused it"))
+2026-04-05 13:59:43,706 [ERROR] in download_data: Cannot load VXB. Exchange:HOSE. Sources tried: SSI:14 rows | DNSE:0 rows | CafeF:0 rows | TCBS:0 rows | CafeF-JSON:0 rows | VNDirect:0 rows | yFinance:0 rows
+2026-04-05 13:59:46,815 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ WSS: price=6,300 ref=6,400 ceil=0 floor=0
+2026-04-05 13:59:48,326 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ YBM: price=10,350 ref=10,300 ceil=0 floor=0
+2026-04-05 13:59:49,883 [INFO] in fetch_ssi_realtime_price: SSI iboard-query ✅ YEG: price=9,940 ref=10,000 ceil=0 floor=0
+2026-04-05 13:59:52,260 [INFO] in fetch_ssi_market_group: SSI group/VN30: 30 tickers loaded

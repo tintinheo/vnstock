@@ -6,7 +6,7 @@ from datetime import datetime
 
 import pandas as pd
 
-from ..data.fetcher import fetch_ohlcv, fetch_foreign_flow, fetch_put_through_deals, fetch_quote
+from ..data.fetcher import fetch_ohlcv, fetch_foreign_flow, fetch_put_through_deals, fetch_quote, fetch_realtime
 from ..data.fetcher import fetch_usdvnd, fetch_vn10y_bond_yield, fetch_sbv_omo_net
 from ..data.fetcher import fetch_earnings_calendar, fetch_financial_statements
 from ..data.cache import cache
@@ -25,6 +25,10 @@ from ..core import (
     compute_macro_regime, macro_sizing_multiplier, macro_score_gate_adjustment,
     compute_earnings_risk,
     compute_fundamental_snapshot, canslim_fundamental_override,
+    compute_trend_warning,
+    compute_multi_horizon_forecast,
+    compute_t25_multiframe,
+    compute_tplus_recommendation,
 )
 from ..core.money_flow import compute_multiday_whale_flow, proxy_whale_net_from_daily, compute_whale_net_from_pt_deals
 from .money_flow_service import MoneyFlowService, sector_flow_lookup
@@ -57,7 +61,7 @@ class ProfilerService:
 
         # ── 1. Fetch data ──────────────────────────────────────────────────
         try:
-            df = fetch_ohlcv(ticker, days=260)
+            df = fetch_ohlcv(ticker, days=1000)
         except Exception as e:
             log.warning(f"OHLCV fetch failed for {ticker}: {e}")
             return self._error_profile(ticker, str(e))
@@ -121,6 +125,54 @@ class ProfilerService:
         # ── 5. Patterns ───────────────────────────────────────────────────
         pattern_result = detect_patterns(df)
 
+        # ── 5b. Gap + VWAP + T+2.5 (non-blocking) ────────────────────────
+        from ..core.gap_vwap import (
+            detect_gaps, compute_vwap_result, compute_vwap_intraday_result,
+        )
+        from ..core.t25_engine import compute_t25_entry_score
+        from ..data.fetcher import fetch_intraday_5m
+
+        gap_result  = detect_gaps(df)
+        vwap_result = compute_vwap_result(df)
+        t25_result  = compute_t25_entry_score(df, pattern_result)
+
+        vwap_intraday_result: dict = {
+            "vwap_intraday": None, "vwap_intraday_dev": "AT",
+            "vwap_intraday_slope": 0.0,
+        }
+        try:
+            df_5m = fetch_intraday_5m(ticker)
+            vwap_intraday_result = compute_vwap_intraday_result(ticker, df_5m)
+        except Exception as _intra_err:
+            log.debug(f"Intraday VWAP skipped for {ticker}: {_intra_err}")
+
+        # ── 5c. Realtime + Trend Warning + T+2.5 MF (non-blocking) ──────
+        rt_data = fetch_realtime(ticker)
+
+        trend_w_result: dict = {"warning": "NONE", "warning_vi": "", "confidence": 0.0, "reasons": []}
+        try:
+            trend_w_result = compute_trend_warning(df)
+        except Exception as _tw_err:
+            log.debug(f"Trend warning skipped for {ticker}: {_tw_err}")
+
+        t25_mf_result: dict = {}
+        try:
+            t25_mf_result = compute_t25_multiframe(df, t25_result, vwap_intraday_result)
+        except Exception as _mf_err:
+            log.debug(f"T+2.5 multiframe skipped for {ticker}: {_mf_err}")
+
+        # ── 5d. T+ setup recommendation (non-blocking) ────────────────────
+        tplus_result: dict = {}
+        try:
+            tplus_result = compute_tplus_recommendation(
+                df, t25_result, pattern_result,
+                dist_warning=dist_warning,
+                amf_decision=str(amf_result.get("decision", "PASS")),
+                amd_phase=str(amd_phase),
+            )
+        except Exception as _tp_err:
+            log.debug(f"T+ recommendation skipped for {ticker}: {_tp_err}")
+
         # ── 6. GMO (HMM + omega) ─────────────────────────────────────────
         hmm_state = detect_hmm_state(df)
         omega = compute_omega(df, None)      # SRS §3.4 gmo_omega
@@ -159,6 +211,21 @@ class ProfilerService:
             )
         except Exception as _fund_err:
             log.debug(f"Fundamental snapshot skipped for {ticker}: {_fund_err}")
+
+        # ── 6e. Multi-horizon forecast (uses macro + fund data) ───────────
+        fc_result: dict = {}
+        try:
+            _fc_ctx = {
+                "hmm_state":         hmm_state,
+                "amd_phase":         amd_phase,
+                "macro_regime":      macro_result.macro_regime   if macro_result else "",
+                "macro_score":       macro_result.macro_score    if macro_result else None,
+                "fundamental_score": fund_snap.fundamental_score if fund_snap    else None,
+                "t25_score":         t25_result.get("t25_score"),
+            }
+            fc_result = compute_multi_horizon_forecast(df, _fc_ctx)
+        except Exception as _fc_err:
+            log.debug(f"Horizon forecast skipped for {ticker}: {_fc_err}")
 
         # ── 7. MFPM scoring ───────────────────────────────────────────────
         try:
@@ -240,9 +307,15 @@ class ProfilerService:
 
         # ── 11. Build TickerProfile ───────────────────────────────────────
         latest_close = close
+        sma3  = float(last.get("SMA3",  0))
+        sma5  = float(last.get("SMA5",  0))
+        sma7  = float(last.get("SMA7",  0))
+        sma10 = float(last.get("SMA10", 0))
         sma20 = float(last.get("SMA20", 0))
         sma50 = float(last.get("SMA50", 0))
         sma200 = float(last.get("SMA200", 0))
+        ema50  = float(last.get("EMA50",  0))
+        ema200 = float(last.get("EMA200", 0))
         rsi14 = float(last.get("RSI14", 50))
         atr14 = float(last.get("ATR14", 0))
         obv_val = float(last.get("OBV", 0))
@@ -272,9 +345,15 @@ class ProfilerService:
             close=latest_close,
             volume=volume,
             avg_volume_20d=avg_vol,
+            sma3=sma3,
+            sma5=sma5,
+            sma7=sma7,
+            sma10=sma10,
             sma20=sma20,
             sma50=sma50,
             sma200=sma200,
+            ema50=ema50,
+            ema200=ema200,
             rsi14=rsi14,
             atr14=atr14,
             obv=obv_val,
@@ -321,6 +400,79 @@ class ProfilerService:
             revenue_growth_yoy = fund_snap.revenue_growth_yoy if fund_snap else None,
             roe                = fund_snap.roe                 if fund_snap else None,
             debt_to_equity     = fund_snap.debt_to_equity      if fund_snap else None,
+            # Gap Analysis
+            gap_pct            = gap_result.get("gap_pct", 0.0),
+            gap_type           = gap_result.get("gap_type", "NO_GAP"),
+            avg_gap_pct        = gap_result.get("avg_gap_pct", 0.0),
+            gap_fill_pct       = gap_result.get("gap_fill_pct", 0.0),
+            # VWAP Daily
+            vwap_daily_val     = float(vwap_result.get("vwap") or 0.0),
+            price_vs_vwap_pct  = vwap_result.get("price_vs_vwap_pct", 0.0),
+            vwap_dev           = vwap_result.get("vwap_dev", "AT"),
+            # VWAP Intraday
+            vwap_intraday      = vwap_intraday_result.get("vwap_intraday"),
+            vwap_intraday_dev  = vwap_intraday_result.get("vwap_intraday_dev", "AT"),
+            vwap_intraday_slope= vwap_intraday_result.get("vwap_intraday_slope", 0.0),
+            # T+2.5
+            t25_score          = t25_result.get("t25_score"),
+            t25_signal         = t25_result.get("t25_signal", ""),
+            t25_momo_score     = t25_result.get("t25_momo_score", 0.0),
+            t25_struct_score   = t25_result.get("t25_struct_score", 0.0),
+            t25_conf_score     = t25_result.get("t25_conf_score", 0.0),
+            t25_confirms       = t25_result.get("t25_confirms", []),
+            # MFPM decomposition (SHAP)
+            mode_a_score       = mfpm_result.get("mode_a_score", 0),
+            mode_b_score       = mfpm_result.get("mode_b_score", 0),
+            sms_components     = sms_result.get("components", {}),
+            # Real-time price header
+            rt_price           = rt_data.get("rt_price"),
+            rt_pct_change      = rt_data.get("rt_pct_change", 0.0),
+            rt_reference       = rt_data.get("rt_reference"),
+            rt_ceiling         = rt_data.get("rt_ceiling"),
+            rt_floor           = rt_data.get("rt_floor"),
+            rt_at_ceiling      = bool(rt_data.get("rt_at_ceiling", False)),
+            rt_at_floor        = bool(rt_data.get("rt_at_floor", False)),
+            rt_volume_today    = float(rt_data.get("rt_volume_today", 0.0)),
+            # Trend Warning
+            trend_warning      = trend_w_result.get("warning",    "NONE"),
+            trend_warning_vi   = trend_w_result.get("warning_vi", ""),
+            trend_warning_conf = trend_w_result.get("confidence",  0.0),
+            trend_warning_reasons = trend_w_result.get("reasons",  []),
+            # Multi-horizon forecast
+            fc_short_vote      = fc_result.get("short_vote",    ""),
+            fc_short_conf      = fc_result.get("short_conf",     0.0),
+            fc_short_reasons   = fc_result.get("short_reasons",  []),
+            fc_mid_vote        = fc_result.get("mid_vote",       ""),
+            fc_mid_conf        = fc_result.get("mid_conf",        0.0),
+            fc_mid_reasons     = fc_result.get("mid_reasons",     []),
+            fc_long_vote       = fc_result.get("long_vote",      ""),
+            fc_long_conf       = fc_result.get("long_conf",       0.0),
+            fc_long_reasons    = fc_result.get("long_reasons",    []),
+            fc_overall_vote    = fc_result.get("overall_vote",   ""),
+            fc_overall_conf    = fc_result.get("overall_conf",    0.0),
+            # T+2.5 Multi-frame
+            t25_morning_score  = t25_mf_result.get("morning_score",   0.0),
+            t25_midday_score   = t25_mf_result.get("midday_score",    0.0),
+            t25_afternoon_score= t25_mf_result.get("afternoon_score", 0.0),
+            t25_best_window    = t25_mf_result.get("best_window",     ""),
+            t25_mf_reasons     = t25_mf_result.get("mf_reasons",      []),
+            # T+ Setup Recommendation
+            tplus_setup          = tplus_result.get("setup_type",      "T_NO_SETUP"),
+            tplus_setup_vi       = tplus_result.get("setup_vi",        ""),
+            tplus_entry_trigger  = tplus_result.get("entry_trigger",   ""),
+            tplus_entry_low      = tplus_result.get("entry_zone_low",  0.0),
+            tplus_entry_high     = tplus_result.get("entry_zone_high", 0.0),
+            tplus_target_t25     = tplus_result.get("target_t25",      0.0),
+            tplus_target_t5      = tplus_result.get("target_t5",       0.0),
+            tplus_stop           = tplus_result.get("stop_loss",       0.0),
+            tplus_rr             = tplus_result.get("rr_ratio",        0.0),
+            tplus_confidence     = tplus_result.get("confidence",      0.0),
+            tplus_session        = tplus_result.get("session",         ""),
+            tplus_session_vi     = tplus_result.get("session_vi",      ""),
+            tplus_verdict        = tplus_result.get("verdict",         "THEO_DOI"),
+            tplus_verdict_vi     = tplus_result.get("verdict_vi",      ""),
+            tplus_reasons        = tplus_result.get("reasons",         []),
+            tplus_risks          = tplus_result.get("risks",           []),
         )
 
         # ── 12. Audit log ─────────────────────────────────────────────────

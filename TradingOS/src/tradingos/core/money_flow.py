@@ -10,11 +10,11 @@ Implements:
 """
 from __future__ import annotations
 
-import math
 import numpy as np
 import pandas as pd
 
 from ..utils.config import cfg
+from ..data.normalizer import round_to_tick, tick_size as _tick_sz
 from .anti_manip import volume_quality_score
 
 
@@ -512,28 +512,30 @@ def mode_w_entry_params(df: pd.DataFrame, sms_result: dict) -> dict:
     tp2_mult = float(cfg.strategy("entry_exit", "atr_tp2_mult", default=8.0))
 
     close = float(last["close"])
-    entry = close
+    entry = round_to_tick(close)    # always align to exchange tick
     ema9 = float(last.get("EMA9", entry))
     if entry > ema9 * 1.01:  # rebalance entry toward EMA9
-        ema9_entry = round(ema9 * 1.005, 1)
+        ema9_entry = round_to_tick(ema9 * 1.005)
         # Cap pullback to 2% below close — prevents un-actionable entries on EMA9 lag
-        entry = round(max(ema9_entry, close * 0.98), 1)
+        entry = round_to_tick(max(ema9_entry, close * 0.98))
 
     # Minimum SL distance: 3% of entry (prevents noise-level SL on sub-5K VND stocks)
     sl_dist = max(atr * sl_mult, entry * 0.03)
-    # Floor-round SL so tick rounding never shrinks the gap below the minimum distance
-    sl = math.floor(round(entry - sl_dist, 4) * 10) / 10
+    # Floor SL to the tick below the raw level so tick rounding never shrinks the gap
+    _sl_raw = entry - sl_dist
+    _t = _tick_sz(_sl_raw)
+    sl = float(int(_sl_raw // _t) * _t)
     sl_pct = (sl - entry) / max(entry, 1) * 100
 
     # Use stealth target if available
     stealth = sms_result.get("stealth_detail", {})
     est_target = stealth.get("est_target")
     if isinstance(est_target, float) and est_target > entry * 1.05:
-        tp1 = round(entry + (est_target - entry) * 0.5, 1)
-        tp2 = round(est_target, 1)
+        tp1 = round_to_tick(entry + (est_target - entry) * 0.5)
+        tp2 = round_to_tick(est_target)
     else:
-        tp1 = round(entry + atr * tp1_mult, 1)
-        tp2 = round(entry + atr * tp2_mult, 1)
+        tp1 = round_to_tick(entry + atr * tp1_mult)
+        tp2 = round_to_tick(entry + atr * tp2_mult)
 
     rr = abs((tp1 - entry) / (sl - entry)) if sl != entry else 0
 

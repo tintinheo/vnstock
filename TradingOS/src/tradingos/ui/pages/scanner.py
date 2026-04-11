@@ -7,6 +7,7 @@ import pandas as pd
 from tradingos.engines.scanner_service import ScannerService
 from tradingos.engines.audit_service import AuditService
 from tradingos.data.schemas import ScanRequest
+from tradingos.core.nlp import generate_summary_headline
 
 _ACTION_ORDER = {"STRONG_BUY": 0, "BUY": 1, "WATCH": 2, "NO_ACTION": 3, "EXIT": 4, "FORCED_EXIT": 5}
 
@@ -22,8 +23,8 @@ def render() -> None:
             placeholder="VCB\nHPG\nSSI\nVNM",
             height=120,
         )
-        exchange = col_left.selectbox("Sàn", ["HOSE", "HNX", "UPCOM", "ALL"], index=0)
-        min_mfpm = col_right.slider("MFPM tối thiểu", 0, 120, 40)
+        exchange = col_left.selectbox("Sàn", ["HOSE", "HNX", "ALL"], index=0)
+        min_mfpm = col_right.slider("MFPM tối thiểu", 0, 120, 0)
         min_sms = col_right.slider("SMS tối thiểu", 0, 100, 0)
         max_workers = col_right.slider("Workers", 1, 16, 8)
         submitted = st.form_submit_button("🔍 Quét ngay", use_container_width=True)
@@ -40,9 +41,11 @@ def render() -> None:
     request = ScanRequest(
         tickers=tickers,
         exchange=exchange,
-        limit=len(tickers) if tickers else 500,
+        limit=len(tickers) if tickers else 2000,
         min_mfpm_score=min_mfpm,
         min_sms=min_sms,
+        min_action="",        # hiển thị tất cả tín hiệu kể cả NO_ACTION
+        include_blocked=True, # kể cả mã bị AMF chặn
     )
 
     svc = ScannerService(max_workers=max_workers)
@@ -53,7 +56,7 @@ def render() -> None:
 
     st.success(
         f"✅ Quét xong: **{result.tickers_scanned}** mã → "
-        f"**{result.tickers_passed}** kết quả lọt filter"
+        f"hiển thị **{result.tickers_passed}** kết quả"
     )
 
     if not result.results:
@@ -97,6 +100,21 @@ def render() -> None:
             "Pattern":  item.best_pattern,
             "HMM":      item.hmm_state,
             "Stealth":  item.stealth_accum,
+            "Tóm tắt NLP": generate_summary_headline(
+                ticker=item.ticker,
+                action=item.action,
+                mfpm_score=item.mfpm_score,
+                signal_mode=item.signal_mode,
+                rsi14=getattr(item, "rsi14", 50.0),
+                sms_raw=item.sms_raw,
+                stealth_accum=item.stealth_accum,
+                best_pattern=item.best_pattern,
+                distribution_warning=getattr(item, "distribution_warning", "NONE"),
+                hmm_state=item.hmm_state,
+            ),
+            "T+ Setup":   getattr(item, "tplus_setup",    "T_NO_SETUP"),
+            "T+ Verdict": getattr(item, "tplus_verdict",  "THEO_DOI"),
+            "T+ Conf":    getattr(item, "tplus_confidence", 0.0),
         })
 
     df_all = pd.DataFrame(rows)
@@ -166,6 +184,54 @@ def render() -> None:
         file_name="scan_results.csv",
         mime="text/csv",
     )
+
+    # ── Inline NLP per high-priority result ──────────────────────────────────
+    buy_items = [
+        item for item in result.results
+        if item.action in ("STRONG_BUY", "BUY", "WATCH")
+        and item.ticker in df_show["Mã"].values
+    ]
+    if buy_items:
+        st.divider()
+        st.markdown("#### 📝 Tóm tắt tín hiệu — NLP")
+        st.caption("Hiển thị tối đa 20 mã có tín hiệu STRONG_BUY / BUY / WATCH đầu tiên.")
+        _action_icon = {"STRONG_BUY": "🚀", "BUY": "🟢", "WATCH": "👀"}
+        for item in buy_items[:20]:
+            headline = generate_summary_headline(
+                ticker=item.ticker,
+                action=item.action,
+                mfpm_score=item.mfpm_score,
+                signal_mode=item.signal_mode,
+                rsi14=getattr(item, "rsi14", 50.0),
+                sms_raw=item.sms_raw,
+                stealth_accum=item.stealth_accum,
+                best_pattern=item.best_pattern,
+                distribution_warning=getattr(item, "distribution_warning", "NONE"),
+                hmm_state=item.hmm_state,
+            )
+            icon = _action_icon.get(item.action, "📋")
+            with st.expander(
+                f"{icon} **{item.ticker}** — {item.action}  |  {headline}",
+                expanded=False,
+            ):
+                col_l, col_r = st.columns([1, 1])
+                with col_l:
+                    st.markdown(f"**Giá:** {item.close:,.0f}")
+                    st.markdown(f"**Vào lệnh:** {item.entry:,.0f}")
+                    st.markdown(f"**Cắt lỗ:** {item.sl:,.0f}")
+                    st.markdown(f"**TP1:** {item.tp1:,.0f}")
+                    st.markdown(f"**R:R:** 1:{item.rr:.1f}")
+                with col_r:
+                    st.markdown(f"**Mode:** {item.signal_mode}")
+                    st.markdown(f"**MFPM:** {item.mfpm_score}")
+                    st.markdown(f"**SMS:** {item.sms_raw} ({item.sms_label})")
+                    st.markdown(f"**HMM:** {item.hmm_state}")
+                    st.markdown(f"**Pattern:** {item.best_pattern}")
+                    st.markdown(f"**Stealth:** {'✅' if item.stealth_accum else '❌'}")
+                if st.button(f"📈 Mở Profiler — {item.ticker}", key=f"nlp_open_{item.ticker}"):
+                    st.session_state["profiler_ticker"] = item.ticker
+                    st.session_state["nav"] = "🔍 Profiler"
+                    st.rerun()
 
     # ── Drill-down to profiler ────────────────────────────────────────────────
     st.divider()

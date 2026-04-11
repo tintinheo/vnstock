@@ -77,9 +77,15 @@ class TickerProfile(BaseModel):
     close           : float
     volume          : float
     avg_volume_20d  : float
+    sma3            : float = 0.0
+    sma5            : float = 0.0
+    sma7            : float = 0.0
+    sma10           : float = 0.0
     sma20           : float
     sma50           : float
     sma200          : float
+    ema50           : float = 0.0
+    ema200          : float = 0.0
     rsi14           : float
     atr14           : float
     obv             : float
@@ -139,6 +145,89 @@ class TickerProfile(BaseModel):
     roe                 : Optional[float] = None  # Return on Equity %
     debt_to_equity      : Optional[float] = None  # Leverage ratio
 
+    # Gap Analysis (F4)
+    gap_pct             : float = 0.0
+    gap_type            : str   = "NO_GAP"   # NO_GAP | GAP_UP | GAP_DOWN
+    avg_gap_pct         : float = 0.0
+    gap_fill_pct        : float = 0.0
+
+    # VWAP Daily (F8)
+    vwap_daily_val      : float = 0.0
+    price_vs_vwap_pct   : float = 0.0
+    vwap_dev            : str   = "AT"       # ABOVE | BELOW | AT
+
+    # VWAP Intraday
+    vwap_intraday       : Optional[float] = None
+    vwap_intraday_dev   : str   = "AT"
+    vwap_intraday_slope : float = 0.0
+
+    # T+2.5 Entry Score
+    t25_score           : Optional[float] = None
+    t25_signal          : str   = ""        # T25_BUY | T25_WATCH | T25_NEUTRAL | T25_AVOID
+    t25_momo_score      : float = 0.0
+    t25_struct_score    : float = 0.0
+    t25_conf_score      : float = 0.0
+    t25_confirms        : list[str] = Field(default_factory=list)
+
+    # MFPM decomposition (for SHAP-style chart)
+    mode_a_score        : int   = 0
+    mode_b_score        : int   = 0
+    sms_components      : dict  = Field(default_factory=dict)
+
+    # Real-time price header (SSI RT)
+    rt_price            : Optional[float] = None
+    rt_pct_change       : float = 0.0
+    rt_reference        : Optional[float] = None
+    rt_ceiling          : Optional[float] = None
+    rt_floor            : Optional[float] = None
+    rt_at_ceiling       : bool  = False
+    rt_at_floor         : bool  = False
+    rt_volume_today     : float = 0.0
+
+    # Trend Warning Engine
+    trend_warning       : str   = "NONE"
+    trend_warning_vi    : str   = ""
+    trend_warning_conf  : float = 0.0
+    trend_warning_reasons: list[str] = Field(default_factory=list)
+
+    # Multi-horizon forecast
+    fc_short_vote       : str   = ""
+    fc_short_conf       : float = 0.0
+    fc_short_reasons    : list[str] = Field(default_factory=list)
+    fc_mid_vote         : str   = ""
+    fc_mid_conf         : float = 0.0
+    fc_mid_reasons      : list[str] = Field(default_factory=list)
+    fc_long_vote        : str   = ""
+    fc_long_conf        : float = 0.0
+    fc_long_reasons     : list[str] = Field(default_factory=list)
+    fc_overall_vote     : str   = ""
+    fc_overall_conf     : float = 0.0
+
+    # T+2.5 Multi-frame
+    t25_morning_score   : float = 0.0
+    t25_midday_score    : float = 0.0
+    t25_afternoon_score : float = 0.0
+    t25_best_window     : str   = ""
+    t25_mf_reasons      : list[str] = Field(default_factory=list)
+
+    # ── T+ setup recommendation (t_plus_engine)
+    tplus_setup          : str   = "T_NO_SETUP"
+    tplus_setup_vi       : str   = ""
+    tplus_entry_trigger  : str   = ""
+    tplus_entry_low      : float = 0.0
+    tplus_entry_high     : float = 0.0
+    tplus_target_t25     : float = 0.0
+    tplus_target_t5      : float = 0.0
+    tplus_stop           : float = 0.0
+    tplus_rr             : float = 0.0
+    tplus_confidence     : float = 0.0
+    tplus_session        : str   = ""
+    tplus_session_vi     : str   = ""
+    tplus_verdict        : str   = "THEO_DOI"
+    tplus_verdict_vi     : str   = ""
+    tplus_reasons        : list[str] = Field(default_factory=list)
+    tplus_risks          : list[str] = Field(default_factory=list)
+
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
 
@@ -177,6 +266,11 @@ class ScanResultItem(BaseModel):
     fundamental_score: Optional[float] = None
     macro_regime    : str = ""     # ACCOMMODATIVE | NEUTRAL | RESTRICTIVE | ""
     macro_score     : Optional[float] = None
+    rsi14           : float = 50.0
+    distribution_warning: WARN_LEVEL = "NONE"
+    tplus_setup          : str   = "T_NO_SETUP"
+    tplus_verdict        : str   = "THEO_DOI"
+    tplus_confidence     : float = 0.0
 
 
 class ScanResult(BaseModel):
@@ -207,6 +301,8 @@ class BacktestRequest(BaseModel):
     start_date      : str = ""    # YYYY-MM-DD
     end_date        : str = ""    # YYYY-MM-DD
     sl_pct          : float = 0.06
+    tp1_mult        : float = 1.5  # TP1 = SL × this
+    tp2_mult        : float = 2.5  # TP2 = SL × this
     mode            : str = "ALL"
 
 

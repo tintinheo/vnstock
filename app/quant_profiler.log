@@ -5051,3 +5051,1186 @@
 2026-04-01 12:52:27 INFO     quant_profiler │ CTB  price=16700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=11  confirmed=False
 2026-04-01 12:52:46 INFO     quant_profiler │ GMX  price=16200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=16  confirmed=False
 2026-04-01 12:52:57 INFO     quant_profiler │ TVB  price=7430  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=17  confirmed=True
+2026-04-03 10:25:41 INFO     quant_profiler │ SSI  price=27550  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=18  confirmed=True
+2026-04-03 10:25:45 INFO     quant_profiler │ VCI  price=26900  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-03 10:25:49 INFO     quant_profiler │ VND  price=15900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-03 10:25:54 INFO     quant_profiler │ HCM  price=24400  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=19  bear=2  confirmed=False
+2026-04-03 10:26:12 INFO     quant_profiler │ MBS  price=20300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-04-03 10:26:27 INFO     quant_profiler │ FTS  price=28050  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=16  confirmed=True
+2026-04-03 10:26:42 INFO     quant_profiler │ VIX  price=16650  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-03 10:26:57 INFO     quant_profiler │ ORS  price=13650  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=14  bear=7  confirmed=False
+2026-04-03 10:49:17 INFO     quant_profiler │ GND  price=32800  signal=MUA  VSA=DISTRIB  regime=SIDEWAYS  bull=21  bear=4  confirmed=False
+2026-04-03 10:49:17 INFO     quant_profiler │ train_lstm_model GND: 211 samples — starting
+2026-04-03 10:49:21 INFO     quant_profiler │ train_lstm_model GND: done in 10 epochs, val_mae=10.4706
+2026-04-03 10:49:29 INFO     quant_profiler │ MTP  price=14000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-03 10:49:29 INFO     quant_profiler │ train_lstm_model MTP: 201 samples — starting
+2026-04-03 10:49:33 INFO     quant_profiler │ train_lstm_model MTP: done in 9 epochs, val_mae=4.0330
+2026-04-03 10:49:37 INFO     quant_profiler │ VFG  price=49050  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-03 10:49:41 INFO     quant_profiler │ CST  price=15500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=11  confirmed=True
+2026-04-03 10:49:47 INFO     quant_profiler │ VC9  price=5400  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=21  bear=7  confirmed=True
+2026-04-03 10:50:00 INFO     quant_profiler │ AGX  price=252600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=19  bear=18  confirmed=True
+2026-04-03 10:50:00 INFO     quant_profiler │ train_lstm_model AGX: 231 samples — starting
+2026-04-03 10:50:03 INFO     quant_profiler │ train_lstm_model AGX: done in 12 epochs, val_mae=7.5557
+2026-04-03 10:50:13 INFO     quant_profiler │ ACM  price=500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=19  confirmed=False
+2026-04-03 10:50:13 INFO     quant_profiler │ train_lstm_model ACM: 57 samples — starting
+2026-04-03 10:50:16 INFO     quant_profiler │ train_lstm_model ACM: done in 9 epochs, val_mae=19.5925
+2026-04-03 10:50:31 INFO     quant_profiler │ EMS  price=19500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-03 10:50:31 INFO     quant_profiler │ train_lstm_model EMS: 337 samples — starting
+2026-04-03 10:50:36 INFO     quant_profiler │ train_lstm_model EMS: done in 17 epochs, val_mae=5.0536
+2026-04-03 10:50:47 INFO     quant_profiler │ KTL  price=30800  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=25  bear=15  confirmed=False
+2026-04-03 10:50:47 INFO     quant_profiler │ train_lstm_model KTL: 71 samples — starting
+2026-04-03 10:50:52 INFO     quant_profiler │ train_lstm_model KTL: done in 17 epochs, val_mae=8.0483
+2026-04-03 10:51:09 INFO     quant_profiler │ SZG  price=36700  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=21  bear=9  confirmed=False
+2026-04-03 10:51:09 INFO     quant_profiler │ train_lstm_model SZG: 181 samples — starting
+2026-04-03 10:51:14 INFO     quant_profiler │ train_lstm_model SZG: done in 21 epochs, val_mae=5.9358
+2026-04-03 10:51:27 INFO     quant_profiler │ VBB  price=11500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=19  bear=16  confirmed=True
+2026-04-03 10:51:27 INFO     quant_profiler │ train_lstm_model VBB: 384 samples — starting
+2026-04-03 10:51:31 INFO     quant_profiler │ train_lstm_model VBB: done in 10 epochs, val_mae=3.3911
+2026-04-03 10:51:42 INFO     quant_profiler │ TKU  price=16000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=22  bear=12  confirmed=True
+2026-04-03 10:52:03 INFO     quant_profiler │ RCC  price=22500  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=5  confirmed=True
+2026-04-03 10:52:03 INFO     quant_profiler │ train_lstm_model RCC: 198 samples — starting
+2026-04-03 10:52:08 INFO     quant_profiler │ train_lstm_model RCC: done in 14 epochs, val_mae=15.4528
+2026-04-03 10:52:20 INFO     quant_profiler │ VEF  price=106000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=16  bear=9  confirmed=True
+2026-04-03 10:52:20 INFO     quant_profiler │ train_lstm_model VEF: 384 samples — starting
+2026-04-03 10:52:27 INFO     quant_profiler │ train_lstm_model VEF: done in 22 epochs, val_mae=4.0562
+2026-04-03 10:52:33 INFO     quant_profiler │ IMP  price=55600  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-03 10:52:54 INFO     quant_profiler │ MSH  price=37700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-03 10:53:06 INFO     quant_profiler │ VCI  price=26800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-03 10:53:22 INFO     quant_profiler │ VTZ  price=20300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-03 10:53:41 INFO     quant_profiler │ BBH  price=13900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=7  bear=8  confirmed=True
+2026-04-03 10:53:41 INFO     quant_profiler │ train_lstm_model BBH: 115 samples — starting
+2026-04-03 10:53:45 INFO     quant_profiler │ train_lstm_model BBH: done in 9 epochs, val_mae=9.6997
+2026-04-03 10:54:01 INFO     quant_profiler │ CMM  price=17700  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=9  bear=10  confirmed=False
+2026-04-03 10:54:01 INFO     quant_profiler │ train_lstm_model CMM: 296 samples — starting
+2026-04-03 10:54:05 INFO     quant_profiler │ train_lstm_model CMM: done in 9 epochs, val_mae=8.2021
+2026-04-03 10:54:16 INFO     quant_profiler │ DCF  price=48500  signal=MUA  VSA=ACCUM  regime=BULL_TREND  bull=26  bear=10  confirmed=True
+2026-04-03 10:54:16 INFO     quant_profiler │ train_lstm_model DCF: 144 samples — starting
+2026-04-03 10:54:20 INFO     quant_profiler │ train_lstm_model DCF: done in 17 epochs, val_mae=12.3014
+2026-04-03 10:54:32 INFO     quant_profiler │ NDC  price=170000  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=HIGH_VOL  bull=12  bear=19  confirmed=False
+2026-04-03 10:54:32 INFO     quant_profiler │ train_lstm_model NDC: 159 samples — starting
+2026-04-03 10:54:36 INFO     quant_profiler │ train_lstm_model NDC: done in 9 epochs, val_mae=8.6929
+2026-04-03 10:54:50 INFO     quant_profiler │ SCL  price=20300  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=21  bear=0  confirmed=True
+2026-04-03 10:54:50 INFO     quant_profiler │ train_lstm_model SCL: 381 samples — starting
+2026-04-03 10:54:57 INFO     quant_profiler │ train_lstm_model SCL: done in 24 epochs, val_mae=4.2567
+2026-04-03 10:55:08 INFO     quant_profiler │ TDB  price=40000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-03 10:55:08 INFO     quant_profiler │ train_lstm_model TDB: 266 samples — starting
+2026-04-03 10:55:14 INFO     quant_profiler │ train_lstm_model TDB: done in 16 epochs, val_mae=1.5960
+2026-04-03 10:55:58 INFO     quant_profiler │ TOS  price=169500  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=15  bear=4  confirmed=True
+2026-04-03 10:55:58 INFO     quant_profiler │ train_lstm_model TOS: 384 samples — starting
+2026-04-03 10:56:02 INFO     quant_profiler │ train_lstm_model TOS: done in 9 epochs, val_mae=3.9302
+2026-04-03 10:56:11 INFO     quant_profiler │ CNC  price=31900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-03 10:56:11 INFO     quant_profiler │ train_lstm_model CNC: 339 samples — starting
+2026-04-03 10:56:15 INFO     quant_profiler │ train_lstm_model CNC: done in 9 epochs, val_mae=2.7377
+2026-04-03 10:56:20 INFO     quant_profiler │ HDP  price=26000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=9  confirmed=False
+2026-04-03 10:56:21 INFO     quant_profiler │ train_lstm_model HDP: 158 samples — starting
+2026-04-03 10:56:24 INFO     quant_profiler │ train_lstm_model HDP: done in 9 epochs, val_mae=3.0503
+2026-04-03 10:56:35 INFO     quant_profiler │ LSG  price=34000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=5  confirmed=True
+2026-04-03 10:56:35 INFO     quant_profiler │ train_lstm_model LSG: 384 samples — starting
+2026-04-03 10:56:40 INFO     quant_profiler │ train_lstm_model LSG: done in 17 epochs, val_mae=4.2272
+2026-04-03 10:56:49 INFO     quant_profiler │ PAP  price=26000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=3  confirmed=True
+2026-04-03 10:56:49 INFO     quant_profiler │ train_lstm_model PAP: 317 samples — starting
+2026-04-03 10:56:55 INFO     quant_profiler │ train_lstm_model PAP: done in 17 epochs, val_mae=4.8918
+2026-04-03 10:57:04 INFO     quant_profiler │ HU1  price=6280  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-03 10:57:11 INFO     quant_profiler │ NST  price=12300  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-03 10:57:21 INFO     quant_profiler │ BDG  price=39200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=HIGH_VOL  bull=13  bear=11  confirmed=False
+2026-04-03 10:57:21 INFO     quant_profiler │ train_lstm_model BDG: 299 samples — starting
+2026-04-03 10:57:27 INFO     quant_profiler │ train_lstm_model BDG: done in 15 epochs, val_mae=5.7265
+2026-04-03 10:57:36 INFO     quant_profiler │ VMG  price=3000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=7  bear=10  confirmed=False
+2026-04-03 10:57:36 INFO     quant_profiler │ train_lstm_model VMG: 268 samples — starting
+2026-04-03 10:57:43 INFO     quant_profiler │ train_lstm_model VMG: done in 24 epochs, val_mae=7.6746
+2026-04-03 10:57:54 INFO     quant_profiler │ DSE  price=23200  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=4  bear=21  confirmed=True
+2026-04-03 10:58:02 INFO     quant_profiler │ NAB  price=12950  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=False
+2026-04-03 10:58:13 INFO     quant_profiler │ NSC  price=73400  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=14  confirmed=True
+2026-04-03 10:58:29 INFO     quant_profiler │ TDM  price=57500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-03 10:58:48 INFO     quant_profiler │ NAS  price=32900  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=14  bear=18  confirmed=True
+2026-04-03 10:58:48 INFO     quant_profiler │ train_lstm_model NAS: 276 samples — starting
+2026-04-03 10:58:51 INFO     quant_profiler │ train_lstm_model NAS: done in 9 epochs, val_mae=4.2780
+2026-04-03 10:59:03 INFO     quant_profiler │ YBC  price=7500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=3  bear=17  confirmed=True
+2026-04-03 10:59:03 INFO     quant_profiler │ train_lstm_model YBC: 165 samples — starting
+2026-04-03 10:59:10 INFO     quant_profiler │ train_lstm_model YBC: done in 19 epochs, val_mae=12.1103
+2026-04-03 10:59:16 INFO     quant_profiler │ D2D  price=36400  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=24  bear=1  confirmed=True
+2026-04-03 10:59:32 INFO     quant_profiler │ DCL  price=59200  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=11  confirmed=True
+2026-04-03 10:59:49 INFO     quant_profiler │ VHM  price=121500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=9  confirmed=True
+2026-04-03 11:00:04 INFO     quant_profiler │ YBM  price=10400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BULL_TREND  bull=6  bear=15  confirmed=False
+2026-04-03 11:00:23 INFO     quant_profiler │ CTP  price=7800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=16  bear=16  confirmed=False
+2026-04-03 11:00:37 INFO     quant_profiler │ BIO  price=12500  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=11  confirmed=True
+2026-04-03 11:00:37 INFO     quant_profiler │ train_lstm_model BIO: 193 samples — starting
+2026-04-03 11:00:42 INFO     quant_profiler │ train_lstm_model BIO: done in 30 epochs, val_mae=3.8536
+2026-04-03 11:00:53 INFO     quant_profiler │ BSQ  price=17800  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=16  bear=14  confirmed=False
+2026-04-03 11:00:53 INFO     quant_profiler │ train_lstm_model BSQ: 179 samples — starting
+2026-04-03 11:00:59 INFO     quant_profiler │ train_lstm_model BSQ: done in 28 epochs, val_mae=6.9793
+2026-04-03 11:01:10 INFO     quant_profiler │ BTB  price=4800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=HIGH_VOL  bull=18  bear=10  confirmed=False
+2026-04-03 11:01:10 INFO     quant_profiler │ train_lstm_model BTB: 215 samples — starting
+2026-04-03 11:01:14 INFO     quant_profiler │ train_lstm_model BTB: done in 10 epochs, val_mae=5.0956
+2026-04-03 11:01:25 INFO     quant_profiler │ HCM  price=24300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=19  bear=2  confirmed=False
+2026-04-03 11:01:43 INFO     quant_profiler │ ORS  price=13600  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=14  bear=7  confirmed=False
+2026-04-03 11:02:00 INFO     quant_profiler │ CST  price=15500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=11  confirmed=True
+2026-04-03 11:02:16 INFO     quant_profiler │ DSC  price=13000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=11  bear=15  confirmed=True
+2026-04-05 14:04:17 INFO     quant_profiler │ SMA  price=9000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=10  confirmed=True
+2026-04-05 14:04:23 INFO     quant_profiler │ VE1  price=3300  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BULL_TREND  bull=2  bear=25  confirmed=False
+2026-04-05 14:04:29 INFO     quant_profiler │ CRC  price=10100  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=6  confirmed=True
+2026-04-05 14:04:35 INFO     quant_profiler │ PCG  price=2800  signal=MUA  VSA=NO_SUPPLY  regime=BULL_TREND  bull=14  bear=7  confirmed=True
+2026-04-05 14:04:42 INFO     quant_profiler │ TTA  price=11850  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=11  confirmed=True
+2026-04-05 14:04:56 INFO     quant_profiler │ DBT  price=10800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=9  confirmed=True
+2026-04-05 14:05:12 INFO     quant_profiler │ TLD  price=8260  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=HIGH_VOL  bull=11  bear=6  confirmed=True
+2026-04-05 14:05:27 INFO     quant_profiler │ ALT  price=13400  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=19  bear=2  confirmed=True
+2026-04-05 14:05:44 INFO     quant_profiler │ CX8  price=9900  signal=MUA  VSA=NO_SUPPLY  regime=HIGH_VOL  bull=17  bear=7  confirmed=True
+2026-04-05 14:06:00 INFO     quant_profiler │ DNC  price=61000  signal=MUA  VSA=NO_DEMAND  regime=HIGH_VOL  bull=13  bear=7  confirmed=True
+2026-04-05 14:06:15 INFO     quant_profiler │ DTT  price=16500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-05 14:06:34 WARNING  quant_profiler │ fetch_ohlcv: all sources failed for SND
+2026-04-05 14:06:38 INFO     quant_profiler │ TCH  price=16500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=7  confirmed=True
+2026-04-05 14:06:47 INFO     quant_profiler │ VBC  price=22000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=23  bear=2  confirmed=True
+2026-04-05 14:07:02 INFO     quant_profiler │ CLW  price=48000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=14  confirmed=False
+2026-04-05 14:07:20 INFO     quant_profiler │ KMT  price=10800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=UNKNOWN  bull=10  bear=9  confirmed=True
+2026-04-05 14:07:20 WARNING  quant_profiler │ train_lstm_model KMT: insufficient training data (38 rows)
+2026-04-05 14:07:36 INFO     quant_profiler │ LBE  price=31900  signal=BÁN / TRÁNH  VSA=ACCUM  regime=HIGH_VOL  bull=11  bear=21  confirmed=False
+2026-04-05 14:07:52 INFO     quant_profiler │ VDL  price=13800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=16  confirmed=False
+2026-04-05 14:08:06 INFO     quant_profiler │ CCI  price=19300  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=17  confirmed=True
+2026-04-05 14:08:20 INFO     quant_profiler │ HNI  price=30100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=HIGH_VOL  bull=14  bear=10  confirmed=True
+2026-04-05 14:08:35 INFO     quant_profiler │ INN  price=38900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-05 14:08:50 INFO     quant_profiler │ VRC  price=13000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=10  confirmed=False
+2026-04-05 14:09:06 INFO     quant_profiler │ DRL  price=45500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=16  confirmed=True
+2026-04-05 14:09:23 INFO     quant_profiler │ NRC  price=5700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=19  confirmed=False
+2026-04-05 14:09:40 INFO     quant_profiler │ TDC  price=10950  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=12  confirmed=True
+2026-04-05 14:09:56 INFO     quant_profiler │ LBM  price=29500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=18  confirmed=False
+2026-04-05 14:10:12 INFO     quant_profiler │ PSH  price=1770  signal=THEO DÕI–GIẢM  VSA=DISTRIB  regime=BEAR_TREND  bull=19  bear=28  confirmed=True
+2026-04-05 14:10:25 INFO     quant_profiler │ TNA  price=3770  signal=TRUNG LẬP  VSA=DISTRIB  regime=UNKNOWN  bull=19  bear=21  confirmed=True
+2026-04-05 14:10:25 WARNING  quant_profiler │ train_lstm_model TNA: insufficient training data (22 rows)
+2026-04-05 14:10:39 INFO     quant_profiler │ DDG  price=800  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=BEAR_TREND  bull=13  bear=29  confirmed=True
+2026-04-05 14:10:53 INFO     quant_profiler │ KPF  price=1210  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=24  confirmed=True
+2026-04-05 14:11:07 INFO     quant_profiler │ LGL  price=4840  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
+2026-04-05 14:11:24 INFO     quant_profiler │ VNS  price=8260  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=20  confirmed=True
+2026-04-05 14:11:42 WARNING  quant_profiler │ fetch_ohlcv: all sources failed for HPS
+2026-04-05 14:11:48 INFO     quant_profiler │ SBV  price=7150  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=2  bear=13  confirmed=True
+2026-04-05 14:11:54 INFO     quant_profiler │ VC9  price=5400  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=4  confirmed=True
+2026-04-05 14:12:23 INFO     quant_profiler │ HRC  price=47100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=12  confirmed=True
+2026-04-05 14:12:38 INFO     quant_profiler │ VE8  price=2200  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=5  confirmed=True
+2026-04-05 14:12:54 INFO     quant_profiler │ NDN  price=10100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=15  confirmed=True
+2026-04-05 14:13:09 INFO     quant_profiler │ MDG  price=41000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=9  bear=6  confirmed=True
+2026-04-05 14:13:25 INFO     quant_profiler │ ABT  price=60000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=10  confirmed=True
+2026-04-05 14:13:42 INFO     quant_profiler │ ACB  price=23500  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-05 14:13:56 INFO     quant_profiler │ DLG  price=2880  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=6  confirmed=True
+2026-04-05 14:14:12 INFO     quant_profiler │ PNJ  price=108800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-05 14:14:29 INFO     quant_profiler │ SCD  price=12800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=HIGH_VOL  bull=7  bear=14  confirmed=False
+2026-04-05 14:14:43 INFO     quant_profiler │ VPD  price=23800  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=BEAR_TREND  bull=9  bear=29  confirmed=True
+2026-04-05 14:14:59 INFO     quant_profiler │ HDG  price=29000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-05 14:15:13 INFO     quant_profiler │ NBB  price=17950  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-05 14:15:27 INFO     quant_profiler │ MAC  price=11900  signal=THEO DÕI–TĂNG  VSA=DISTRIB  regime=BULL_TREND  bull=20  bear=13  confirmed=False
+2026-04-05 14:15:44 INFO     quant_profiler │ PBP  price=12200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=0  bear=20  confirmed=False
+2026-04-05 14:16:00 INFO     quant_profiler │ AAM  price=6200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=10  confirmed=True
+2026-04-05 14:16:15 INFO     quant_profiler │ EVE  price=10450  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-05 14:16:31 INFO     quant_profiler │ HCD  price=7760  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=18  confirmed=True
+2026-04-05 14:16:45 INFO     quant_profiler │ SHI  price=14250  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=20  bear=5  confirmed=False
+2026-04-05 14:17:00 INFO     quant_profiler │ SRF  price=6820  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=2  bear=25  confirmed=True
+2026-04-05 14:17:16 INFO     quant_profiler │ TCM  price=22550  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=12  confirmed=True
+2026-04-05 14:17:30 INFO     quant_profiler │ TCO  price=13450  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=8  confirmed=True
+2026-04-05 14:17:48 INFO     quant_profiler │ VTC  price=12100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=7  confirmed=True
+2026-04-05 14:18:03 INFO     quant_profiler │ PNC  price=27950  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=20  bear=3  confirmed=True
+2026-04-05 14:18:20 INFO     quant_profiler │ DXG  price=14400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-05 14:18:35 INFO     quant_profiler │ VPS  price=8450  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=10  confirmed=True
+2026-04-05 14:18:51 INFO     quant_profiler │ BFC  price=55400  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=13  bear=13  confirmed=True
+2026-04-05 14:19:07 INFO     quant_profiler │ ACC  price=13100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=16  bear=9  confirmed=True
+2026-04-05 14:19:24 INFO     quant_profiler │ APC  price=5900  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=5  bear=17  confirmed=True
+2026-04-05 14:19:42 INFO     quant_profiler │ DIH  price=9500  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=12  bear=11  confirmed=True
+2026-04-05 14:19:56 INFO     quant_profiler │ DXV  price=3700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=16  confirmed=True
+2026-04-05 14:20:07 INFO     quant_profiler │ HEV  price=7000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=5  bear=14  confirmed=True
+2026-04-05 14:20:21 INFO     quant_profiler │ NHT  price=12450  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=20  bear=10  confirmed=True
+2026-04-05 14:20:37 INFO     quant_profiler │ PND  price=7500  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=20  bear=4  confirmed=False
+2026-04-05 14:20:53 INFO     quant_profiler │ PRC  price=11800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=18  confirmed=False
+2026-04-05 14:21:07 INFO     quant_profiler │ PSC  price=12000  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=16  bear=10  confirmed=True
+2026-04-05 14:21:25 INFO     quant_profiler │ PTS  price=9100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=16  confirmed=True
+2026-04-05 14:21:40 INFO     quant_profiler │ TKU  price=15600  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=20  bear=13  confirmed=True
+2026-04-05 14:21:56 INFO     quant_profiler │ TXM  price=4600  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=9  confirmed=False
+2026-04-05 14:22:13 INFO     quant_profiler │ EID  price=22500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=19  confirmed=True
+2026-04-05 14:22:27 INFO     quant_profiler │ HID  price=4760  signal=TRUNG LẬP  VSA=DISTRIB  regime=BULL_TREND  bull=13  bear=12  confirmed=True
+2026-04-05 14:22:44 INFO     quant_profiler │ MSB  price=11500  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-05 14:22:58 INFO     quant_profiler │ SJD  price=14000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-05 14:23:14 INFO     quant_profiler │ VJC  price=161100  signal=TRUNG LẬP  VSA=DISTRIB  regime=SIDEWAYS  bull=9  bear=8  confirmed=True
+2026-04-05 14:23:31 INFO     quant_profiler │ MHC  price=9050  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=13  confirmed=True
+2026-04-05 14:23:47 INFO     quant_profiler │ CEO  price=16500  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=11  confirmed=False
+2026-04-05 14:23:59 INFO     quant_profiler │ HCM  price=24150  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-05 14:24:16 INFO     quant_profiler │ HVN  price=21600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=12  confirmed=False
+2026-04-05 14:24:29 INFO     quant_profiler │ IDC  price=46800  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=4  confirmed=True
+2026-04-05 14:24:44 INFO     quant_profiler │ MSN  price=75300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=5  confirmed=True
+2026-04-05 14:24:56 INFO     quant_profiler │ NT2  price=26000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-05 14:25:13 INFO     quant_profiler │ NVL  price=14300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=7  confirmed=True
+2026-04-05 14:25:30 INFO     quant_profiler │ ORS  price=13200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=10  confirmed=False
+2026-04-05 14:25:45 INFO     quant_profiler │ SVC  price=18200  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=5  bear=14  confirmed=False
+2026-04-05 14:26:00 INFO     quant_profiler │ VPG  price=4020  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=BEAR_TREND  bull=9  bear=19  confirmed=True
+2026-04-05 14:26:13 INFO     quant_profiler │ AFX  price=10650  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=19  bear=11  confirmed=True
+2026-04-05 14:26:27 INFO     quant_profiler │ BCE  price=11200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=13  confirmed=False
+2026-04-05 14:26:42 INFO     quant_profiler │ CAP  price=46100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=11  confirmed=True
+2026-04-05 14:26:58 INFO     quant_profiler │ CPC  price=17400  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=13  bear=6  confirmed=True
+2026-04-05 14:27:17 INFO     quant_profiler │ DAH  price=3000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-04-05 14:27:29 INFO     quant_profiler │ DGW  price=43900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=6  confirmed=True
+2026-04-05 14:27:47 INFO     quant_profiler │ HLD  price=17000  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=11  confirmed=True
+2026-04-05 14:28:00 INFO     quant_profiler │ HMC  price=11900  signal=MUA  VSA=DISTRIB  regime=SIDEWAYS  bull=17  bear=4  confirmed=True
+2026-04-05 14:28:15 INFO     quant_profiler │ IDI  price=6610  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=17  confirmed=True
+2026-04-05 14:28:33 INFO     quant_profiler │ KMR  price=2730  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=11  confirmed=True
+2026-04-05 14:28:50 INFO     quant_profiler │ L10  price=25200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-05 14:29:05 INFO     quant_profiler │ MCP  price=27200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=18  confirmed=True
+2026-04-05 14:29:21 INFO     quant_profiler │ NTC  price=142100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=16  confirmed=True
+2026-04-05 14:29:39 INFO     quant_profiler │ PCH  price=20200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=10  confirmed=False
+2026-04-05 14:29:53 INFO     quant_profiler │ PDN  price=107300  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=3  bear=12  confirmed=True
+2026-04-05 14:30:10 INFO     quant_profiler │ PHC  price=4590  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-05 14:30:26 INFO     quant_profiler │ PRE  price=22400  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=18  bear=6  confirmed=True
+2026-04-05 14:30:41 INFO     quant_profiler │ SAF  price=53900  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=7  bear=14  confirmed=True
+2026-04-05 14:30:56 INFO     quant_profiler │ SGC  price=80900  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=10  confirmed=False
+2026-04-05 14:31:11 INFO     quant_profiler │ SGT  price=15500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-04-05 14:31:27 INFO     quant_profiler │ SMC  price=12600  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=6  confirmed=True
+2026-04-05 14:31:44 INFO     quant_profiler │ TA9  price=11600  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=21  confirmed=True
+2026-04-05 14:32:01 INFO     quant_profiler │ TCL  price=33850  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=13  bear=18  confirmed=False
+2026-04-05 14:32:17 INFO     quant_profiler │ TLD  price=8260  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=HIGH_VOL  bull=11  bear=6  confirmed=True
+2026-04-05 14:32:30 INFO     quant_profiler │ TV4  price=15300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=10  confirmed=False
+2026-04-05 14:32:47 INFO     quant_profiler │ VTV  price=14800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=8  confirmed=True
+2026-04-05 14:33:02 INFO     quant_profiler │ HKT  price=20400  signal=TRUNG LẬP  VSA=ACCUM  regime=BEAR_TREND  bull=13  bear=10  confirmed=False
+2026-04-05 14:33:18 INFO     quant_profiler │ AAV  price=9000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=19  bear=16  confirmed=True
+2026-04-05 14:33:32 INFO     quant_profiler │ API  price=5700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=15  confirmed=False
+2026-04-05 14:33:47 INFO     quant_profiler │ CRE  price=7600  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-04-05 14:34:03 INFO     quant_profiler │ CTB  price=16200  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=12  confirmed=True
+2026-04-05 14:34:20 INFO     quant_profiler │ LBE  price=31900  signal=BÁN / TRÁNH  VSA=ACCUM  regime=HIGH_VOL  bull=11  bear=21  confirmed=False
+2026-04-05 14:34:34 INFO     quant_profiler │ NNC  price=50000  signal=BÁN / TRÁNH  VSA=ACCUM  regime=BEAR_TREND  bull=5  bear=25  confirmed=True
+2026-04-05 14:34:49 INFO     quant_profiler │ NSC  price=73400  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=16  bear=11  confirmed=False
+2026-04-05 14:35:06 INFO     quant_profiler │ PCG  price=2800  signal=MUA  VSA=NO_SUPPLY  regime=BULL_TREND  bull=14  bear=7  confirmed=True
+2026-04-05 14:35:19 INFO     quant_profiler │ TSC  price=2420  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=20  confirmed=False
+2026-04-05 14:35:34 INFO     quant_profiler │ AGR  price=14600  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=7  confirmed=True
+2026-04-05 14:35:50 INFO     quant_profiler │ AMV  price=1800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=10  confirmed=False
+2026-04-05 14:36:07 INFO     quant_profiler │ BKG  price=2610  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=11  bear=11  confirmed=False
+2026-04-05 14:36:22 INFO     quant_profiler │ BXH  price=12300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=13  confirmed=True
+2026-04-05 14:36:37 INFO     quant_profiler │ CLC  price=55900  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=21  bear=0  confirmed=True
+2026-04-05 14:36:53 INFO     quant_profiler │ CRC  price=10100  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=6  confirmed=True
+2026-04-05 14:37:09 INFO     quant_profiler │ DAT  price=8490  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=True
+2026-04-05 14:37:24 INFO     quant_profiler │ GVR  price=32050  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=False
+2026-04-05 14:37:41 INFO     quant_profiler │ HTP  price=1100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=21  confirmed=True
+2026-04-05 14:37:54 INFO     quant_profiler │ ITD  price=16300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=8  confirmed=False
+2026-04-05 14:38:12 INFO     quant_profiler │ KMT  price=10800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=UNKNOWN  bull=10  bear=9  confirmed=True
+2026-04-05 14:38:12 WARNING  quant_profiler │ train_lstm_model KMT: insufficient training data (38 rows)
+2026-04-05 14:38:26 INFO     quant_profiler │ KVC  price=1300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=18  confirmed=False
+2026-04-05 14:38:41 INFO     quant_profiler │ LGC  price=60900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=12  confirmed=False
+2026-04-05 14:38:57 INFO     quant_profiler │ LTC  price=1600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=17  confirmed=True
+2026-04-05 14:39:13 INFO     quant_profiler │ MBS  price=20000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=14  confirmed=False
+2026-04-05 14:39:27 INFO     quant_profiler │ NBP  price=7700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=16  confirmed=False
+2026-04-05 14:39:44 INFO     quant_profiler │ PAN  price=31450  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=3  confirmed=True
+2026-04-05 14:40:01 INFO     quant_profiler │ PJT  price=8900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=17  confirmed=True
+2026-04-05 14:40:17 INFO     quant_profiler │ PPY  price=8700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=17  confirmed=True
+2026-04-05 14:40:32 INFO     quant_profiler │ PXA  price=800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=2  bear=15  confirmed=True
+2026-04-05 14:40:45 INFO     quant_profiler │ S4A  price=33700  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=5  confirmed=True
+2026-04-05 14:41:02 INFO     quant_profiler │ SCS  price=53900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=8  confirmed=False
+2026-04-05 14:41:18 INFO     quant_profiler │ SD9  price=11100  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=4  confirmed=True
+2026-04-05 14:41:34 INFO     quant_profiler │ STG  price=30350  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=15  confirmed=True
+2026-04-05 14:41:50 INFO     quant_profiler │ TDT  price=7800  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BULL_TREND  bull=26  bear=19  confirmed=True
+2026-04-05 14:42:05 INFO     quant_profiler │ TDW  price=47900  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-05 14:42:22 INFO     quant_profiler │ VAF  price=20000  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BULL_TREND  bull=9  bear=10  confirmed=False
+2026-04-05 14:42:38 INFO     quant_profiler │ VIG  price=4700  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=14  confirmed=True
+2026-04-05 14:42:55 INFO     quant_profiler │ VSA  price=19900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=6  bear=11  confirmed=True
+2026-04-05 14:43:11 INFO     quant_profiler │ YBM  price=10350  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=7  confirmed=False
+2026-04-05 14:43:27 INFO     quant_profiler │ APG  price=5640  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=18  bear=12  confirmed=False
+2026-04-05 14:43:43 INFO     quant_profiler │ BMI  price=17250  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=8  bear=7  confirmed=True
+2026-04-05 14:43:59 INFO     quant_profiler │ BSI  price=35850  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=4  bear=13  confirmed=False
+2026-04-05 14:44:14 INFO     quant_profiler │ BVS  price=26300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=12  confirmed=False
+2026-04-05 14:44:31 INFO     quant_profiler │ CTS  price=27200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=12  confirmed=False
+2026-04-05 14:44:45 INFO     quant_profiler │ DRH  price=2500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=19  confirmed=True
+2026-04-05 14:45:01 INFO     quant_profiler │ FTS  price=27550  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=14  confirmed=False
+2026-04-05 14:45:17 INFO     quant_profiler │ GEX  price=35300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-05 14:45:33 INFO     quant_profiler │ HAG  price=15950  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-05 14:45:47 INFO     quant_profiler │ HII  price=5290  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-05 14:46:04 INFO     quant_profiler │ NKG  price=13600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=12  confirmed=False
+2026-04-05 14:46:18 INFO     quant_profiler │ NTL  price=16000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=7  confirmed=False
+2026-04-05 14:46:33 INFO     quant_profiler │ PHP  price=32900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=10  confirmed=False
+2026-04-05 14:46:48 INFO     quant_profiler │ PVD  price=33600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=10  confirmed=True
+2026-04-05 14:47:02 INFO     quant_profiler │ PVT  price=21150  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=10  confirmed=False
+2026-04-05 14:47:19 INFO     quant_profiler │ SHS  price=16900  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=8  bear=12  confirmed=False
+2026-04-05 14:47:36 INFO     quant_profiler │ STK  price=13800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=19  confirmed=True
+2026-04-05 14:47:50 INFO     quant_profiler │ VCI  price=26500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=7  confirmed=True
+2026-04-05 14:48:05 INFO     quant_profiler │ ACG  price=33500  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=9  bear=17  confirmed=True
+2026-04-05 14:48:22 INFO     quant_profiler │ ADP  price=22900  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
+2026-04-05 14:48:38 INFO     quant_profiler │ CTI  price=22550  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=4  bear=24  confirmed=True
+2026-04-05 14:48:53 INFO     quant_profiler │ DBD  price=50800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=18  confirmed=False
+2026-04-05 14:49:07 INFO     quant_profiler │ GMC  price=4500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=21  confirmed=True
+2026-04-05 14:49:20 INFO     quant_profiler │ HUB  price=13900  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=7  bear=16  confirmed=True
+2026-04-05 14:49:36 INFO     quant_profiler │ SBT  price=21900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=18  confirmed=False
+2026-04-05 14:49:51 INFO     quant_profiler │ VPI  price=58000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=23  bear=2  confirmed=True
+2026-04-05 14:53:43 WARNING  quant_profiler │ train_lstm_model KMT: insufficient training data (38 rows)
+2026-04-05 15:05:16 INFO     quant_profiler │ GND  price=32800  signal=MUA  VSA=DISTRIB  regime=SIDEWAYS  bull=18  bear=7  confirmed=False
+2026-04-05 15:05:22 INFO     quant_profiler │ MTP  price=14000  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=7  bear=18  confirmed=False
+2026-04-05 15:05:29 INFO     quant_profiler │ YBM  price=10350  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=7  confirmed=False
+2026-04-05 15:05:39 INFO     quant_profiler │ VTZ  price=20100  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=18  bear=7  confirmed=True
+2026-04-05 15:05:55 INFO     quant_profiler │ ACM  price=600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-05 15:06:11 INFO     quant_profiler │ KTL  price=30800  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=25  bear=15  confirmed=False
+2026-04-05 15:06:26 INFO     quant_profiler │ SZG  price=36700  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=18  bear=12  confirmed=False
+2026-04-05 15:06:45 INFO     quant_profiler │ RCC  price=22500  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=18  bear=8  confirmed=True
+2026-04-05 15:07:03 INFO     quant_profiler │ GEG  price=15850  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=12  bear=15  confirmed=False
+2026-04-05 15:07:19 INFO     quant_profiler │ HCM  price=24150  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-05 15:07:33 INFO     quant_profiler │ BBH  price=13900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=7  bear=8  confirmed=True
+2026-04-05 15:07:50 INFO     quant_profiler │ CMM  price=17700  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=9  bear=10  confirmed=False
+2026-04-05 15:08:03 INFO     quant_profiler │ DCF  price=48500  signal=MUA  VSA=ACCUM  regime=BULL_TREND  bull=26  bear=10  confirmed=True
+2026-04-05 15:08:18 INFO     quant_profiler │ NDC  price=170000  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=HIGH_VOL  bull=12  bear=19  confirmed=False
+2026-04-05 15:08:35 INFO     quant_profiler │ TDB  price=40000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-05 15:08:51 INFO     quant_profiler │ CNC  price=31000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=14  confirmed=False
+2026-04-05 15:09:07 INFO     quant_profiler │ HDP  price=26000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=9  confirmed=False
+2026-04-05 15:09:22 INFO     quant_profiler │ PAP  price=26000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=3  confirmed=True
+2026-04-05 15:09:38 INFO     quant_profiler │ HU1  price=6280  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-05 15:09:51 INFO     quant_profiler │ BDG  price=39200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=10  bear=14  confirmed=True
+2026-04-07 12:32:47 INFO     quant_profiler │ HPG  price=26900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=11  confirmed=True
+2026-04-07 12:32:53 INFO     quant_profiler │ VNM  price=60600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-07 12:32:59 INFO     quant_profiler │ VCB  price=57900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-07 12:33:06 INFO     quant_profiler │ BID  price=39000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-07 12:33:13 INFO     quant_profiler │ CTG  price=33600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-07 12:33:31 INFO     quant_profiler │ TCB  price=28750  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-07 12:33:47 INFO     quant_profiler │ VHM  price=116200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=9  confirmed=True
+2026-04-07 12:34:01 INFO     quant_profiler │ VIC  price=143800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-07 12:34:18 INFO     quant_profiler │ MBB  price=25550  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-07 12:34:31 INFO     quant_profiler │ ACB  price=23300  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=7  bear=10  confirmed=False
+2026-04-07 12:34:46 INFO     quant_profiler │ FPT  price=73900  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-07 12:35:02 INFO     quant_profiler │ GAS  price=78600  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=17  confirmed=True
+2026-04-07 12:35:17 INFO     quant_profiler │ SAB  price=44150  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=3  bear=14  confirmed=True
+2026-04-07 12:35:36 INFO     quant_profiler │ VJC  price=161700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=4  confirmed=False
+2026-04-07 12:35:52 INFO     quant_profiler │ PLX  price=38850  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=17  confirmed=True
+2026-04-07 12:36:08 INFO     quant_profiler │ REE  price=64600  signal=MUA  VSA=NO_SUPPLY  regime=BULL_TREND  bull=21  bear=7  confirmed=True
+2026-04-07 12:36:23 INFO     quant_profiler │ MWG  price=77900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-07 12:36:41 INFO     quant_profiler │ PNJ  price=103600  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=14  confirmed=True
+2026-04-07 12:36:55 INFO     quant_profiler │ MSN  price=74700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=9  confirmed=False
+2026-04-07 12:37:10 INFO     quant_profiler │ VRE  price=25850  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=16  confirmed=True
+2026-04-08 17:43:03 INFO     quant_profiler │ GND  price=24400  signal=MUA  VSA=DISTRIB  regime=SIDEWAYS  bull=19  bear=10  confirmed=False
+2026-04-08 17:43:08 INFO     quant_profiler │ BMP  price=133200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=15  confirmed=True
+2026-04-08 17:43:15 INFO     quant_profiler │ ACM  price=600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-08 17:43:22 INFO     quant_profiler │ KTL  price=22000  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=16  bear=6  confirmed=True
+2026-04-08 17:43:28 INFO     quant_profiler │ UDL  price=31300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=UNKNOWN  bull=16  bear=24  confirmed=False
+2026-04-08 17:43:28 WARNING  quant_profiler │ train_lstm_model UDL: insufficient training data (41 rows)
+2026-04-08 17:43:43 INFO     quant_profiler │ RCC  price=22500  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=5  confirmed=True
+2026-04-08 17:44:02 INFO     quant_profiler │ BBH  price=15000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=20  bear=3  confirmed=False
+2026-04-08 17:44:09 INFO     quant_profiler │ DCF  price=48500  signal=MUA  VSA=ACCUM  regime=BULL_TREND  bull=26  bear=10  confirmed=True
+2026-04-08 17:44:19 INFO     quant_profiler │ DCV  price=163000  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=UNKNOWN  bull=16  bear=12  confirmed=True
+2026-04-08 17:44:19 INFO     quant_profiler │ train_lstm_model DCV: 24 samples — starting
+2026-04-08 17:44:23 INFO     quant_profiler │ train_lstm_model DCV: done in 9 epochs, val_mae=10.4403
+2026-04-08 17:44:39 INFO     quant_profiler │ NDC  price=170000  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=HIGH_VOL  bull=12  bear=19  confirmed=False
+2026-04-08 17:44:54 INFO     quant_profiler │ HU1  price=5850  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=12  confirmed=False
+2026-04-08 17:45:09 INFO     quant_profiler │ BDG  price=38000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=HIGH_VOL  bull=12  bear=12  confirmed=True
+2026-04-08 17:45:27 INFO     quant_profiler │ KMR  price=2720  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=10  confirmed=False
+2026-04-08 17:45:43 INFO     quant_profiler │ TDM  price=57200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-08 17:46:01 INFO     quant_profiler │ TLH  price=4630  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=11  confirmed=False
+2026-04-08 17:46:17 INFO     quant_profiler │ NAS  price=32500  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=14  bear=18  confirmed=True
+2026-04-08 17:46:36 INFO     quant_profiler │ YBC  price=8600  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=16  confirmed=True
+2026-04-08 17:46:48 INFO     quant_profiler │ BIO  price=13500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=7  confirmed=False
+2026-04-08 17:47:02 INFO     quant_profiler │ BSQ  price=17800  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=16  bear=14  confirmed=False
+2026-04-08 17:47:21 INFO     quant_profiler │ CID  price=9800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-08 17:47:21 INFO     quant_profiler │ train_lstm_model CID: 147 samples — starting
+2026-04-08 17:47:25 INFO     quant_profiler │ train_lstm_model CID: done in 9 epochs, val_mae=6.7162
+2026-04-08 17:47:35 INFO     quant_profiler │ MTP  price=14000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=False
+2026-04-08 17:47:52 INFO     quant_profiler │ NQN  price=13500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=12  confirmed=False
+2026-04-08 17:47:52 INFO     quant_profiler │ train_lstm_model NQN: 37 samples — starting
+2026-04-08 17:47:55 INFO     quant_profiler │ train_lstm_model NQN: done in 9 epochs, val_mae=4.6983
+2026-04-08 17:48:09 INFO     quant_profiler │ TDS  price=8500  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=17  bear=4  confirmed=True
+2026-04-08 17:48:09 INFO     quant_profiler │ train_lstm_model TDS: 242 samples — starting
+2026-04-08 17:48:14 INFO     quant_profiler │ train_lstm_model TDS: done in 16 epochs, val_mae=2.3463
+2026-04-08 17:48:26 INFO     quant_profiler │ TIN  price=166700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=12  confirmed=True
+2026-04-08 17:48:26 INFO     quant_profiler │ train_lstm_model TIN: 236 samples — starting
+2026-04-08 17:48:32 INFO     quant_profiler │ train_lstm_model TIN: done in 23 epochs, val_mae=11.6687
+2026-04-08 17:48:42 INFO     quant_profiler │ UDJ  price=6800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=10  confirmed=True
+2026-04-08 17:48:42 INFO     quant_profiler │ train_lstm_model UDJ: 247 samples — starting
+2026-04-08 17:48:49 INFO     quant_profiler │ train_lstm_model UDJ: done in 22 epochs, val_mae=2.3227
+2026-04-08 17:48:56 INFO     quant_profiler │ VIH  price=28000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=HIGH_VOL  bull=11  bear=13  confirmed=True
+2026-04-08 17:48:56 INFO     quant_profiler │ train_lstm_model VIH: 38 samples — starting
+2026-04-08 17:48:59 INFO     quant_profiler │ train_lstm_model VIH: done in 9 epochs, val_mae=23.2840
+2026-04-08 17:49:10 INFO     quant_profiler │ VIX  price=18100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-08 17:49:29 INFO     quant_profiler │ GDA  price=14000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=13  confirmed=True
+2026-04-08 17:49:29 INFO     quant_profiler │ train_lstm_model GDA: 249 samples — starting
+2026-04-08 17:49:34 INFO     quant_profiler │ train_lstm_model GDA: done in 16 epochs, val_mae=3.8333
+2026-04-08 17:49:45 INFO     quant_profiler │ MTS  price=10200  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=14  bear=7  confirmed=True
+2026-04-08 17:49:45 INFO     quant_profiler │ train_lstm_model MTS: 98 samples — starting
+2026-04-08 17:49:51 INFO     quant_profiler │ train_lstm_model MTS: done in 29 epochs, val_mae=4.2817
+2026-04-08 17:50:07 INFO     quant_profiler │ TID  price=21300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-08 17:50:14 INFO     quant_profiler │ CLC  price=54300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-08 17:50:32 INFO     quant_profiler │ CRE  price=8020  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=18  bear=14  confirmed=True
+2026-04-08 17:50:48 INFO     quant_profiler │ HPG  price=28000  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-08 17:51:05 INFO     quant_profiler │ TDG  price=2620  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-08 17:51:20 INFO     quant_profiler │ VFG  price=50100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-08 17:51:36 INFO     quant_profiler │ VGC  price=45900  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=9  confirmed=False
+2026-04-08 17:51:54 INFO     quant_profiler │ VIC  price=153400  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 17:52:08 INFO     quant_profiler │ VSH  price=43300  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=11  bear=17  confirmed=False
+2026-04-08 17:52:26 INFO     quant_profiler │ VTB  price=14500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=4  confirmed=False
+2026-04-08 17:52:44 INFO     quant_profiler │ CAG  price=7100  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=3  confirmed=True
+2026-04-08 17:52:56 INFO     quant_profiler │ EBS  price=11100  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=6  confirmed=False
+2026-04-08 17:53:13 INFO     quant_profiler │ KSD  price=4600  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-08 17:53:27 INFO     quant_profiler │ MCO  price=5300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=22  confirmed=True
+2026-04-08 17:53:40 INFO     quant_profiler │ VTZ  price=20300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 17:53:59 INFO     quant_profiler │ AG1  price=13000  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=7  confirmed=True
+2026-04-08 17:53:59 INFO     quant_profiler │ train_lstm_model AG1: 190 samples — starting
+2026-04-08 17:54:04 INFO     quant_profiler │ train_lstm_model AG1: done in 9 epochs, val_mae=3.3288
+2026-04-08 17:54:14 INFO     quant_profiler │ BLF  price=2500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=10  confirmed=False
+2026-04-08 17:54:14 INFO     quant_profiler │ train_lstm_model BLF: 101 samples — starting
+2026-04-08 17:54:17 INFO     quant_profiler │ train_lstm_model BLF: done in 9 epochs, val_mae=13.0515
+2026-04-08 17:54:30 INFO     quant_profiler │ BLT  price=22000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-08 17:54:30 INFO     quant_profiler │ train_lstm_model BLT: 225 samples — starting
+2026-04-08 17:54:41 INFO     quant_profiler │ train_lstm_model BLT: done in 35 epochs, val_mae=2.8171
+2026-04-08 17:54:49 INFO     quant_profiler │ HAN  price=8500  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=5  bear=12  confirmed=True
+2026-04-08 17:54:49 INFO     quant_profiler │ train_lstm_model HAN: 211 samples — starting
+2026-04-08 17:54:53 INFO     quant_profiler │ train_lstm_model HAN: done in 12 epochs, val_mae=3.1503
+2026-04-08 17:54:59 INFO     quant_profiler │ HBD  price=19300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=4  bear=19  confirmed=False
+2026-04-08 17:54:59 INFO     quant_profiler │ train_lstm_model HBD: 45 samples — starting
+2026-04-08 17:55:03 INFO     quant_profiler │ train_lstm_model HBD: done in 10 epochs, val_mae=12.0576
+2026-04-08 17:55:16 INFO     quant_profiler │ HDP  price=23600  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=19  confirmed=True
+2026-04-08 17:55:31 INFO     quant_profiler │ HEP  price=15000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-08 17:55:31 INFO     quant_profiler │ train_lstm_model HEP: 62 samples — starting
+2026-04-08 17:55:35 INFO     quant_profiler │ train_lstm_model HEP: done in 9 epochs, val_mae=2.9956
+2026-04-08 17:55:48 INFO     quant_profiler │ HPW  price=23000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-08 17:55:48 INFO     quant_profiler │ train_lstm_model HPW: 160 samples — starting
+2026-04-08 17:55:52 INFO     quant_profiler │ train_lstm_model HPW: done in 9 epochs, val_mae=5.7323
+2026-04-08 17:56:05 INFO     quant_profiler │ HU6  price=4400  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=4  bear=11  confirmed=True
+2026-04-08 17:56:05 INFO     quant_profiler │ train_lstm_model HU6: 182 samples — starting
+2026-04-08 17:56:08 INFO     quant_profiler │ train_lstm_model HU6: done in 9 epochs, val_mae=5.6835
+2026-04-08 17:56:20 INFO     quant_profiler │ ISH  price=24500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=0  bear=15  confirmed=True
+2026-04-08 17:56:20 INFO     quant_profiler │ train_lstm_model ISH: 181 samples — starting
+2026-04-08 17:56:24 INFO     quant_profiler │ train_lstm_model ISH: done in 21 epochs, val_mae=1.9901
+2026-04-08 17:56:34 INFO     quant_profiler │ ITS  price=4100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=24  confirmed=True
+2026-04-08 17:56:34 INFO     quant_profiler │ train_lstm_model ITS: 237 samples — starting
+2026-04-08 17:56:38 INFO     quant_profiler │ train_lstm_model ITS: done in 10 epochs, val_mae=5.8811
+2026-04-08 17:56:50 INFO     quant_profiler │ MGC  price=12900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=11  confirmed=True
+2026-04-08 17:56:50 INFO     quant_profiler │ train_lstm_model MGC: 249 samples — starting
+2026-04-08 17:56:53 INFO     quant_profiler │ train_lstm_model MGC: done in 9 epochs, val_mae=6.3072
+2026-04-08 17:57:05 INFO     quant_profiler │ MTH  price=23000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=21  confirmed=False
+2026-04-08 17:57:05 INFO     quant_profiler │ train_lstm_model MTH: 56 samples — starting
+2026-04-08 17:57:09 INFO     quant_profiler │ train_lstm_model MTH: done in 14 epochs, val_mae=6.0118
+2026-04-08 17:57:20 INFO     quant_profiler │ MTV  price=16000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=14  confirmed=False
+2026-04-08 17:57:20 INFO     quant_profiler │ train_lstm_model MTV: 38 samples — starting
+2026-04-08 17:57:24 INFO     quant_profiler │ train_lstm_model MTV: done in 9 epochs, val_mae=2.7824
+2026-04-08 17:57:36 INFO     quant_profiler │ NDT  price=5000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=4  confirmed=False
+2026-04-08 17:57:36 INFO     quant_profiler │ train_lstm_model NDT: 212 samples — starting
+2026-04-08 17:57:40 INFO     quant_profiler │ train_lstm_model NDT: done in 9 epochs, val_mae=4.3894
+2026-04-08 17:57:51 INFO     quant_profiler │ PLA  price=6200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=8  confirmed=True
+2026-04-08 17:57:51 INFO     quant_profiler │ train_lstm_model PLA: 142 samples — starting
+2026-04-08 17:57:59 INFO     quant_profiler │ train_lstm_model PLA: done in 60 epochs, val_mae=20.2714
+2026-04-08 17:58:05 INFO     quant_profiler │ PVH  price=700  signal=MUA  VSA=ACCUM  regime=BULL_TREND  bull=18  bear=3  confirmed=False
+2026-04-08 17:58:05 INFO     quant_profiler │ train_lstm_model PVH: 28 samples — starting
+2026-04-08 17:58:09 INFO     quant_profiler │ train_lstm_model PVH: done in 9 epochs, val_mae=15.3678
+2026-04-08 17:58:23 INFO     quant_profiler │ SAS  price=36700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 17:58:23 INFO     quant_profiler │ train_lstm_model SAS: 249 samples — starting
+2026-04-08 17:58:26 INFO     quant_profiler │ train_lstm_model SAS: done in 9 epochs, val_mae=3.1850
+2026-04-08 17:58:38 INFO     quant_profiler │ TOS  price=173200  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=15  bear=4  confirmed=True
+2026-04-08 17:59:00 INFO     quant_profiler │ USD  price=17000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=20  bear=9  confirmed=True
+2026-04-08 17:59:00 INFO     quant_profiler │ train_lstm_model USD: 230 samples — starting
+2026-04-08 17:59:06 INFO     quant_profiler │ train_lstm_model USD: done in 20 epochs, val_mae=1.8976
+2026-04-08 17:59:12 INFO     quant_profiler │ VE9  price=3600  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=8  bear=14  confirmed=True
+2026-04-08 17:59:32 INFO     quant_profiler │ VGG  price=42300  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=9  confirmed=True
+2026-04-08 17:59:32 INFO     quant_profiler │ train_lstm_model VGG: 236 samples — starting
+2026-04-08 17:59:36 INFO     quant_profiler │ train_lstm_model VGG: done in 12 epochs, val_mae=1.2917
+2026-04-08 17:59:45 INFO     quant_profiler │ VCB  price=60200  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=14  bear=11  confirmed=False
+2026-04-08 18:00:03 INFO     quant_profiler │ CTP  price=7300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=16  bear=12  confirmed=True
+2026-04-08 18:00:20 INFO     quant_profiler │ ACE  price=37000  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=7  bear=25  confirmed=True
+2026-04-08 18:00:20 INFO     quant_profiler │ train_lstm_model ACE: 230 samples — starting
+2026-04-08 18:00:26 INFO     quant_profiler │ train_lstm_model ACE: done in 9 epochs, val_mae=3.6939
+2026-04-08 18:00:37 INFO     quant_profiler │ KHG  price=5490  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BEAR_TREND  bull=15  bear=9  confirmed=False
+2026-04-08 18:00:49 INFO     quant_profiler │ MBB  price=26600  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-08 18:01:05 INFO     quant_profiler │ PTC  price=7350  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=7  confirmed=False
+2026-04-08 18:01:24 INFO     quant_profiler │ RYG  price=10800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=11  confirmed=True
+2026-04-08 18:01:36 INFO     quant_profiler │ SHB  price=15300  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=18  bear=12  confirmed=False
+2026-04-08 18:01:54 INFO     quant_profiler │ SVT  price=11250  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=11  confirmed=False
+2026-04-08 18:02:09 INFO     quant_profiler │ TVT  price=16000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-08 18:02:27 INFO     quant_profiler │ UIC  price=61000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=13  bear=6  confirmed=True
+2026-04-08 18:02:41 INFO     quant_profiler │ HLC  price=12900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=14  confirmed=False
+2026-04-08 18:03:00 INFO     quant_profiler │ NAG  price=8300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=9  confirmed=True
+2026-04-08 18:03:12 INFO     quant_profiler │ PMS  price=36000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 18:03:31 INFO     quant_profiler │ APP  price=4900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=13  confirmed=True
+2026-04-08 18:03:31 INFO     quant_profiler │ train_lstm_model APP: 244 samples — starting
+2026-04-08 18:03:36 INFO     quant_profiler │ train_lstm_model APP: done in 12 epochs, val_mae=6.4593
+2026-04-08 18:03:49 INFO     quant_profiler │ BQB  price=4200  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=3  confirmed=True
+2026-04-08 18:03:49 INFO     quant_profiler │ train_lstm_model BQB: 210 samples — starting
+2026-04-08 18:03:52 INFO     quant_profiler │ train_lstm_model BQB: done in 9 epochs, val_mae=6.2011
+2026-04-08 18:04:03 INFO     quant_profiler │ BVB  price=12600  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-08 18:04:03 INFO     quant_profiler │ train_lstm_model BVB: 249 samples — starting
+2026-04-08 18:04:08 INFO     quant_profiler │ train_lstm_model BVB: done in 15 epochs, val_mae=4.0302
+2026-04-08 18:04:17 INFO     quant_profiler │ CMN  price=65900  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=7  bear=12  confirmed=False
+2026-04-08 18:04:17 INFO     quant_profiler │ train_lstm_model CMN: 105 samples — starting
+2026-04-08 18:04:21 INFO     quant_profiler │ train_lstm_model CMN: done in 10 epochs, val_mae=5.0547
+2026-04-08 18:04:35 INFO     quant_profiler │ DGT  price=4300  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=5  confirmed=True
+2026-04-08 18:04:35 INFO     quant_profiler │ train_lstm_model DGT: 249 samples — starting
+2026-04-08 18:04:43 INFO     quant_profiler │ train_lstm_model DGT: done in 29 epochs, val_mae=3.0145
+2026-04-08 18:04:51 INFO     quant_profiler │ DKG  price=9800  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=8  confirmed=True
+2026-04-08 18:04:51 INFO     quant_profiler │ train_lstm_model DKG: 61 samples — starting
+2026-04-08 18:04:55 INFO     quant_profiler │ train_lstm_model DKG: done in 9 epochs, val_mae=18.4359
+2026-04-08 18:05:07 INFO     quant_profiler │ DMS  price=10500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-08 18:05:07 INFO     quant_profiler │ train_lstm_model DMS: 39 samples — starting
+2026-04-08 18:05:12 INFO     quant_profiler │ train_lstm_model DMS: done in 17 epochs, val_mae=14.3598
+2026-04-08 18:05:24 INFO     quant_profiler │ EFI  price=1800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=7  bear=14  confirmed=False
+2026-04-08 18:05:24 INFO     quant_profiler │ train_lstm_model EFI: 205 samples — starting
+2026-04-08 18:05:29 INFO     quant_profiler │ train_lstm_model EFI: done in 9 epochs, val_mae=6.6240
+2026-04-08 18:05:39 INFO     quant_profiler │ EIC  price=22800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=21  confirmed=True
+2026-04-08 18:05:39 INFO     quant_profiler │ train_lstm_model EIC: 160 samples — starting
+2026-04-08 18:05:43 INFO     quant_profiler │ train_lstm_model EIC: done in 9 epochs, val_mae=2.8411
+2026-04-08 18:05:57 INFO     quant_profiler │ G36  price=11100  signal=TRUNG LẬP  VSA=DISTRIB  regime=SIDEWAYS  bull=9  bear=8  confirmed=True
+2026-04-08 18:05:57 INFO     quant_profiler │ train_lstm_model G36: 249 samples — starting
+2026-04-08 18:06:07 INFO     quant_profiler │ train_lstm_model G36: done in 60 epochs, val_mae=4.0711
+2026-04-08 18:06:14 INFO     quant_profiler │ HSP  price=14500  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=11  bear=13  confirmed=True
+2026-04-08 18:06:14 INFO     quant_profiler │ train_lstm_model HSP: 193 samples — starting
+2026-04-08 18:06:19 INFO     quant_profiler │ train_lstm_model HSP: done in 23 epochs, val_mae=2.3386
+2026-04-08 18:06:29 INFO     quant_profiler │ KGM  price=5700  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=11  confirmed=True
+2026-04-08 18:06:29 INFO     quant_profiler │ train_lstm_model KGM: 249 samples — starting
+2026-04-08 18:06:33 INFO     quant_profiler │ train_lstm_model KGM: done in 12 epochs, val_mae=2.3383
+2026-04-08 18:06:43 INFO     quant_profiler │ L43  price=2400  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=HIGH_VOL  bull=11  bear=10  confirmed=True
+2026-04-08 18:07:02 INFO     quant_profiler │ MA1  price=35500  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=6  confirmed=True
+2026-04-08 18:07:02 INFO     quant_profiler │ train_lstm_model MA1: 212 samples — starting
+2026-04-08 18:07:06 INFO     quant_profiler │ train_lstm_model MA1: done in 12 epochs, val_mae=7.5549
+2026-04-08 18:07:16 INFO     quant_profiler │ MGR  price=5100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=21  bear=14  confirmed=False
+2026-04-08 18:07:16 INFO     quant_profiler │ train_lstm_model MGR: 112 samples — starting
+2026-04-08 18:07:20 INFO     quant_profiler │ train_lstm_model MGR: done in 9 epochs, val_mae=8.1925
+2026-04-08 18:07:33 INFO     quant_profiler │ MKP  price=30000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=5  bear=8  confirmed=True
+2026-04-08 18:07:33 INFO     quant_profiler │ train_lstm_model MKP: 182 samples — starting
+2026-04-08 18:07:37 INFO     quant_profiler │ train_lstm_model MKP: done in 15 epochs, val_mae=4.8607
+2026-04-08 18:07:49 INFO     quant_profiler │ MSR  price=47200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=6  confirmed=False
+2026-04-08 18:07:49 INFO     quant_profiler │ train_lstm_model MSR: 249 samples — starting
+2026-04-08 18:07:53 INFO     quant_profiler │ train_lstm_model MSR: done in 12 epochs, val_mae=12.2542
+2026-04-08 18:08:07 INFO     quant_profiler │ NCS  price=41000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=9  confirmed=True
+2026-04-08 18:08:07 INFO     quant_profiler │ train_lstm_model NCS: 191 samples — starting
+2026-04-08 18:08:11 INFO     quant_profiler │ train_lstm_model NCS: done in 9 epochs, val_mae=4.9109
+2026-04-08 18:08:24 INFO     quant_profiler │ PVE  price=3200  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BULL_TREND  bull=22  bear=13  confirmed=True
+2026-04-08 18:08:24 INFO     quant_profiler │ train_lstm_model PVE: 29 samples — starting
+2026-04-08 18:08:27 INFO     quant_profiler │ train_lstm_model PVE: done in 9 epochs, val_mae=14.5995
+2026-04-08 18:08:42 INFO     quant_profiler │ SAC  price=12700  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=12  confirmed=False
+2026-04-08 18:08:42 INFO     quant_profiler │ train_lstm_model SAC: 221 samples — starting
+2026-04-08 18:08:49 INFO     quant_profiler │ train_lstm_model SAC: done in 26 epochs, val_mae=3.2339
+2026-04-08 18:08:57 INFO     quant_profiler │ SBH  price=42300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-08 18:08:57 INFO     quant_profiler │ train_lstm_model SBH: 217 samples — starting
+2026-04-08 18:09:00 INFO     quant_profiler │ train_lstm_model SBH: done in 9 epochs, val_mae=2.5840
+2026-04-08 18:09:12 INFO     quant_profiler │ SIV  price=39500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=19  confirmed=False
+2026-04-08 18:09:12 INFO     quant_profiler │ train_lstm_model SIV: 147 samples — starting
+2026-04-08 18:09:17 INFO     quant_profiler │ train_lstm_model SIV: done in 17 epochs, val_mae=3.7908
+2026-04-08 18:09:30 INFO     quant_profiler │ SJG  price=20500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=5  confirmed=False
+2026-04-08 18:09:30 INFO     quant_profiler │ train_lstm_model SJG: 209 samples — starting
+2026-04-08 18:09:35 INFO     quant_profiler │ train_lstm_model SJG: done in 11 epochs, val_mae=7.8348
+2026-04-08 18:09:43 INFO     quant_profiler │ SP2  price=23000  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=12  bear=7  confirmed=True
+2026-04-08 18:09:43 INFO     quant_profiler │ train_lstm_model SP2: 135 samples — starting
+2026-04-08 18:09:47 INFO     quant_profiler │ train_lstm_model SP2: done in 10 epochs, val_mae=2.1351
+2026-04-08 18:10:00 INFO     quant_profiler │ SSG  price=8000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=13  confirmed=True
+2026-04-08 18:10:00 INFO     quant_profiler │ train_lstm_model SSG: 246 samples — starting
+2026-04-08 18:10:04 INFO     quant_profiler │ train_lstm_model SSG: done in 9 epochs, val_mae=5.1810
+2026-04-08 18:10:17 INFO     quant_profiler │ TAN  price=43900  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=23  confirmed=True
+2026-04-08 18:10:17 INFO     quant_profiler │ train_lstm_model TAN: 223 samples — starting
+2026-04-08 18:10:20 INFO     quant_profiler │ train_lstm_model TAN: done in 11 epochs, val_mae=1.6883
+2026-04-08 18:10:29 INFO     quant_profiler │ UDC  price=3300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=23  confirmed=True
+2026-04-08 18:10:48 INFO     quant_profiler │ VGV  price=42400  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=4  bear=11  confirmed=True
+2026-04-08 18:10:48 INFO     quant_profiler │ train_lstm_model VGV: 127 samples — starting
+2026-04-08 18:10:52 INFO     quant_profiler │ train_lstm_model VGV: done in 9 epochs, val_mae=8.4597
+2026-04-08 18:11:04 INFO     quant_profiler │ VLG  price=8400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=2  bear=19  confirmed=True
+2026-04-08 18:11:04 INFO     quant_profiler │ train_lstm_model VLG: 237 samples — starting
+2026-04-08 18:11:09 INFO     quant_profiler │ train_lstm_model VLG: done in 9 epochs, val_mae=3.4102
+2026-04-08 18:11:18 INFO     quant_profiler │ VKC  price=1000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=18  bear=10  confirmed=True
+2026-04-08 18:11:18 INFO     quant_profiler │ train_lstm_model VKC: 29 samples — starting
+2026-04-08 18:11:21 INFO     quant_profiler │ train_lstm_model VKC: done in 13 epochs, val_mae=11.2520
+2026-04-08 18:11:34 INFO     quant_profiler │ VST  price=3100  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=8  confirmed=True
+2026-04-08 18:11:34 INFO     quant_profiler │ train_lstm_model VST: 29 samples — starting
+2026-04-08 18:11:37 INFO     quant_profiler │ train_lstm_model VST: done in 13 epochs, val_mae=3.3667
+2026-04-08 18:11:49 INFO     quant_profiler │ VUA  price=17300  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=10  confirmed=False
+2026-04-08 18:11:49 INFO     quant_profiler │ train_lstm_model VUA: 93 samples — starting
+2026-04-08 18:11:53 INFO     quant_profiler │ train_lstm_model VUA: done in 10 epochs, val_mae=9.6628
+2026-04-08 18:12:04 INFO     quant_profiler │ XMD  price=5900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=10  confirmed=True
+2026-04-08 18:12:04 INFO     quant_profiler │ train_lstm_model XMD: 106 samples — starting
+2026-04-08 18:12:08 INFO     quant_profiler │ train_lstm_model XMD: done in 9 epochs, val_mae=4.1497
+2026-04-08 18:12:19 INFO     quant_profiler │ AAA  price=7090  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
+2026-04-08 18:12:37 INFO     quant_profiler │ APH  price=5570  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-04-08 18:12:52 INFO     quant_profiler │ CTG  price=35500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=6  confirmed=False
+2026-04-08 18:13:08 INFO     quant_profiler │ FCM  price=3250  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=18  confirmed=True
+2026-04-08 18:13:24 INFO     quant_profiler │ NSC  price=77000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=7  bear=16  confirmed=True
+2026-04-08 18:13:38 INFO     quant_profiler │ TCB  price=30700  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-08 18:13:54 INFO     quant_profiler │ TVB  price=7670  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=17  confirmed=True
+2026-04-08 18:14:10 INFO     quant_profiler │ VPH  price=3720  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=10  confirmed=False
+2026-04-08 18:14:25 INFO     quant_profiler │ PVI  price=78500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=7  confirmed=False
+2026-04-08 18:14:43 INFO     quant_profiler │ QTC  price=32500  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=HIGH_VOL  bull=7  bear=13  confirmed=False
+2026-04-08 18:14:56 INFO     quant_profiler │ VIG  price=4900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=17  confirmed=True
+2026-04-08 18:15:16 INFO     quant_profiler │ CC1  price=37000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=7  confirmed=True
+2026-04-08 18:15:16 INFO     quant_profiler │ train_lstm_model CC1: 222 samples — starting
+2026-04-08 18:15:20 INFO     quant_profiler │ train_lstm_model CC1: done in 9 epochs, val_mae=7.5742
+2026-04-08 18:15:31 INFO     quant_profiler │ KHW  price=30100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=7  bear=21  confirmed=False
+2026-04-08 18:15:31 INFO     quant_profiler │ train_lstm_model KHW: 86 samples — starting
+2026-04-08 18:15:35 INFO     quant_profiler │ train_lstm_model KHW: done in 12 epochs, val_mae=5.0940
+2026-04-08 18:15:46 INFO     quant_profiler │ SSH  price=83000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 18:15:46 INFO     quant_profiler │ train_lstm_model SSH: 149 samples — starting
+2026-04-08 18:15:53 INFO     quant_profiler │ train_lstm_model SSH: done in 33 epochs, val_mae=9.7738
+2026-04-08 18:16:01 INFO     quant_profiler │ DBT  price=10900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=14  confirmed=False
+2026-04-08 18:16:22 INFO     quant_profiler │ MCM  price=25850  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=17  bear=12  confirmed=False
+2026-04-08 18:16:22 INFO     quant_profiler │ train_lstm_model MCM: 249 samples — starting
+2026-04-08 18:16:31 INFO     quant_profiler │ train_lstm_model MCM: done in 22 epochs, val_mae=2.4721
+2026-04-08 18:16:37 INFO     quant_profiler │ MSB  price=12200  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=9  confirmed=False
+2026-04-08 18:16:50 INFO     quant_profiler │ MSH  price=37450  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-08 18:17:10 INFO     quant_profiler │ OGC  price=2990  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=11  confirmed=True
+2026-04-08 18:17:20 INFO     quant_profiler │ PAN  price=31900  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-08 18:17:35 INFO     quant_profiler │ PET  price=49550  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=11  confirmed=True
+2026-04-08 18:17:57 INFO     quant_profiler │ PLP  price=5130  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=BEAR_TREND  bull=5  bear=16  confirmed=True
+2026-04-08 18:18:08 INFO     quant_profiler │ SCS  price=54200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=12  confirmed=True
+2026-04-08 18:18:27 INFO     quant_profiler │ SRC  price=54000  signal=MUA  VSA=DISTRIB  regime=BULL_TREND  bull=14  bear=7  confirmed=True
+2026-04-08 18:18:41 INFO     quant_profiler │ TV2  price=37150  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=18  bear=1  confirmed=True
+2026-04-08 18:18:57 INFO     quant_profiler │ VHM  price=123000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=9  confirmed=True
+2026-04-08 18:19:14 INFO     quant_profiler │ VND  price=17150  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-08 18:19:29 INFO     quant_profiler │ YBM  price=10100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BULL_TREND  bull=6  bear=15  confirmed=False
+2026-04-08 18:19:49 INFO     quant_profiler │ BAB  price=11300  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=BEAR_TREND  bull=12  bear=16  confirmed=True
+2026-04-08 18:20:02 INFO     quant_profiler │ CLH  price=22200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=6  confirmed=True
+2026-04-08 18:20:15 INFO     quant_profiler │ D11  price=10700  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=7  confirmed=True
+2026-04-08 18:20:33 INFO     quant_profiler │ NDX  price=6200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=20  bear=12  confirmed=False
+2026-04-08 18:20:47 INFO     quant_profiler │ PMB  price=10900  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=6  confirmed=False
+2026-04-08 18:21:08 INFO     quant_profiler │ TTL  price=8300  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=12  confirmed=False
+2026-04-08 18:21:18 INFO     quant_profiler │ VC3  price=26700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=14  confirmed=False
+2026-04-08 18:21:39 INFO     quant_profiler │ AMP  price=13500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=11  confirmed=True
+2026-04-08 18:21:39 INFO     quant_profiler │ train_lstm_model AMP: 225 samples — starting
+2026-04-08 18:21:44 INFO     quant_profiler │ train_lstm_model AMP: done in 9 epochs, val_mae=5.1247
+2026-04-08 18:21:52 INFO     quant_profiler │ BCP  price=10000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=5  bear=12  confirmed=True
+2026-04-08 18:21:52 INFO     quant_profiler │ train_lstm_model BCP: 61 samples — starting
+2026-04-08 18:21:55 INFO     quant_profiler │ train_lstm_model BCP: done in 9 epochs, val_mae=28.5637
+2026-04-08 18:22:06 INFO     quant_profiler │ BTU  price=16800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-08 18:22:06 INFO     quant_profiler │ train_lstm_model BTU: 161 samples — starting
+2026-04-08 18:22:10 INFO     quant_profiler │ train_lstm_model BTU: done in 10 epochs, val_mae=4.7825
+2026-04-08 18:22:22 INFO     quant_profiler │ C92  price=4100  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=15  bear=14  confirmed=True
+2026-04-08 18:22:22 INFO     quant_profiler │ train_lstm_model C92: 212 samples — starting
+2026-04-08 18:22:30 INFO     quant_profiler │ train_lstm_model C92: done in 26 epochs, val_mae=4.0777
+2026-04-08 18:22:38 INFO     quant_profiler │ CCS  price=9400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=UNKNOWN  bull=3  bear=14  confirmed=True
+2026-04-08 18:22:38 INFO     quant_profiler │ train_lstm_model CCS: 22 samples — starting
+2026-04-08 18:22:43 INFO     quant_profiler │ train_lstm_model CCS: done in 12 epochs, val_mae=2.0559
+2026-04-08 18:22:55 INFO     quant_profiler │ CIP  price=2300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=9  bear=12  confirmed=False
+2026-04-08 18:22:55 INFO     quant_profiler │ train_lstm_model CIP: 172 samples — starting
+2026-04-08 18:23:03 INFO     quant_profiler │ train_lstm_model CIP: done in 20 epochs, val_mae=6.7861
+2026-04-08 18:23:13 INFO     quant_profiler │ CSI  price=17000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=14  confirmed=False
+2026-04-08 18:23:13 INFO     quant_profiler │ train_lstm_model CSI: 248 samples — starting
+2026-04-08 18:23:27 INFO     quant_profiler │ train_lstm_model CSI: done in 59 epochs, val_mae=6.4418
+2026-04-08 18:23:35 INFO     quant_profiler │ DRG  price=8900  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=7  confirmed=True
+2026-04-08 18:23:35 INFO     quant_profiler │ train_lstm_model DRG: 235 samples — starting
+2026-04-08 18:23:46 INFO     quant_profiler │ train_lstm_model DRG: done in 22 epochs, val_mae=3.9203
+2026-04-08 18:23:54 INFO     quant_profiler │ HIO  price=7700  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=6  confirmed=True
+2026-04-08 18:23:54 INFO     quant_profiler │ train_lstm_model HIO: 241 samples — starting
+2026-04-08 18:23:58 INFO     quant_profiler │ train_lstm_model HIO: done in 17 epochs, val_mae=4.9705
+2026-04-08 18:24:05 INFO     quant_profiler │ HNG  price=6400  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=7  confirmed=True
+2026-04-08 18:24:12 INFO     quant_profiler │ MNB  price=27000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=3  confirmed=True
+2026-04-08 18:24:12 INFO     quant_profiler │ train_lstm_model MNB: 107 samples — starting
+2026-04-08 18:24:18 INFO     quant_profiler │ train_lstm_model MNB: done in 27 epochs, val_mae=5.7484
+2026-04-08 18:24:24 INFO     quant_profiler │ MPT  price=600  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=12  confirmed=False
+2026-04-08 18:24:24 INFO     quant_profiler │ train_lstm_model MPT: 29 samples — starting
+2026-04-08 18:24:27 INFO     quant_profiler │ train_lstm_model MPT: done in 9 epochs, val_mae=12.8102
+2026-04-08 18:24:41 INFO     quant_profiler │ NTW  price=20000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=10  confirmed=False
+2026-04-08 18:24:41 INFO     quant_profiler │ train_lstm_model NTW: 74 samples — starting
+2026-04-08 18:24:47 INFO     quant_profiler │ train_lstm_model NTW: done in 29 epochs, val_mae=0.8439
+2026-04-08 18:24:59 INFO     quant_profiler │ PEG  price=4700  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=9  confirmed=True
+2026-04-08 18:24:59 INFO     quant_profiler │ train_lstm_model PEG: 210 samples — starting
+2026-04-08 18:25:04 INFO     quant_profiler │ train_lstm_model PEG: done in 17 epochs, val_mae=9.9009
+2026-04-08 18:25:16 INFO     quant_profiler │ SBS  price=5500  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=16  bear=7  confirmed=False
+2026-04-08 18:25:16 INFO     quant_profiler │ train_lstm_model SBS: 249 samples — starting
+2026-04-08 18:25:25 INFO     quant_profiler │ train_lstm_model SBS: done in 9 epochs, val_mae=4.7389
+2026-04-08 18:25:34 INFO     quant_profiler │ TCW  price=31500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=13  confirmed=True
+2026-04-08 18:25:34 INFO     quant_profiler │ train_lstm_model TCW: 249 samples — starting
+2026-04-08 18:25:44 INFO     quant_profiler │ train_lstm_model TCW: done in 30 epochs, val_mae=1.2719
+2026-04-08 18:25:52 INFO     quant_profiler │ TDF  price=9200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-08 18:25:52 INFO     quant_profiler │ train_lstm_model TDF: 107 samples — starting
+2026-04-08 18:25:57 INFO     quant_profiler │ train_lstm_model TDF: done in 9 epochs, val_mae=5.2171
+2026-04-08 18:26:04 INFO     quant_profiler │ TIE  price=3200  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=7  bear=10  confirmed=False
+2026-04-08 18:26:04 INFO     quant_profiler │ train_lstm_model TIE: 69 samples — starting
+2026-04-08 18:26:08 INFO     quant_profiler │ train_lstm_model TIE: done in 9 epochs, val_mae=5.5702
+2026-04-08 18:26:21 INFO     quant_profiler │ TNS  price=3800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=10  confirmed=True
+2026-04-08 18:26:21 INFO     quant_profiler │ train_lstm_model TNS: 29 samples — starting
+2026-04-08 18:26:24 INFO     quant_profiler │ train_lstm_model TNS: done in 9 epochs, val_mae=21.5025
+2026-04-08 18:26:38 INFO     quant_profiler │ VCX  price=12000  signal=TRUNG LẬP  VSA=ACCUM  regime=HIGH_VOL  bull=14  bear=16  confirmed=False
+2026-04-08 18:26:38 INFO     quant_profiler │ train_lstm_model VCX: 80 samples — starting
+2026-04-08 18:26:42 INFO     quant_profiler │ train_lstm_model VCX: done in 16 epochs, val_mae=10.6943
+2026-04-08 18:26:52 INFO     quant_profiler │ VIN  price=16600  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=12  confirmed=False
+2026-04-08 18:26:52 INFO     quant_profiler │ train_lstm_model VIN: 128 samples — starting
+2026-04-08 18:26:57 INFO     quant_profiler │ train_lstm_model VIN: done in 18 epochs, val_mae=8.9362
+2026-04-08 18:27:08 INFO     quant_profiler │ VLW  price=41000  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=14  confirmed=False
+2026-04-08 18:27:08 INFO     quant_profiler │ train_lstm_model VLW: 53 samples — starting
+2026-04-08 18:27:19 INFO     quant_profiler │ train_lstm_model VLW: done in 27 epochs, val_mae=7.6754
+2026-04-08 18:27:26 INFO     quant_profiler │ XDH  price=17000  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=8  bear=13  confirmed=True
+2026-04-08 18:27:26 INFO     quant_profiler │ train_lstm_model XDH: 54 samples — starting
+2026-04-08 18:27:31 INFO     quant_profiler │ train_lstm_model XDH: done in 9 epochs, val_mae=4.0338
+2026-04-08 18:27:39 INFO     quant_profiler │ ADS  price=8620  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=11  confirmed=False
+2026-04-08 18:28:01 INFO     quant_profiler │ VES  price=32000  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=BULL_TREND  bull=20  bear=14  confirmed=True
+2026-04-08 18:28:01 INFO     quant_profiler │ train_lstm_model VES: 169 samples — starting
+2026-04-08 18:28:06 INFO     quant_profiler │ train_lstm_model VES: done in 9 epochs, val_mae=14.8547
+2026-04-08 18:28:12 INFO     quant_profiler │ AAM  price=6520  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=19  confirmed=True
+2026-04-08 18:28:29 INFO     quant_profiler │ ACL  price=12350  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=11  confirmed=False
+2026-04-08 18:28:44 INFO     quant_profiler │ ADP  price=22750  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=8  bear=18  confirmed=True
+2026-04-08 18:29:01 INFO     quant_profiler │ ANV  price=24650  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=11  confirmed=False
+2026-04-08 18:29:18 INFO     quant_profiler │ BAF  price=35450  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=14  bear=9  confirmed=False
+2026-04-08 18:29:37 INFO     quant_profiler │ BMI  price=15850  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-08 18:29:51 INFO     quant_profiler │ BSI  price=38000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-08 18:30:08 INFO     quant_profiler │ BTP  price=8440  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=13  bear=4  confirmed=True
+2026-04-08 18:30:23 INFO     quant_profiler │ CDC  price=22800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=13  bear=11  confirmed=False
+2026-04-08 18:30:43 INFO     quant_profiler │ CKG  price=8780  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-08 18:30:56 INFO     quant_profiler │ CLL  price=29900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BULL_TREND  bull=4  bear=13  confirmed=True
+2026-04-08 18:31:12 INFO     quant_profiler │ CMX  price=6060  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=4  bear=17  confirmed=True
+2026-04-08 18:31:26 INFO     quant_profiler │ CTS  price=29050  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=16  confirmed=True
+2026-04-08 18:31:43 INFO     quant_profiler │ DBD  price=51000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-08 18:31:57 INFO     quant_profiler │ DCL  price=46600  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=22  bear=10  confirmed=True
+2026-04-08 18:32:17 INFO     quant_profiler │ DC4  price=9170  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-08 18:32:32 INFO     quant_profiler │ DCM  price=45250  signal=MUA  VSA=NO_DEMAND  regime=BULL_TREND  bull=17  bear=6  confirmed=False
+2026-04-08 18:32:49 INFO     quant_profiler │ EVE  price=10650  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=8  confirmed=False
+2026-04-08 18:33:06 INFO     quant_profiler │ FMC  price=38350  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-08 18:33:24 INFO     quant_profiler │ GEE  price=200700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=4  confirmed=True
+2026-04-08 18:33:34 INFO     quant_profiler │ HCD  price=7900  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=5  bear=12  confirmed=True
+2026-04-08 18:33:50 INFO     quant_profiler │ HDB  price=26350  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=10  bear=13  confirmed=True
+2026-04-08 18:34:06 INFO     quant_profiler │ HHS  price=13800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=12  confirmed=True
+2026-04-08 18:34:20 INFO     quant_profiler │ HQC  price=2640  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=9  confirmed=True
+2026-04-08 18:34:36 INFO     quant_profiler │ HTL  price=22200  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=0  bear=15  confirmed=True
+2026-04-08 18:34:52 INFO     quant_profiler │ HTI  price=24800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-08 18:35:06 INFO     quant_profiler │ HTV  price=11000  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-08 18:35:22 INFO     quant_profiler │ HUB  price=13350  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=17  confirmed=True
+2026-04-08 18:35:40 INFO     quant_profiler │ ICT  price=17900  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=10  confirmed=False
+2026-04-08 18:35:55 INFO     quant_profiler │ HVH  price=11900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=13  confirmed=False
+2026-04-08 18:36:13 INFO     quant_profiler │ IJC  price=10200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=9  confirmed=False
+2026-04-08 18:36:27 INFO     quant_profiler │ ILB  price=21350  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=13  confirmed=True
+2026-04-08 18:36:43 INFO     quant_profiler │ LHG  price=28400  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=13  confirmed=True
+2026-04-08 18:36:59 INFO     quant_profiler │ LPB  price=47500  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=16  bear=9  confirmed=False
+2026-04-08 18:37:16 INFO     quant_profiler │ NO1  price=5600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=13  confirmed=True
+2026-04-08 18:37:29 INFO     quant_profiler │ NTL  price=16300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=7  confirmed=False
+2026-04-08 18:37:46 INFO     quant_profiler │ PPC  price=10350  signal=MUA  VSA=NO_SUPPLY  regime=BULL_TREND  bull=16  bear=5  confirmed=True
+2026-04-08 18:38:01 INFO     quant_profiler │ PTL  price=2770  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=7  bear=11  confirmed=True
+2026-04-08 18:38:19 INFO     quant_profiler │ QNP  price=32000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=10  confirmed=True
+2026-04-08 18:38:19 INFO     quant_profiler │ train_lstm_model QNP: 222 samples — starting
+2026-04-08 18:38:23 INFO     quant_profiler │ train_lstm_model QNP: done in 10 epochs, val_mae=2.0707
+2026-04-08 18:38:32 INFO     quant_profiler │ SAB  price=45400  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=4  bear=13  confirmed=True
+2026-04-08 18:38:51 INFO     quant_profiler │ SAV  price=13400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-08 18:39:06 INFO     quant_profiler │ SBA  price=28500  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=BULL_TREND  bull=14  bear=11  confirmed=False
+2026-04-08 18:39:23 INFO     quant_profiler │ SBT  price=21950  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=18  confirmed=True
+2026-04-08 18:39:38 INFO     quant_profiler │ SHA  price=3990  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=18  bear=7  confirmed=False
+2026-04-08 18:39:54 INFO     quant_profiler │ SSB  price=17000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=14  confirmed=False
+2026-04-08 18:40:10 INFO     quant_profiler │ SVC  price=18200  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=9  bear=12  confirmed=True
+2026-04-08 18:40:27 INFO     quant_profiler │ TBC  price=34800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=7  bear=13  confirmed=False
+2026-04-08 18:40:45 INFO     quant_profiler │ TDP  price=29550  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BULL_TREND  bull=5  bear=16  confirmed=False
+2026-04-08 18:41:02 INFO     quant_profiler │ TEG  price=5970  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=5  bear=14  confirmed=False
+2026-04-08 18:41:17 INFO     quant_profiler │ TIP  price=18500  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=4  bear=21  confirmed=True
+2026-04-08 18:41:31 INFO     quant_profiler │ TPB  price=16500  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=13  confirmed=True
+2026-04-08 18:41:47 INFO     quant_profiler │ TSC  price=2470  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-08 18:42:06 INFO     quant_profiler │ TTF  price=2680  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=12  confirmed=True
+2026-04-08 18:42:25 INFO     quant_profiler │ VID  price=4950  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=14  bear=13  confirmed=False
+2026-04-08 18:42:38 INFO     quant_profiler │ VIB  price=17350  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=10  confirmed=True
+2026-04-08 18:42:54 INFO     quant_profiler │ VNL  price=19600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-08 18:43:16 INFO     quant_profiler │ BNA  price=6000  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=9  confirmed=False
+2026-04-08 18:43:26 INFO     quant_profiler │ BVS  price=28400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-08 18:43:46 INFO     quant_profiler │ CIA  price=9600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-08 18:43:58 INFO     quant_profiler │ CPC  price=17500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=19  bear=0  confirmed=True
+2026-04-08 18:44:19 INFO     quant_profiler │ DS3  price=5600  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-08 18:44:37 INFO     quant_profiler │ EVS  price=5200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=7  confirmed=False
+2026-04-08 18:44:51 INFO     quant_profiler │ HVT  price=27400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=17  confirmed=True
+2026-04-08 18:45:07 INFO     quant_profiler │ ICG  price=18000  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=17  bear=5  confirmed=False
+2026-04-08 18:45:23 INFO     quant_profiler │ KTS  price=23800  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=8  bear=18  confirmed=False
+2026-04-08 18:45:38 INFO     quant_profiler │ L14  price=24000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=14  confirmed=True
+2026-04-08 18:45:52 INFO     quant_profiler │ L18  price=23400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=10  confirmed=False
+2026-04-08 18:46:09 INFO     quant_profiler │ LDP  price=8000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=12  confirmed=True
+2026-04-08 18:46:25 INFO     quant_profiler │ LIG  price=3900  signal=TRUNG LẬP  VSA=ACCUM  regime=BEAR_TREND  bull=14  bear=12  confirmed=False
+2026-04-08 18:46:39 INFO     quant_profiler │ MBG  price=2900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=16  confirmed=True
+2026-04-08 18:46:54 INFO     quant_profiler │ MCF  price=7600  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=8  bear=9  confirmed=True
+2026-04-08 18:47:11 INFO     quant_profiler │ MKV  price=24000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=13  confirmed=True
+2026-04-08 18:47:28 INFO     quant_profiler │ NST  price=12100  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=9  confirmed=True
+2026-04-08 18:47:45 INFO     quant_profiler │ NVB  price=11000  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=10  bear=12  confirmed=True
+2026-04-08 18:48:01 INFO     quant_profiler │ PBP  price=12500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-08 18:48:19 INFO     quant_profiler │ PCT  price=10400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=15  confirmed=True
+2026-04-08 18:48:30 INFO     quant_profiler │ PCE  price=19700  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=11  confirmed=True
+2026-04-08 18:48:47 INFO     quant_profiler │ PIC  price=17000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=HIGH_VOL  bull=4  bear=13  confirmed=False
+2026-04-08 18:49:05 INFO     quant_profiler │ PRC  price=12800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=24  confirmed=True
+2026-04-08 18:49:18 INFO     quant_profiler │ PSW  price=8100  signal=MUA  VSA=NO_DEMAND  regime=HIGH_VOL  bull=16  bear=8  confirmed=False
+2026-04-08 18:49:35 INFO     quant_profiler │ PSI  price=8300  signal=MUA  VSA=NO_DEMAND  regime=HIGH_VOL  bull=13  bear=7  confirmed=False
+2026-04-08 18:49:57 INFO     quant_profiler │ PV2  price=2200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=False
+2026-04-08 18:50:06 INFO     quant_profiler │ SCI  price=10200  signal=MUA  VSA=ACCUM  regime=BULL_TREND  bull=21  bear=11  confirmed=False
+2026-04-08 18:50:24 INFO     quant_profiler │ SED  price=18300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=19  confirmed=True
+2026-04-08 18:50:42 INFO     quant_profiler │ SLS  price=160500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=7  confirmed=True
+2026-04-08 18:51:03 INFO     quant_profiler │ SMT  price=9300  signal=THEO DÕI–GIẢM  VSA=DISTRIB  regime=BEAR_TREND  bull=8  bear=13  confirmed=False
+2026-04-08 18:51:10 INFO     quant_profiler │ TV4  price=15300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=5  bear=8  confirmed=True
+2026-04-08 18:51:30 INFO     quant_profiler │ TVC  price=8100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=12  confirmed=True
+2026-04-08 18:51:48 INFO     quant_profiler │ V21  price=5700  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=15  bear=13  confirmed=False
+2026-04-08 18:52:03 INFO     quant_profiler │ VGS  price=24300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-08 18:52:18 INFO     quant_profiler │ VTV  price=14700  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=11  confirmed=False
+2026-04-08 18:52:38 INFO     quant_profiler │ VSM  price=14300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=13  confirmed=True
+2026-04-08 18:52:51 INFO     quant_profiler │ VTH  price=8300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=5  confirmed=True
+2026-04-08 18:53:08 INFO     quant_profiler │ WCS  price=284900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=11  confirmed=True
+2026-04-08 18:53:28 INFO     quant_profiler │ AAS  price=9100  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BULL_TREND  bull=20  bear=16  confirmed=False
+2026-04-08 18:53:28 INFO     quant_profiler │ train_lstm_model AAS: 249 samples — starting
+2026-04-08 18:53:37 INFO     quant_profiler │ train_lstm_model AAS: done in 22 epochs, val_mae=4.9502
+2026-04-08 18:53:46 INFO     quant_profiler │ ABW  price=10800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=8  confirmed=False
+2026-04-08 18:53:46 INFO     quant_profiler │ train_lstm_model ABW: 249 samples — starting
+2026-04-08 18:53:50 INFO     quant_profiler │ train_lstm_model ABW: done in 9 epochs, val_mae=4.4571
+2026-04-08 18:53:58 INFO     quant_profiler │ AIC  price=9400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=0  bear=13  confirmed=True
+2026-04-08 18:53:58 INFO     quant_profiler │ train_lstm_model AIC: 144 samples — starting
+2026-04-08 18:54:04 INFO     quant_profiler │ train_lstm_model AIC: done in 34 epochs, val_mae=4.9362
+2026-04-08 18:54:11 INFO     quant_profiler │ BMF  price=8000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=18  confirmed=True
+2026-04-08 18:54:11 INFO     quant_profiler │ train_lstm_model BMF: 130 samples — starting
+2026-04-08 18:54:16 INFO     quant_profiler │ train_lstm_model BMF: done in 12 epochs, val_mae=7.7195
+2026-04-08 18:54:28 INFO     quant_profiler │ BNW  price=16900  signal=TRUNG LẬP  VSA=ACCUM  regime=SIDEWAYS  bull=9  bear=10  confirmed=False
+2026-04-08 18:54:28 INFO     quant_profiler │ train_lstm_model BNW: 33 samples — starting
+2026-04-08 18:54:34 INFO     quant_profiler │ train_lstm_model BNW: done in 9 epochs, val_mae=3.5129
+2026-04-08 18:54:43 INFO     quant_profiler │ BMV  price=4900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=14  confirmed=True
+2026-04-08 18:54:44 INFO     quant_profiler │ train_lstm_model BMV: 28 samples — starting
+2026-04-08 18:54:49 INFO     quant_profiler │ train_lstm_model BMV: done in 9 epochs, val_mae=9.0335
+2026-04-08 18:54:58 INFO     quant_profiler │ BTB  price=4400  signal=TRUNG LẬP  VSA=NEUTRAL  regime=HIGH_VOL  bull=15  bear=13  confirmed=False
+2026-04-08 18:55:18 INFO     quant_profiler │ BVL  price=15100  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=0  bear=15  confirmed=True
+2026-04-08 18:55:18 INFO     quant_profiler │ train_lstm_model BVL: 230 samples — starting
+2026-04-08 18:55:25 INFO     quant_profiler │ train_lstm_model BVL: done in 9 epochs, val_mae=5.0111
+2026-04-08 18:55:33 INFO     quant_profiler │ BWS  price=34600  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=7  confirmed=True
+2026-04-08 18:55:33 INFO     quant_profiler │ train_lstm_model BWS: 216 samples — starting
+2026-04-08 18:55:37 INFO     quant_profiler │ train_lstm_model BWS: done in 10 epochs, val_mae=1.5411
+2026-04-08 18:55:47 INFO     quant_profiler │ CAD  price=500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=13  confirmed=True
+2026-04-08 18:55:47 INFO     quant_profiler │ train_lstm_model CAD: 29 samples — starting
+2026-04-08 18:55:55 INFO     quant_profiler │ train_lstm_model CAD: done in 14 epochs, val_mae=7.0406
+2026-04-08 18:56:04 INFO     quant_profiler │ CDP  price=14200  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=HIGH_VOL  bull=9  bear=16  confirmed=False
+2026-04-08 18:56:04 INFO     quant_profiler │ train_lstm_model CDP: 238 samples — starting
+2026-04-08 18:56:14 INFO     quant_profiler │ train_lstm_model CDP: done in 21 epochs, val_mae=10.0670
+2026-04-08 18:56:23 INFO     quant_profiler │ CDR  price=4400  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=3  bear=15  confirmed=True
+2026-04-08 18:56:23 INFO     quant_profiler │ train_lstm_model CDR: 243 samples — starting
+2026-04-08 18:56:28 INFO     quant_profiler │ train_lstm_model CDR: done in 12 epochs, val_mae=4.3133
+2026-04-08 18:56:36 INFO     quant_profiler │ CHS  price=11000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=27  confirmed=True
+2026-04-08 18:56:36 INFO     quant_profiler │ train_lstm_model CHS: 137 samples — starting
+2026-04-08 18:56:46 INFO     quant_profiler │ train_lstm_model CHS: done in 33 epochs, val_mae=2.1758
+2026-04-08 18:56:55 INFO     quant_profiler │ CMT  price=12900  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=HIGH_VOL  bull=12  bear=7  confirmed=False
+2026-04-08 18:56:55 INFO     quant_profiler │ train_lstm_model CMT: 225 samples — starting
+2026-04-08 18:57:04 INFO     quant_profiler │ train_lstm_model CMT: done in 25 epochs, val_mae=3.1799
+2026-04-08 18:57:15 INFO     quant_profiler │ CTX  price=5500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=10  bear=9  confirmed=True
+2026-04-08 18:57:15 INFO     quant_profiler │ train_lstm_model CTX: 220 samples — starting
+2026-04-08 18:57:23 INFO     quant_profiler │ train_lstm_model CTX: done in 9 epochs, val_mae=8.8845
+2026-04-08 18:57:34 INFO     quant_profiler │ DDB  price=9300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=11  confirmed=False
+2026-04-08 18:57:34 INFO     quant_profiler │ train_lstm_model DDB: 237 samples — starting
+2026-04-08 18:57:40 INFO     quant_profiler │ train_lstm_model DDB: done in 9 epochs, val_mae=2.7505
+2026-04-08 18:57:46 INFO     quant_profiler │ DDM  price=1800  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=UNKNOWN  bull=5  bear=8  confirmed=True
+2026-04-08 18:57:46 INFO     quant_profiler │ train_lstm_model DDM: 22 samples — starting
+2026-04-08 18:57:50 INFO     quant_profiler │ train_lstm_model DDM: done in 9 epochs, val_mae=3.8493
+2026-04-08 18:57:58 INFO     quant_profiler │ DTC  price=4500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=20  confirmed=False
+2026-04-08 18:57:58 INFO     quant_profiler │ train_lstm_model DTC: 98 samples — starting
+2026-04-08 18:58:04 INFO     quant_profiler │ train_lstm_model DTC: done in 29 epochs, val_mae=10.2970
+2026-04-08 18:58:08 INFO     quant_profiler │ DVN  price=20600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-08 18:58:08 INFO     quant_profiler │ train_lstm_model DVN: 249 samples — starting
+2026-04-08 18:58:17 INFO     quant_profiler │ train_lstm_model DVN: done in 36 epochs, val_mae=2.8215
+2026-04-08 18:58:27 INFO     quant_profiler │ E12  price=4000  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=SIDEWAYS  bull=9  bear=14  confirmed=False
+2026-04-08 18:58:27 INFO     quant_profiler │ train_lstm_model E12: 178 samples — starting
+2026-04-08 18:58:35 INFO     quant_profiler │ train_lstm_model E12: done in 33 epochs, val_mae=7.5450
+2026-04-08 18:58:46 INFO     quant_profiler │ FOC  price=67500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=4  confirmed=True
+2026-04-08 18:58:46 INFO     quant_profiler │ train_lstm_model FOC: 249 samples — starting
+2026-04-08 18:58:54 INFO     quant_profiler │ train_lstm_model FOC: done in 15 epochs, val_mae=2.4483
+2026-04-08 18:59:05 INFO     quant_profiler │ FOX  price=84500  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=17  bear=0  confirmed=False
+2026-04-08 18:59:05 INFO     quant_profiler │ train_lstm_model FOX: 249 samples — starting
+2026-04-08 18:59:16 INFO     quant_profiler │ train_lstm_model FOX: done in 23 epochs, val_mae=6.9578
+2026-04-08 18:59:22 INFO     quant_profiler │ FSO  price=7200  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=14  bear=3  confirmed=True
+2026-04-08 18:59:22 INFO     quant_profiler │ train_lstm_model FSO: 62 samples — starting
+2026-04-08 18:59:34 INFO     quant_profiler │ train_lstm_model FSO: done in 60 epochs, val_mae=11.6548
+2026-04-08 18:59:43 INFO     quant_profiler │ FT1  price=41000  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=19  bear=7  confirmed=False
+2026-04-08 18:59:43 INFO     quant_profiler │ train_lstm_model FT1: 182 samples — starting
+2026-04-08 18:59:52 INFO     quant_profiler │ train_lstm_model FT1: done in 19 epochs, val_mae=2.9496
+2026-04-08 19:00:02 INFO     quant_profiler │ HAF  price=17900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=16  confirmed=True
+2026-04-08 19:00:02 INFO     quant_profiler │ train_lstm_model HAF: 97 samples — starting
+2026-04-08 19:00:08 INFO     quant_profiler │ train_lstm_model HAF: done in 9 epochs, val_mae=5.1137
+2026-04-08 19:00:18 INFO     quant_profiler │ HAC  price=10000  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=22  bear=10  confirmed=False
+2026-04-08 19:00:18 INFO     quant_profiler │ train_lstm_model HAC: 175 samples — starting
+2026-04-08 19:00:24 INFO     quant_profiler │ train_lstm_model HAC: done in 9 epochs, val_mae=7.1409
+2026-04-08 19:00:30 INFO     quant_profiler │ HMS  price=38600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=12  bear=11  confirmed=True
+2026-04-08 19:00:42 INFO     quant_profiler │ HND  price=10700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=13  confirmed=True
+2026-04-08 19:00:42 INFO     quant_profiler │ train_lstm_model HND: 249 samples — starting
+2026-04-08 19:00:47 INFO     quant_profiler │ train_lstm_model HND: done in 9 epochs, val_mae=3.3175
+2026-04-08 19:00:57 INFO     quant_profiler │ HNM  price=8300  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=7  confirmed=True
+2026-04-08 19:00:57 INFO     quant_profiler │ train_lstm_model HNM: 249 samples — starting
+2026-04-08 19:01:04 INFO     quant_profiler │ train_lstm_model HNM: done in 21 epochs, val_mae=1.6972
+2026-04-08 19:01:12 INFO     quant_profiler │ HPP  price=79000  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=13  bear=6  confirmed=True
+2026-04-08 19:01:12 INFO     quant_profiler │ train_lstm_model HPP: 213 samples — starting
+2026-04-08 19:01:19 INFO     quant_profiler │ train_lstm_model HPP: done in 11 epochs, val_mae=2.1571
+2026-04-08 19:01:28 INFO     quant_profiler │ HPT  price=27200  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=18  bear=5  confirmed=False
+2026-04-08 19:01:28 INFO     quant_profiler │ train_lstm_model HPT: 201 samples — starting
+2026-04-08 19:01:35 INFO     quant_profiler │ train_lstm_model HPT: done in 15 epochs, val_mae=4.7160
+2026-04-08 19:01:44 INFO     quant_profiler │ HTE  price=3300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=11  confirmed=True
+2026-04-08 19:01:44 INFO     quant_profiler │ train_lstm_model HTE: 244 samples — starting
+2026-04-08 19:01:52 INFO     quant_profiler │ train_lstm_model HTE: done in 19 epochs, val_mae=1.9370
+2026-04-08 19:02:01 INFO     quant_profiler │ HTM  price=9400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=2  bear=22  confirmed=True
+2026-04-08 19:02:01 INFO     quant_profiler │ train_lstm_model HTM: 215 samples — starting
+2026-04-08 19:02:07 INFO     quant_profiler │ train_lstm_model HTM: done in 11 epochs, val_mae=6.4761
+2026-04-08 19:02:20 INFO     quant_profiler │ HSV  price=4500  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=HIGH_VOL  bull=9  bear=14  confirmed=False
+2026-04-08 19:02:20 INFO     quant_profiler │ train_lstm_model HSV: 249 samples — starting
+2026-04-08 19:02:28 INFO     quant_profiler │ train_lstm_model HSV: done in 18 epochs, val_mae=3.5527
+2026-04-08 19:02:36 INFO     quant_profiler │ HWS  price=15000  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=11  confirmed=False
+2026-04-08 19:02:36 INFO     quant_profiler │ train_lstm_model HWS: 245 samples — starting
+2026-04-08 19:02:43 INFO     quant_profiler │ train_lstm_model HWS: done in 21 epochs, val_mae=1.3976
+2026-04-08 19:02:51 INFO     quant_profiler │ ILA  price=5100  signal=BÁN / TRÁNH  VSA=DISTRIB  regime=SIDEWAYS  bull=8  bear=18  confirmed=False
+2026-04-08 19:02:51 INFO     quant_profiler │ train_lstm_model ILA: 234 samples — starting
+2026-04-08 19:02:56 INFO     quant_profiler │ train_lstm_model ILA: done in 10 epochs, val_mae=6.0587
+2026-04-08 19:03:04 INFO     quant_profiler │ JOS  price=1000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=7  confirmed=True
+2026-04-08 19:03:04 INFO     quant_profiler │ train_lstm_model JOS: 29 samples — starting
+2026-04-08 19:03:10 INFO     quant_profiler │ train_lstm_model JOS: done in 26 epochs, val_mae=14.9288
+2026-04-08 19:03:19 INFO     quant_profiler │ KSQ  price=1600  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=17  confirmed=True
+2026-04-08 19:03:19 INFO     quant_profiler │ train_lstm_model KSQ: 238 samples — starting
+2026-04-08 19:03:24 INFO     quant_profiler │ train_lstm_model KSQ: done in 16 epochs, val_mae=5.7543
+2026-04-08 19:03:34 INFO     quant_profiler │ L63  price=9500  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=20  bear=16  confirmed=False
+2026-04-08 19:03:34 INFO     quant_profiler │ train_lstm_model L63: 44 samples — starting
+2026-04-08 19:03:42 INFO     quant_profiler │ train_lstm_model L63: done in 26 epochs, val_mae=4.1451
+2026-04-08 19:03:52 INFO     quant_profiler │ M10  price=22800  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=6  confirmed=True
+2026-04-08 19:03:52 INFO     quant_profiler │ train_lstm_model M10: 246 samples — starting
+2026-04-08 19:03:56 INFO     quant_profiler │ train_lstm_model M10: done in 11 epochs, val_mae=2.1825
+2026-04-08 19:04:04 INFO     quant_profiler │ MML  price=32000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=5  bear=12  confirmed=True
+2026-04-08 19:04:04 INFO     quant_profiler │ train_lstm_model MML: 249 samples — starting
+2026-04-08 19:04:08 INFO     quant_profiler │ train_lstm_model MML: done in 9 epochs, val_mae=6.0070
+2026-04-08 19:04:18 INFO     quant_profiler │ MQN  price=19500  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=HIGH_VOL  bull=8  bear=20  confirmed=True
+2026-04-08 19:04:18 INFO     quant_profiler │ train_lstm_model MQN: 157 samples — starting
+2026-04-08 19:04:26 INFO     quant_profiler │ train_lstm_model MQN: done in 22 epochs, val_mae=3.3930
+2026-04-08 19:04:38 INFO     quant_profiler │ MTA  price=13600  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-08 19:04:38 INFO     quant_profiler │ train_lstm_model MTA: 249 samples — starting
+2026-04-08 19:04:47 INFO     quant_profiler │ train_lstm_model MTA: done in 26 epochs, val_mae=7.0465
+2026-04-08 19:04:56 INFO     quant_profiler │ MTL  price=5700  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=7  confirmed=True
+2026-04-08 19:04:56 INFO     quant_profiler │ train_lstm_model MTL: 185 samples — starting
+2026-04-08 19:05:01 INFO     quant_profiler │ train_lstm_model MTL: done in 17 epochs, val_mae=4.3859
+2026-04-08 19:05:11 INFO     quant_profiler │ MVC  price=15000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=4  bear=19  confirmed=True
+2026-04-08 19:05:11 INFO     quant_profiler │ train_lstm_model MVC: 249 samples — starting
+2026-04-08 19:05:15 INFO     quant_profiler │ train_lstm_model MVC: done in 9 epochs, val_mae=4.3394
+2026-04-08 19:05:25 INFO     quant_profiler │ NBT  price=16600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=3  bear=14  confirmed=True
+2026-04-08 19:05:25 INFO     quant_profiler │ train_lstm_model NBT: 153 samples — starting
+2026-04-08 19:05:30 INFO     quant_profiler │ train_lstm_model NBT: done in 10 epochs, val_mae=1.3158
+2026-04-08 19:05:41 INFO     quant_profiler │ ND2  price=36000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=14  confirmed=False
+2026-04-08 19:05:41 INFO     quant_profiler │ train_lstm_model ND2: 199 samples — starting
+2026-04-08 19:05:47 INFO     quant_profiler │ train_lstm_model ND2: done in 9 epochs, val_mae=1.4973
+2026-04-08 19:05:59 INFO     quant_profiler │ PBC  price=5800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=11  confirmed=True
+2026-04-08 19:05:59 INFO     quant_profiler │ train_lstm_model PBC: 249 samples — starting
+2026-04-08 19:06:05 INFO     quant_profiler │ train_lstm_model PBC: done in 15 epochs, val_mae=2.0057
+2026-04-08 19:06:14 INFO     quant_profiler │ PGB  price=12300  signal=MUA  VSA=ACCUM  regime=SIDEWAYS  bull=20  bear=9  confirmed=True
+2026-04-08 19:06:14 INFO     quant_profiler │ train_lstm_model PGB: 248 samples — starting
+2026-04-08 19:06:19 INFO     quant_profiler │ train_lstm_model PGB: done in 9 epochs, val_mae=2.7362
+2026-04-08 19:06:26 INFO     quant_profiler │ QHW  price=35000  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=0  bear=13  confirmed=True
+2026-04-08 19:06:26 INFO     quant_profiler │ train_lstm_model QHW: 93 samples — starting
+2026-04-08 19:06:33 INFO     quant_profiler │ train_lstm_model QHW: done in 26 epochs, val_mae=4.4919
+2026-04-08 19:06:39 INFO     quant_profiler │ QNS  price=47600  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=12  confirmed=True
+2026-04-08 19:06:39 INFO     quant_profiler │ train_lstm_model QNS: 249 samples — starting
+2026-04-08 19:06:44 INFO     quant_profiler │ train_lstm_model QNS: done in 9 epochs, val_mae=1.5624
+2026-04-08 19:06:56 INFO     quant_profiler │ QPH  price=34100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=HIGH_VOL  bull=7  bear=16  confirmed=True
+2026-04-08 19:06:56 INFO     quant_profiler │ train_lstm_model QPH: 177 samples — starting
+2026-04-08 19:07:02 INFO     quant_profiler │ train_lstm_model QPH: done in 16 epochs, val_mae=3.1746
+2026-04-08 19:07:12 INFO     quant_profiler │ SB1  price=7100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=10  confirmed=True
+2026-04-08 19:07:12 INFO     quant_profiler │ train_lstm_model SB1: 145 samples — starting
+2026-04-08 19:07:24 INFO     quant_profiler │ train_lstm_model SB1: done in 45 epochs, val_mae=4.4804
+2026-04-08 19:07:31 INFO     quant_profiler │ SBM  price=34700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=15  bear=11  confirmed=True
+2026-04-08 19:07:31 INFO     quant_profiler │ train_lstm_model SBM: 52 samples — starting
+2026-04-08 19:07:35 INFO     quant_profiler │ train_lstm_model SBM: done in 9 epochs, val_mae=1.7954
+2026-04-08 19:07:46 INFO     quant_profiler │ SBL  price=5200  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=11  confirmed=True
+2026-04-08 19:07:46 INFO     quant_profiler │ train_lstm_model SBL: 175 samples — starting
+2026-04-08 19:07:51 INFO     quant_profiler │ train_lstm_model SBL: done in 22 epochs, val_mae=7.5121
+2026-04-08 19:08:02 INFO     quant_profiler │ SCJ  price=2900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=11  confirmed=False
+2026-04-08 19:08:02 INFO     quant_profiler │ train_lstm_model SCJ: 226 samples — starting
+2026-04-08 19:08:05 INFO     quant_profiler │ train_lstm_model SCJ: done in 9 epochs, val_mae=4.1003
+2026-04-08 19:08:16 INFO     quant_profiler │ SD3  price=8100  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=22  bear=0  confirmed=True
+2026-04-08 19:08:16 INFO     quant_profiler │ train_lstm_model SD3: 214 samples — starting
+2026-04-08 19:08:21 INFO     quant_profiler │ train_lstm_model SD3: done in 12 epochs, val_mae=5.0644
+2026-04-08 19:08:32 INFO     quant_profiler │ SGB  price=12400  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=14  bear=3  confirmed=True
+2026-04-08 19:08:32 INFO     quant_profiler │ train_lstm_model SGB: 248 samples — starting
+2026-04-08 19:08:36 INFO     quant_profiler │ train_lstm_model SGB: done in 12 epochs, val_mae=1.9590
+2026-04-08 19:08:45 INFO     quant_profiler │ SGP  price=24300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-08 19:08:45 INFO     quant_profiler │ train_lstm_model SGP: 249 samples — starting
+2026-04-08 19:08:52 INFO     quant_profiler │ train_lstm_model SGP: done in 31 epochs, val_mae=4.6956
+2026-04-08 19:09:03 INFO     quant_profiler │ SIG  price=6700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=True
+2026-04-08 19:09:03 INFO     quant_profiler │ train_lstm_model SIG: 63 samples — starting
+2026-04-08 19:09:06 INFO     quant_profiler │ train_lstm_model SIG: done in 9 epochs, val_mae=11.4078
+2026-04-09 08:59:04 INFO     quant_profiler │ VIB  price=17000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-09 08:59:10 INFO     quant_profiler │ MBB  price=25750  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-09 08:59:14 INFO     quant_profiler │ VFG  price=49050  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-09 08:59:19 INFO     quant_profiler │ VIC  price=131600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-09 08:59:26 INFO     quant_profiler │ NSC  price=71500  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-09 08:59:41 INFO     quant_profiler │ TLH  price=4480  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=12  confirmed=False
+2026-04-09 09:00:00 INFO     quant_profiler │ VIX  price=16200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-09 09:00:19 INFO     quant_profiler │ BMP  price=125700  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=15  confirmed=True
+2026-04-09 09:00:34 INFO     quant_profiler │ IJC  price=10250  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=9  confirmed=False
+2026-04-09 09:00:48 INFO     quant_profiler │ KHG  price=5490  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BEAR_TREND  bull=15  bear=9  confirmed=False
+2026-04-09 09:01:05 INFO     quant_profiler │ MCM  price=25850  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=17  bear=12  confirmed=False
+2026-04-09 09:01:22 INFO     quant_profiler │ OGC  price=2990  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=11  confirmed=True
+2026-04-09 09:01:39 INFO     quant_profiler │ SAB  price=43950  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=3  bear=14  confirmed=True
+2026-04-09 09:01:51 INFO     quant_profiler │ TDG  price=2600  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-09 09:02:08 INFO     quant_profiler │ VCB  price=58100  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-09 09:02:25 INFO     quant_profiler │ CTS  price=26300  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=6  bear=17  confirmed=True
+2026-04-09 09:02:39 INFO     quant_profiler │ DBD  price=50900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-09 09:02:57 INFO     quant_profiler │ DCM  price=49550  signal=MUA  VSA=NO_DEMAND  regime=BULL_TREND  bull=18  bear=5  confirmed=False
+2026-04-09 09:03:12 INFO     quant_profiler │ HPG  price=25950  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-04-09 09:03:30 INFO     quant_profiler │ MSB  price=11250  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=8  confirmed=False
+2026-04-09 09:03:47 INFO     quant_profiler │ PTC  price=6800  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=8  bear=13  confirmed=True
+2026-04-09 09:04:01 INFO     quant_profiler │ SBT  price=21500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=18  confirmed=True
+2026-04-09 09:04:15 INFO     quant_profiler │ SCS  price=53300  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=13  confirmed=True
+2026-04-09 09:04:30 INFO     quant_profiler │ VND  price=15500  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-09 09:04:48 INFO     quant_profiler │ MSH  price=37700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-09 09:05:02 INFO     quant_profiler │ SHA  price=3990  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=18  bear=7  confirmed=False
+2026-04-09 09:05:18 INFO     quant_profiler │ AAA  price=6970  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
+2026-04-09 09:05:34 INFO     quant_profiler │ TCB  price=30200  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 09:05:51 INFO     quant_profiler │ HTI  price=24200  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-09 09:06:08 INFO     quant_profiler │ CTG  price=34000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-09 09:06:21 INFO     quant_profiler │ SAV  price=13350  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-09 09:06:38 INFO     quant_profiler │ AAM  price=6070  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=20  confirmed=True
+2026-04-09 09:06:55 INFO     quant_profiler │ ANV  price=23550  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=12  confirmed=False
+2026-04-09 09:07:15 INFO     quant_profiler │ HDB  price=24750  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-09 09:07:28 INFO     quant_profiler │ ICT  price=17800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=10  confirmed=False
+2026-04-09 09:07:44 INFO     quant_profiler │ VID  price=4940  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=14  bear=13  confirmed=False
+2026-04-09 09:07:59 INFO     quant_profiler │ DC4  price=9050  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-09 09:08:17 INFO     quant_profiler │ EVE  price=10100  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=5  bear=11  confirmed=False
+2026-04-09 09:08:33 INFO     quant_profiler │ FMC  price=38000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-09 09:08:50 INFO     quant_profiler │ FRT  price=157900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=11  confirmed=True
+2026-04-09 09:09:07 INFO     quant_profiler │ HSG  price=14600  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-09 09:09:21 INFO     quant_profiler │ HTL  price=22300  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=0  bear=15  confirmed=True
+2026-04-09 09:09:37 INFO     quant_profiler │ MWG  price=80200  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-09 09:09:55 INFO     quant_profiler │ PAN  price=30400  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=SIDEWAYS  bull=9  bear=12  confirmed=True
+2026-04-09 09:10:12 INFO     quant_profiler │ TV2  price=38500  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=19  bear=0  confirmed=True
+2026-04-09 09:10:28 INFO     quant_profiler │ TDM  price=55400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-09 09:10:45 INFO     quant_profiler │ BTP  price=8480  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=14  bear=3  confirmed=True
+2026-04-09 09:11:01 INFO     quant_profiler │ CMG  price=29200  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-09 09:11:18 INFO     quant_profiler │ FPT  price=74700  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-09 09:11:37 INFO     quant_profiler │ HCD  price=7800  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=0  bear=17  confirmed=True
+2026-04-09 09:11:53 INFO     quant_profiler │ VTZ  price=20400  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-09 09:12:08 INFO     quant_profiler │ PRC  price=11200  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=0  bear=23  confirmed=True
+2026-04-09 09:12:25 INFO     quant_profiler │ BAB  price=11300  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=BEAR_TREND  bull=12  bear=16  confirmed=True
+2026-04-09 09:12:40 INFO     quant_profiler │ BVS  price=28400  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 09:12:59 INFO     quant_profiler │ PSI  price=8200  signal=MUA  VSA=NO_DEMAND  regime=HIGH_VOL  bull=13  bear=7  confirmed=False
+2026-04-09 09:13:18 INFO     quant_profiler │ KTS  price=23800  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=8  bear=18  confirmed=False
+2026-04-09 09:13:32 INFO     quant_profiler │ VIG  price=4900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=17  confirmed=True
+2026-04-09 09:13:49 INFO     quant_profiler │ EBS  price=11100  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=6  confirmed=False
+2026-04-09 09:14:05 INFO     quant_profiler │ SHB  price=15100  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=18  bear=12  confirmed=False
+2026-04-09 09:14:21 INFO     quant_profiler │ MBB  price=25750  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-09 09:14:36 INFO     quant_profiler │ HPG  price=25950  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=15  confirmed=True
+2026-04-09 09:14:53 INFO     quant_profiler │ HHV  price=12400  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=7  confirmed=True
+2026-04-09 09:15:08 INFO     quant_profiler │ BAF  price=35450  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=14  bear=9  confirmed=False
+2026-04-09 09:15:25 INFO     quant_profiler │ APH  price=5580  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-04-09 09:15:41 INFO     quant_profiler │ SAM  price=7190  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 09:15:55 INFO     quant_profiler │ VIX  price=17950  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 09:16:13 INFO     quant_profiler │ VND  price=16800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 09:16:31 INFO     quant_profiler │ DXG  price=14750  signal=TRUNG LẬP  VSA=ACCUM  regime=BEAR_TREND  bull=19  bear=14  confirmed=False
+2026-04-09 09:16:49 INFO     quant_profiler │ HQC  price=2600  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=9  confirmed=True
+2026-04-09 12:07:54 INFO     quant_profiler │ VIB  price=17100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-09 12:08:02 INFO     quant_profiler │ MBB  price=26500  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-09 12:08:10 INFO     quant_profiler │ VFG  price=49900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=4  bear=15  confirmed=True
+2026-04-09 12:08:16 INFO     quant_profiler │ VIC  price=151700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-09 12:08:23 INFO     quant_profiler │ NSC  price=74000  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=5  bear=14  confirmed=True
+2026-04-09 12:08:39 INFO     quant_profiler │ TLH  price=4570  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=12  confirmed=False
+2026-04-09 12:08:58 INFO     quant_profiler │ VIX  price=17850  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 12:09:13 INFO     quant_profiler │ BMP  price=130400  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=11  bear=15  confirmed=True
+2026-04-09 12:09:30 INFO     quant_profiler │ IJC  price=10250  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=9  confirmed=False
+2026-04-09 12:09:46 INFO     quant_profiler │ KHG  price=5490  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=BEAR_TREND  bull=15  bear=9  confirmed=False
+2026-04-09 12:10:02 INFO     quant_profiler │ MCM  price=25600  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=16  bear=13  confirmed=False
+2026-04-09 12:10:18 INFO     quant_profiler │ OGC  price=3010  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=11  confirmed=True
+2026-04-09 12:10:34 INFO     quant_profiler │ SAB  price=45350  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=4  bear=13  confirmed=True
+2026-04-09 12:10:49 INFO     quant_profiler │ TDG  price=2620  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=SIDEWAYS  bull=6  bear=13  confirmed=True
+2026-04-09 12:11:03 INFO     quant_profiler │ VCB  price=59500  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-09 12:11:19 INFO     quant_profiler │ CTS  price=28250  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=7  bear=16  confirmed=True
+2026-04-09 12:11:34 INFO     quant_profiler │ DBD  price=50900  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-09 12:11:50 INFO     quant_profiler │ DCM  price=44950  signal=MUA  VSA=NO_DEMAND  regime=BULL_TREND  bull=17  bear=6  confirmed=False
+2026-04-09 12:12:06 INFO     quant_profiler │ HPG  price=27750  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-09 12:12:23 INFO     quant_profiler │ MSB  price=12000  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=9  confirmed=False
+2026-04-09 12:12:40 INFO     quant_profiler │ PTC  price=7360  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=14  bear=7  confirmed=False
+2026-04-09 12:12:57 INFO     quant_profiler │ SBT  price=21850  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=18  confirmed=True
+2026-04-09 12:13:13 INFO     quant_profiler │ SCS  price=54300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=12  confirmed=True
+2026-04-09 12:13:31 INFO     quant_profiler │ VND  price=16850  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 12:13:45 INFO     quant_profiler │ MSH  price=36950  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=17  bear=5  confirmed=True
+2026-04-09 12:14:02 INFO     quant_profiler │ SHA  price=3950  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=9  confirmed=False
+2026-04-09 12:14:19 INFO     quant_profiler │ AAA  price=7060  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=15  bear=12  confirmed=False
+2026-04-09 12:14:35 INFO     quant_profiler │ TCB  price=30950  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=8  bear=13  confirmed=True
+2026-04-09 12:14:49 INFO     quant_profiler │ HTI  price=23800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=10  confirmed=False
+2026-04-09 12:15:06 INFO     quant_profiler │ CTG  price=34950  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=6  confirmed=False
+2026-04-09 12:15:21 INFO     quant_profiler │ SAV  price=13500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-09 12:15:36 INFO     quant_profiler │ AAM  price=6690  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=21  confirmed=True
+2026-04-09 12:15:54 INFO     quant_profiler │ ANV  price=24450  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=11  confirmed=False
+2026-04-09 12:16:10 INFO     quant_profiler │ HDB  price=26000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=10  bear=13  confirmed=True
+2026-04-09 12:16:25 INFO     quant_profiler │ ICT  price=17800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=10  confirmed=False
+2026-04-09 12:16:41 INFO     quant_profiler │ VID  price=4900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=13  bear=14  confirmed=True
+2026-04-09 12:16:56 INFO     quant_profiler │ DC4  price=9170  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-09 12:17:15 INFO     quant_profiler │ EVE  price=10500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=8  confirmed=False
+2026-04-09 12:17:31 INFO     quant_profiler │ FMC  price=38300  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-09 12:17:46 INFO     quant_profiler │ FRT  price=150600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-09 12:18:01 INFO     quant_profiler │ HSG  price=15100  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-09 12:18:17 INFO     quant_profiler │ HTL  price=22200  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=0  bear=15  confirmed=True
+2026-04-09 12:18:33 INFO     quant_profiler │ MWG  price=80800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-09 12:18:48 INFO     quant_profiler │ PAN  price=32300  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-09 12:19:05 INFO     quant_profiler │ TV2  price=36700  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=3  confirmed=True
+2026-04-09 12:19:19 INFO     quant_profiler │ TDM  price=56900  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=7  bear=12  confirmed=True
+2026-04-09 12:19:37 INFO     quant_profiler │ BTP  price=8440  signal=MUA  VSA=NEUTRAL  regime=BULL_TREND  bull=13  bear=4  confirmed=True
+2026-04-09 12:19:53 INFO     quant_profiler │ CMG  price=29150  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-09 12:20:10 INFO     quant_profiler │ FPT  price=78300  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-09 12:20:27 INFO     quant_profiler │ HCD  price=7980  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=6  bear=11  confirmed=True
+2026-04-09 12:20:41 INFO     quant_profiler │ VTZ  price=20300  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-09 12:20:58 INFO     quant_profiler │ PRC  price=12800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=3  bear=24  confirmed=True
+2026-04-09 12:21:12 INFO     quant_profiler │ BAB  price=11200  signal=THEO DÕI–GIẢM  VSA=ACCUM  regime=BEAR_TREND  bull=12  bear=16  confirmed=True
+2026-04-09 12:21:26 INFO     quant_profiler │ BVS  price=27700  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 12:21:44 INFO     quant_profiler │ PSI  price=8000  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=HIGH_VOL  bull=10  bear=10  confirmed=True
+2026-04-09 12:22:04 INFO     quant_profiler │ KTS  price=23800  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=16  confirmed=False
+2026-04-09 12:22:16 INFO     quant_profiler │ VIG  price=4800  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=6  bear=18  confirmed=True
+2026-04-09 12:22:31 INFO     quant_profiler │ EBS  price=11100  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=6  confirmed=False
+2026-04-09 12:22:48 INFO     quant_profiler │ SHB  price=15100  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=18  bear=12  confirmed=False
+2026-04-09 12:23:04 INFO     quant_profiler │ MBB  price=26500  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-09 12:23:21 INFO     quant_profiler │ HPG  price=27750  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-09 12:23:36 INFO     quant_profiler │ HHV  price=12350  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=7  confirmed=True
+2026-04-09 12:23:55 INFO     quant_profiler │ BAF  price=35000  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=10  bear=13  confirmed=True
+2026-04-09 12:24:12 INFO     quant_profiler │ APH  price=5560  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-04-09 12:24:27 INFO     quant_profiler │ SAM  price=7130  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 12:24:42 INFO     quant_profiler │ VIX  price=17850  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 12:24:57 INFO     quant_profiler │ VND  price=16850  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-09 12:25:13 INFO     quant_profiler │ DXG  price=15250  signal=TRUNG LẬP  VSA=ACCUM  regime=BEAR_TREND  bull=21  bear=16  confirmed=False
+2026-04-09 12:25:30 INFO     quant_profiler │ HQC  price=2670  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=9  confirmed=True
+2026-04-09 14:27:44 INFO     quant_profiler │ TLH  price=4630  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=11  confirmed=False
+2026-04-09 14:30:39 INFO     quant_profiler │ TLH  price=4640  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=11  confirmed=False
+2026-04-09 14:30:43 INFO     quant_profiler │ HHV  price=12950  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=11  confirmed=True
+2026-04-09 14:36:16 INFO     quant_profiler │ TLH  price=4640  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BEAR_TREND  bull=17  bear=11  confirmed=False
+2026-04-09 14:36:20 INFO     quant_profiler │ HHV  price=12950  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=11  confirmed=True
+2026-04-09 14:36:24 INFO     quant_profiler │ VCG  price=23000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BULL_TREND  bull=11  bear=16  confirmed=False
+2026-04-09 14:36:32 INFO     quant_profiler │ VGC  price=45800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=9  confirmed=False
+2026-04-09 14:36:38 INFO     quant_profiler │ LCG  price=10400  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=21  bear=8  confirmed=False
+2026-04-09 14:40:23 INFO     quant_profiler │ SAM  price=7170  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-09 14:40:37 INFO     quant_profiler │ YBM  price=10350  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BULL_TREND  bull=6  bear=15  confirmed=False
+2026-04-09 14:40:52 INFO     quant_profiler │ GEG  price=15300  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=HIGH_VOL  bull=9  bear=10  confirmed=False
+2026-04-09 14:41:10 INFO     quant_profiler │ CST  price=14600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BULL_TREND  bull=11  bear=12  confirmed=False
+2026-04-10 18:04:38 INFO     quant_profiler │ VCB  price=59800  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-10 18:04:40 INFO     quant_profiler │ BID  price=40800  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-10 18:04:43 INFO     quant_profiler │ CTG  price=35000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=6  confirmed=False
+2026-04-10 18:04:45 INFO     quant_profiler │ MBB  price=26700  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-10 18:04:49 INFO     quant_profiler │ TCB  price=32250  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=8  bear=13  confirmed=True
+2026-04-10 18:04:51 INFO     quant_profiler │ ACB  price=23850  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-10 18:04:54 INFO     quant_profiler │ VPB  price=27300  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=14  confirmed=False
+2026-04-10 18:04:56 INFO     quant_profiler │ HDB  price=26150  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=10  bear=13  confirmed=True
+2026-04-10 18:05:03 INFO     quant_profiler │ LPB  price=49300  signal=THEO DÕI–TĂNG  VSA=ACCUM  regime=SIDEWAYS  bull=21  bear=14  confirmed=True
+2026-04-10 18:05:05 INFO     quant_profiler │ SHB  price=15400  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=18  bear=12  confirmed=False
+2026-04-10 18:05:07 INFO     quant_profiler │ STB  price=66900  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=13  bear=11  confirmed=False
+2026-04-10 18:05:10 INFO     quant_profiler │ TPB  price=16300  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=13  confirmed=True
+2026-04-10 18:05:12 INFO     quant_profiler │ OCB  price=11600  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=True
+2026-04-10 18:05:14 INFO     quant_profiler │ MSB  price=12750  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=17  bear=6  confirmed=False
+2026-04-10 18:05:18 INFO     quant_profiler │ VIB  price=17450  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=14  bear=10  confirmed=True
+2026-04-10 18:05:20 INFO     quant_profiler │ EIB  price=23100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=11  bear=8  confirmed=True
+2026-04-10 18:05:22 INFO     quant_profiler │ SSB  price=17150  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=8  bear=16  confirmed=False
+2026-04-10 18:05:25 INFO     quant_profiler │ SSI  price=28600  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=6  bear=18  confirmed=True
+2026-04-10 18:05:27 INFO     quant_profiler │ VCI  price=27900  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=11  bear=8  confirmed=False
+2026-04-10 18:05:29 INFO     quant_profiler │ VND  price=16750  signal=BÁN / TRÁNH  VSA=NEUTRAL  regime=BEAR_TREND  bull=7  bear=14  confirmed=True
+2026-04-10 18:05:33 INFO     quant_profiler │ HCM  price=25300  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=19  bear=6  confirmed=False
+2026-04-10 18:05:35 INFO     quant_profiler │ MBS  price=20800  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=13  bear=15  confirmed=True
+2026-04-10 18:05:37 INFO     quant_profiler │ FTS  price=28000  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=16  confirmed=True
+2026-04-10 18:05:39 INFO     quant_profiler │ VIX  price=18050  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=14  bear=11  confirmed=False
+2026-04-10 18:05:42 INFO     quant_profiler │ ORS  price=13600  signal=MUA  VSA=NO_DEMAND  regime=SIDEWAYS  bull=14  bear=7  confirmed=False
+2026-04-10 18:05:44 INFO     quant_profiler │ VNM  price=62800  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=13  bear=6  confirmed=False
+2026-04-10 18:05:48 INFO     quant_profiler │ MSN  price=78000  signal=MUA  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=4  confirmed=False
+2026-04-10 18:05:51 INFO     quant_profiler │ SAB  price=45800  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=BEAR_TREND  bull=4  bear=13  confirmed=True
+2026-04-10 18:05:54 INFO     quant_profiler │ MWG  price=81500  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-10 18:05:57 INFO     quant_profiler │ PNJ  price=109000  signal=THEO DÕI–GIẢM  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=10  bear=14  confirmed=True
+2026-04-10 18:05:59 INFO     quant_profiler │ FRT  price=152000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=12  confirmed=False
+2026-04-10 18:06:03 INFO     quant_profiler │ KDC  price=48800  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=6  bear=15  confirmed=True
+2026-04-10 18:06:06 INFO     quant_profiler │ DBC  price=23250  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=11  bear=14  confirmed=True
+2026-04-10 18:06:09 INFO     quant_profiler │ VHC  price=61200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=7  confirmed=False
+2026-04-10 18:06:12 INFO     quant_profiler │ ANV  price=24900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=15  bear=11  confirmed=False
+2026-04-10 18:06:14 INFO     quant_profiler │ FPT  price=77700  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-10 18:06:18 INFO     quant_profiler │ CMG  price=28900  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=13  bear=12  confirmed=False
+2026-04-10 18:06:21 INFO     quant_profiler │ ELC  price=17900  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=10  bear=12  confirmed=True
+2026-04-10 18:06:23 INFO     quant_profiler │ VNG  price=7000  signal=BÁN / TRÁNH  VSA=NO_DEMAND  regime=SIDEWAYS  bull=4  bear=17  confirmed=False
+2026-04-10 18:06:25 INFO     quant_profiler │ ICT  price=17800  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=9  bear=10  confirmed=False
+2026-04-10 18:06:28 INFO     quant_profiler │ GAS  price=80700  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=17  confirmed=True
+2026-04-10 18:06:30 INFO     quant_profiler │ PLX  price=41150  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=BEAR_TREND  bull=12  bear=14  confirmed=True
+2026-04-10 18:06:34 INFO     quant_profiler │ POW  price=13000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=9  bear=10  confirmed=True
+2026-04-10 18:06:36 INFO     quant_profiler │ NT2  price=26200  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=20  bear=8  confirmed=True
+2026-04-10 18:06:38 INFO     quant_profiler │ GEG  price=15200  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=HIGH_VOL  bull=7  bear=12  confirmed=False
+2026-04-10 18:06:41 INFO     quant_profiler │ REE  price=65800  signal=MUA  VSA=NO_SUPPLY  regime=BULL_TREND  bull=21  bear=7  confirmed=True
+2026-04-10 18:06:44 INFO     quant_profiler │ PC1  price=27350  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=24  bear=1  confirmed=True
+2026-04-10 18:06:47 INFO     quant_profiler │ PVD  price=33900  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-10 18:06:50 INFO     quant_profiler │ PVT  price=22500  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=HIGH_VOL  bull=11  bear=10  confirmed=False
+2026-04-10 18:06:52 INFO     quant_profiler │ BSR  price=26750  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=9  bear=14  confirmed=True
+2026-04-10 18:06:54 INFO     quant_profiler │ VHM  price=121100  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=9  confirmed=True
+2026-04-10 18:06:57 INFO     quant_profiler │ NVL  price=16800  signal=MUA  VSA=NEUTRAL  regime=HIGH_VOL  bull=17  bear=9  confirmed=True
+2026-04-10 18:06:59 INFO     quant_profiler │ PDR  price=16400  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=18  confirmed=True
+2026-04-10 18:07:02 INFO     quant_profiler │ DIG  price=14550  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=12  bear=18  confirmed=True
+2026-04-10 18:07:05 INFO     quant_profiler │ KDH  price=26200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-10 18:07:07 INFO     quant_profiler │ TCH  price=17000  signal=TRUNG LẬP  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=12  confirmed=False
+2026-04-10 18:07:09 INFO     quant_profiler │ NLG  price=29200  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=10  bear=8  confirmed=True
+2026-04-10 18:07:12 INFO     quant_profiler │ DXG  price=15250  signal=TRUNG LẬP  VSA=ACCUM  regime=BEAR_TREND  bull=21  bear=16  confirmed=False
+2026-04-10 18:07:14 INFO     quant_profiler │ CTD  price=82000  signal=MUA  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=21  bear=5  confirmed=True
+2026-04-10 18:07:17 INFO     quant_profiler │ HBC  price=5100  signal=TRUNG LẬP  VSA=NEUTRAL  regime=BEAR_TREND  bull=16  bear=12  confirmed=False
+2026-04-10 18:07:19 INFO     quant_profiler │ VCG  price=22850  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BULL_TREND  bull=11  bear=16  confirmed=False
+2026-04-10 18:07:25 INFO     quant_profiler │ DPG  price=42750  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=8  bear=5  confirmed=True
+2026-04-10 18:07:27 INFO     quant_profiler │ CII  price=18550  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=BULL_TREND  bull=18  bear=12  confirmed=True
+2026-04-10 18:07:32 INFO     quant_profiler │ HPG  price=28000  signal=THEO DÕI–TĂNG  VSA=NO_DEMAND  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-10 18:07:33 INFO     quant_profiler │ VCB  price=59800  signal=TRUNG LẬP  VSA=NO_DEMAND  regime=SIDEWAYS  bull=13  bear=12  confirmed=False
+2026-04-10 18:07:34 INFO     quant_profiler │ BID  price=40800  signal=THEO DÕI–GIẢM  VSA=NEUTRAL  regime=BEAR_TREND  bull=9  bear=12  confirmed=True
+2026-04-10 18:07:36 INFO     quant_profiler │ CTG  price=35000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=15  bear=6  confirmed=False
+2026-04-10 18:07:37 INFO     quant_profiler │ TCB  price=32250  signal=THEO DÕI–GIẢM  VSA=NO_DEMAND  regime=BEAR_TREND  bull=8  bear=13  confirmed=True
+2026-04-10 18:07:40 INFO     quant_profiler │ VIC  price=151700  signal=THEO DÕI–TĂNG  VSA=NEUTRAL  regime=SIDEWAYS  bull=12  bear=7  confirmed=False
+2026-04-10 18:07:41 INFO     quant_profiler │ MBB  price=26700  signal=THEO DÕI–TĂNG  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=12  bear=9  confirmed=False
+2026-04-10 18:07:42 INFO     quant_profiler │ ACB  price=23850  signal=TRUNG LẬP  VSA=NO_SUPPLY  regime=SIDEWAYS  bull=8  bear=9  confirmed=False
+2026-04-10 18:07:45 INFO     quant_profiler │ VJC  price=167000  signal=MUA  VSA=NEUTRAL  regime=SIDEWAYS  bull=16  bear=8  confirmed=False
+2026-04-10 18:07:48 INFO     quant_profiler │ VRE  price=27500  signal=BÁN / TRÁNH  VSA=NO_SUPPLY  regime=BEAR_TREND  bull=6  bear=15  confirmed=True

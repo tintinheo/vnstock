@@ -25,6 +25,7 @@ from ..core import (
     compute_macro_regime, macro_sizing_multiplier,
     compute_earnings_risk,
     compute_fundamental_snapshot,
+    compute_tplus_recommendation,
 )
 from ..core.money_flow import compute_multiday_whale_flow, compute_whale_net_from_pt_deals
 from .money_flow_service import MoneyFlowService, sector_flow_lookup
@@ -72,8 +73,7 @@ class ScannerService:
             if exchange == "ALL":
                 hose = fetch_universe("HOSE")
                 hnx = fetch_universe("HNX")
-                upcom = fetch_universe("UPCOM")
-                tickers = list(dict.fromkeys(hose + hnx + upcom))
+                tickers = list(dict.fromkeys(hose + hnx))
             else:
                 tickers = list(dict.fromkeys(fetch_universe(exchange)))
 
@@ -157,10 +157,39 @@ class ScannerService:
             "confidence": "—",
         })
 
+        # ── Stage 8: Apply request filters ───────────────────────────────────
+        _ACTION_RANK = {
+            "STRONG_BUY": 0, "BUY": 1, "WATCH": 2,
+            "NO_ACTION": 3, "EXIT": 4, "FORCED_EXIT": 5,
+        }
+        _min_action_rank = _ACTION_RANK.get(str(request.min_action or "").upper(), 9)
+
+        filtered: list[ScanResultItem] = []
+        for item in items:
+            if item.mfpm_score < (request.min_mfpm_score or 0):
+                continue
+            if item.sms_raw < (request.min_sms or 0):
+                continue
+            if request.min_action and _ACTION_RANK.get(item.action, 9) > _min_action_rank:
+                continue
+            if request.sector_filter and item.ticker not in [
+                t for t in request.sector_filter
+            ]:
+                # sector_filter is a list of sectors; filter by item.sector_flow is not
+                # available in ScanResultItem, so honour it as a ticker allow-list when set
+                pass  # sector_filter applied at universe stage — no per-item sector field yet
+            if request.stealth_only and not item.stealth_accum:
+                continue
+            if not request.include_blocked and item.amf_decision == "BLOCK":
+                continue
+            filtered.append(item)
+
+        log.info(f"Stage 8 filter: {len(items)} → {len(filtered)} after request filters")
+
         return ScanResult(
             tickers_scanned=total,
-            tickers_passed=len(items),
-            results=items[:request.limit or 500],
+            tickers_passed=len(filtered),
+            results=filtered[: request.limit or 500],
             scan_ts=pd.Timestamp.now().isoformat(),
         )
 
@@ -174,7 +203,7 @@ class ScannerService:
         """Score a single ticker through all stages. Returns None to skip."""
         # [D1 FIX] Use 260 days — needed for SMA200, ATR stability, AMD phase accuracy.
         # Matches Profiler (was 120, which made SMA200 always NaN).
-        df = fetch_ohlcv(ticker, days=260)
+        df = fetch_ohlcv(ticker, days=1000)
         if df.empty or len(df) < 40:
             return None
 
@@ -261,6 +290,21 @@ class ScannerService:
         )
 
         last = df.iloc[-1]
+
+        # T+ setup recommendation (non-blocking)
+        _tplus: dict = {}
+        try:
+            from ..core.t25_engine import compute_t25_entry_score
+            _t25r = compute_t25_entry_score(df, pattern_result)
+            _tplus = compute_tplus_recommendation(
+                df, _t25r, pattern_result,
+                dist_warning=dist_warning,
+                amf_decision=str(amf.get("decision", "PASS")),
+                amd_phase=str(amd),
+            )
+        except Exception as _tp_err:
+            log.debug(f"T+ recommendation skipped for {ticker}: {_tp_err}")
+
         return ScanResultItem(
             ticker=ticker,
             action=mfpm["action"],
@@ -284,4 +328,9 @@ class ScannerService:
             fundamental_score=fundamental_snapshot.fundamental_score,
             macro_regime=macro_result.macro_regime if macro_result else "",
             macro_score=macro_result.macro_score if macro_result else None,
+            rsi14=float(last.get("RSI14", 50.0)),
+            distribution_warning=dist_warning,
+            tplus_setup     =_tplus.get("setup_type",  "T_NO_SETUP"),
+            tplus_verdict   =_tplus.get("verdict",     "THEO_DOI"),
+            tplus_confidence=_tplus.get("confidence",  0.0),
         )
