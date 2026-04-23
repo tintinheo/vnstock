@@ -170,6 +170,7 @@ def monte_carlo_win_prob(
     grossly underestimates.  Drawing from the empirical distribution preserves
     those extremes and gives a more conservative, realistic win probability.
     Returns probability that price reaches TP before SL within `horizon` bars.
+    *(Vectorized version for fast execution)*
     """
     if df.empty or entry <= 0 or sl >= entry or tp <= entry:
         return 0.5
@@ -178,21 +179,32 @@ def monte_carlo_win_prob(
     if len(returns) < 30:
         return 0.5
 
-    wins = 0
     rng = np.random.default_rng(42)
-    for _ in range(n_sim):
-        price = entry
-        # Bootstrap: resample from actual return distribution (fat-tails included)
-        path = rng.choice(returns, size=horizon, replace=True)
-        for r in path:
-            price *= (1 + float(r))
-            if price <= sl:
-                break
-            if price >= tp:
-                wins += 1
-                break
+    # Generate all paths at once: shape (n_sim, horizon)
+    paths = rng.choice(returns, size=(n_sim, horizon), replace=True)
+    
+    # Calculate cumulative returns: shape (n_sim, horizon)
+    cum_returns = np.cumprod(1 + paths, axis=1)
+    
+    # Calculate simulated prices
+    sim_prices = entry * cum_returns
+    
+    # Create boolean masks for hits
+    tp_hits = sim_prices >= tp
+    sl_hits = sim_prices <= sl
+    
+    # Find the indices where hits occur (horizon + 1 if never hit)
+    tp_idx = np.argmax(tp_hits, axis=1)
+    sl_idx = np.argmax(sl_hits, axis=1)
+    
+    # Adjust indices for paths that never hit
+    tp_idx = np.where(tp_hits.any(axis=1), tp_idx, horizon + 1)
+    sl_idx = np.where(sl_hits.any(axis=1), sl_idx, horizon + 1)
+    
+    # Win = TP hit AND (hit TP before SL, or hit TP at same step but we consider it a win)
+    wins = np.sum((tp_idx <= horizon) & (tp_idx < sl_idx))
 
-    return round(wins / n_sim, 3)
+    return round(float(wins / n_sim), 3)
 
 
 # ── ModeW Pre-condition Check ─────────────────────────────────────────────────

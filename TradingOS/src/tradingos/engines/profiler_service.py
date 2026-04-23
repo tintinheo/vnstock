@@ -8,7 +8,11 @@ import pandas as pd
 
 from ..data.fetcher import fetch_ohlcv, fetch_foreign_flow, fetch_put_through_deals, fetch_quote, fetch_realtime
 from ..data.fetcher import fetch_usdvnd, fetch_vn10y_bond_yield, fetch_sbv_omo_net
-from ..data.fetcher import fetch_earnings_calendar, fetch_financial_statements
+from ..data.fetcher import fetch_earnings_calendar, fetch_financial_statements, fetch_intraday_5m
+from ..data.fiinquant_provider import fiin as _fiin_provider
+from ..data.dnse_provider import dnse as _dnse_provider
+from ..core.intraday_cvd import compute_intraday_cvd
+from ..core.orderbook import compute_order_book_imbalance
 from ..data.cache import cache
 from ..data.schemas import TickerProfile, ProfilerRequest, TradingSignal
 from ..core import (
@@ -112,8 +116,39 @@ class ProfilerService:
             log.debug(f"FOL merge skipped for {ticker}: {_fol_err}")
 
         mcvd_detail = compute_multiday_whale_flow(daily_flow_df)
+
+        # ── 4.5. Pre-fetch intraday bars for CVD (feeds into SMS cvd_today) ──────────
+        _df_intraday: pd.DataFrame | None = None
+        _intraday_source = "NONE"
+        _cvd_result: dict = {}
+        _cvd_raw: float | None = None
+        try:
+            # Priority 1: FiinQuant 1m bars with real bu/sd columns
+            if _fiin_provider.is_configured():
+                _df_intraday = _fiin_provider.fetch_bars(ticker, by="1m", period=60)
+                if _df_intraday is not None and not _df_intraday.empty:
+                    _intraday_source = "FIINQUANT"
+            # Priority 2: DNSE 1m candles
+            if _df_intraday is None and _dnse_provider.is_configured():
+                _df_intraday = _dnse_provider.fetch_intraday_candles(ticker, resolution="1")
+                if _df_intraday is not None and not _df_intraday.empty:
+                    _intraday_source = "DNSE"
+            # Priority 3: SSI 5m fallback
+            if _df_intraday is None:
+                _df_5m_pre = fetch_intraday_5m(ticker)
+                if _df_5m_pre is not None and not _df_5m_pre.empty:
+                    _df_intraday = _df_5m_pre
+                    _intraday_source = "SSI_5M"
+            if _df_intraday is not None and not _df_intraday.empty:
+                _cvd_result = compute_intraday_cvd(_df_intraday)
+                _cvd_raw = _cvd_result.get("cvd_raw")
+        except Exception as _cvd_pre_err:
+            log.debug(f"Pre-fetch CVD skipped for {ticker}: {_cvd_pre_err}")
+
         sms_result = compute_smart_money_score(
-            ticker, df, daily_flow_df, pt_deals_df, None, None, amd_phase
+            ticker, df, daily_flow_df, pt_deals_df, None, None, amd_phase,
+            cvd_today=_cvd_raw,
+            cvd_data_quality=str(_cvd_result.get("data_quality", "NONE")),
         )
         stealth = detect_stealth_accumulation(df, daily_flow_df, amd_phase=amd_phase)
         dist_warning_obj = detect_whale_distribution(df, daily_flow_df)
@@ -130,7 +165,6 @@ class ProfilerService:
             detect_gaps, compute_vwap_result, compute_vwap_intraday_result,
         )
         from ..core.t25_engine import compute_t25_entry_score
-        from ..data.fetcher import fetch_intraday_5m
 
         gap_result  = detect_gaps(df)
         vwap_result = compute_vwap_result(df)
@@ -141,8 +175,9 @@ class ProfilerService:
             "vwap_intraday_slope": 0.0,
         }
         try:
-            df_5m = fetch_intraday_5m(ticker)
-            vwap_intraday_result = compute_vwap_intraday_result(ticker, df_5m)
+            # Re-use already-fetched intraday df from step 4.5; fall back to SSI 5m
+            _df_vwap = _df_intraday if _df_intraday is not None else fetch_intraday_5m(ticker)
+            vwap_intraday_result = compute_vwap_intraday_result(ticker, _df_vwap)
         except Exception as _intra_err:
             log.debug(f"Intraday VWAP skipped for {ticker}: {_intra_err}")
 
@@ -172,7 +207,15 @@ class ProfilerService:
             )
         except Exception as _tp_err:
             log.debug(f"T+ recommendation skipped for {ticker}: {_tp_err}")
-
+        # ── 5e. Order Book Imbalance — FiinQuant BidAsk (non-blocking) ──────────────
+        _obi_result: dict = {}
+        try:
+            if _fiin_provider.is_configured():
+                _bidask_df = _fiin_provider.fetch_orderbook(ticker)
+                if _bidask_df is not None and not _bidask_df.empty:
+                    _obi_result = compute_order_book_imbalance(_bidask_df)
+        except Exception as _obi_err:
+            log.debug(f"OBI skipped for {ticker}: {_obi_err}")
         # ── 6. GMO (HMM + omega) ─────────────────────────────────────────
         hmm_state = detect_hmm_state(df)
         omega = compute_omega(df, None)      # SRS §3.4 gmo_omega
@@ -473,6 +516,15 @@ class ProfilerService:
             tplus_verdict_vi     = tplus_result.get("verdict_vi",      ""),
             tplus_reasons        = tplus_result.get("reasons",         []),
             tplus_risks          = tplus_result.get("risks",           []),
+            # Intraday CVD & OBI
+            cvd_signal              = _cvd_result.get("cvd_signal",              "NEUTRAL"),
+            cvd_divergence          = _cvd_result.get("cvd_divergence",          "NONE"),
+            cvd_buying_pressure_pct = _cvd_result.get("buying_pressure_pct",     50.0),
+            cvd_score               = _cvd_result.get("cvd_score",               5.0),
+            cvd_data_quality        = _cvd_result.get("data_quality",            "NONE"),
+            obi_pct                 = _obi_result.get("obi_pct",                 0.0),
+            obi_signal              = _obi_result.get("obi_signal",              "BALANCED"),
+            data_source_intraday    = _intraday_source,
         )
 
         # ── 12. Audit log ─────────────────────────────────────────────────

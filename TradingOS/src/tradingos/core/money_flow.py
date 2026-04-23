@@ -209,6 +209,7 @@ def compute_smart_money_score(
     quote: dict | None = None,
     amd_phase: str = "RANGING",
     cvd_today: int | None = None,
+    cvd_data_quality: str = "NONE",
 ) -> dict:
     """
     Composite Smart Money Score 0–100 (SRS §8.3).
@@ -287,8 +288,27 @@ def compute_smart_money_score(
     comps["amd"] = amd_bonus.get(amd_phase, 4)
 
     # 6. Intraday CVD (0–10)
+    # Proxy OHLCV direction is useful for timing, but it must not carry the same
+    # weight as real aggressor-flow data.  Cap proxy influence to a narrow band
+    # around neutral; allow only REAL_FLOW to reach the full 0–10 range.
     if cvd_today is not None:
-        comps["cvd_today"] = 10 if cvd_today > 0 else (5 if cvd_today == 0 else 0)
+        intensity = abs(float(cvd_today)) / max(float(avg_vol), 1.0)
+        if cvd_data_quality == "REAL_FLOW":
+            if cvd_today > 0:
+                comps["cvd_today"] = 10 if intensity >= 0.12 else (8 if intensity >= 0.05 else 6)
+            elif cvd_today < 0:
+                comps["cvd_today"] = 0 if intensity >= 0.12 else (2 if intensity >= 0.05 else 4)
+            else:
+                comps["cvd_today"] = 5
+        elif cvd_data_quality == "OHLCV_PROXY":
+            if cvd_today > 0:
+                comps["cvd_today"] = 7 if intensity >= 0.12 else 6
+            elif cvd_today < 0:
+                comps["cvd_today"] = 3 if intensity >= 0.12 else 4
+            else:
+                comps["cvd_today"] = 5
+        else:
+            comps["cvd_today"] = 5
     else:
         comps["cvd_today"] = 5
 

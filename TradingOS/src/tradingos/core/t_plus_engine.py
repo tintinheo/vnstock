@@ -43,10 +43,10 @@ _SETUP_VI: dict[str, str] = {
 }
 
 _VERDICT_VI: dict[str, str] = {
-    "MUA_NGAY":      "✅ Mua ngay khi giá xác nhận trigger",
-    "CHO_XAC_NHAN": "⏳ Chờ xác nhận nến/khối lượng phiên tiếp",
-    "THEO_DOI":     "👀 Theo dõi – chưa hành động",
-    "TRANH_XA":     "🚫 Tránh xa – rủi ro phân phối hoặc thị trường yếu",
+    "MUA_NGAY":      "✅ Thích hợp giải ngân T+",
+    "CHO_XAC_NHAN":  "⏳ Chờ xác nhận nến/khối lượng",
+    "THEO_DOI":      "👀 Theo dõi tín hiệu T+",
+    "TRANH_XA":      "🚫 Không có điểm vào T+ an toàn",
 }
 
 _SESSION_VI: dict[str, str] = {

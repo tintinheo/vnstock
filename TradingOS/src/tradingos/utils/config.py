@@ -105,5 +105,17 @@ class _Config:
     def ssi_device_id(self) -> str:
         return os.environ.get("SSI_DEVICE_ID") or self.get("api", "ssi_device_id", default="")
 
+    @property
+    def fiinquantx_username(self) -> str:
+        return os.environ.get("FIINQUANTX_USERNAME") or self.get("api", "fiinquantx_username", default="")
+
+    @property
+    def fiinquantx_password(self) -> str:
+        return os.environ.get("FIINQUANTX_PASSWORD") or self.get("api", "fiinquantx_password", default="")
+
+    @property
+    def dnse_api_key(self) -> str:
+        return os.environ.get("DNSE_API_KEY") or self.get("api", "dnse_api_key", default="")
+
 
 cfg = _Config()

@@ -115,6 +115,7 @@ def render() -> None:
             "T+ Setup":   getattr(item, "tplus_setup",    "T_NO_SETUP"),
             "T+ Verdict": getattr(item, "tplus_verdict",  "THEO_DOI"),
             "T+ Conf":    getattr(item, "tplus_confidence", 0.0),
+            "CVD":        getattr(item, "cvd_signal",       "N/A"),
         })
 
     df_all = pd.DataFrame(rows)

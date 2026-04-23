@@ -134,6 +134,43 @@ class TestS1AmdPhaseKeyword:
             "cvd_today=None must yield 5 (unknown / neutral sentinel)"
         )
 
+    def test_proxy_cvd_is_downweighted_vs_real_flow(self):
+        """Positive proxy CVD must contribute less than equally positive REAL_FLOW."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df   = _make_indicators()
+        flow = _make_flow(df)
+        proxy = compute_smart_money_score(
+            "TEST", df, flow,
+            cvd_today=int(df["volume"].tail(20).mean() * 0.20),
+            cvd_data_quality="OHLCV_PROXY",
+        )
+        real = compute_smart_money_score(
+            "TEST", df, flow,
+            cvd_today=int(df["volume"].tail(20).mean() * 0.20),
+            cvd_data_quality="REAL_FLOW",
+        )
+        assert proxy["components"]["cvd_today"] < real["components"]["cvd_today"], (
+            "OHLCV proxy CVD must be scored below REAL_FLOW CVD"
+        )
+
+    def test_proxy_cvd_stays_near_neutral_band(self):
+        """Proxy CVD should nudge SMS, not dominate it."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df   = _make_indicators()
+        flow = _make_flow(df)
+        bullish = compute_smart_money_score(
+            "TEST", df, flow,
+            cvd_today=int(df["volume"].tail(20).mean() * 0.25),
+            cvd_data_quality="OHLCV_PROXY",
+        )
+        bearish = compute_smart_money_score(
+            "TEST", df, flow,
+            cvd_today=-int(df["volume"].tail(20).mean() * 0.25),
+            cvd_data_quality="OHLCV_PROXY",
+        )
+        assert bullish["components"]["cvd_today"] <= 7
+        assert bearish["components"]["cvd_today"] >= 3
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # S2 — stealth_detail wired into MFPM before scoring

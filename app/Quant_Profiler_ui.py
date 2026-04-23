@@ -1146,7 +1146,7 @@ def render_monte_carlo(r: dict, df: pd.DataFrame) -> None:
         f"🎲 Monte Carlo Projection  ·  P5={mc['p5_downside']:,.0f}  P50={mc['expected_price']:,.0f}  P95={mc['p95_upside']:,.0f}  ·  Vol={mc['vol_used']:.2f}%/ngày",
         expanded=False,
     ):
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False},
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False},
                         key=f"mc_{r['ticker']}")
         st.caption(
             "⚠️ Phương pháp: Geometric Brownian Motion (GBM). "
@@ -1707,7 +1707,7 @@ def render_correlation_matrix(results: list, dfs: dict) -> None:
         height=max(280, len(corr_tks) * 50 + 60), margin=dict(l=10, r=10, t=20, b=10),
         font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#94a3b8"),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
     st.caption("Dựa trên lợi suất hàng ngày 60 phiên gần nhất.")
 
 
@@ -2844,7 +2844,7 @@ def render_audit_page() -> None:
             if len(hist_asc) >= 2:
                 st.plotly_chart(
                     _build_audit_trend_chart(hist_asc),
-                    use_container_width=True,
+                    width="stretch",
                     config={"displayModeBar": False},
                     key=f"audit_trend_{sel}",
                 )
@@ -3288,7 +3288,7 @@ def render_ticker_section(r: dict, dfs: dict, show_bb, show_ema, show_levels) ->
     # Chart
     if not df.empty:
         fig = build_chart(df, r, show_bb=show_bb, show_ema=show_ema, show_levels=show_levels)
-        st.plotly_chart(fig, use_container_width=True, config={
+        st.plotly_chart(fig, width="stretch", config={
             "displayModeBar": True,
             "modeBarButtonsToRemove": ["autoScale2d", "lasso2d", "select2d"],
             "displaylogo": False,
@@ -3682,7 +3682,7 @@ def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
         # ══ ROW 1 — Forecast Chart ════════════════════════════════════════════
         if candles:
             chart = _build_forecast_chart(df, candles, garch, fc_result["current_price"], timing, ticker, hmm)
-            st.plotly_chart(chart, use_container_width=True, config={"displayModeBar": False}, key=f"cf_chart_{ticker}_{n_days}")
+            st.plotly_chart(chart, width="stretch", config={"displayModeBar": False}, key=f"cf_chart_{ticker}_{n_days}")
         else:
             st.warning("Không tạo được nến dự báo.")
 
@@ -3717,7 +3717,7 @@ def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
                 height=180, margin=dict(l=15, r=15, t=30, b=5),
                 font=dict(color="#94a3b8"),
             )
-            st.plotly_chart(fig_gauge, use_container_width=True, config={"displayModeBar": False}, key=f"cf_gauge_{ticker}_{n_days}")
+            st.plotly_chart(fig_gauge, width="stretch", config={"displayModeBar": False}, key=f"cf_gauge_{ticker}_{n_days}")
 
             # DA per model
             da = ensemble.directional_accuracy
@@ -3766,7 +3766,7 @@ def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
                 y0=cur - 0.5, y1=cur + 0.5,
                 line=dict(color="#fbbf24", width=2),
             )
-            st.plotly_chart(fig_hmm, use_container_width=True, config={"displayModeBar": False}, key=f"cf_hmm_{ticker}_{n_days}")
+            st.plotly_chart(fig_hmm, width="stretch", config={"displayModeBar": False}, key=f"cf_hmm_{ticker}_{n_days}")
 
         with r2c3:
             # Model weight bar chart
@@ -3792,7 +3792,7 @@ def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
                 font=dict(color="#94a3b8"),
                 showlegend=False,
             )
-            st.plotly_chart(fig_wt, use_container_width=True, config={"displayModeBar": False}, key=f"cf_weights_{ticker}_{n_days}")
+            st.plotly_chart(fig_wt, width="stretch", config={"displayModeBar": False}, key=f"cf_weights_{ticker}_{n_days}")
 
         # ══ ROW 3 — Action Card + Timing + Kelly ═════════════════════════════
         r3c1, r3c2, r3c3 = st.columns([1, 1, 1], gap="small")
@@ -3872,7 +3872,7 @@ def render_candle_forecast(r: dict, df: pd.DataFrame) -> None:
                     "CI Thấp (95%)": f"{c.lower_ci:,.0f}",
                     "CI Cao (95%)":  f"{c.upper_ci:,.0f}",
                 })
-            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -3962,7 +3962,7 @@ def render_portfolio_hub() -> None:
             "ticker": "Mã", "qty": "Số lượng", "avg_cost": "Giá vốn BQ",
             "trade_date": "Ngày GD", "status": "Trạng thái T+2",
         }),
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         key="portfolio_editor",
     )
@@ -4181,7 +4181,7 @@ def render_portfolio_hub() -> None:
             paper_bgcolor="#0e1117", font=dict(color="#e2e8f0", size=11),
             legend=dict(orientation="h"),
         )
-        st.plotly_chart(pie_fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(pie_fig, width="stretch", config={"displayModeBar": False})
 
     with ch2:
         st.markdown("##### 🏭 Phân bổ theo ngành")
@@ -4202,7 +4202,7 @@ def render_portfolio_hub() -> None:
                 xaxis=dict(gridcolor="#1e2535", title="% Tỷ trọng"),
                 yaxis=dict(gridcolor="#1e2535"),
             )
-            st.plotly_chart(bar_fig, use_container_width=True, config={"displayModeBar": False})
+            st.plotly_chart(bar_fig, width="stretch", config={"displayModeBar": False})
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -4833,7 +4833,7 @@ def render_sector_heatmap_page() -> None:
         font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#94a3b8"),
         xaxis=dict(side="top"),
     )
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+    st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     # ── Market Breadth widget ──────────────────────────────────────────────────
     st.markdown("---")
@@ -5115,7 +5115,7 @@ def render_trade_journal_page() -> None:
             font=dict(family="JetBrains Mono, Consolas, monospace", size=11, color="#94a3b8"),
             xaxis=dict(gridcolor="#1a2030"), yaxis=dict(gridcolor="#1a2030"),
         )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        st.plotly_chart(fig, width="stretch", config={"displayModeBar": False})
 
     # ── Full journal table ─────────────────────────────────────────────────────
     st.markdown("#### Lịch sử đầy đủ")
@@ -5842,7 +5842,7 @@ def main() -> None:
             if t.strip()
         ]
         _invalid = [t for t in _raw if not _VN_TICKER_RE.match(t)]
-        tickers  = [t for t in _raw if _VN_TICKER_RE.match(t)]
+        tickers  = list(dict.fromkeys(t for t in _raw if _VN_TICKER_RE.match(t)))
         if _invalid:
             st.warning(
                 f"⚠️ Bỏ qua {len(_invalid)} mã không hợp lệ: "

@@ -30,34 +30,45 @@ def bootstrap_win_prob(df: pd.DataFrame, sl_pct: float, tp_pct: float, n: int = 
     Non-conclusive paths (neither TP nor SL hit within the horizon) are
     excluded from the denominator — they do not count as wins or losses.
     Falls back to 0.5 when fewer than 20 bars or no conclusive paths.
+    *(Vectorized version for fast execution)*
     """
     returns = df["close"].pct_change().dropna().values
     if len(returns) < 20:
         return 0.5
 
     rng = np.random.default_rng(42)
-    horizons = [5, 7, 10]
+    horizons = np.array([5, 7, 10])
+    
+    # Vectorized random choice array: n sim lengths
+    h_choices = rng.choice(horizons, size=n)
+    
     wins = 0
     losses = 0
-
-    for _ in range(n):
-        h = rng.choice(horizons)
-        if len(returns) < h:
+    
+    for h in horizons:
+        # Number of paths simulating this horizon
+        n_h = np.sum(h_choices == h)
+        if n_h == 0 or len(returns) < h:
             continue
-        start = rng.integers(0, len(returns) - h)
-        path = returns[start : start + h]
-        cumulative = np.cumprod(1 + path)
-        max_gain = float(cumulative.max() - 1)
-        max_loss = float(cumulative.min() - 1)
-        if max_gain >= tp_pct:
-            wins += 1
-        elif max_loss <= -sl_pct:
-            losses += 1
-        # else: non-conclusive — excluded from denominator
+            
+        # Draw start indices
+        starts = rng.integers(0, len(returns) - h, size=n_h)
+        
+        # Build path matrix: (n_h, h) items from returns
+        # Using broadcasting to slice the returns array
+        idx = starts[:, None] + np.arange(h)
+        paths = returns[idx]
+        
+        cumulative = np.cumprod(1 + paths, axis=1)
+        max_gains = cumulative.max(axis=1) - 1.0
+        max_losses = cumulative.min(axis=1) - 1.0
+        
+        wins += np.sum(max_gains >= tp_pct)
+        losses += np.sum(max_losses <= -sl_pct)
 
     if wins + losses == 0:
         return 0.5
-    return round(wins / (wins + losses), 3)
+    return round(float(wins / (wins + losses)), 3)
 
 
 def compute_position_size(

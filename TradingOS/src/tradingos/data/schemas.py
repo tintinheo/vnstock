@@ -228,6 +228,16 @@ class TickerProfile(BaseModel):
     tplus_reasons        : list[str] = Field(default_factory=list)
     tplus_risks          : list[str] = Field(default_factory=list)
 
+    # ── Intraday CVD & Order Book Imbalance (FiinQuant / DNSE / SSI 5m) ────────────
+    cvd_signal              : str   = "NEUTRAL"
+    cvd_divergence          : str   = "NONE"
+    cvd_buying_pressure_pct : float = 50.0
+    cvd_score               : float = 5.0
+    cvd_data_quality        : str   = "NONE"   # REAL_FLOW | OHLCV_PROXY | NONE
+    obi_pct                 : float = 0.0
+    obi_signal              : str   = "BALANCED"
+    data_source_intraday    : str   = "NONE"   # FIINQUANT | DNSE | SSI_5M | NONE
+
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
 
@@ -271,6 +281,7 @@ class ScanResultItem(BaseModel):
     tplus_setup          : str   = "T_NO_SETUP"
     tplus_verdict        : str   = "THEO_DOI"
     tplus_confidence     : float = 0.0
+    cvd_signal           : str   = "NEUTRAL"
 
 
 class ScanResult(BaseModel):

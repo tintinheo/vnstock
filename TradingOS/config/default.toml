@@ -2,10 +2,13 @@
 # Copy to config/local.toml and fill in secrets (never commit local.toml)
 
 [api]
-ssi_device_id   = ""        # SSI iboard device UUID — rotate when blocked
-dnse_api_base   = "https://api.dnse.com.vn/chart-api/v2"
-ssi_api_base    = "https://iboard-api.ssi.com.vn"
-cafef_api_base  = "https://historial.cafef.vn"
+ssi_device_id       = ""        # SSI iboard device UUID — rotate when blocked
+dnse_api_base       = "https://api.dnse.com.vn/chart-api/v2"
+ssi_api_base        = "https://iboard-api.ssi.com.vn"
+cafef_api_base      = "https://historial.cafef.vn"
+fiinquantx_username = ""        # FiinQuant account username (email)
+fiinquantx_password = ""        # FiinQuant account password
+dnse_api_key        = ""        # DNSE LightSpeed API key (Bearer token)
 
 [data]
 history_days    = 400       # Default OHLCV lookback (trading days)

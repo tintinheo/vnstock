@@ -102,10 +102,11 @@ def _render_detail(profile, svc_label: str = "") -> None:
 
     render_signal_card(profile)
 
-    tab1, tab2, tab3, tab4, tab5, tab_nlp, tab_f0, tab_t25, tab_tw, tab_fc, tab_tplus = st.tabs([
+    tab1, tab2, tab3, tab4, tab5, tab_nlp, tab_f0, tab_t25, tab_tw, tab_fc, tab_tplus, tab_cvd, tab_ob = st.tabs([
         "📋 Horizon", "📊 SMS / M-CVD", "🔬 SHAP", "🧭 Overlay",
         "📈 Chỉ số", "📝 NLP Insights", "🔰 Giải thích F0", "⚡ T+2.5",
         "⚠️ Trend Warning", "🔭 Dự báo", "🎯 T+ Setup",
+        "📊 CVD Intraday", "📖 Sổ lệnh",
     ])
 
     with tab1:
@@ -459,7 +460,60 @@ def _render_detail(profile, svc_label: str = "") -> None:
                 "Hệ thống phát hiện tín hiệu phân phối hoặc xu hướng bất lợi. "
                 "Không khuyến nghị giao dịch T+ cho mã này."
             )
+    with tab_cvd:
+        st.markdown("#### 📊 CVD Intraday — Phân tích luồng vốn từng phiên")
+        st.caption(
+            "Cumulative Volume Delta (CVD) từng phiên có thể tiết lộ áp lực mua/bán thực sự từ "
+            "các tổ chức. Dữ liệu Real Flow sử dụng trường bu/sd của FiinQuant."
+        )
+        _dq = getattr(profile, "cvd_data_quality", "NONE")
+        if _dq == "REAL_FLOW":
+            st.success("🟢 Real Flow — FiinQuant bu/sd (dữ liệu thực tế)")
+        elif _dq == "OHLCV_PROXY":
+            st.warning("🟡 Proxy — OHLCV sign (xấp xỉ)")
+        else:
+            st.info("⬜ Chưa có dữ liệu intraday — cần FiinQuant hoặc DNSE")
 
+        _cvd_sig = getattr(profile, "cvd_signal", "NEUTRAL")
+        if _cvd_sig == "BUYING":
+            st.success(f"🟢 Tín hiệu CVD: **BUYING** — tiền vào đầu phiên")
+        elif _cvd_sig == "DISTRIBUTING":
+            st.error(f"🔴 Tín hiệu CVD: **DISTRIBUTING** — nhà đầu tư lớn đang xả")
+        else:
+            st.info(f"⚪ Tín hiệu CVD: **NEUTRAL**")
+
+        _bp = getattr(profile, "cvd_buying_pressure_pct", 50.0)
+        st.progress(_bp / 100, text=f"Áp lực mua: {_bp:.1f}%")
+        st.metric("🔢 CVD Score", f"{getattr(profile, 'cvd_score', 5.0):.1f} / 10")
+
+        _div = getattr(profile, "cvd_divergence", "NONE")
+        if _div != "NONE":
+            st.warning(f"⚡ Phân kỳ: **{_div}**")
+
+        _src = getattr(profile, "data_source_intraday", "NONE")
+        if _src != "NONE":
+            st.caption(f"Nguồn dữ liệu: `{_src}`")
+
+    with tab_ob:
+        st.markdown("#### 📖 Sổ lệnh — Order Book Imbalance (OBI)")
+        st.caption(
+            "Phân tích sị lượng đặt mua và đặt bán tổng hợp để đo áp lực nhẩy góc ngắn hạn. "
+            "Yêu cầu FiinQuant BidAsk snapshot."
+        )
+        _obi = getattr(profile, "obi_pct", 0.0)
+        _obi_sig = getattr(profile, "obi_signal", "BALANCED")
+
+        if _obi == 0.0 and _obi_sig == "BALANCED":
+            st.info("⏸ Chưa có dữ liệu sổ lệnh — cần FiinQuant BidAsk")
+        else:
+            if _obi_sig == "BUYING_PRESSURE":
+                st.success(f"🟢 Áp lực mua: OBI = {_obi:+.1f}%")
+            elif _obi_sig == "SELLING_PRESSURE":
+                st.error(f"🔴 Áp lực bán: OBI = {_obi:+.1f}%")
+            else:
+                st.info(f"⚪ Cân bằng: OBI = {_obi:+.1f}%")
+
+            st.metric("OBI %", f"{_obi:+.1f}%")
     with tab_nlp:
         st.markdown("#### 🤖 Phân tích toàn diện bằng ngôn ngữ tự nhiên")
         st.caption(
