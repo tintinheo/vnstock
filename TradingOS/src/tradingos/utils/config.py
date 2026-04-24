@@ -86,7 +86,7 @@ class _Config:
 
     @property
     def db_path(self) -> Path:
-        raw = self.get("data", "db_path", default="data/vn_cache.duckdb")
+        raw = os.environ.get("TRADINGOS_DB_PATH") or self.get("data", "db_path", default="data/vn_cache.duckdb")
         p = Path(raw)
         if not p.is_absolute():
             p = ROOT / p

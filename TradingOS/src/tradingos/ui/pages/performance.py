@@ -10,6 +10,13 @@ from tradingos.data.cache import cache
 from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 
+_PERFORMANCE_READING_GUIDE = """
+- `Win rate` không đủ để đánh giá hệ thống; nên đọc cùng `Profit Factor`, `Max Drawdown` và `Calmar`.
+- `Confidence Calibration` chỉ đáng tin khi số lệnh đủ lớn; đây là kiểm tra hệ thống có tự chấm độ tin cậy đúng hay không.
+- Khi lọc ledger, hãy nhìn nhóm lệnh đang xem thay vì suy từ thống kê tổng thể.
+"""
+
+
 def _max_drawdown(pnl_series: pd.Series) -> float:
     equity = (1 + pnl_series / 100).cumprod()
     dd = 1 - equity / np.maximum.accumulate(equity)
@@ -18,6 +25,8 @@ def _max_drawdown(pnl_series: pd.Series) -> float:
 
 def render() -> None:
     st.title("🏆 Hiệu suất Giao dịch (Paper Trading)")
+    with st.expander("🧭 Cách đọc trang Hiệu suất", expanded=False):
+        st.markdown(_PERFORMANCE_READING_GUIDE)
 
     df = cache.get_trade_ledger()
 
@@ -110,6 +119,16 @@ def render() -> None:
     display_df = df if status_filter == "Tất cả" else df[df["status"] == status_filter]
     
     display_df = filter_dataframe(display_df, key_prefix="perf_ledger")
+    visible_closed = display_df[display_df["status"] == "CLOSED"] if "status" in display_df.columns else pd.DataFrame()
+    visible_open = display_df[display_df["status"] == "OPEN"] if "status" in display_df.columns else pd.DataFrame()
+    visible_win_rate = float((visible_closed["pnl_pct"] > 0).mean()) if not visible_closed.empty else 0.0
+    visible_avg_pnl = float(visible_closed["pnl_pct"].mean()) if not visible_closed.empty else 0.0
+    ledger_info_cols = st.columns(4)
+    ledger_info_cols[0].metric("Lệnh đang hiển thị", len(display_df), delta=f"/{len(df)} tổng")
+    ledger_info_cols[1].metric("Lệnh OPEN trong view", int(len(visible_open)))
+    ledger_info_cols[2].metric("Win rate trong view", f"{visible_win_rate:.1%}")
+    ledger_info_cols[3].metric("P&L TB trong view", f"{visible_avg_pnl:+.2f}%")
+
     st.dataframe(
         display_df,
         column_config={
@@ -203,5 +222,6 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
     st.plotly_chart(fig, use_container_width=True, key="perf_calibration")
     
     calib_df = filter_dataframe(calib_df, key_prefix="perf_calib")
+    st.caption(f"Đang hiển thị {len(calib_df)} nhóm confidence sau khi lọc bảng calibration.")
     st.dataframe(calib_df, hide_index=True, use_container_width=True)
 

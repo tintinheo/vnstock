@@ -12,10 +12,18 @@ from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 _ACTION_ORDER = {"STRONG_BUY": 0, "BUY": 1, "WATCH": 2, "NO_ACTION": 3, "EXIT": 4, "FORCED_EXIT": 5}
 
+_SCANNER_READING_GUIDE = """
+- `Action`, `MFPM`, `SMS`, `T+ Verdict` là 4 lớp ưu tiên để sàng cơ hội.
+- `RSI`, `Pattern`, `HMM`, `Sector Flow` dùng để giải thích bối cảnh, không nên dùng riêng lẻ để mua.
+- `AMF` khác `NO_ACTION`: `AMF BLOCK` là cờ rủi ro thao túng, nên coi nặng hơn một tín hiệu kỹ thuật đẹp.
+"""
+
 
 def render() -> None:
     st.title("📡 Scanner")
     st.caption("Quét toàn bộ universe theo MFPM score — lọc cơ hội mua theo Mode A/B/W.")
+    with st.expander("🧭 Cách đọc kết quả Scanner", expanded=False):
+        st.markdown(_SCANNER_READING_GUIDE)
 
     with st.form("scanner_form"):
         col_left, col_right = st.columns([3, 1])
@@ -236,6 +244,16 @@ def render() -> None:
         return colours.get(val, "")
 
     df_show = filter_dataframe(df_show, key_prefix="scanner")
+
+    visible_buy_like = int(df_show["Action"].isin(["STRONG_BUY", "BUY", "WATCH"]).sum()) if not df_show.empty else 0
+    avg_mfpm_visible = float(df_show["MFPM"].mean()) if not df_show.empty else 0.0
+    avg_tconf_visible = float(df_show["T+ Conf"].mean()) if not df_show.empty else 0.0
+    scan_info_cols = st.columns(4)
+    scan_info_cols[0].metric("Mã đang hiển thị", len(df_show), delta=f"/{len(df_all)} tổng")
+    scan_info_cols[1].metric("Cơ hội buy/watch", visible_buy_like)
+    scan_info_cols[2].metric("MFPM TB trong view", f"{avg_mfpm_visible:.1f}")
+    scan_info_cols[3].metric("T+ Conf TB trong view", f"{avg_tconf_visible:.1f}%")
+
     styled = df_show.style.map(_colour_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 

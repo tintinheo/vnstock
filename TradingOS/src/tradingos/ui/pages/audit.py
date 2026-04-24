@@ -43,6 +43,13 @@ _INDICATOR_GUIDE = """
 | **Sizing %** | % danh mục đề xuất cho lệnh này (Kelly fraction điều chỉnh rủi ro) |
 """
 
+_VN_BEHAVIOR_GUIDE = """
+- Ưu tiên đọc theo cụm `MFPM + SMS/M-CVD + AMF + T+ Verdict`, không dùng RSI hay OBV như trigger độc lập.
+- `RSI14`, `OBV`, `VWAP` và `ATR` là chỉ báo ngữ cảnh/rủi ro; ở thị trường Việt Nam chúng dễ nhiễu khi bị kéo trụ, nghẽn thanh khoản hoặc có giao dịch thoả thuận lớn.
+- `Put-through Net`, `Whale % Vol` và `Sector Flow` phản ánh tâm lý dòng tiền nội sát hơn foreign-flow thô, vì hành vi nhà đầu tư Việt thường bị dẫn dắt bởi nhóm ngành và tay to nội.
+- `MC Win Prob` và `R:R` chỉ hữu ích khi đi cùng `AMF=PASS` và không có `Dist Warning`; xác suất đẹp nhưng bị phân phối vẫn là tín hiệu xấu.
+"""
+
 
 def render() -> None:
     st.title("🗂 Audit Log")
@@ -51,6 +58,8 @@ def render() -> None:
     # ── Indicator explanation ─────────────────────────────────────────────────
     with st.expander("📖 Giải thích các chỉ số ảnh hưởng đến quyết định", expanded=False):
         st.markdown(_INDICATOR_GUIDE)
+    with st.expander("🧭 Cách đọc đúng theo hành vi thị trường Việt Nam", expanded=False):
+        st.markdown(_VN_BEHAVIOR_GUIDE)
 
     svc = AuditService()
 
@@ -211,8 +220,16 @@ def render() -> None:
             display_cols += [c for c in df.columns if c not in display_cols
                               and c not in _skip]
             df_display = df[display_cols].copy()
+            total_events = len(df_display)
 
             df_display = filter_dataframe(df_display, key_prefix="audit")
+
+            filtered_tickers = df_display["ticker"].nunique() if "ticker" in df_display.columns else 0
+            filtered_actions = df_display["action"].nunique() if "action" in df_display.columns else 0
+            info_cols = st.columns(3)
+            info_cols[0].metric("Su kien dang hien thi", len(df_display), delta=f"/{total_events} tong")
+            info_cols[1].metric("Ma co phieu trong view", int(filtered_tickers))
+            info_cols[2].metric("Loai khuyen nghi trong view", int(filtered_actions))
 
             # Format timestamp
             if "timestamp" in df_display.columns:

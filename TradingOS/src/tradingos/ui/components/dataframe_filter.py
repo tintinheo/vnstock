@@ -9,18 +9,73 @@ from pandas.api.types import (
     is_object_dtype,
 )
 
+try:
+    from st_aggrid import (
+        AgGrid,
+        ColumnsAutoSizeMode,
+        DataReturnMode,
+        GridOptionsBuilder,
+        GridUpdateMode,
+    )
+except ImportError:  # pragma: no cover - exercised only in environments without st_aggrid
+    AgGrid = None
+    ColumnsAutoSizeMode = None
+    DataReturnMode = None
+    GridOptionsBuilder = None
+    GridUpdateMode = None
 
-def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.DataFrame:
-    """
-    Adds a UI on top of a dataframe to let viewers filter columns.
 
-    Args:
-        df: Original dataframe
-        key_prefix: Unique key prefix for streamlit widgets
+def _normalize_aggrid_response(response: object, fallback_df: pd.DataFrame) -> pd.DataFrame:
+    if response is None:
+        return fallback_df
 
-    Returns:
-        The filtered dataframe
-    """
+    data = getattr(response, "data", None)
+    if data is None and isinstance(response, dict):
+        data = response.get("data")
+
+    if isinstance(data, pd.DataFrame):
+        return data
+
+    if data is None:
+        return fallback_df
+
+    return pd.DataFrame(data)
+
+
+def _render_aggrid_filter(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
+    builder = GridOptionsBuilder.from_dataframe(df)
+    builder.configure_default_column(
+        filter=True,
+        floatingFilter=True,
+        sortable=True,
+        resizable=True,
+    )
+    builder.configure_grid_options(
+        animateRows=False,
+        ensureDomOrder=True,
+        suppressFieldDotNotation=True,
+    )
+
+    st.caption("Loc ngay tren tung cot de thu hep bang du lieu truoc khi xem chi tiet.")
+    response = AgGrid(
+        df,
+        gridOptions=builder.build(),
+        height=min(max(220, 44 * (len(df) + 1)), 420),
+        enable_enterprise_modules=False,
+        data_return_mode=DataReturnMode.FILTERED_AND_SORTED,
+        update_mode=GridUpdateMode.MODEL_CHANGED,
+        columns_auto_size_mode=ColumnsAutoSizeMode.FIT_CONTENTS,
+        fit_columns_on_grid_load=False,
+        theme="streamlit",
+        show_toolbar=False,
+        show_search=False,
+        show_download_button=False,
+        key=f"aggrid_{key_prefix}",
+    )
+    return _normalize_aggrid_response(response, df)
+
+
+def _render_streamlit_filter(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
     modify = st.checkbox("🔍 Thêm bộ lọc nhiều cột (Advanced Filter)", key=f"{key_prefix}_modify_cb")
 
     if not modify:
@@ -48,11 +103,9 @@ def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.Data
         for column in to_filter_columns:
             left, right = st.columns((1, 20))
             left.write("↳")
-            
-            # Use pandas mapping to determine widget type
+
             target_series = df_filtered[column]
-            
-            # Treat boolean or low-cardinality < 10 as categorical
+
             if (
                 isinstance(target_series.dtype, pd.CategoricalDtype)
                 or target_series.nunique() < 10
@@ -73,8 +126,8 @@ def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.Data
                     _ = right.slider(
                         f"Khoảng giá trị [{column}]",
                         min_value=min_v,
-                        max_value=max_v+1.0,
-                        value=(min_v, max_v+1.0),
+                        max_value=max_v + 1.0,
+                        value=(min_v, max_v + 1.0),
                         disabled=True,
                         key=f"{key_prefix}_{column}_sl"
                     )
@@ -98,8 +151,7 @@ def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.Data
                     key=f"{key_prefix}_{column}_dt",
                 )
                 if isinstance(user_date_input, tuple) and len(user_date_input) == 2:
-                    user_date_input = tuple(map(pd.to_datetime, user_date_input))
-                    start_date, end_date = user_date_input
+                    start_date, end_date = tuple(map(pd.to_datetime, user_date_input))
                     df_filtered = df_filtered.loc[df_filtered[column].between(start_date, end_date)]
             else:
                 user_text_input = right.text_input(
@@ -107,6 +159,31 @@ def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.Data
                     key=f"{key_prefix}_{column}_txt",
                 )
                 if user_text_input:
-                    df_filtered = df_filtered[df_filtered[column].astype(str).str.contains(user_text_input, case=False, na=False)]
+                    df_filtered = df_filtered[
+                        df_filtered[column].astype(str).str.contains(user_text_input, case=False, na=False)
+                    ]
 
     return df_filtered
+
+
+def filter_dataframe(df: pd.DataFrame, key_prefix: str = "df_filter") -> pd.DataFrame:
+    """
+    Adds a UI on top of a dataframe to let viewers filter columns.
+
+    Args:
+        df: Original dataframe
+        key_prefix: Unique key prefix for streamlit widgets
+
+    Returns:
+        The filtered dataframe
+    """
+    if df.empty:
+        return df
+
+    if AgGrid is not None:
+        try:
+            return _render_aggrid_filter(df.copy(), key_prefix)
+        except Exception as exc:  # pragma: no cover - only hit when AgGrid fails at runtime
+            st.warning(f"Khong the khoi tao grid filter nang cao, quay lai bo loc thuong: {exc}")
+
+    return _render_streamlit_filter(df, key_prefix)
