@@ -85,20 +85,24 @@ class TestC1ConfigBuyGate:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# C2 — SMS cap at 85 when PT deals unavailable (pt_flow = 0)
+# C2 — SMS cap when PT deals unavailable (pt_flow = 5, neutral since VN-B3 fix)
 # ─────────────────────────────────────────────────────────────────────────────
 
 class TestC2SMSCapWithoutPT:
     def test_sms_max_without_pt_is_85(self):
-        """With no PT data, sum of other components caps at 85 (15 pt_flow missing)."""
+        """[VN-B3 FIX] With no PT data, pt_flow = 5 (neutral, not 0).
+        Old assertion checked pt_flow==0 and sms<=85; updated to new neutral behavior."""
         from tradingos.core.money_flow import compute_smart_money_score, proxy_whale_net_from_daily
         df = _make_indicators_df(120)
         flow = proxy_whale_net_from_daily(df)
         flow["data_source"] = "PROXY_OHLCV"
-        # Pass no PT data (None) — pt_flow must be 0
+        # Pass no PT data (None) — pt_flow must be 5 (neutral) per VN-B3 fix
         result = compute_smart_money_score("TEST", df, flow, pt_deals_df=None)
-        assert result["components"]["pt_flow"] == 0, "pt_flow must be 0 when no PT data"
-        assert result["sms"] <= 85, f"SMS without PT data should be <= 85, got {result['sms']}"
+        assert result["components"]["pt_flow"] == 5, (
+            "pt_flow must be 5 (neutral) when no PT data — VN-B3 fix"
+        )
+        # Max SMS without real PT data: other components (max 85) + neutral pt_flow (5) = 90
+        assert result["sms"] <= 90, f"SMS without real PT data should be <= 90, got {result['sms']}"
 
     def test_sms_with_pt_can_exceed_85(self):
         """With strong PT buy data, SMS can reach higher than 85."""

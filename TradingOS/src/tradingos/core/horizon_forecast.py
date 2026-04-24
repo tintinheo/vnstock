@@ -71,8 +71,11 @@ def _vote(bull_pts: float, bear_pts: float, threshold: float = 2.0) -> tuple[str
 
 # ── Short horizon (3–5 days) ──────────────────────────────────────────────────
 
-def _forecast_short(df: pd.DataFrame) -> tuple[str, float, list[str]]:
+def _forecast_short(df: pd.DataFrame, ctx: dict | None = None) -> tuple[str, float, list[str]]:
     """RSI momentum, MACD, Stochastic, BB position, vol, gap."""
+    # [VN-FIX V6] Propagate context so BB bear signal can be suppressed for ceiling stocks.
+    _ctx = ctx or {}
+    _at_ceiling = bool(_ctx.get("rt_at_ceiling", False))
     bull, bear = 0.0, 0.0
     reasons: list[str] = []
 
@@ -140,7 +143,13 @@ def _forecast_short(df: pd.DataFrame) -> tuple[str, float, list[str]]:
         if pos < 0.15:
             bull += 2.0; reasons.append("Giá tại dải BB dưới — hỗ trợ mạnh")
         elif pos > 0.88:
-            bear += 1.5; reasons.append("Giá áp sát dải BB trên — kháng cự")
+            # [VN-FIX V6] VN circuit-breaker: stock at trần (+7%) is price-locked by
+            # market rules, not by technical resistance. Suppressing BB bear signal
+            # avoids false bearish read when unmet buy orders carry to next session.
+            if not _at_ceiling:
+                bear += 1.5; reasons.append("Giá áp sát dải BB trên — kháng cự")
+            else:
+                reasons.append("⚠️ Đang tại trần (circuit breaker) — BB kháng cự không áp dụng")
 
     # Volume confirmation
     if len(vol_arr) >= 5:
@@ -321,14 +330,25 @@ def _aggregate(
     mv: str, mc: float,
     lv: str, lc: float,
 ) -> tuple[str, float]:
-    """Weighted aggregate vote (Short 40%, Mid 35%, Long 25%)."""
-    weights = {"short": 0.40, "mid": 0.35, "long": 0.25}
+    """Weighted aggregate vote.
+
+    [VN-FIX V2] Weights are config-driven (default 0.50/0.30/0.20) to reflect
+    VN T+2.5 market where retail traders hold 1–5 sessions — short-term forecast
+    should dominate. Previous hardcoded weights were 0.40/0.35/0.25.
+    """
+    w_short = float(cfg.strategy("horizon_forecast", "weight_short", default=0.50))
+    w_mid   = float(cfg.strategy("horizon_forecast", "weight_mid",   default=0.30))
+    w_long  = float(cfg.strategy("horizon_forecast", "weight_long",  default=0.20))
+    # Normalise in case config values don't sum to 1.0
+    total_w = w_short + w_mid + w_long
+    if total_w > 0:
+        w_short, w_mid, w_long = w_short / total_w, w_mid / total_w, w_long / total_w
     score = (
-        _VOTE_VAL.get(sv, 0) * sc / 100 * weights["short"]
-        + _VOTE_VAL.get(mv, 0) * mc / 100 * weights["mid"]
-        + _VOTE_VAL.get(lv, 0) * lc / 100 * weights["long"]
+        _VOTE_VAL.get(sv, 0) * sc / 100 * w_short
+        + _VOTE_VAL.get(mv, 0) * mc / 100 * w_mid
+        + _VOTE_VAL.get(lv, 0) * lc / 100 * w_long
     )
-    avg_conf = sc * weights["short"] + mc * weights["mid"] + lc * weights["long"]
+    avg_conf = sc * w_short + mc * w_mid + lc * w_long
     if   score >  0.12: return "TĂNG",      round(avg_conf, 1)
     elif score < -0.12: return "GIẢM",      round(avg_conf, 1)
     else:               return "TRUNG LẬP", round(avg_conf * 0.7, 1)
@@ -349,7 +369,8 @@ def compute_multi_horizon_forecast(
         OHLCV + indicators from ``compute_all()``.
     profile_context : dict, optional
         Keys: hmm_state, amd_phase, macro_regime, macro_score,
-              fundamental_score, t25_score
+              fundamental_score, t25_score,
+              rt_at_ceiling (bool) — suppress BB bear signal when VN circuit-breaker active
 
     Returns
     -------
@@ -373,7 +394,7 @@ def compute_multi_horizon_forecast(
             "overall_vote": "TRUNG LẬP", "overall_conf": 0.0,
         }
 
-    sv, sc, sr = _forecast_short(df)
+    sv, sc, sr = _forecast_short(df, ctx)
     mv, mc, mr = _forecast_mid(df, ctx)
     lv, lc, lr = _forecast_long(df, ctx)
     ov, oc = _aggregate(sv, sc, mv, mc, lv, lc)

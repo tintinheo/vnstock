@@ -9,6 +9,7 @@ import streamlit as st
 
 from tradingos.engines.audit_service import AuditService
 from tradingos.ui.components.audit_timeline import render_audit_timeline, render_audit_stats
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 
 _ACTION_ICONS = {
@@ -76,6 +77,39 @@ def render() -> None:
         )
         date_to = tc2.date_input("Đến ngày", value=datetime.now(timezone.utc).date())
         limit = tc3.number_input("Giới hạn", value=500, min_value=10, max_value=5000, step=50)
+
+        # ── Advanced signal filters ───────────────────────────────────────
+        st.markdown("**Lọc nâng cao theo tín hiệu:**")
+        af1, af2, af3, af4 = st.columns(4)
+        tw_filter = af1.multiselect(
+            "⚠️ Trend Warning",
+            options=[
+                "UPTREND_STRENGTHENING", "UPTREND_EXHAUSTING",
+                "BREAKOUT_EMERGING",
+                "DOWNTREND_STRENGTHENING", "DOWNTREND_EXHAUSTING",
+                "RANGE_COMPRESSION",
+                "REVERSAL_WARNING_LOW_CONF", "REVERSAL_WARNING_CONFIRMED",
+                "NONE",
+            ],
+            default=[],
+            placeholder="Tất cả",
+        )
+        fc_filter = af2.multiselect(
+            "🔭 Dự báo",
+            options=["TĂNG", "GIẢM", "TRUNG LẬP"],
+            default=[],
+            placeholder="Tất cả",
+        )
+        vd_filter = af3.multiselect(
+            "🎯 T+ Verdict",
+            options=["MUA_NGAY", "CHO_XAC_NHAN", "THEO_DOI", "TRANH_XA"],
+            default=[],
+            placeholder="Tất cả",
+        )
+        min_tconf_audit = af4.number_input(
+            "T+ Conf% tối thiểu", min_value=0, max_value=100, value=0, step=5,
+        )
+
         submitted = st.form_submit_button("🔍 Tìm kiếm", use_container_width=True)
 
     if submitted:
@@ -97,20 +131,6 @@ def render() -> None:
         if action_filter and "action" in df.columns:
             df = df[df["action"].isin(action_filter)]
 
-        # ── Signal breakdown tiles ────────────────────────────────────────
-        if "action" in df.columns and not df.empty:
-            breakdown = df["action"].value_counts()
-            cols = st.columns(min(len(breakdown) + 1, 7))
-            cols[0].metric("📋 Tổng sự kiện", len(df))
-            for i, (action, count) in enumerate(breakdown.items(), start=1):
-                cols[i % len(cols)].metric(
-                    f"{_ACTION_ICONS.get(action, '•')} {action}", int(count)
-                )
-        else:
-            st.metric("📋 Tổng sự kiện", len(df))
-
-        st.subheader(f"📋 {len(df)} sự kiện")
-
         if not df.empty:
             # ── Expand payload JSON into columns ──────────────────────────
             if "payload" in df.columns:
@@ -130,6 +150,40 @@ def render() -> None:
 
             # Ensure index is unique and clean before styling
             df = df.reset_index(drop=True)
+
+            # ── Apply advanced signal filters (on expanded payload cols) ──
+            if tw_filter:
+                _tw_col = next((c for c in ["trend_warning", "p_trend_warning"] if c in df.columns), None)
+                if _tw_col:
+                    df = df[df[_tw_col].isin(tw_filter)]
+            if fc_filter:
+                _fc_col = next((c for c in ["fc_overall_vote", "p_fc_overall_vote"] if c in df.columns), None)
+                if _fc_col:
+                    df = df[df[_fc_col].isin(fc_filter)]
+            if vd_filter:
+                _vd_col = next((c for c in ["tplus_verdict", "p_tplus_verdict"] if c in df.columns), None)
+                if _vd_col:
+                    df = df[df[_vd_col].isin(vd_filter)]
+            if min_tconf_audit > 0:
+                _tc_col = next((c for c in ["tplus_confidence", "p_tplus_confidence"] if c in df.columns), None)
+                if _tc_col:
+                    df = df[pd.to_numeric(df[_tc_col], errors="coerce").fillna(0) >= min_tconf_audit]
+
+            # ── [BUG-B1 FIX] Signal breakdown tiles ──
+            if "action" in df.columns and not df.empty:
+                with st.container(border=True):
+                    st.markdown("##### 📈 Tổng quan kết quả")
+                    breakdown = df["action"].value_counts()
+                    cols = st.columns(min(len(breakdown) + 1, 7))
+                    cols[0].metric("📋 Tổng sự kiện", len(df))
+                    for i, (action, count) in enumerate(breakdown.items(), start=1):
+                        cols[i % len(cols)].metric(
+                            f"{_ACTION_ICONS.get(action, '•')} {action}", int(count)
+                        )
+            else:
+                st.metric("📋 Tổng sự kiện", len(df))
+
+            st.subheader(f"🗂 {len(df)} sự kiện chi tiết")
 
             # ── Column ordering ───────────────────────────────────────────
             priority_cols = [
@@ -158,6 +212,8 @@ def render() -> None:
                               and c not in _skip]
             df_display = df[display_cols].copy()
 
+            df_display = filter_dataframe(df_display, key_prefix="audit")
+
             # Format timestamp
             if "timestamp" in df_display.columns:
                 df_display["timestamp"] = df_display["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
@@ -172,20 +228,44 @@ def render() -> None:
 
             def _colour_action(val: str) -> str:
                 colours = {
-                    "STRONG_BUY":  "background-color:#004d1a; color:#00c851",
-                    "BUY":         "background-color:#002d40; color:#33b5e5",
+                    "STRONG_BUY":  "background-color:#004d1a; color:#00c851; font-weight:bold",
+                    "BUY":         "background-color:#002d40; color:#33b5e5; font-weight:bold",
                     "WATCH":       "background-color:#3d3000; color:#ffbb33",
-                    "NO_ACTION":   "color:#888",
-                    "EXIT":        "background-color:#3d0000; color:#ff4444",
-                    "FORCED_EXIT": "background-color:#260000; color:#cc0000",
+                    "NO_ACTION":   "color:#666666",
+                    "EXIT":        "background-color:#3d0000; color:#ff4444; font-weight:bold",
+                    "FORCED_EXIT": "background-color:#260000; color:#cc0000; font-weight:bold",
                 }
                 return colours.get(val, "")
+
+            config = {
+                "timestamp": st.column_config.TextColumn("⏰ Thời gian", width="medium"),
+                "ticker": st.column_config.TextColumn("🏷 MÃ CK", width="small"),
+                "event_type": st.column_config.TextColumn("Loại SK", width="small", help="Kiểu sự kiện trong hệ thống (PROFILE, SCAN, v.v)"),
+                "action": st.column_config.TextColumn("🎯 Khuyến nghị", width="medium", help="Quyết định cuối cùng do TradingOS đưa ra."),
+                "confidence": st.column_config.ProgressColumn("⭐ T+ Conf(%)", format="%.0f", min_value=0, max_value=120, help="Độ tự tin vào lệnh T+ (càng cao khả năng thắng càng lớn)"),
+                "mfpm_score": st.column_config.ProgressColumn("🔥 Chấm điểm MFPM", format="%.0f", min_value=0, max_value=120, help="Điểm số sức mạnh kỹ thuật và xu hướng"),
+                "sms_raw": st.column_config.ProgressColumn("🐳 Lực Mua Cá Mập", format="%d", min_value=0, max_value=100, help="Smart Money Score: >=60 là dòng tiền lớn đang gom, <40 là lực bán xả hàng"),
+                "p_rsi14": st.column_config.NumberColumn("Sức mạnh RSI", format="%.1f", help="Chỉ báo RSI: >70 (rất nóng/mua nhiều), <30 (quá lạnh/bị bán tháo)"),
+                "p_rr": st.column_config.NumberColumn("Lợi nhuận / Rủi ro ⚖️", format="%.2fx", help="Tỉ lệ Lợi nhuận dự kiến chia cho Rủi ro (Reward/Risk). Lớn hơn 2x là rất tốt."),
+                "p_mc_prob": st.column_config.NumberColumn("Tỉ lệ thắng (MC)%", format="%.1f%%", help="Xác suất giá chốt lời thành công qua mô phỏng Monte Carlo"),
+                "p_close": st.column_config.NumberColumn("💰 Giá Khớp", format="%.1f", help="Giá trị thực tế tại thời điểm quét tín hiệu"),
+                "p_entry": st.column_config.NumberColumn("Điểm Mua", format="%.1f", help="Vùng giá mua an toàn"),
+                "p_sl": st.column_config.NumberColumn("Cắt Lỗ (SL)", format="%.1f", help="Vùng giá phải bán cắt lỗ để bảo vệ vốn"),
+                "p_tp1": st.column_config.NumberColumn("Chốt Lời (TP1)", format="%.1f", help="Mức giá kỳ vọng chốt lời một phần"),
+                "p_tp2": st.column_config.NumberColumn("Chốt Lời (TP2)", format="%.1f", help="Mức chốt lời mục tiêu cuối cùng"),
+            }
 
             styled = (
                 df_display.style.map(_colour_action, subset=["action"])
                 if "action" in df_display.columns else df_display.style
             )
-            st.dataframe(styled, use_container_width=True, hide_index=True)
+            st.dataframe(
+                styled, 
+                use_container_width=True, 
+                hide_index=True, 
+                column_config=config, 
+                height=650
+            )
 
             # ── FVG detail expander ───────────────────────────────────────
             if "p_fvg_zones" in df_display.columns:

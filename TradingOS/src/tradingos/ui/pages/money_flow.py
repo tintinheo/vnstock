@@ -7,6 +7,7 @@ from tradingos.engines.money_flow_service import MoneyFlowService
 from tradingos.ui.components.sms_gauge import render_sms_gauge
 from tradingos.ui.components.mcvd_chart import render_mcvd_chart
 from tradingos.ui.components.sector_heatmap import render_sector_heatmap
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 
 def render() -> None:
@@ -32,6 +33,7 @@ def render() -> None:
             if df.empty:
                 st.info("Không có dữ liệu.")
             else:
+                df = filter_dataframe(df, key_prefix="money_flow")
                 st.dataframe(df, use_container_width=True, hide_index=True)
                 # Show gauge for top ticker
                 if len(df) > 0:
@@ -47,14 +49,14 @@ def render() -> None:
         if st.button("📊 Vẽ M-CVD"):
             with st.spinner("Đang lấy dữ liệu..."):
                 df = svc.get_mcvd_chart_data(mcvd_ticker.upper(), days=int(mcvd_days))
-            render_mcvd_chart(df, mcvd_ticker.upper(), days=int(mcvd_days))
+            render_mcvd_chart(df, mcvd_ticker.upper(), days=int(mcvd_days), key_suffix="_mf")
 
             # Also show SMS
             sms_data = svc.get_sms(mcvd_ticker.upper())
-            col1, col2 = st.columns(2)
-            with col1:
-                render_sms_gauge(sms_data.get("sms", 0), sms_data.get("sms_label", ""), mcvd_ticker.upper())
-            with col2:
+            sms_col1, sms_col2 = st.columns(2)
+            with sms_col1:
+                render_sms_gauge(sms_data.get("sms", 0), sms_data.get("sms_label", ""), mcvd_ticker.upper(), key_suffix="_mf")
+            with sms_col2:
                 stealth = sms_data.get("stealth_detail", {})
                 mcvd_d = sms_data.get("mcvd_detail", {})
                 st.metric("M-CVD Trend", mcvd_d.get("mcvd_trend", "—"))

@@ -6,7 +6,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-def render_mcvd_chart(mcvd_df: pd.DataFrame, ticker: str = "", days: int = 20) -> None:
+def render_mcvd_chart(mcvd_df: pd.DataFrame, ticker: str = "", days: int = 20, key_suffix: str = "") -> None:
     """
     Render M-CVD net whale flow as bar chart.
     mcvd_df must have columns: date (or index), whale_net.
@@ -16,6 +16,11 @@ def render_mcvd_chart(mcvd_df: pd.DataFrame, ticker: str = "", days: int = 20) -
         return
 
     df = mcvd_df.copy().tail(days)
+
+    # [BUG-B5 FIX] Guard against missing whale_net column to prevent KeyError crash
+    if "whale_net" not in df.columns:
+        st.warning("⚠️ M-CVD: cột whale_net không tồn tại trong dữ liệu được cung cấp.")
+        return
 
     if "date" not in df.columns:
         df = df.reset_index()
@@ -60,5 +65,5 @@ def render_mcvd_chart(mcvd_df: pd.DataFrame, ticker: str = "", days: int = 20) -
         showlegend=True,
     )
 
-    _key = f"mcvd_chart_{ticker}" if ticker else "mcvd_chart"
+    _key = (f"mcvd_chart_{ticker}" if ticker else "mcvd_chart") + key_suffix
     st.plotly_chart(fig, use_container_width=True, key=_key)

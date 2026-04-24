@@ -22,7 +22,13 @@ from __future__ import annotations
 
 import argparse
 import sys
+import os
+import logging
 from pathlib import Path
+
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
+os.environ["TF_ENABLE_ONEDNN_OPTS"] = "0"
+logging.getLogger("tensorflow").setLevel(logging.ERROR)
 
 import numpy as np
 import pandas as pd

@@ -13,6 +13,18 @@ mfpm:
   mode_w_sms_gate:      60   # SMS_raw must be >= this to activate Mode W gate
   mc_min_prob_buy:      0.55 # Min Monte-Carlo win probability for BUY
   mc_min_prob_strong:   0.60 # Min MC for STRONG_BUY
+  # [VN-FIX O4] 500 sims achieves equivalent decision stability for daily re-evaluation
+  mc_n_sim:             500  # Monte Carlo simulation count (was 2000)
+  # [VN-FIX V1] Volume confirmation for Mode A — VN "nến xanh" requires ≥1.5× avg volume
+  mode_a_vol_confirm:   1.5  # multiplier vs 20-day avg volume (was 0.8)
+
+# ── Horizon Forecast Weights ─────────────────────────────────────────────────
+# [VN-FIX V2] VN is a T+2.5 settlement market — retail traders hold 1–5 sessions.
+# Short-term forecast should carry more weight than long-term.
+horizon_forecast:
+  weight_short: 0.50   # was 0.40 — VN T+2.5 dominance
+  weight_mid:   0.30   # was 0.35
+  weight_long:  0.20   # was 0.25
 
 # ── Mode W Thresholds (ModeW_score) ─────────────────────────────────────────
 mode_w:
@@ -43,6 +55,9 @@ whale:
   stealth_max_atr_pct:  0.015  # Giá hẹp: ATR/Price < 1.5%
   stealth_obv_min_chg:  0.03   # OBV tăng >= 3%
   stealth_z_vol_max:    1.5    # Z_vol < 1.5 (no spike)
+  # [VN-FIX VN-B2] Proxy whale detection gate — z-score min for volume anomaly
+  # Old hardcoded 0.5 caught ~30% of all sessions. 1.5 ≈ top 7% (statistically significant).
+  proxy_z_vol_min:      1.5
 
 # ── Proxy Data Quality (4.3 FIX) ─────────────────────────────────────────────
 proxy_confidence_penalty:
@@ -60,7 +75,8 @@ entry_exit:
   atr_sl_mult:     1.5    # SL = Entry - 1.5 × ATR14
   atr_tp1_mult:    4.0    # TP1 = Entry + 4 × ATR14
   atr_tp2_mult:    8.0    # TP2 = Entry + 8 × ATR14
-  t25_window_open:  "09:30"
+  # [VN-FIX V3] ATO on HOSE ends 09:15; early momentum wave is 09:15–09:45.
+  t25_window_open:  "09:15"
   t25_window_close: "10:00"
   atc_window_start: "14:43"
 

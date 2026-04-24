@@ -1,5 +1,6 @@
 """UI components package."""
 from .signal_card import render_signal_card
+from .dataframe_filter import filter_dataframe
 from .horizon_table import render_horizon_table
 from .shap_chart import render_shap_chart
 from .sms_gauge import render_sms_gauge
@@ -10,6 +11,7 @@ from .audit_timeline import render_audit_timeline, render_audit_stats
 
 __all__ = [
     "render_signal_card",
+    "filter_dataframe",
     "render_horizon_table",
     "render_shap_chart",
     "render_sms_gauge",

@@ -7,6 +7,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 from tradingos.data.cache import cache
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 
 def _max_drawdown(pnl_series: pd.Series) -> float:
@@ -96,7 +97,8 @@ def render() -> None:
                 "Profit Factor": f"{w['pnl_pct'].sum()/max(abs(l['pnl_pct'].sum()),1e-9):.2f}",
                 "Max DD": f"{_max_drawdown(grp['pnl_pct']):.1%}",
             })
-        st.dataframe(pd.DataFrame(mode_stats), hide_index=True, use_container_width=True)
+        df_stats = filter_dataframe(pd.DataFrame(mode_stats), key_prefix="perf_stats")
+        st.dataframe(df_stats, hide_index=True, use_container_width=True)
 
     # ── Confidence calibration chart ──────────────────────────────────────
     if not closed.empty:
@@ -106,6 +108,8 @@ def render() -> None:
     st.subheader("Sổ lệnh Giao dịch (Trade Ledger)")
     status_filter = st.radio("Lọc:", ["Tất cả", "OPEN", "CLOSED"], horizontal=True)
     display_df = df if status_filter == "Tất cả" else df[df["status"] == status_filter]
+    
+    display_df = filter_dataframe(display_df, key_prefix="perf_ledger")
     st.dataframe(
         display_df,
         column_config={
@@ -197,5 +201,7 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
         height=280,
     )
     st.plotly_chart(fig, use_container_width=True, key="perf_calibration")
+    
+    calib_df = filter_dataframe(calib_df, key_prefix="perf_calib")
     st.dataframe(calib_df, hide_index=True, use_container_width=True)
 

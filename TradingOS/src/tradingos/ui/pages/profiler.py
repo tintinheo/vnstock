@@ -13,6 +13,7 @@ from tradingos.ui.components.horizon_table import render_horizon_table
 from tradingos.ui.components.shap_chart import render_shap_chart
 from tradingos.ui.components.sms_gauge import render_sms_gauge
 from tradingos.ui.components.mcvd_chart import render_mcvd_chart
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 from tradingos.core.nlp import generate_indicator_explanation, generate_f0_explanation
 
 _ALL_ACTIONS = ["ALL", "STRONG_BUY", "BUY", "WATCH", "NO_ACTION", "EXIT", "FORCED_EXIT"]
@@ -60,10 +61,15 @@ def _profile_to_row(p) -> dict:
         "Sizing%":     round(p.sizing_pct * 100, 2),
         "Sizing Qty":  p.sizing_shares,
         "Sector":      p.sector,
+        "Trend Warning": getattr(p, "trend_warning", "NONE") or "NONE",
+        "D\u1ef1 b\u00e1o":     getattr(p, "fc_overall_vote", "") or "",
+        "FC Conf%":    round((getattr(p, "fc_overall_conf", 0.0) or 0.0), 0),
+        "T+ Verdict":  getattr(p, "tplus_verdict", "") or "",
+        "T+ Conf%":    round((getattr(p, "tplus_confidence", 0.0) or 0.0), 0),
     }
 
 
-def _render_detail(profile) -> None:
+def _render_detail(profile, idx: int = 0) -> None:
     # ── Real-time price header ────────────────────────────────────────────────
     if profile.rt_price:
         pct = profile.rt_pct_change or 0.0
@@ -115,7 +121,7 @@ def _render_detail(profile) -> None:
     with tab2:
         col1, col2 = st.columns(2)
         with col1:
-            render_sms_gauge(profile.sms_raw, profile.sms_label, f"SMS – {profile.ticker}")
+            render_sms_gauge(profile.sms_raw, profile.sms_label, f"SMS \u2013 {profile.ticker}", key_suffix=f"_{idx}")
         with col2:
             st.markdown(f"**M-CVD 5d:** {profile.mcvd_5d:+,.0f}")
             st.markdown(f"**M-CVD 20d:** {profile.mcvd_20d:+,.0f}")
@@ -127,7 +133,7 @@ def _render_detail(profile) -> None:
             from tradingos.engines.money_flow_service import MoneyFlowService
             mf_svc = MoneyFlowService()
             mcvd_df = mf_svc.get_mcvd_chart_data(profile.ticker, days=20)
-            render_mcvd_chart(mcvd_df, profile.ticker)
+            render_mcvd_chart(mcvd_df, profile.ticker, days=20, key_suffix=f"_{idx}")
         except Exception:
             pass
 
@@ -138,7 +144,7 @@ def _render_detail(profile) -> None:
             "mode_w_score": profile.mode_w_score,
             "mc_win_prob":  profile.mc_win_prob,
             "components":   profile.sms_components,
-        }, profile.ticker)
+        }, profile.ticker, key_suffix=f"_{idx}")
 
     with tab4:
         c1, c2, c3 = st.columns(3)
@@ -262,7 +268,9 @@ def _render_detail(profile) -> None:
             st.info("T+2.5 chưa được tính (thiếu dữ liệu chỉ số).")
 
         # ── Multi-frame session windows ───────────────────────────────────
-        if profile.t25_morning_score > 0 or profile.t25_midday_score > 0:
+        # [BUG-B3 FIX] Include afternoon_score in condition — previously omitted,
+        # causing the window section to be hidden when only afternoon score > 0.
+        if profile.t25_morning_score > 0 or profile.t25_midday_score > 0 or profile.t25_afternoon_score > 0:
             st.divider()
             st.markdown("#### 🕐 Phân tích theo cửa sổ phiên giao dịch")
             w1, w2, w3 = st.columns(3)
@@ -311,7 +319,8 @@ def _render_detail(profile) -> None:
             unsafe_allow_html=True,
         )
         if tw_conf_pct > 0:
-            st.progress(tw_conf_pct)
+            # [BUG-B2 FIX] Clamp to [0, 100] — st.progress crashes if value > 100
+            st.progress(min(100, max(0, tw_conf_pct)))
         if profile.trend_warning_reasons:
             st.markdown("**Lý do phân tích:**")
             for r in profile.trend_warning_reasons:
@@ -589,52 +598,68 @@ def render() -> None:
         portfolio_val = col2.number_input(
             "Vốn (VND)", value=300_000_000, step=10_000_000, format="%d"
         )
-        max_workers = col2.slider("Workers (batch)", 1, 16, 8)
         submitted = st.form_submit_button("🚀 Phân tích", use_container_width=True)
 
-    if not submitted:
+    if submitted:
+        # Parse tickers — support newline, comma, space separation
+        raw = ticker_input.replace(",", "\n").replace(" ", "\n")
+        # Deduplicate while preserving order
+        seen: set = set()
+        tickers = []
+        for t in raw.split("\n"):
+            t = t.strip().upper()
+            if t and t not in seen:
+                seen.add(t)
+                tickers.append(t)
+        if not tickers:
+            st.warning("Vui lòng nhập ít nhất một mã.")
+            return
+
+        svc = ProfilerService(portfolio_value=portfolio_val)
+        profiles: list = []
+        errors: list[tuple[str, str]] = []
+
+        progress = st.progress(0.0, text=f"0 / {len(tickers)}")
+        for i, ticker in enumerate(tickers):
+            progress.progress((i + 1) / len(tickers), text=f"{ticker}  ({i + 1}/{len(tickers)})")
+            try:
+                profile = svc.run(ProfilerRequest(ticker=ticker, mode=mode))
+                profiles.append(profile)
+                audit_svc.log_event(
+                    event_type="PROFILE",
+                    ticker=ticker,
+                    action=profile.action,
+                    mfpm_score=profile.mfpm_score,
+                    sms_raw=profile.sms_raw,
+                    confidence=profile.confidence,
+                    extra={
+                        "signal_mode": profile.signal_mode,
+                        "close": profile.close,
+                        "entry_price": profile.entry_price,
+                        "stop_loss": profile.stop_loss,
+                        "tp1": profile.tp1,
+                        "rr_ratio": profile.rr_ratio,
+                        "best_pattern": profile.best_pattern,
+                        "pt_net_5d": profile.pt_net_5d,
+                    },
+                )
+            except Exception as e:
+                errors.append((ticker, str(e)))
+
+        progress.empty()
+
+        # Store results in session_state so filters don't cause page reset
+        st.session_state["profiler_profiles"] = profiles
+        st.session_state["profiler_errors"]   = errors
+
+    # ── Retrieve from session_state (survives filter reruns) ─────────────────
+    profiles = st.session_state.get("profiler_profiles")
+    errors   = st.session_state.get("profiler_errors", [])
+
+    if profiles is None:
+        # Nothing analysed yet — show placeholder
+        st.info("Nhập mã và nhấn 🚀 Phân tích để bắt đầu.")
         return
-
-    # Parse tickers — support newline, comma, space separation
-    raw = ticker_input.replace(",", "\n").replace(" ", "\n")
-    tickers = [t.strip().upper() for t in raw.split("\n") if t.strip()]
-    if not tickers:
-        st.warning("Vui lòng nhập ít nhất một mã.")
-        return
-
-    svc = ProfilerService(portfolio_value=portfolio_val)
-    profiles: list = []
-    errors: list[tuple[str, str]] = []
-
-    progress = st.progress(0.0, text=f"0 / {len(tickers)}")
-    for i, ticker in enumerate(tickers):
-        progress.progress((i + 1) / len(tickers), text=f"{ticker}  ({i + 1}/{len(tickers)})")
-        try:
-            profile = svc.run(ProfilerRequest(ticker=ticker, mode=mode))
-            profiles.append(profile)
-            # Log to audit
-            audit_svc.log_event(
-                event_type="PROFILE",
-                ticker=ticker,
-                action=profile.action,
-                mfpm_score=profile.mfpm_score,
-                sms_raw=profile.sms_raw,
-                confidence=profile.confidence,
-                extra={
-                    "signal_mode": profile.signal_mode,
-                    "close": profile.close,
-                    "entry_price": profile.entry_price,
-                    "stop_loss": profile.stop_loss,
-                    "tp1": profile.tp1,
-                    "rr_ratio": profile.rr_ratio,
-                    "best_pattern": profile.best_pattern,
-                    "pt_net_5d": profile.pt_net_5d,
-                },
-            )
-        except Exception as e:
-            errors.append((ticker, str(e)))
-
-    progress.empty()
 
     if errors:
         with st.expander(f"⚠️ {len(errors)} mã lỗi"):
@@ -648,24 +673,70 @@ def render() -> None:
     # ── Summary table with signal filter ─────────────────────────────────────
     st.subheader(f"📋 Kết quả — {len(profiles)} mã")
 
-    filter_col, export_col = st.columns([3, 1])
-    with filter_col:
-        selected_actions = st.multiselect(
-            "Lọc theo tín hiệu (Action)",
-            options=["STRONG_BUY", "BUY", "WATCH", "NO_ACTION", "EXIT", "FORCED_EXIT"],
-            default=[],
-            placeholder="Chọn tín hiệu — để trống = hiển thị tất cả",
-            key="profiler_action_filter",
-        )
-
     rows = [_profile_to_row(p) for p in profiles]
     df_all = pd.DataFrame(rows)
 
-    df_show = (
-        df_all[df_all["Action"].isin(selected_actions)]
-        if selected_actions else df_all
-    )
+    # ── Filter panel ──────────────────────────────────────────────────────────
+    with st.expander("🔍 Bộ lọc kết quả", expanded=True):
+        frow1 = st.columns([2, 2, 2, 2])
+        selected_actions = frow1[0].multiselect(
+            "Action",
+            options=["STRONG_BUY", "BUY", "WATCH", "NO_ACTION", "EXIT", "FORCED_EXIT"],
+            default=[],
+            placeholder="Tất cả",
+            key="profiler_action_filter",
+        )
+        _tw_opts = sorted(df_all["Trend Warning"].dropna().unique().tolist())
+        selected_tw = frow1[1].multiselect(
+            "⚠️ Trend Warning",
+            options=_tw_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="profiler_tw_filter",
+        )
+        _fc_opts = [v for v in ["TĂNG", "GIẢM", "TRUNG LẬP"] if v in df_all["Dự báo"].values]
+        selected_fc = frow1[2].multiselect(
+            "🔭 Dự báo",
+            options=_fc_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="profiler_fc_filter",
+        )
+        _vd_opts = sorted(df_all["T+ Verdict"].dropna().unique().tolist())
+        selected_vd = frow1[3].multiselect(
+            "🎯 T+ Verdict",
+            options=_vd_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="profiler_vd_filter",
+        )
+        frow2 = st.columns([2, 2, 4])
+        min_tconf = frow2[0].number_input(
+            "T+ Conf% tối thiểu", min_value=0, max_value=100, value=0, step=5,
+            key="profiler_tconf_min",
+        )
+        min_fcconf = frow2[1].number_input(
+            "FC Conf% tối thiểu", min_value=0, max_value=100, value=0, step=5,
+            key="profiler_fcconf_min",
+        )
 
+    df_show = df_all.copy()
+    if selected_actions:
+        df_show = df_show[df_show["Action"].isin(selected_actions)]
+    if selected_tw:
+        df_show = df_show[df_show["Trend Warning"].isin(selected_tw)]
+    if selected_fc:
+        df_show = df_show[df_show["Dự báo"].isin(selected_fc)]
+    if selected_vd:
+        df_show = df_show[df_show["T+ Verdict"].isin(selected_vd)]
+    if min_tconf > 0:
+        df_show = df_show[df_show["T+ Conf%"] >= min_tconf]
+    if min_fcconf > 0:
+        df_show = df_show[df_show["FC Conf%"] >= min_fcconf]
+
+    st.caption(f"Hiển thị **{len(df_show)}** / {len(df_all)} mã sau lọc")
+
+    export_col, _ = st.columns([1, 3])
     with export_col:
         csv_bytes = df_show.to_csv(index=False).encode("utf-8-sig")
         st.download_button(
@@ -688,6 +759,7 @@ def render() -> None:
         }
         return colours.get(val, "")
 
+    df_show = filter_dataframe(df_show, key_prefix="profiler_history")
     styled = df_show.style.map(_colour_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -701,12 +773,35 @@ def render() -> None:
     st.divider()
 
     # ── Per-ticker detail expanders (filtered) ────────────────────────────────
+    _TW_EM = {
+        "UPTREND_STRENGTHENING":     "📈",
+        "DOWNTREND_STRENGTHENING":   "📉",
+        "UPTREND_EXHAUSTING":        "⚠️📈",
+        "DOWNTREND_EXHAUSTING":      "⚠️📉",
+        "RANGE_COMPRESSION":         "↔️",
+        "BREAKOUT_EMERGING":         "🚀",
+        "REVERSAL_WARNING_LOW_CONF": "⚡",
+        "REVERSAL_WARNING_CONFIRMED":"🔴⚡",
+    }
+    _FC_EM  = {"TĂNG": "🔭↑", "GIẢM": "🔭↓", "TRUNG LẬP": "🔭↔"}
+    _VD_EM  = {
+        "MUA_NGAY":      "T+✅",
+        "CHO_XAC_NHAN": "T+⏳",
+        "THEO_DOI":     "T+👀",
+        "TRANH_XA":     "T+❌",
+    }
+    # Per-ticker detail — use ordered list, not set, to preserve display order
     visible_tickers = set(df_show["Mã"].tolist())
-    for profile in profiles:
+    for i, profile in enumerate(profiles):
         if profile.ticker not in visible_tickers:
             continue
+        _tw_em = _TW_EM.get(getattr(profile, "trend_warning", "") or "", "")
+        _fc_em = _FC_EM.get(getattr(profile, "fc_overall_vote", "") or "", "")
+        _vd_em = _VD_EM.get(getattr(profile, "tplus_verdict", "") or "", "")
+        _conf  = getattr(profile, "tplus_confidence", 0) or 0
+        _extras = "  |  " + "  ".join(x for x in [_tw_em, _fc_em, f"{_vd_em} {_conf:.0f}%" if _vd_em else ""] if x)
         with st.expander(
-            f"📈 {profile.ticker} — {profile.action} | MFPM {profile.mfpm_score} | SMS {profile.sms_raw}",
+            f"📈 {profile.ticker} — {profile.action} | MFPM {profile.mfpm_score} | SMS {profile.sms_raw}{_extras}",
             expanded=(len(visible_tickers) == 1),
         ):
-            _render_detail(profile)
+            _render_detail(profile, idx=i)

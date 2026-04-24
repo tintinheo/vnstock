@@ -41,6 +41,10 @@ def _session_phase() -> str:
         return "PRE_OPEN"
     elif now < time(9, 30):
         return "ATO"
+    elif now < time(11, 30):
+        return "CONTINUOUS"
+    elif now < time(12, 45):
+        return "BREAK"           # [VN-FIX VN-B4] HOSE midday break 11:30–12:45; exchange closed
     elif now < time(14, 30):
         return "CONTINUOUS"
     elif now < time(14, 43):
@@ -116,8 +120,10 @@ def t25_exit_check(
             exit_pct=1.0,
         )
 
-    # ── TP1 hit + hold ≥ 3 days ──────────────────────────────────────────
-    if current_price >= tp1 and hold_days >= 3:
+    # ── TP1 hit + hold ≥ 2 days (T+2.5 ATC) ─────────────────────────────
+    # [VN-FIX VN-B1] T+2.5 = ATC of day T+2. hold_days=2 is the earliest valid
+    # partial exit window. Old threshold >= 3 mapped to T+3 settlement — wrong.
+    if current_price >= tp1 and hold_days >= 2:
         return T25ExitAdvisory(
             ticker=ticker,
             action="SELL_PARTIAL_ATC",

@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-def render_shap_chart(mfpm_result: dict, ticker: str = "") -> None:
+def render_shap_chart(mfpm_result: dict, ticker: str = "", key_suffix: str = "") -> None:
     """
     Render SHAP-style contribution bar chart from MFPM result.
     Uses pre-computed component scores as feature contributions.
@@ -51,5 +51,5 @@ def render_shap_chart(mfpm_result: dict, ticker: str = "") -> None:
         xaxis=dict(gridcolor="#333"),
     )
 
-    _key = f"shap_{ticker}" if ticker else "shap_chart"
+    _key = (f"shap_{ticker}" if ticker else "shap_chart") + key_suffix
     st.plotly_chart(fig, use_container_width=True, key=_key)

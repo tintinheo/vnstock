@@ -1,16 +1,18 @@
 """Backtest page — mode A/B/W comparison + walk-forward."""
 from __future__ import annotations
 
+import pandas as pd
 import streamlit as st
 
 from tradingos.engines.backtest_service import BacktestService
 from tradingos.data.schemas import BacktestRequest
 from tradingos.ui.components.equity_curve import render_equity_curve, render_backtest_summary
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 
 def render() -> None:
     st.title("📊 Backtest")
-    st.caption("So sánh Mode A / B / W — VN constraints (T+3, LOCK_SAN=5% synthetic).")
+    st.caption("So sánh Mode A / B / W — áp dụng đầy đủ các ràng buộc thị trường chứng khoán Việt Nam (T+2.5, circuit breaker, lịch khọp lệnh).")
 
     with st.form("bt_form"):
         col1, col2, col3 = st.columns(3)
@@ -51,17 +53,19 @@ def render() -> None:
         for mode, bt in results.items():
             if bt.walk_forward_windows:
                 with st.expander(f"Walk-Forward Windows — {mode}"):
-                    import pandas as pd
-                    st.dataframe(pd.DataFrame(bt.walk_forward_windows), use_container_width=True, hide_index=True)
+                    df_wf = pd.DataFrame(bt.walk_forward_windows)
+                    df_wf = filter_dataframe(df_wf, key_prefix=f"wf_{mode}")
+                    st.dataframe(df_wf, use_container_width=True, hide_index=True)
 
         # Trade list
         best_mode = max(results, key=lambda m: results[m].total_return)
         bt = results[best_mode]
         if bt.trades:
             with st.expander(f"📜 Trade list — {best_mode} ({len(bt.trades)} lệnh)"):
-                import pandas as pd
                 rows = [vars(t) for t in bt.trades[:50]]
-                st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+                df_trades = pd.DataFrame(rows)
+                df_trades = filter_dataframe(df_trades, key_prefix="trades")
+                st.dataframe(df_trades, use_container_width=True, hide_index=True)
 
         st.caption(
             "⚠️ [SYNTHETIC] LOCK_SAN=5% là tham số giả định. Kết quả backtest chỉ mang tính tham khảo."

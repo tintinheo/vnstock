@@ -46,8 +46,16 @@ from ..core.bilstm_predictor import BiLSTMPredictor
 from ..data.intraday_collector import fetch_intraday_features
 from .money_flow_service import MoneyFlowService, sector_flow_lookup
 from ..utils.logging import get_logger
+import time as _time
 
 log = get_logger("profiler_service")
+
+# ── Module-level macro cache (O1 FIX) ────────────────────────────────────────
+# Macro data (USD/VND, bond yield, SBV OMO) changes on a hours-to-days timescale.
+# Fetching it per-ticker in a scan of 50+ tickers wastes 50+ redundant HTTP calls.
+# Cache is shared across all ProfilerService instances; TTL = 5 minutes.
+_MACRO_CACHE: dict = {}   # keys: "result" → MacroResult | None, "ts" → float
+_MACRO_TTL = 300.0        # seconds
 
 
 def _extract_exchange(quote: dict) -> str:
@@ -236,20 +244,29 @@ class ProfilerService:
         omega = compute_omega(df, None)      # SRS §3.4 gmo_omega
 
         # ── 6b. Macro regime ─────────────────────────────────────────────
-        # Fetch once; use cached result if fresh from same scan batch
+        # [O1 FIX] Cache macro result for 5 min across all tickers in a scan.
+        # Macro data (USD/VND, VN10Y bond, SBV OMO) changes on an hours-to-days
+        # timescale; fetching it per-ticker wastes 50+ HTTP calls during a scan.
         macro_result = None
-        try:
-            usdvnd_df    = fetch_usdvnd(days=60)
-            bond_df      = fetch_vn10y_bond_yield(days=60)
-            sbv_data     = fetch_sbv_omo_net(days=30)
-            macro_result = compute_macro_regime(
-                usdvnd_df=usdvnd_df,
-                bond_yield_df=bond_df,
-                sbv_net_injection_7d=sbv_data.get("net_7d"),
-                sbv_avg_vol_ref=sbv_data.get("avg_ref", 10_000.0),
-            )
-        except Exception as _macro_err:
-            log.debug(f"Macro regime skipped for {ticker}: {_macro_err}")
+        _now = _time.time()
+        if _MACRO_CACHE.get("ts") and _now - _MACRO_CACHE["ts"] < _MACRO_TTL:
+            macro_result = _MACRO_CACHE.get("result")
+            log.debug("Macro cache hit")
+        else:
+            try:
+                usdvnd_df    = fetch_usdvnd(days=60)
+                bond_df      = fetch_vn10y_bond_yield(days=60)
+                sbv_data     = fetch_sbv_omo_net(days=30)
+                macro_result = compute_macro_regime(
+                    usdvnd_df=usdvnd_df,
+                    bond_yield_df=bond_df,
+                    sbv_net_injection_7d=sbv_data.get("net_7d"),
+                    sbv_avg_vol_ref=sbv_data.get("avg_ref", 10_000.0),
+                )
+                _MACRO_CACHE["result"] = macro_result
+                _MACRO_CACHE["ts"]     = _now
+            except Exception as _macro_err:
+                log.debug(f"Macro regime skipped for {ticker}: {_macro_err}")
 
         # ── 6c. Earnings risk ─────────────────────────────────────────────
         earnings_risk_result = None
@@ -280,6 +297,8 @@ class ProfilerService:
                 "macro_score":       macro_result.macro_score    if macro_result else None,
                 "fundamental_score": fund_snap.fundamental_score if fund_snap    else None,
                 "t25_score":         t25_result.get("t25_score"),
+                # [VN-FIX V6] Pass ceiling flag so BB bear signal is suppressed on trần
+                "rt_at_ceiling":     bool(rt_data.get("rt_at_ceiling", False)),
             }
             fc_result = compute_multi_horizon_forecast(df, _fc_ctx)
         except Exception as _fc_err:

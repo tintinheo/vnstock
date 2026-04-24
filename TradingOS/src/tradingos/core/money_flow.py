@@ -43,9 +43,13 @@ def proxy_whale_net_from_daily(df: pd.DataFrame) -> pd.DataFrame:
     # z_vol > 0.5 signals on halted or stagnant-volume stocks.  Added .replace(0, 1).
     sigma = c["volume"].rolling(20).std().fillna(1).replace(0, 1)
     c["z_vol"] = (c["volume"] - mu) / sigma
+    # [VN-FIX VN-B2] Old z_vol > 0.5 caught ~30% of all sessions as "whale",
+    # inflating SMS scores on normal trading days. Config-driven threshold
+    # (default 1.5) requires statistically significant volume deviation.
+    _z_min = float(cfg.strategy("whale", "proxy_z_vol_min", default=1.5))
     c["whale_net_proxy"] = c.apply(
         lambda r: int(r["volume"] * 0.3 * np.sign(r["range_pct"] - 0.5))
-        if r["z_vol"] > 0.5 else 0,
+        if r["z_vol"] > _z_min else 0,
         axis=1,
     )
     c["whale_net"] = c["whale_net_proxy"]
@@ -267,23 +271,12 @@ def compute_smart_money_score(
     fol_ratio = fol_net_5d / max(avg_vol * 5, 1)
     # [BUG3 FIX] No fol_net column → no information; score 0 not 3
     if not has_fol_data:
-        # [VN-FIX] FOL column absent on all vnstock tickers (no public foreign-net feed).
-        # Redistribute the 15-pt FOL slot via OBV slope as institutional proxy.
-        # OBV rising strongly ≈ sustained accumulation; gives up to 10 pts (vs 15 for real FOL).
-        _obv_proxy = 0
-        if "OBV" in df.columns and len(df) >= 10:
-            _obv_10 = df["OBV"].iloc[-10]
-            _obv_now = df["OBV"].iloc[-1]
-            _obv_slope = (_obv_now - _obv_10) / max(abs(_obv_10), 1)
-            if _obv_slope > 0.05:
-                _obv_proxy = 10
-            elif _obv_slope > 0.02:
-                _obv_proxy = 6
-            elif _obv_slope > 0:
-                _obv_proxy = 3
-            else:
-                _obv_proxy = 0
-        comps["fol"] = _obv_proxy
+        # [VN-FIX V4] When no foreign-flow data, use a neutral score (5/15) instead
+        # of OBV-slope proxy. OBV slope measures price-direction pressure, not foreign
+        # ownership level (FOL) — they are semantically unrelated signals. A domestic
+        # stock with rising price was incorrectly receiving a "foreigners buying" bonus.
+        # Neutral score 5/15 means "no edge information" without penalising or inflating.
+        comps["fol"] = 5
     elif fol_ratio > 0.05:
         comps["fol"] = 15
     elif fol_ratio > 0.02:
@@ -359,7 +352,9 @@ def compute_smart_money_score(
         else: # Net selling or insignificant
             comps["pt_flow"] = 0
     else:
-        comps["pt_flow"] = 0 # No data
+        # [VN-FIX VN-B3] No PT data → neutral (5/15), consistent with FOL fallback.
+        # Old value 0 penalised stocks that simply don't have PT deals — most mid/small caps.
+        comps["pt_flow"] = 5  # No data — neutral (no information edge)
 
     sms = sum(comps.values())
     sms = max(0, min(100, sms))

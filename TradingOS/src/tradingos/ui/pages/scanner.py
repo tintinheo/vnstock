@@ -8,6 +8,7 @@ from tradingos.engines.scanner_service import ScannerService
 from tradingos.engines.audit_service import AuditService
 from tradingos.data.schemas import ScanRequest
 from tradingos.core.nlp import generate_summary_headline
+from tradingos.ui.components.dataframe_filter import filter_dataframe
 
 _ACTION_ORDER = {"STRONG_BUY": 0, "BUY": 1, "WATCH": 2, "NO_ACTION": 3, "EXIT": 4, "FORCED_EXIT": 5}
 
@@ -23,7 +24,7 @@ def render() -> None:
             placeholder="VCB\nHPG\nSSI\nVNM",
             height=120,
         )
-        exchange = col_left.selectbox("Sàn", ["HOSE", "HNX", "ALL"], index=0)
+        exchange = col_left.selectbox("Sàn", ["HOSE", "HNX", "UPCOM", "ALL"], index=0)
         min_mfpm = col_right.slider("MFPM tối thiểu", 0, 120, 0)
         min_sms = col_right.slider("SMS tối thiểu", 0, 100, 0)
         max_workers = col_right.slider("Workers", 1, 16, 8)
@@ -36,51 +37,59 @@ def render() -> None:
         )
         submitted = st.form_submit_button("🔍 Quét ngay", use_container_width=True)
 
-    if not submitted:
-        return
+    if submitted:
+        raw = ticker_input.replace(",", "\n").replace(" ", "\n")
+        tickers = [t.strip().upper() for t in raw.split("\n") if t.strip()] or None
 
-    raw = ticker_input.replace(",", "\n").replace(" ", "\n")
-    tickers = [t.strip().upper() for t in raw.split("\n") if t.strip()] or None
+        if tickers is None:
+            st.info(f"⏳ Quét toàn bộ {exchange} — có thể mất vài phút...")
 
-    if tickers is None:
-        st.info(f"⏳ Quét toàn bộ {exchange} — có thể mất vài phút...")
-
-    request = ScanRequest(
-        tickers=tickers,
-        exchange=exchange,
-        limit=len(tickers) if tickers else 2000,
-        min_mfpm_score=min_mfpm,
-        min_sms=min_sms,
-        min_action="",          # hiển thị tất cả tín hiệu kể cả NO_ACTION
-        include_blocked=include_blocked,
-    )
-
-    svc = ScannerService(max_workers=max_workers)
-    audit_svc = AuditService()
-
-    with st.spinner("Đang quét..."):
-        result = svc.scan(request)
-
-    st.success(
-        f"✅ Quét xong: **{result.tickers_scanned}** mã → "
-        f"hiển thị **{result.tickers_passed}** kết quả"
-    )
-
-    if not result.results:
-        st.info("Không có kết quả phù hợp.")
-        return
-
-    # Log scan to audit
-    for item in result.results:
-        audit_svc.log_event(
-            event_type="SCAN",
-            ticker=item.ticker,
-            action=item.action,
-            mfpm_score=item.mfpm_score,
-            sms_raw=item.sms_raw,
-            confidence=item.confidence,
-            extra={"signal_mode": item.signal_mode, "close": item.close, "best_pattern": item.best_pattern},
+        request = ScanRequest(
+            tickers=tickers,
+            exchange=exchange,
+            limit=len(tickers) if tickers else 2000,
+            min_mfpm_score=min_mfpm,
+            min_sms=min_sms,
+            min_action="",
+            include_blocked=include_blocked,
         )
+
+        svc = ScannerService(max_workers=max_workers)
+        audit_svc = AuditService()
+
+        with st.spinner("Đang quét..."):
+            result = svc.scan(request)
+
+        if not result.results:
+            st.info("Không có kết quả phù hợp.")
+            st.session_state.pop("scanner_result", None)
+            return
+
+        # Log to audit
+        for item in result.results:
+            audit_svc.log_event(
+                event_type="SCAN",
+                ticker=item.ticker,
+                action=item.action,
+                mfpm_score=item.mfpm_score,
+                sms_raw=item.sms_raw,
+                confidence=item.confidence,
+                extra={"signal_mode": item.signal_mode, "close": item.close, "best_pattern": item.best_pattern},
+            )
+
+        st.session_state["scanner_result"] = result
+        st.session_state["scanner_summary"] = (
+            f"✅ Quét xong: **{result.tickers_scanned}** mã → "
+            f"hiển thị **{result.tickers_passed}** kết quả"
+        )
+
+    # ── Retrieve from session_state (survives filter reruns) ─────────────────
+    result = st.session_state.get("scanner_result")
+    if result is None:
+        st.info("Nhập danh sách mã và nhấn 🔍 Quét ngay để bắt đầu.")
+        return
+
+    st.success(st.session_state.get("scanner_summary", ""))
 
     rows = []
     for item in result.results:
@@ -122,6 +131,9 @@ def render() -> None:
             "T+ Setup":   getattr(item, "tplus_setup",    "T_NO_SETUP"),
             "T+ Verdict": getattr(item, "tplus_verdict",  "THEO_DOI"),
             "T+ Conf":    getattr(item, "tplus_confidence", 0.0),
+            "Trend Warning": getattr(item, "trend_warning", "NONE") or "NONE",
+            "D\u1ef1 b\u00e1o":    getattr(item, "fc_overall_vote", "") or "",
+            "FC Conf%":   round(getattr(item, "fc_overall_conf", 0.0) or 0.0, 0),
             "CVD":        getattr(item, "cvd_signal",       "N/A"),
         })
 
@@ -139,25 +151,57 @@ def render() -> None:
     st.divider()
 
     # ── Filter controls ───────────────────────────────────────────────────────
-    fc1, fc2, fc3 = st.columns([2, 2, 1])
-    with fc1:
-        selected_actions = st.multiselect(
-            "Lọc Action",
+    with st.expander("🔍 Bộ lọc kết quả", expanded=True):
+        sc_r1 = st.columns([2, 2, 2, 1])
+        selected_actions = sc_r1[0].multiselect(
+            "Action",
             options=list(_ACTION_ORDER.keys()),
             default=[],
-            placeholder="Để trống = tất cả",
+            placeholder="Tất cả",
             key="scanner_action_filter",
         )
-    with fc2:
-        selected_modes = st.multiselect(
-            "Lọc Mode",
+        selected_modes = sc_r1[1].multiselect(
+            "Mode",
             options=sorted(df_all["Mode"].unique().tolist()),
             default=[],
-            placeholder="Để trống = tất cả",
+            placeholder="Tất cả",
             key="scanner_mode_filter",
         )
-    with fc3:
-        stealth_only = st.checkbox("Stealth Accum only", key="scanner_stealth")
+        _sc_tw_opts = sorted(df_all["Trend Warning"].dropna().unique().tolist())
+        selected_tw = sc_r1[2].multiselect(
+            "⚠️ Trend Warning",
+            options=_sc_tw_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="scanner_tw_filter",
+        )
+        stealth_only = sc_r1[3].checkbox("Stealth only", key="scanner_stealth")
+
+        sc_r2 = st.columns([2, 2, 2, 2])
+        _sc_fc_opts = [v for v in ["TĂNG", "GIẢM", "TRUNG LẬP"] if v in df_all["Dự báo"].values]
+        selected_fc = sc_r2[0].multiselect(
+            "🔭 Dự báo",
+            options=_sc_fc_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="scanner_fc_filter",
+        )
+        _sc_vd_opts = sorted(df_all["T+ Verdict"].dropna().unique().tolist())
+        selected_vd = sc_r2[1].multiselect(
+            "🎯 T+ Verdict",
+            options=_sc_vd_opts,
+            default=[],
+            placeholder="Tất cả",
+            key="scanner_vd_filter",
+        )
+        min_tconf = sc_r2[2].number_input(
+            "T+ Conf% tối thiểu", min_value=0, max_value=100, value=0, step=5,
+            key="scanner_tconf_min",
+        )
+        min_fcconf = sc_r2[3].number_input(
+            "FC Conf% tối thiểu", min_value=0, max_value=100, value=0, step=5,
+            key="scanner_fcconf_min",
+        )
 
     df_show = df_all.copy()
     if selected_actions:
@@ -166,6 +210,16 @@ def render() -> None:
         df_show = df_show[df_show["Mode"].isin(selected_modes)]
     if stealth_only:
         df_show = df_show[df_show["Stealth"] == True]
+    if selected_tw:
+        df_show = df_show[df_show["Trend Warning"].isin(selected_tw)]
+    if selected_fc:
+        df_show = df_show[df_show["Dự báo"].isin(selected_fc)]
+    if selected_vd:
+        df_show = df_show[df_show["T+ Verdict"].isin(selected_vd)]
+    if min_tconf > 0:
+        df_show = df_show[df_show["T+ Conf"] >= min_tconf]
+    if min_fcconf > 0:
+        df_show = df_show[df_show["FC Conf%"] >= min_fcconf]
 
     st.caption(f"Hiển thị **{len(df_show)}** / {len(df_all)} mã sau lọc")
 
@@ -181,6 +235,7 @@ def render() -> None:
         }
         return colours.get(val, "")
 
+    df_show = filter_dataframe(df_show, key_prefix="scanner")
     styled = df_show.style.map(_colour_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
@@ -204,7 +259,7 @@ def render() -> None:
         st.markdown("#### 📝 Tóm tắt tín hiệu — NLP")
         st.caption("Hiển thị tối đa 20 mã có tín hiệu STRONG_BUY / BUY / WATCH đầu tiên.")
         _action_icon = {"STRONG_BUY": "🚀", "BUY": "🟢", "WATCH": "👀"}
-        for item in buy_items[:20]:
+        for _i, item in enumerate(buy_items[:20]):
             headline = generate_summary_headline(
                 ticker=item.ticker,
                 action=item.action,
@@ -236,7 +291,7 @@ def render() -> None:
                     st.markdown(f"**HMM:** {item.hmm_state}")
                     st.markdown(f"**Pattern:** {item.best_pattern}")
                     st.markdown(f"**Stealth:** {'✅' if item.stealth_accum else '❌'}")
-                if st.button(f"📈 Mở Profiler — {item.ticker}", key=f"nlp_open_{item.ticker}"):
+                if st.button(f"📈 Mở Profiler — {item.ticker}", key=f"nlp_open_{item.ticker}_{_i}"):
                     st.session_state["profiler_ticker"] = item.ticker
                     st.session_state["nav"] = "🔍 Profiler"
                     st.rerun()

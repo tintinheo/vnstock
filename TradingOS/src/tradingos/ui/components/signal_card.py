@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import streamlit as st
 
-from tradingos.core.nlp import generate_indicator_explanation, generate_f0_explanation
+from tradingos.core.nlp import generate_f0_explanation
 
 
 _ACTION_COLOR = {
@@ -47,6 +47,75 @@ def render_signal_card(profile) -> None:
     col2.metric("Cắt lỗ", f"{profile.stop_loss:,.0f} đ", delta=f"-{profile.sl_pct:.1%}")
     col3.metric("TP1 / TP2", f"{profile.tp1:,.0f} / {profile.tp2:,.0f}")
     col4.metric("R:R", f"1:{profile.rr_ratio:.1f}")
+
+    # ── Quick-glance signal badges ────────────────────────────────────────────
+    tw       = getattr(profile, "trend_warning", "NONE") or "NONE"
+    tw_vi    = getattr(profile, "trend_warning_vi", "") or ""
+    fc_vote  = getattr(profile, "fc_overall_vote", "") or ""
+    fc_conf  = getattr(profile, "fc_overall_conf", 0.0) or 0.0
+    verdict  = getattr(profile, "tplus_verdict", "") or ""
+    vd_vi    = getattr(profile, "tplus_verdict_vi", "") or verdict
+    tplus_conf = getattr(profile, "tplus_confidence", 0.0) or 0.0
+
+    _TW_COLOR = {
+        "UPTREND_STRENGTHENING":     "#22c55e",
+        "DOWNTREND_STRENGTHENING":   "#ef4444",
+        "UPTREND_EXHAUSTING":        "#f59e0b",
+        "DOWNTREND_EXHAUSTING":      "#6366f1",
+        "RANGE_COMPRESSION":         "#94a3b8",
+        "BREAKOUT_EMERGING":         "#3b82f6",
+        "REVERSAL_WARNING_LOW_CONF": "#f97316",
+        "REVERSAL_WARNING_CONFIRMED":"#dc2626",
+        "NONE":                      "#475569",
+        "INSUFFICIENT_DATA":         "#475569",
+    }
+    _TW_LABEL = {
+        "UPTREND_STRENGTHENING":     "Tăng mạnh",
+        "DOWNTREND_STRENGTHENING":   "Giảm mạnh",
+        "UPTREND_EXHAUSTING":        "Tăng cạn kiệt",
+        "DOWNTREND_EXHAUSTING":      "Giảm đảo chiều",
+        "RANGE_COMPRESSION":         "Tích lũy",
+        "BREAKOUT_EMERGING":         "Sắp bứt phá",
+        "REVERSAL_WARNING_LOW_CONF": "Cảnh báo đảo chiều",
+        "REVERSAL_WARNING_CONFIRMED":"Đảo chiều ✓",
+        "NONE":                      "Bình thường",
+        "INSUFFICIENT_DATA":         "Thiếu dữ liệu",
+    }
+    _VOTE_COLOR   = {"TĂNG": "#22c55e", "GIẢM": "#ef4444", "TRUNG LẬP": "#94a3b8"}
+    _VERDICT_COLOR = {
+        "MUA_NGAY":      "#22c55e",
+        "CHO_XAC_NHAN": "#f59e0b",
+        "THEO_DOI":     "#94a3b8",
+        "TRANH_XA":     "#ef4444",
+    }
+
+    tw_col = _TW_COLOR.get(tw, "#475569")
+    fc_col = _VOTE_COLOR.get(fc_vote, "#475569")
+    vd_col = _VERDICT_COLOR.get(verdict, "#475569")
+    tw_display = _TW_LABEL.get(tw, tw_vi or tw)
+
+    def _badge(label: str, value: str, color: str, sub: str = "") -> str:
+        sub_html = f'<div style="font-size:10px;color:#64748b;margin-top:1px;">{sub}</div>' if sub else ""
+        return (
+            f'<div style="background:{color}15;border:1px solid {color}40;border-radius:8px;'
+            f'padding:7px 10px;text-align:center;">'
+            f'<div style="font-size:10px;color:#94a3b8;margin-bottom:2px;">{label}</div>'
+            f'<div style="font-size:13px;font-weight:700;color:{color};line-height:1.2;">{value}</div>'
+            f'{sub_html}</div>'
+        )
+
+    b1, b2, b3, b4 = st.columns(4)
+    b1.markdown(_badge("⚠️ Trend Warning", tw_display, tw_col), unsafe_allow_html=True)
+    b2.markdown(
+        _badge("🔭 Dự báo", fc_vote or "—", fc_col, f"{fc_conf:.0f}% tin cậy" if fc_conf > 0 else ""),
+        unsafe_allow_html=True,
+    )
+    b3.markdown(_badge("🎯 T+ Verdict", vd_vi or "—", vd_col), unsafe_allow_html=True)
+    b4.markdown(
+        _badge("📊 T+ Conf", f"{tplus_conf:.0f}%" if tplus_conf > 0 else "—", vd_col),
+        unsafe_allow_html=True,
+    )
+    st.write("")
 
     with st.expander("📊 Chi tiết tín hiệu", expanded=False):
         c1, c2 = st.columns(2)

@@ -117,7 +117,7 @@ class TestUISourceWiring:
 
         src = inspect.getsource(scanner.render)
         # UPCOM removed; list should contain HOSE, HNX, ALL
-        assert 'selectbox("S\u00e0n", ["HOSE", "HNX", "ALL"]' in src
+        assert 'selectbox("Sàn", ["HOSE", "HNX", "UPCOM", "ALL"]' in src
         assert 'exchange=exchange' in src
 
     def test_signal_card_shows_overlay_details(self):

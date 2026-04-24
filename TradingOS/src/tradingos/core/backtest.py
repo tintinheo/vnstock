@@ -90,7 +90,13 @@ def _simulate_single_trade(
     entry_cost_pct  = commission_bps + slippage_bps
     exit_cost_pct   = commission_bps + slippage_bps + tax_sell_bps
 
-    rng = np.random.default_rng(entry_idx)
+    # [VN-FIX VN-B5] Diverse seed: combine entry position + df characteristics
+    # (first-bar close as ticker proxy) + mode offset so different tickers and
+    # modes at the same bar index produce independent lock_san outcomes.
+    # Old code (seed=entry_idx) correlated simulations across tickers at same bar.
+    _df_fp = len(df) + (int(df.iloc[0]["close"]) if not df.empty else 0)
+    _mode_offset = {"MODE_A": 0, "MODE_B": 99991, "MODE_W": 199979}.get(mode, 0)
+    rng = np.random.default_rng((entry_idx + _df_fp * 7 + _mode_offset) % (2 ** 32))
 
     if entry_idx >= len(df) - 2:
         return None

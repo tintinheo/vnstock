@@ -5,7 +5,7 @@ import plotly.graph_objects as go
 import streamlit as st
 
 
-def render_sms_gauge(sms_raw: int, sms_label: str = "", title: str = "SMS Score") -> None:
+def render_sms_gauge(sms_raw: int, sms_label: str = "", title: str = "SMS Score", key_suffix: str = "") -> None:
     """Render SMS as a Plotly gauge (speedometer)."""
     color = (
         "#00c851" if sms_raw >= 75
@@ -43,5 +43,5 @@ def render_sms_gauge(sms_raw: int, sms_label: str = "", title: str = "SMS Score"
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="white",
     )
-    _key = "sms_gauge_" + title.replace(" ", "_").replace("/", "_")
+    _key = "sms_gauge_" + title.replace(" ", "_").replace("/", "_") + key_suffix
     st.plotly_chart(fig, use_container_width=True, key=_key)

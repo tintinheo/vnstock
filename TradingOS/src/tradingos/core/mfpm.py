@@ -55,8 +55,11 @@ def score_mode_a(df: pd.DataFrame) -> int:
             score += 10
 
     # Volume confirmation
+    # [VN-FIX V1] VN "xác nhận" requires ≥1.5× avg volume (nến xanh khối lượng rule).
+    # Old threshold 0.8× was trivially satisfied 80%+ of the time.
     avg_vol = df["volume"].tail(20).mean()
-    if float(last["volume"]) > avg_vol * 0.8:
+    vol_confirm_mult = float(cfg.strategy("mfpm", "mode_a_vol_confirm", default=1.5))
+    if float(last["volume"]) > avg_vol * vol_confirm_mult:
         score += 10
 
     return min(score, 60)
@@ -431,7 +434,10 @@ def compute_mfpm(
     tp1 = params["tp1"]
     tp2 = params["tp2"]
 
-    mc_prob = monte_carlo_win_prob(df, entry, sl, tp1)
+    mc_prob = monte_carlo_win_prob(
+        df, entry, sl, tp1,
+        n_sim=int(cfg.strategy("mfpm", "mc_n_sim", default=500)),
+    )
 
     # Distribution warning override
     dist_warning = sms_result.get("distribution_warning", "NONE")
