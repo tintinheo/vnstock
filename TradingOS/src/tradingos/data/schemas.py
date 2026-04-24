@@ -331,7 +331,13 @@ class ScanResultItem(BaseModel):
     distribution_warning: WARN_LEVEL = "NONE"
     tplus_setup          : str   = "T_NO_SETUP"
     tplus_verdict        : str   = "THEO_DOI"
+    tplus_verdict_vi     : str   = ""
     tplus_confidence     : float = 0.0
+    tplus_entry_low      : float = 0.0
+    tplus_entry_high     : float = 0.0
+    tplus_target_t25     : float = 0.0
+    tplus_target_t5      : float = 0.0
+    tplus_stop           : float = 0.0
     cvd_signal           : str   = "NEUTRAL"
 
 

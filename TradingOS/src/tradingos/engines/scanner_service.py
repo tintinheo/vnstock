@@ -359,5 +359,11 @@ class ScannerService:
             distribution_warning=dist_warning,
             tplus_setup     =_tplus.get("setup_type",  "T_NO_SETUP"),
             tplus_verdict   =_tplus.get("verdict",     "THEO_DOI"),
+            tplus_verdict_vi=_tplus.get("verdict_vi",  ""),
             tplus_confidence=_tplus.get("confidence",  0.0),
+            tplus_entry_low =_tplus.get("entry_zone_low",  0.0),
+            tplus_entry_high=_tplus.get("entry_zone_high", 0.0),
+            tplus_target_t25=_tplus.get("target_t25",      0.0),
+            tplus_target_t5 =_tplus.get("target_t5",       0.0),
+            tplus_stop      =_tplus.get("stop_loss",       0.0),
         )

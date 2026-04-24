@@ -9,6 +9,14 @@ from tradingos.engines.audit_service import AuditService
 from tradingos.data.schemas import ScanRequest
 from tradingos.core.nlp import generate_summary_headline
 from tradingos.ui.components.dataframe_filter import filter_dataframe
+from tradingos.ui.components.tplus_explainer import (
+    TPLUS_MAPPING_GUIDE,
+    build_action_tplus_explanation,
+    build_tplus_exit_plan,
+    verdict_label,
+    verdict_row_tint,
+    verdict_style,
+)
 
 _ACTION_ORDER = {"STRONG_BUY": 0, "BUY": 1, "WATCH": 2, "NO_ACTION": 3, "EXIT": 4, "FORCED_EXIT": 5}
 
@@ -24,6 +32,8 @@ def render() -> None:
     st.caption("Quét toàn bộ universe theo MFPM score — lọc cơ hội mua theo Mode A/B/W.")
     with st.expander("🧭 Cách đọc kết quả Scanner", expanded=False):
         st.markdown(_SCANNER_READING_GUIDE)
+    with st.expander("🧩 Mapping chuẩn giữa Action và T+ Verdict", expanded=False):
+        st.markdown(TPLUS_MAPPING_GUIDE)
 
     with st.form("scanner_form"):
         col_left, col_right = st.columns([3, 1])
@@ -82,7 +92,20 @@ def render() -> None:
                 mfpm_score=item.mfpm_score,
                 sms_raw=item.sms_raw,
                 confidence=item.confidence,
-                extra={"signal_mode": item.signal_mode, "close": item.close, "best_pattern": item.best_pattern},
+                extra={
+                    "signal_mode": item.signal_mode,
+                    "close": item.close,
+                    "best_pattern": item.best_pattern,
+                    "tplus_setup": item.tplus_setup,
+                    "tplus_verdict": item.tplus_verdict,
+                    "tplus_verdict_vi": getattr(item, "tplus_verdict_vi", ""),
+                    "tplus_confidence": item.tplus_confidence,
+                    "tplus_entry_low": getattr(item, "tplus_entry_low", 0.0),
+                    "tplus_entry_high": getattr(item, "tplus_entry_high", 0.0),
+                    "tplus_target_t25": getattr(item, "tplus_target_t25", 0.0),
+                    "tplus_target_t5": getattr(item, "tplus_target_t5", 0.0),
+                    "tplus_stop": getattr(item, "tplus_stop", 0.0),
+                },
             )
 
         st.session_state["scanner_result"] = result
@@ -138,7 +161,23 @@ def render() -> None:
             ),
             "T+ Setup":   getattr(item, "tplus_setup",    "T_NO_SETUP"),
             "T+ Verdict": getattr(item, "tplus_verdict",  "THEO_DOI"),
+            "T+ Verdict VI": verdict_label(
+                getattr(item, "tplus_verdict", "THEO_DOI"),
+                getattr(item, "tplus_verdict_vi", ""),
+            ),
             "T+ Conf":    getattr(item, "tplus_confidence", 0.0),
+            "A×T+ Ý nghĩa": build_action_tplus_explanation(
+                item.action,
+                getattr(item, "tplus_verdict", "THEO_DOI"),
+            ),
+            "T+ Exit": build_tplus_exit_plan(
+                getattr(item, "tplus_verdict", "THEO_DOI"),
+                getattr(item, "tplus_stop", 0.0),
+                getattr(item, "tplus_target_t25", 0.0),
+                getattr(item, "tplus_target_t5", 0.0),
+                getattr(item, "tplus_entry_low", 0.0),
+                getattr(item, "tplus_entry_high", 0.0),
+            ),
             "Trend Warning": getattr(item, "trend_warning", "NONE") or "NONE",
             "D\u1ef1 b\u00e1o":    getattr(item, "fc_overall_vote", "") or "",
             "FC Conf%":   round(getattr(item, "fc_overall_conf", 0.0) or 0.0, 0),
@@ -243,6 +282,13 @@ def render() -> None:
         }
         return colours.get(val, "")
 
+    def _colour_verdict(val: str) -> str:
+        return verdict_style(val)
+
+    def _row_tint(row: pd.Series) -> list[str]:
+        tint = verdict_row_tint(row.get("T+ Verdict", ""))
+        return [tint] * len(row)
+
     df_show = filter_dataframe(df_show, key_prefix="scanner")
 
     visible_buy_like = int(df_show["Action"].isin(["STRONG_BUY", "BUY", "WATCH"]).sum()) if not df_show.empty else 0
@@ -254,8 +300,21 @@ def render() -> None:
     scan_info_cols[2].metric("MFPM TB trong view", f"{avg_mfpm_visible:.1f}")
     scan_info_cols[3].metric("T+ Conf TB trong view", f"{avg_tconf_visible:.1f}%")
 
-    styled = df_show.style.map(_colour_action, subset=["Action"])
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    styled = (
+        df_show.style
+        .apply(_row_tint, axis=1)
+        .map(_colour_action, subset=["Action"])
+        .map(_colour_verdict, subset=["T+ Verdict", "T+ Verdict VI", "Mã"])
+    )
+    scanner_config = {
+        "Action": st.column_config.TextColumn("Action", help="Quyết định tổng thể của hệ thống cho mã này."),
+        "T+ Verdict": st.column_config.TextColumn("T+ Verdict", help="Timing T+2.5/T+5 cho biết có thể mua ngay, cần chờ xác nhận, chỉ theo dõi hay nên tránh."),
+        "T+ Verdict VI": st.column_config.TextColumn("T+ Verdict VI", help="Diễn giải tiếng Việt của verdict T+ để đọc nhanh trên bảng."),
+        "A×T+ Ý nghĩa": st.column_config.TextColumn("A×T+ Ý nghĩa", width="large", help="Giải thích chuẩn cho tổ hợp Action và T+ Verdict, ví dụ BUY nhưng CHO_XAC_NHAN nghĩa là nền tốt nhưng chưa nên vào ngay."),
+        "T+ Exit": st.column_config.TextColumn("T+ Exit", width="large", help="Kế hoạch thoát theo T+ Verdict gồm vùng vào, stop, mục tiêu T+2.5 và T+5."),
+        "T+ Conf": st.column_config.ProgressColumn("T+ Conf", format="%.0f", min_value=0, max_value=100),
+    }
+    st.dataframe(styled, use_container_width=True, hide_index=True, column_config=scanner_config)
 
     # ── Export ────────────────────────────────────────────────────────────────
     csv_bytes = df_show.to_csv(index=False).encode("utf-8-sig")

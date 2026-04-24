@@ -10,6 +10,14 @@ import streamlit as st
 from tradingos.engines.audit_service import AuditService
 from tradingos.ui.components.audit_timeline import render_audit_timeline, render_audit_stats
 from tradingos.ui.components.dataframe_filter import filter_dataframe
+from tradingos.ui.components.tplus_explainer import (
+    TPLUS_MAPPING_GUIDE,
+    build_action_tplus_explanation,
+    build_tplus_exit_plan,
+    verdict_label,
+    verdict_row_tint,
+    verdict_style,
+)
 
 
 _ACTION_ICONS = {
@@ -60,6 +68,8 @@ def render() -> None:
         st.markdown(_INDICATOR_GUIDE)
     with st.expander("🧭 Cách đọc đúng theo hành vi thị trường Việt Nam", expanded=False):
         st.markdown(_VN_BEHAVIOR_GUIDE)
+    with st.expander("🧩 Mapping chuẩn giữa Action và T+ Verdict", expanded=False):
+        st.markdown(TPLUS_MAPPING_GUIDE)
 
     svc = AuditService()
 
@@ -220,6 +230,39 @@ def render() -> None:
             display_cols += [c for c in df.columns if c not in display_cols
                               and c not in _skip]
             df_display = df[display_cols].copy()
+            verdict_col = next((c for c in ["tplus_verdict", "p_tplus_verdict"] if c in df_display.columns), None)
+            verdict_vi_col = next((c for c in ["tplus_verdict_vi", "p_tplus_verdict_vi"] if c in df_display.columns), None)
+            stop_col = next((c for c in ["tplus_stop", "p_tplus_stop"] if c in df_display.columns), None)
+            t25_col = next((c for c in ["tplus_target_t25", "p_tplus_target_t25"] if c in df_display.columns), None)
+            t5_col = next((c for c in ["tplus_target_t5", "p_tplus_target_t5"] if c in df_display.columns), None)
+            entry_low_col = next((c for c in ["tplus_entry_low", "p_tplus_entry_low"] if c in df_display.columns), None)
+            entry_high_col = next((c for c in ["tplus_entry_high", "p_tplus_entry_high"] if c in df_display.columns), None)
+            if verdict_col:
+                df_display["tplus_verdict_vi_display"] = df_display.apply(
+                    lambda row: verdict_label(
+                        row.get(verdict_col, ""),
+                        row.get(verdict_vi_col, "") if verdict_vi_col else "",
+                    ),
+                    axis=1,
+                )
+                df_display["action_tplus_note"] = df_display.apply(
+                    lambda row: build_action_tplus_explanation(
+                        row.get("action", ""),
+                        row.get(verdict_col, ""),
+                    ),
+                    axis=1,
+                )
+                df_display["tplus_exit_plan"] = df_display.apply(
+                    lambda row: build_tplus_exit_plan(
+                        row.get(verdict_col, ""),
+                        row.get(stop_col, 0.0) if stop_col else 0.0,
+                        row.get(t25_col, 0.0) if t25_col else 0.0,
+                        row.get(t5_col, 0.0) if t5_col else 0.0,
+                        row.get(entry_low_col, 0.0) if entry_low_col else 0.0,
+                        row.get(entry_high_col, 0.0) if entry_high_col else 0.0,
+                    ),
+                    axis=1,
+                )
             total_events = len(df_display)
 
             df_display = filter_dataframe(df_display, key_prefix="audit")
@@ -254,12 +297,24 @@ def render() -> None:
                 }
                 return colours.get(val, "")
 
+            def _colour_verdict(val: str) -> str:
+                return verdict_style(val)
+
+            def _row_tint(row: pd.Series) -> list[str]:
+                verdict_value = row.get("p_tplus_verdict", row.get("tplus_verdict", ""))
+                tint = verdict_row_tint(verdict_value)
+                return [tint] * len(row)
+
             config = {
                 "timestamp": st.column_config.TextColumn("⏰ Thời gian", width="medium"),
                 "ticker": st.column_config.TextColumn("🏷 MÃ CK", width="small"),
                 "event_type": st.column_config.TextColumn("Loại SK", width="small", help="Kiểu sự kiện trong hệ thống (PROFILE, SCAN, v.v)"),
                 "action": st.column_config.TextColumn("🎯 Khuyến nghị", width="medium", help="Quyết định cuối cùng do TradingOS đưa ra."),
                 "confidence": st.column_config.ProgressColumn("⭐ T+ Conf(%)", format="%.0f", min_value=0, max_value=120, help="Độ tự tin vào lệnh T+ (càng cao khả năng thắng càng lớn)"),
+                "p_tplus_verdict": st.column_config.TextColumn("🎯 T+ Verdict", help="Timing T+ của tín hiệu tại thời điểm log."),
+                "tplus_verdict_vi_display": st.column_config.TextColumn("T+ Verdict VI", help="Diễn giải tiếng Việt của verdict T+ để đọc nhanh."),
+                "action_tplus_note": st.column_config.TextColumn("A×T+ Ý nghĩa", width="large", help="Giải thích chuẩn cho tổ hợp Action và T+ Verdict, ví dụ BUY nhưng CHO_XAC_NHAN nghĩa là gì."),
+                "tplus_exit_plan": st.column_config.TextColumn("T+ Exit", width="large", help="Điểm EXIT và mục tiêu tham chiếu theo verdict T+, gồm stop, T+2.5 và T+5."),
                 "mfpm_score": st.column_config.ProgressColumn("🔥 Chấm điểm MFPM", format="%.0f", min_value=0, max_value=120, help="Điểm số sức mạnh kỹ thuật và xu hướng"),
                 "sms_raw": st.column_config.ProgressColumn("🐳 Lực Mua Cá Mập", format="%d", min_value=0, max_value=100, help="Smart Money Score: >=60 là dòng tiền lớn đang gom, <40 là lực bán xả hàng"),
                 "p_rsi14": st.column_config.NumberColumn("Sức mạnh RSI", format="%.1f", help="Chỉ báo RSI: >70 (rất nóng/mua nhiều), <30 (quá lạnh/bị bán tháo)"),
@@ -273,7 +328,9 @@ def render() -> None:
             }
 
             styled = (
-                df_display.style.map(_colour_action, subset=["action"])
+                df_display.style.apply(_row_tint, axis=1)
+                .map(_colour_action, subset=["action"])
+                .map(_colour_verdict, subset=[c for c in ["ticker", "p_tplus_verdict", "tplus_verdict_vi_display"] if c in df_display.columns])
                 if "action" in df_display.columns else df_display.style
             )
             st.dataframe(

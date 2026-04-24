@@ -303,7 +303,10 @@ class TestTplusSchemaFields:
     def test_scan_result_item_has_tplus_fields(self):
         from tradingos.data.schemas import ScanResultItem
         fields = ScanResultItem.model_fields
-        required = ["tplus_setup", "tplus_verdict", "tplus_confidence"]
+        required = [
+            "tplus_setup", "tplus_verdict", "tplus_verdict_vi", "tplus_confidence",
+            "tplus_entry_low", "tplus_entry_high", "tplus_target_t25", "tplus_target_t5", "tplus_stop",
+        ]
         missing = [f for f in required if f not in fields]
         assert not missing, f"Missing ScanResultItem fields: {missing}"
 
@@ -328,4 +331,10 @@ class TestTplusSchemaFields:
         )
         assert item.tplus_setup      == "T_NO_SETUP"
         assert item.tplus_verdict    == "THEO_DOI"
+        assert item.tplus_verdict_vi == ""
         assert item.tplus_confidence == 0.0
+        assert item.tplus_entry_low  == 0.0
+        assert item.tplus_entry_high == 0.0
+        assert item.tplus_target_t25 == 0.0
+        assert item.tplus_target_t5  == 0.0
+        assert item.tplus_stop       == 0.0

@@ -14,6 +14,13 @@ from tradingos.ui.components.shap_chart import render_shap_chart
 from tradingos.ui.components.sms_gauge import render_sms_gauge
 from tradingos.ui.components.mcvd_chart import render_mcvd_chart
 from tradingos.ui.components.dataframe_filter import filter_dataframe
+from tradingos.ui.components.tplus_explainer import (
+    TPLUS_MAPPING_GUIDE,
+    build_action_tplus_explanation,
+    build_tplus_exit_plan,
+    verdict_row_tint,
+    verdict_style,
+)
 from tradingos.core.nlp import generate_indicator_explanation, generate_f0_explanation
 
 _ALL_ACTIONS = ["ALL", "STRONG_BUY", "BUY", "WATCH", "NO_ACTION", "EXIT", "FORCED_EXIT"]
@@ -65,6 +72,18 @@ def _profile_to_row(p) -> dict:
         "D\u1ef1 b\u00e1o":     getattr(p, "fc_overall_vote", "") or "",
         "FC Conf%":    round((getattr(p, "fc_overall_conf", 0.0) or 0.0), 0),
         "T+ Verdict":  getattr(p, "tplus_verdict", "") or "",
+        "A×T+ Ý nghĩa": build_action_tplus_explanation(
+            p.action,
+            getattr(p, "tplus_verdict", "") or "",
+        ),
+        "T+ Exit": build_tplus_exit_plan(
+            getattr(p, "tplus_verdict", "") or "",
+            getattr(p, "tplus_stop", 0.0),
+            getattr(p, "tplus_target_t25", 0.0),
+            getattr(p, "tplus_target_t5", 0.0),
+            getattr(p, "tplus_entry_low", 0.0),
+            getattr(p, "tplus_entry_high", 0.0),
+        ),
         "T+ Conf%":    round((getattr(p, "tplus_confidence", 0.0) or 0.0), 0),
     }
 
@@ -420,6 +439,19 @@ def _render_detail(profile, idx: int = 0) -> None:
             f'</div>',
             unsafe_allow_html=True,
         )
+        action_tplus_note = build_action_tplus_explanation(profile.action, profile.tplus_verdict)
+        action_tplus_plan = build_tplus_exit_plan(
+            profile.tplus_verdict,
+            profile.tplus_stop,
+            profile.tplus_target_t25,
+            profile.tplus_target_t5,
+            profile.tplus_entry_low,
+            profile.tplus_entry_high,
+        )
+        with st.expander("🧩 Mapping chuẩn giữa Action và T+ Verdict", expanded=False):
+            st.markdown(TPLUS_MAPPING_GUIDE)
+            st.info(action_tplus_note)
+            st.caption(action_tplus_plan)
         if conf > 0:
             st.progress(min(100, int(conf)))
 
@@ -641,6 +673,15 @@ def render() -> None:
                         "rr_ratio": profile.rr_ratio,
                         "best_pattern": profile.best_pattern,
                         "pt_net_5d": profile.pt_net_5d,
+                        "tplus_setup": profile.tplus_setup,
+                        "tplus_verdict": profile.tplus_verdict,
+                        "tplus_verdict_vi": profile.tplus_verdict_vi,
+                        "tplus_confidence": profile.tplus_confidence,
+                        "tplus_entry_low": profile.tplus_entry_low,
+                        "tplus_entry_high": profile.tplus_entry_high,
+                        "tplus_target_t25": profile.tplus_target_t25,
+                        "tplus_target_t5": profile.tplus_target_t5,
+                        "tplus_stop": profile.tplus_stop,
                     },
                 )
             except Exception as e:
@@ -759,9 +800,26 @@ def render() -> None:
         }
         return colours.get(val, "")
 
+    def _colour_verdict(val: str) -> str:
+        return verdict_style(val)
+
+    def _row_tint(row: pd.Series) -> list[str]:
+        tint = verdict_row_tint(row.get("T+ Verdict", ""))
+        return [tint] * len(row)
+
     df_show = filter_dataframe(df_show, key_prefix="profiler_history")
-    styled = df_show.style.map(_colour_action, subset=["Action"])
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    styled = (
+        df_show.style
+        .apply(_row_tint, axis=1)
+        .map(_colour_action, subset=["Action"])
+        .map(_colour_verdict, subset=["T+ Verdict", "Mã"])
+    )
+    profiler_config = {
+        "A×T+ Ý nghĩa": st.column_config.TextColumn("A×T+ Ý nghĩa", width="large", help="Giải thích chuẩn cho tổ hợp Action và T+ Verdict ngay trong lịch sử Profiler."),
+        "T+ Exit": st.column_config.TextColumn("T+ Exit", width="large", help="Kế hoạch thoát theo verdict T+, gồm vùng vào, stop, T+2.5 và T+5."),
+        "T+ Verdict": st.column_config.TextColumn("T+ Verdict", help="Timing T+ của từng lần profile."),
+    }
+    st.dataframe(styled, use_container_width=True, hide_index=True, column_config=profiler_config)
 
     # ── Signal breakdown ──────────────────────────────────────────────────────
     breakdown = df_all["Action"].value_counts()

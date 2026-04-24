@@ -12,6 +12,14 @@ class TestAuditReadingGuide:
         assert "Cách đọc đúng theo hành vi thị trường Việt Nam" in src
         assert "MFPM + SMS/M-CVD + AMF + T+ Verdict" in src
 
+    def test_audit_has_action_tplus_mapping_affordance(self):
+        import tradingos.ui.pages.audit as audit_ui
+
+        src = inspect.getsource(audit_ui)
+        assert "Mapping chuẩn giữa Action và T+ Verdict" in src
+        assert "A×T+ Ý nghĩa" in src
+        assert "T+ Exit" in src
+
 
 class TestScannerFilteredSummary:
     def test_scanner_has_reading_guide_and_view_metrics(self):
@@ -21,6 +29,31 @@ class TestScannerFilteredSummary:
         assert "Cách đọc kết quả Scanner" in src
         assert "Mã đang hiển thị" in src
         assert "Cơ hội buy/watch" in src
+
+    def test_scanner_has_action_tplus_mapping_columns(self):
+        import tradingos.ui.pages.scanner as scanner_ui
+
+        src = inspect.getsource(scanner_ui.render)
+        assert "Mapping chuẩn giữa Action và T+ Verdict" in src
+        assert "A×T+ Ý nghĩa" in src
+        assert "T+ Exit" in src
+        assert "apply(_row_tint, axis=1)" in src
+
+
+class TestTplusExplainer:
+    def test_buy_but_wait_for_confirmation_explanation(self):
+        from tradingos.ui.components.tplus_explainer import build_action_tplus_explanation
+
+        text = build_action_tplus_explanation("BUY", "CHO_XAC_NHAN")
+        assert "chua den diem kich hoat dep" in text.lower()
+
+    def test_tplus_exit_plan_mentions_targets_and_stop(self):
+        from tradingos.ui.components.tplus_explainer import build_tplus_exit_plan
+
+        text = build_tplus_exit_plan("MUA_NGAY", 95, 108, 114, 100, 102)
+        assert "SL 95.0" in text
+        assert "T+2.5 108.0" in text
+        assert "T+5 114.0" in text
 
 
 class TestPerformanceFilteredSummary:
@@ -38,3 +71,20 @@ class TestPerformanceFilteredSummary:
         src = inspect.getsource(perf_ui._render_confidence_calibration)
         assert "Đang hiển thị" in src
         assert "calibration" in src.lower()
+
+
+class TestProfilerTplusConsistency:
+    def test_profiler_has_action_tplus_summary_and_row_tint(self):
+        import tradingos.ui.pages.profiler as profiler_ui
+
+        src = inspect.getsource(profiler_ui)
+        assert "Mapping chuẩn giữa Action và T+ Verdict" in src
+        assert "A×T+ Ý nghĩa" in src
+        assert "T+ Exit" in src
+        assert "apply(_row_tint, axis=1)" in src
+
+    def test_audit_uses_verdict_row_tint(self):
+        import tradingos.ui.pages.audit as audit_ui
+
+        src = inspect.getsource(audit_ui)
+        assert "apply(_row_tint, axis=1)" in src
