@@ -43,4 +43,5 @@ def render_sms_gauge(sms_raw: int, sms_label: str = "", title: str = "SMS Score"
         paper_bgcolor="rgba(0,0,0,0)",
         font_color="white",
     )
-    st.plotly_chart(fig, use_container_width=True)
+    _key = "sms_gauge_" + title.replace(" ", "_").replace("/", "_")
+    st.plotly_chart(fig, use_container_width=True, key=_key)

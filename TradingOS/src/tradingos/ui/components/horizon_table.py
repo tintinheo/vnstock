@@ -36,5 +36,5 @@ def render_horizon_table(horizons: list[dict]) -> None:
         }
         return colors.get(val, "")
 
-    styled = df.style.applymap(_color_action, subset=["Action"])
+    styled = df.style.map(_color_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)

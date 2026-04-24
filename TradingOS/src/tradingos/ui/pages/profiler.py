@@ -63,7 +63,7 @@ def _profile_to_row(p) -> dict:
     }
 
 
-def _render_detail(profile, svc_label: str = "") -> None:
+def _render_detail(profile) -> None:
     # ── Real-time price header ────────────────────────────────────────────────
     if profile.rt_price:
         pct = profile.rt_pct_change or 0.0
@@ -688,7 +688,7 @@ def render() -> None:
         }
         return colours.get(val, "")
 
-    styled = df_show.style.applymap(_colour_action, subset=["Action"])
+    styled = df_show.style.map(_colour_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # ── Signal breakdown ──────────────────────────────────────────────────────

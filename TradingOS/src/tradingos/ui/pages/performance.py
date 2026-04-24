@@ -78,7 +78,7 @@ def render() -> None:
             font_color="white",
             height=300,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, use_container_width=True, key="perf_equity_curve")
 
     # ── Walk-forward breakdown by mode ────────────────────────────────────
     if not closed.empty and "signal_mode" in closed.columns:
@@ -196,6 +196,6 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
         font_color="white",
         height=280,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="perf_calibration")
     st.dataframe(calib_df, hide_index=True, use_container_width=True)
 

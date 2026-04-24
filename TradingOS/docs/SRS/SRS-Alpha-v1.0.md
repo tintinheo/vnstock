@@ -1,8 +1,18 @@
-# TradingOS Alpha — Software Requirements Specification (SRS) v1.0
+# TradingOS Alpha — Software Requirements Specification (SRS) v1.1
 
-> **Version:** 1.0 | **Date:** 2026-03-30 | **Status:** Approved for Implementation
-> **Based on:** `TradingOS-Alpha-Proposal-v1.0.md` (Round-5 audit + v5 Merge)
+> **Version:** 1.1 | **Date:** 2026-04-24 | **Status:** Living Document — Updated to reflect implemented state
+> **Based on:** `SRS-Alpha-v1.0.md` (2026-03-30) + AMF Wash Sale Directionality proposal (April 2026)
 > **Scope:** HOSE + HNX | Swing Trading T+2 → T+15
+>
+> **v1.1 Changelog:**
+> - Added FR-7: AMF Wash Sale Directionality (Phases I–IV, fully implemented)
+> - Added FR-8: ML & AI Signal Layer (BiLSTM, Macro, Earnings, Fundamentals)
+> - Updated `TickerProfile` schema to reflect all 90+ implemented fields
+> - Updated architecture diagram with all new modules
+> - Updated intraday data sources: TCBS ticks + SSI iBoard + VNDirect fallback
+> - Updated file structure (§10.3) with all new core modules and engines
+> - Marked Phase I–IV AMF implementation as complete in implementation plan
+> - Added risk model (GJR-GARCH VaR/CVaR) to risk framework
 
 ---
 
@@ -16,12 +26,14 @@
 6. [FR-4: Performance Optimization](#6-fr-4-performance-optimization)
 7. [FR-5: Backtesting Engine](#7-fr-5-backtesting-engine)
 8. [FR-6: Dòng Tiền Lớn — Large Money Flow](#8-fr-6-dòng-tiền-lớn--large-money-flow)
-9. [Non-Functional Requirements](#9-non-functional-requirements)
-10. [Data Models & DuckDB Schema](#10-data-models--duckdb-schema)
-11. [API Specification](#11-api-specification)
-12. [UI/UX Specification](#12-uiux-specification)
-13. [Implementation Plan (17 tuần)](#13-implementation-plan-17-tuần)
-14. [Risk Register](#14-risk-register)
+9. [FR-7: AMF Wash Sale Directionality ✅ IMPLEMENTED](#9-fr-7-amf-wash-sale-directionality)
+10. [FR-8: ML & AI Signal Layer ✅ IMPLEMENTED](#10-fr-8-ml--ai-signal-layer)
+11. [Non-Functional Requirements](#11-non-functional-requirements)
+12. [Data Models & DuckDB Schema](#12-data-models--duckdb-schema)
+13. [API Specification](#13-api-specification)
+14. [UI/UX Specification](#14-uiux-specification)
+15. [Implementation Plan (17 tuần)](#15-implementation-plan-17-tuần)
+16. [Risk Register](#16-risk-register)
 
 ---
 
@@ -83,50 +95,131 @@ Proposal v1.0 đã có CVD/whale tracking **ở mức phòng thủ** (block mani
 > **Alpha MVP UI scope (H3):** 6 pages chính thức. `Realtime` và `Portfolio` defer sang Beta.
 
 ```
-┌───────────────────────────────────────────────────────────────────────┐
-│                       STREAMLIT UI LAYER                              │
-│  [Profiler] [Scanner] [Money Flow] [Backtest] [Audit] [Settings]     │
-│  ← Alpha MVP: 6 pages above. [Realtime] [Portfolio] deferred → Beta  │
-└──────────────────────────────┬────────────────────────────────────────┘
+┌───────────────────────────────────────────────────────────────────────────┐
+│                         STREAMLIT UI LAYER                                │
+│  [Profiler] [Scanner] [Money Flow] [Backtest] [Audit] [Settings]         │
+│  ← Alpha MVP: 6 pages above. [Realtime] [Portfolio] deferred → Beta      │
+└──────────────────────────────┬────────────────────────────────────────────┘
                                │
-┌──────────────────────────────┴────────────────────────────────────────┐
-│                        SERVICE LAYER                                  │
-│  ProfilerService │ ScannerService │ MoneyFlowService │ BacktestService│
-│  AuditService    │ AlertService   │ PortfolioService │ SectorService  │
-└──────────────────────────────┬────────────────────────────────────────┘
+┌──────────────────────────────┴────────────────────────────────────────────┐
+│                          SERVICE LAYER                                    │
+│  ProfilerService │ ScannerService │ MoneyFlowService │ BacktestService   │
+│  AuditService    │ AlertService   │ PortfolioService │ SectorService     │
+└──────────────────────────────┬────────────────────────────────────────────┘
                                │
-┌──────────────────────────────┴────────────────────────────────────────┐
-│                       CORE ENGINE LAYER                               │
-│  gmo.py        │ indicators.py  │ anti_manip.py  │ patterns.py       │
-│  mfpm.py       │ sizing.py      │ t25_engine.py  │ exit_engine.py    │
-│  nlp.py        │ backtest.py    │ universe.py    │ execution_advisory.py │
-│  ← renamed from atc_router.py (H1: advisory only, no broker connector) │
-│  money_flow.py ← NEW: SMS, M-CVD, Stealth Accum, Sector Rotation    │
-└──────────────────────────────┬────────────────────────────────────────┘
+┌──────────────────────────────┴────────────────────────────────────────────┐
+│                        CORE ENGINE LAYER                                  │
+│                                                                           │
+│  ── Signal & Analysis ──────────────────────────────────────────────────  │
+│  gmo.py           │ indicators.py    │ anti_manip.py   │ patterns.py     │
+│  mfpm.py          │ sizing.py        │ t25_engine.py   │ exit_engine.py  │
+│  nlp.py           │ backtest.py      │ universe.py     │ execution_advisory.py │
+│                                                                           │
+│  ── Money Flow (FR-6) ──────────────────────────────────────────────────  │
+│  money_flow.py    ← M-CVD, SMS, Stealth Accum, Sector Rotation, Mode W  │
+│  intraday_cvd.py  ← CVD from tick data (FiinQuant/DNSE/SSI-5m)          │
+│  orderbook.py     ← Order Book Imbalance (OBI), L3/reconstructed LOB    │
+│                                                                           │
+│  ── AMF Wash Sale Directionality (FR-7) ✅ IMPLEMENTED ────────────────  │
+│  anti_manip.py    ← run_amf(): TFI, OBI, M-CVD, foreign_net             │
+│  (Phase I)  data/intraday_collector.py → compute_mcvd() TCBS ticks      │
+│  (Phase II) sizing.py → compute_atr_position_size() ATR risk sizing     │
+│  (Phase III) risk_model.py → compute_var() GJR-GARCH VaR/CVaR          │
+│  (Phase IV) data/intraday_collector.py → VNDirect orderbook fallback    │
+│                                                                           │
+│  ── ML & AI (FR-8) ✅ IMPLEMENTED ────────────────────────────────────   │
+│  bilstm_predictor.py  ← 10-day directional forecast (UP/DOWN/FLAT)     │
+│  horizon_forecast.py  ← multi-horizon consensus vote (short/mid/long)   │
+│  trend_warning.py     ← regime-change early warning                     │
+│  t_plus_engine.py     ← T+ setup recommendation (entry trigger, window) │
+│                                                                           │
+│  ── Contextual Enrichment ────────────────────────────────────────────── │
+│  macro.py         ← macro regime (ACCOMMODATIVE/NEUTRAL/RESTRICTIVE)    │
+│  earnings.py      ← earnings risk (SAFE/CAUTION/HIGH_RISK)              │
+│  fundamental.py   ← CAN SLIM fundamentals (EPS, ROE, debt)              │
+│  gap_vwap.py      ← gap analysis + VWAP daily + intraday VWAP           │
+└──────────────────────────────┬────────────────────────────────────────────┘
                                │
-┌──────────────────────────────┴────────────────────────────────────────┐
-│                         DATA LAYER                                    │
-│  fetcher.py (SSI EP-1..14 async + DNSE fallback)                     │
-│  cache.py (DuckDB TTL-managed)  │  normalizer.py (ex-div, tick round)│
-│  schemas.py (Pydantic)          │  audit_db.py                       │
-└───────────────────────────────────────────────────────────────────────┘
+┌──────────────────────────────┴────────────────────────────────────────────┐
+│                          DATA LAYER                                       │
+│                                                                           │
+│  fetcher.py  — Async SSI EP-1..14 + DNSE fallback                       │
+│  cache.py    — DuckDB TTL-managed                                         │
+│  normalizer.py — ex-div, tick rounding                                   │
+│  schemas.py  — Pydantic models (90+ fields)                              │
+│  audit_db.py — audit log                                                 │
+│                                                                           │
+│  ── Intraday Data Sources (priority order) ─────────────────────────── │
+│  intraday_collector.py:                                                   │
+│    1. TCBS  — tick-by-tick trades with aggressor (B/S) ← unique         │
+│    2. SSI iBoard — L3 bid/ask snapshot + foreign flow ← primary OB      │
+│    3. VNDirect — L3 bid/ask snapshot ← orderbook fallback ✅ Phase IV  │
+│  fiinquant_provider.py — FiinQuant intraday bars                         │
+│  dnse_provider.py      — DNSE intraday bars                              │
+└───────────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 2.2 Luồng Dữ Liệu Chính
 
 ```
 User input (ticker / scan / money-flow)
-  └─► build_universe() + sector_map           [Scanner / DTL mode]
+  └─► build_universe() + sector_map               [Scanner / DTL mode]
        └─► fetch_ohlcv() ──► DuckDB cache (TTL)
-            └─► IndicatorEngine.compute_all()  [SMA/RSI/OBV/VWAP-intraday(5m)/TP-daily/Hurst]
-                 └─► MoneyFlowEngine.score()   [M-CVD, SMS, Stealth, Sector]
-                      └─► PatternEngine.detect_all()
-                           └─► AntiManipFilter.run()  [AMF — phòng thủ]
-                                └─► MFPMEngine.score() [Mode A / B / W]
-                                     └─► HorizonEngine.project(T+2..T+15)
-                                          └─► NLPEngine.advisory()
-                                               └─► AuditService.log()
-                                                    └─► UI render
+            │
+            ├─► fetch_intraday_features()           [intraday_collector.py]
+            │     ├─ TCBS → fetch_tcbs_trades()     ← aggressor B/S, compute_mcvd() Phase I
+            │     ├─ SSI iBoard → fetch_ssi_orderbook()  ← L3 bid/ask, foreign flow
+            │     └─ VNDirect → fetch_vndirect_orderbook()  ← fallback if SSI fails Phase IV
+            │
+            ├─► IndicatorEngine.compute_all()       [indicators.py]
+            │     SMA/EMA/RSI/ATR/OBV/MACD/VWAP/Hurst/OFI/Z_vol/gap_vwap.py
+            │
+            ├─► compute_var(df)                     [risk_model.py — Phase III]
+            │     GJR-GARCH(1,1,1) VaR95/99/CVaR95 + tail_regime + stop_loss_var
+            │
+            ├─► MoneyFlowEngine.score()             [money_flow.py]
+            │     M-CVD, SMS, Stealth Accum, Sector Rotation
+            │
+            ├─► compute_intraday_cvd()              [intraday_cvd.py]
+            │     CVD signal, OBI, buying_pressure_pct, data_quality
+            │
+            ├─► PatternEngine.detect_all()          [patterns.py]
+            │     Spring, VCP, FVG, Weis, RSI-Div, OB, CwH
+            │
+            ├─► AntiManipFilter.run_amf()           [anti_manip.py]
+            │     4-layer AMF: VQS, AMD, VSA, CVD + wash_side (TFI/OBI/M-CVD) Phase I
+            │
+            ├─► compute_atr_position_size()         [sizing.py — Phase II]
+            │     ATR-based position size + stop + lot-rounding
+            │
+            ├─► MFPMEngine.score()                  [mfpm.py]
+            │     Mode A / B / W scoring; Kelly guard; MC gate
+            │
+            ├─► HorizonEngine.project(T+2..T+15)   [horizon_forecast.py]
+            │     short/mid/long vote consensus
+            │
+            ├─► compute_tplus_recommendation()      [t_plus_engine.py]
+            │     T+ setup, entry window, session label
+            │
+            ├─► compute_trend_warning()             [trend_warning.py]
+            │     regime-change early warning (NONE/CAUTION/DANGER)
+            │
+            ├─► compute_macro_regime()              [macro.py]
+            │     ACCOMMODATIVE/NEUTRAL/RESTRICTIVE
+            │
+            ├─► compute_earnings_risk()             [earnings.py]
+            │     SAFE/CAUTION/HIGH_RISK + days_to_earnings
+            │
+            ├─► compute_fundamental_snapshot()      [fundamental.py]
+            │     EPS growth, ROE, debt/equity, CANSLIM score
+            │
+            ├─► BiLSTMPredictor.predict()           [bilstm_predictor.py — FR-8]
+            │     10-day directional signal (UP/DOWN/FLAT) + confidence
+            │
+            └─► NLPEngine.advisory()               [nlp.py]
+                  advisory_text VN/EN + SHAP top-5
+                       └─► AuditService.log()
+                                └─► UI render
 ```
 
 ---
@@ -161,51 +254,38 @@ class ProfilerRequest:
 
 ### 3.4 Output Schema
 
-```python
-class TickerProfile:
-    ticker          : str
-    exchange        : str
-    as_of_date      : date
-    current_price   : float
+> **v1.1 Note:** Schema đã được mở rộng lên 90+ fields (xem src/tradingos/data/schemas.py
+> cho full definition). Dưới đây là các nhóm field chính theo module:
 
-    # Signal summary
-    # [C1] Unified action taxonomy (4 layers, không trộn SMS_raw với action)
-    overall_signal  : str           # NO_ACTION|WATCH|BUY|STRONG_BUY|EXIT|FORCED_EXIT
-    signal_mode     : str           # MODE_A|MODE_B|MODE_W|MIXED
-    sms_raw         : int           # SMS_raw 0–100 (input, không quyết định action trực tiếp)
-    mode_w_score    : int | None    # ModeW_score 0–115 (None nếu SMS_raw < 60)
-    mfpm_score      : int
-    hmm_state       : str           # STEADY_BULL|TRANSITIONAL|STEADY_BEAR
-    gmo_omega       : float
-    amd_phase       : str
-
-    # Traditional flow (existing)
-    vqs_score       : float
-    cvd_whale_net   : int | None    # intraday only
-    amf_decision    : str           # PASS|WARN|BLOCK
-    amf_flags       : list[str]
-    canslim_score   : int
-    hurst_exp       : float
-    mc_win_prob     : float
-
-    # Large Money Flow / FR-6 (8 fields)
-    sms             : int           # 21 Smart Money Score 0–100 (alias SMS_raw for UI)
-    sms_label       : str           # 22 WHALE_BUYING|WHALE_DISTRIBUTING|MIXED|RETAIL_DRIVEN
-    mcvd_5d         : int           # 23 Multi-day CVD 5 sessions (shares net)
-    mcvd_trend      : str           # 24 UP|DOWN|FLAT
-    stealth_accum   : bool          # 25 Silent accumulation detected
-    sector_flow     : str           # 26 INFLOW|NEUTRAL|OUTFLOW for this ticker’s sector
-    fol_net_5d      : int           # 27 Foreign net buy/sell rolling 5 days
-    whale_pct_vol   : float         # 28 % of daily volume from whale ticks
-
-    # Explanation (6 fields)
-    horizons        : list[HorizonRecommendation]  # 29
-    shap_top5       : list[str]     # 30
-    advisory_vn     : str           # 31
-    advisory_en     : str           # 32
-    chart_data      : ChartPayload | None  # 33
-    audit_id        : str           # 34
-```
+| Nhóm | Fields | Module |
+|---|---|---|
+| Identity | ticker, exchange, sector, last_updated | — |
+| Signal output | action, confidence, signal_mode, mfpm_score, mode_w_score, mc_win_prob | mfpm.py |
+| Entry/Exit | entry_price, stop_loss, sl_pct, tp1, tp2, rr_ratio | mfpm.py |
+| Indicators | close, volume, sma3/5/7/10/20/50/200, ema50/200, rsi14, atr14, obv, macd | indicators.py |
+| FR-6 Money Flow | sms_raw, sms_label, mcvd_5d, mcvd_20d, mcvd_trend, stealth_accum, distribution_warning | money_flow.py |
+| AMD/Signal context | amd_phase, hmm_state, gmo_omega, vqs, amf_decision, amf_flags, sector_flow | anti_manip.py |
+| Kelly sizing | sizing_pct, sizing_shares | sizing.py |
+| **ATR sizing ✅ Phase II** | atr_position_shares, atr_stop_price, atr_stop_distance, atr_position_value, atr_risk_amount, atr_risk_pct_actual, atr_size_pct | sizing.py |
+| **GJR-GARCH VaR ✅ Phase III** | var_95, var_99, cvar_95, tail_regime, var_model, var_cond_vol, stop_loss_var | risk_model.py |
+| Macro regime | macro_score, macro_regime, macro_confidence, macro_staleness_days | macro.py |
+| Earnings risk | earnings_risk, days_to_earnings, next_earnings_date | earnings.py |
+| Fundamentals | fundamental_score, eps_growth_yoy, revenue_growth_yoy, roe, debt_to_equity | fundamental.py |
+| Gap analysis | gap_pct, gap_type, avg_gap_pct, gap_fill_pct | gap_vwap.py |
+| VWAP daily/intraday | vwap_daily_val, price_vs_vwap_pct, vwap_dev, vwap_intraday, vwap_intraday_dev, vwap_intraday_slope | gap_vwap.py |
+| T+2.5 entry | t25_score, t25_signal, t25_momo_score, t25_struct_score, t25_conf_score, t25_confirms | t25_engine.py |
+| T+2.5 multi-frame | t25_morning_score, t25_midday_score, t25_afternoon_score, t25_best_window, t25_mf_reasons | t25_engine.py |
+| T+ setup | tplus_setup/vi, tplus_entry_trigger/low/high, tplus_target_t25/t5, tplus_stop, tplus_rr, tplus_verdict | t_plus_engine.py |
+| Real-time price | rt_price, rt_pct_change, rt_reference, rt_ceiling, rt_floor, rt_at_ceiling/floor, rt_volume_today | SSI RT |
+| Trend warning | trend_warning, trend_warning_vi, trend_warning_conf, trend_warning_reasons | trend_warning.py |
+| Horizon forecast | fc_short/mid/long/overall vote+conf+reasons | horizon_forecast.py |
+| Intraday CVD/OBI | cvd_signal, cvd_divergence, cvd_buying_pressure_pct, cvd_score, cvd_data_quality, obi_pct, obi_signal, data_source_intraday | intraday_cvd.py |
+| NCVD normalized | ncvd_5d/label, ncvd_20d/label | money_flow.py |
+| CVD conflict | cvd_conflict_pattern, cvd_conflict_action, cvd_conflict_confidence | money_flow.py |
+| SMA200 quality | sma200_confidence | indicators.py |
+| Adaptive RSI | rsi_label, rsi_action_hint, rsi_ob_threshold | indicators.py |
+| **AMF wash ✅ Phase I** | amf_wash_side, amf_tfi, amf_obi, amf_obi_reconstructed, amf_foreign_net, amf_mcvd | anti_manip.py |
+| **BiLSTM ✅ FR-8** | bilstm_10d_signal, bilstm_10d_up_prob, bilstm_10d_confidence | bilstm_predictor.py |
 
 ### 3.5 Horizon Recommendation Schema
 
@@ -1307,7 +1387,163 @@ class TradingSignal:  # [C2] 34 fields total: 26 original (corrected count) + 8 
 
 ---
 
-## 9. Non-Functional Requirements
+
+---
+
+## 9. FR-7: AMF Wash Sale Directionality - IMPLEMENTED
+
+**Status:** Fully implemented and tested (2026-04-24) - 750 unit tests passing.
+
+FR-7 adds directionality analysis to the AMF: instead of only blocking manipulated signals,
+the system now characterises which side (buy or sell) is dominant in the wash activity.
+Four cross-validated data streams: TFI (Trade Flow Imbalance), OBI (Order Book Imbalance),
+M-CVD (Micro-CVD from TCBS ticks), and amf_foreign_net.
+
+### 9.2 Phase I � Micro-CVD from TCBS Ticks (DONE)
+
+Module: `src/tradingos/data/intraday_collector.py`, `src/tradingos/core/anti_manip.py`
+
+TCBS public API provides field `a` (aggressor): `B` = buy-driven, `S` = sell-driven.
+`compute_mcvd(trades)` accumulates signed net volume directly from tick aggressor data �
+replacing the inaccurate `close > open` OHLCV heuristic.
+
+New schema fields: `amf_mcvd` (tick net), `amf_tfi`, `amf_obi`, `amf_obi_reconstructed`,
+`amf_foreign_net`, `amf_wash_side` (BUY_WASH|SELL_WASH|NEUTRAL_WASH|NONE).
+
+Tests: `test_amf_wash_directionality.py` � 27 tests.
+
+### 9.3 Phase II � ATR-Based Position Sizing (DONE)
+
+Module: `src/tradingos/core/sizing.py`
+
+`compute_atr_position_size()` sizes the position so that 1% of portfolio is at risk
+if the ATR-based stop is hit, then lot-rounds to 100 shares.
+
+```
+stop_distance       = ATR14 x atr_mult (default 2.0)
+max_risk_vnd        = portfolio_value x risk_pct (default 0.01)
+position_shares     = floor(max_risk_vnd / stop_distance / 100) x 100
+```
+
+AMF gating: BLOCK -> 0 shares; WARN -> shares x 0.5; PASS -> full.
+
+Config: `position_sizing.risk_pct`, `position_sizing.atr_mult`, `position_sizing.warn_size_multiplier`
+in `config/strategy.yaml`.
+
+New schema fields (7): `atr_position_shares`, `atr_stop_price`, `atr_stop_distance`,
+`atr_position_value`, `atr_risk_amount`, `atr_risk_pct_actual`, `atr_size_pct`.
+
+Tests: `test_atr_position_sizing.py` � 17 tests.
+
+### 9.4 Phase III � GJR-GARCH VaR / CVaR (DONE)
+
+Module: `src/tradingos/core/risk_model.py`
+
+Normal-distribution VaR is dangerous for VN equities (circuit breaker, gap-risk, F0 herding).
+GJR-GARCH(1,1,1) with skewed-t captures the asymmetric leverage effect and fat left tails.
+
+Three-tier fallback: GJR_GARCH (>=100 bars) -> HISTORICAL (30-99) -> NONE (<30).
+
+Critical arch 8.0.0 note: `res.conditional_volatility[-1]` (numpy), NOT `.iloc[-1]`.
+
+`calibrate_stop_with_var()` returns `min(atr_stop_price, var99_stop)` � the more conservative stop.
+
+Tail regime: FAT_TAIL if excess kurtosis > 0.5 or skewness < -0.5.
+
+New schema fields (7): `var_95`, `var_99`, `cvar_95`, `tail_regime`, `var_model`,
+`var_cond_vol`, `stop_loss_var`.
+
+Tests: `test_garch_var.py` � 24 tests.
+
+### 9.5 Phase IV � VNDirect Orderbook Fallback (DONE)
+
+Module: `src/tradingos/data/intraday_collector.py`
+
+`fetch_vndirect_orderbook(symbol)` calls `api.vndirect.com.vn/v4/stocks` (no credentials,
+public endpoint) and returns the same dict format as `fetch_ssi_orderbook()`.
+
+Fallback chain in `fetch_intraday_features()`:
+1. Try SSI iBoard (primary)
+2. If SSI fails -> try VNDirect (logged at DEBUG level)
+3. If both fail -> ob = None -> zero-fill OBI/foreign flow
+
+TCBS tick data (TFI, M-CVD) has its own independent try/except and is unaffected.
+
+Tests: `test_vndirect_fallback.py` � 17 tests.
+
+### 9.6 FR-7 Test Baseline
+
+| Phase | Test file | Tests |
+|---|---|---|
+| I: M-CVD | test_amf_wash_directionality.py | 27 |
+| II: ATR sizing | test_atr_position_sizing.py | 17 |
+| III: GJR-GARCH | test_garch_var.py | 24 |
+| IV: VNDirect fallback | test_vndirect_fallback.py | 17 |
+| **Total FR-7** | | **85** |
+
+Suite baseline: **750 passed, 2 skipped** (2026-04-24).
+
+---
+
+## 10. FR-8: ML and AI Signal Layer - IMPLEMENTED
+
+### 10.1 BiLSTM 10-day Directional Forecast
+
+Module: `src/tradingos/core/bilstm_predictor.py`
+
+Bidirectional LSTM trained on OHLCV + technical indicators for VN stocks.
+Predicts price direction 10 calendar days ahead.
+
+- Input: 60-bar sequence x N features
+- Output: `signal` (UP|DOWN|FLAT), `up_prob` (0-1), `confidence` (HIGH|MEDIUM|LOW|NONE)
+- Fallback: no trained model -> `signal = "NO_MODEL"`, `up_prob = 0.5`
+
+Schema fields: `bilstm_10d_signal`, `bilstm_10d_up_prob`, `bilstm_10d_confidence`
+
+### 10.2 Multi-Horizon Forecast Consensus
+
+Module: `src/tradingos/core/horizon_forecast.py`
+
+Aggregates votes from multiple signals across three horizons:
+- Short (T+2-5): RSI trend, MACD, candlestick patterns
+- Mid (T+7-10): HMM state, SMA alignment, M-CVD
+- Long (T+12-15): Hurst exponent, AMD phase, BiLSTM
+
+Schema fields: `fc_short_vote/conf/reasons`, `fc_mid_vote/conf/reasons`,
+`fc_long_vote/conf/reasons`, `fc_overall_vote/conf`
+
+### 10.3 Trend Warning Engine
+
+Module: `src/tradingos/core/trend_warning.py`
+
+Early warning for regime changes. Levels: NONE -> CAUTION -> DANGER.
+
+Schema fields: `trend_warning`, `trend_warning_vi`, `trend_warning_conf`, `trend_warning_reasons`
+
+### 10.4 T+ Setup Recommendation
+
+Module: `src/tradingos/core/t_plus_engine.py`
+
+Identifies optimal entry session and trigger for T+2.5 trading strategy.
+Maps to sessions: morning (09:15-11:30), midday (13:00-14:30), afternoon (14:30-14:45).
+
+Schema fields: `tplus_setup/vi`, `tplus_entry_trigger/low/high`, `tplus_target_t25/t5`,
+`tplus_stop`, `tplus_rr`, `tplus_verdict/vi`, `tplus_reasons`, `tplus_risks`
+
+### 10.5 Contextual Enrichment Modules
+
+| Module | Purpose | Key schema fields |
+|---|---|---|
+| `macro.py` | Macro regime (interest rate, FX, commodities) | macro_score, macro_regime, macro_confidence, macro_staleness_days |
+| `earnings.py` | Earnings risk window detection | earnings_risk, days_to_earnings, next_earnings_date |
+| `fundamental.py` | CAN SLIM fundamentals (EPS, ROE, debt) | fundamental_score, eps_growth_yoy, revenue_growth_yoy, roe, debt_to_equity |
+| `gap_vwap.py` | Gap analysis + VWAP daily/intraday | gap_pct, gap_type, vwap_daily_val, vwap_intraday, vwap_intraday_slope |
+| `intraday_cvd.py` | CVD from real tick bars (FiinQuant/DNSE/SSI-5m) | cvd_signal, cvd_divergence, cvd_buying_pressure_pct, cvd_data_quality |
+| `orderbook.py` | OBI from L3/reconstructed LOB | obi_pct, obi_signal |
+
+---
+
+## 11. Non-Functional Requirements
 
 ### 9.1 Reliability
 
@@ -1397,7 +1633,7 @@ money_flow:
 
 ---
 
-## 9.5 Regulatory & Architecture Scope Decisions
+## 11.5 Regulatory & Architecture Scope Decisions
 
 ### 9.5.1 Accepted — KRX Technical Standards
 
@@ -1424,7 +1660,7 @@ money_flow:
 
 ---
 
-## 10. Data Models & DuckDB Schema
+## 12. Data Models & DuckDB Schema
 
 ### 10.1 New Tables for FR-6
 
@@ -1485,31 +1721,46 @@ CREATE TABLE distribution_alerts (
 
 ### 10.3 Updated File Structure
 
-```
-src/tradingos/
+> **v1.1:** Reflects actual implemented state as of 2026-04-24.
+
+\src/tradingos/
 ├── core/
-│   ├── gmo.py              # Module 1: HMM, Omega, Breadth, VN30F, Kalman
-│   ├── indicators.py       # Module 2: SMA/EMA/RSI/ATR/OBV/VWAP-intraday(5m)/TP-daily/Hurst/OFI
-│   ├── anti_manip.py       # Module 2.9+2.10: VQS, AMD, VSA, CVD intraday, AMF
-│   ├── money_flow.py       # Module 2.11 (NEW FR-6): M-CVD, SMS, Stealth, Sector, Mode W
-│   ├── patterns.py         # Module 3: Spring, VCP, FVG, Weis, RSI-Div, OB, CwH
-│   ├── mfpm.py             # Module 4: Mode A/B/W scoring, MC gate, Kelly guard
-│   ├── sizing.py           # Kelly bootstrap, progressive entry
-│   ├── t25_engine.py       # Module 5: T+2.5 exit logic
-│   ├── exit_engine.py      # Module 6: Progressive exit, trailing stop
-│   ├── nlp.py              # Module 7: Advisory generation, SHAP
-│   ├── backtest.py         # Module 8: VN-constrained backtest + walk-forward
-│   ├── universe.py         # build_universe, CAN SLIM, RS Rating
-│   └── execution_advisory.py  # [H1 ADVISORY ONLY — no broker API] Smart ATC/MTL advisor (KRX: MTL partial fill → LO remainder, ATC imbalance, anti-manip gate)
+│   ├── gmo.py                 # HMM, Omega, Breadth, VN30F, Kalman
+│   ├── indicators.py          # SMA/EMA/RSI/ATR/OBV/VWAP/Hurst/OFI/MACD/Z_vol
+│   ├── anti_manip.py          # VQS, AMD, VSA, CVD, AMF pipeline + wash_side (FR-7 I)
+│   ├── money_flow.py          # M-CVD, SMS, Stealth, Sector Rotation, NCVD, conflict
+│   ├── patterns.py            # Spring, VCP, FVG, Weis, RSI-Div, OB, CwH
+│   ├── mfpm.py                # Mode A/B/W scoring, MC gate, Kelly guard
+│   ├── sizing.py              # Kelly bootstrap, progressive entry, ATR sizing (FR-7 II)
+│   ├── risk_model.py          # GJR-GARCH VaR/CVaR (FR-7 III) ✅ IMPLEMENTED
+│   ├── t25_engine.py          # T+2.5 exit logic + multi-frame scoring
+│   ├── t_plus_engine.py       # T+ setup recommendation + entry window
+│   ├── exit_engine.py         # Progressive exit, trailing stop
+│   ├── horizon_forecast.py    # Multi-horizon consensus vote (FR-8)
+│   ├── trend_warning.py       # Regime-change early warning (FR-8)
+│   ├── intraday_cvd.py        # CVD from real tick data (FiinQuant/DNSE/SSI)
+│   ├── orderbook.py           # OBI from L3/reconstructed LOB
+│   ├── macro.py               # Macro regime (ACCOMMODATIVE/NEUTRAL/RESTRICTIVE)
+│   ├── earnings.py            # Earnings risk (SAFE/CAUTION/HIGH_RISK)
+│   ├── fundamental.py         # CAN SLIM fundamentals (EPS, ROE, debt)
+│   ├── gap_vwap.py            # Gap analysis + VWAP daily/intraday
+│   ├── nlp.py                 # Advisory generation, SHAP explanation
+│   ├── backtest.py            # VN-constrained backtest + walk-forward
+│   ├── universe.py            # build_universe, CAN SLIM, RS Rating
+│   ├── bilstm_predictor.py    # BiLSTM 10-day directional forecast (FR-8) ✅
+│   └── execution_advisory.py  # [H1 ADVISORY ONLY] Smart ATC/MTL advisor
 ├── data/
-│   ├── fetcher.py          # Async SSI EP-1..14 + DNSE
-│   ├── cache.py            # DuckDB TTL management
-│   ├── normalizer.py       # Ex-div, tick rounding
-│   └── schemas.py          # Pydantic models (updated with SMS fields)
+│   ├── fetcher.py             # Async SSI EP-1..14 + DNSE fallback
+│   ├── cache.py               # DuckDB TTL management
+│   ├── normalizer.py          # Ex-div, tick rounding
+│   ├── schemas.py             # Pydantic models (90+ fields)
+│   ├── intraday_collector.py  # TCBS ticks + SSI orderbook + VNDirect fallback (FR-7 IV) ✅
+│   ├── fiinquant_provider.py  # FiinQuant intraday bars provider
+│   └── dnse_provider.py       # DNSE intraday bars provider
 ├── engines/
-│   ├── profiler_service.py
-│   ├── scanner_service.py
-│   ├── money_flow_service.py   # NEW: MoneyFlowService orchestration
+│   ├── profiler_service.py    # Full pipeline orchestration
+│   ├── scanner_service.py     # 5-stage scanner pipeline
+│   ├── money_flow_service.py  # MoneyFlowService orchestration
 │   ├── audit_service.py
 │   ├── backtest_service.py
 │   └── portfolio_service.py
@@ -1518,7 +1769,7 @@ src/tradingos/
 │   ├── pages/
 │   │   ├── profiler.py
 │   │   ├── scanner.py
-│   │   ├── money_flow.py       # NEW: DTL Dashboard page
+│   │   ├── money_flow.py      # DTL Dashboard (FR-6.8)
 │   │   ├── audit.py
 │   │   ├── backtest.py
 │   │   └── settings.py
@@ -1526,20 +1777,25 @@ src/tradingos/
 │       ├── signal_card.py
 │       ├── horizon_table.py
 │       ├── shap_chart.py
-│       ├── sms_gauge.py         # NEW: SMS speedometer component
-│       ├── mcvd_chart.py        # NEW: M-CVD bar chart N days
-│       ├── sector_heatmap.py    # NEW: sector rotation heatmap
+│       ├── sms_gauge.py
+│       ├── mcvd_chart.py
+│       ├── sector_heatmap.py
 │       ├── equity_curve.py
 │       └── audit_timeline.py
+├── tests/
+│   └── unit/                  # 750 passed, 2 skipped as of 2026-04-24
+│       ├── test_amf_wash_directionality.py   # FR-7 Phase I
+│       ├── test_atr_position_sizing.py        # FR-7 Phase II
+│       ├── test_garch_var.py                  # FR-7 Phase III
+│       └── test_vndirect_fallback.py          # FR-7 Phase IV
 └── utils/
     ├── config.py
     ├── logging.py
     └── dates.py
-```
-
+\
 ---
 
-## 11. API Specification
+## 13. API Specification
 
 ```python
 # ProfilerService (updated)
@@ -1593,7 +1849,7 @@ class BacktestService:
 
 ---
 
-## 12. UI/UX Specification
+## 14. UI/UX Specification
 
 ### 12.1 Profiler Page (updated with SMS)
 
@@ -1700,19 +1956,24 @@ class BacktestService:
 
 ---
 
-## 13. Implementation Plan (17 tuần)
+## 15. Implementation Plan (17 tuần)
+
+> **Status as of 2026-04-24:** FR-7 Phases I–IV complete (750 tests passing). FR-8 core
+> models (BiLSTM, horizon forecast, T+ engine) operational. FR-1–FR-6 in active development.
 
 ### Phase Overview
 
-| Phase | Name | Duration | Key Output |
-|---|---|---|---|
-| P1 | Foundation | Weeks 1–3 | Data layer, DuckDB, indicators |
-| P2 | Core Engine | Weeks 4–7 | MFPM A/B, Patterns, AMF, HMM, NLP |
-| P2b | Money Flow | Week 4b (parallel) | money_flow.py: M-CVD, SMS, Stealth, Sector |
-| P3 | Profiler + Audit | Weeks 8–10 | FR-1 + FR-3 + Streamlit Profiler |
-| P4 | Scanner + DTL UI | Weeks 11–13 | FR-2 + FR-6 Dashboard |
-| P5 | Backtest | Weeks 14–15 | FR-5 + Mode W backtest |
-| P6 | Optimization | Weeks 16–17 | FR-4, testing, hardening |
+| Phase | Name | Duration | Status | Key Output |
+|---|---|---|---|---|
+| P1 | Foundation | Weeks 1–3 | In progress | Data layer, DuckDB, indicators |
+| P2 | Core Engine | Weeks 4–7 | In progress | MFPM A/B, Patterns, AMF, HMM, NLP |
+| P2b | Money Flow | Week 4b (parallel) | In progress | money_flow.py: M-CVD, SMS, Stealth, Sector |
+| P3 | Profiler + Audit | Weeks 8–10 | In progress | FR-1 + FR-3 + Streamlit Profiler |
+| P4 | Scanner + DTL UI | Weeks 11–13 | Planned | FR-2 + FR-6 Dashboard |
+| P5 | Backtest | Weeks 14–15 | Planned | FR-5 + Mode W backtest |
+| P6 | Optimization | Weeks 16–17 | Planned | FR-4, testing, hardening |
+| **FR-7** | **AMF Wash Sale Directionality** | **2026-04 (4 phases)** | **DONE** | **M-CVD, ATR sizing, GJR-GARCH VaR, VNDirect fallback** |
+| **FR-8** | **ML & AI Signal Layer** | **2026-04** | **DONE (core)** | **BiLSTM, horizon forecast, T+ engine, macro/earnings** |
 
 ---
 
@@ -1909,7 +2170,7 @@ class BacktestService:
 
 ---
 
-## 14. Risk Register
+## 16. Risk Register
 
 | Risk | Prob | Impact | Mitigation |
 |---|---|---|---|

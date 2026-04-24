@@ -60,4 +60,5 @@ def render_mcvd_chart(mcvd_df: pd.DataFrame, ticker: str = "", days: int = 20) -
         showlegend=True,
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    _key = f"mcvd_chart_{ticker}" if ticker else "mcvd_chart"
+    st.plotly_chart(fig, use_container_width=True, key=_key)

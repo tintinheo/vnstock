@@ -44,7 +44,7 @@ def render_sector_heatmap(sector_rotation_result: dict) -> None:
         xaxis=dict(range=[-110, 110], showgrid=True, gridcolor="#333"),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="sector_heatmap")
 
     # Top inflow / top outflow summary
     top_inflow = sector_rotation_result.get("hot_sectors") or sector_rotation_result.get("top_inflow")

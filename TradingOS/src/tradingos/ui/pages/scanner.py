@@ -181,7 +181,7 @@ def render() -> None:
         }
         return colours.get(val, "")
 
-    styled = df_show.style.applymap(_colour_action, subset=["Action"])
+    styled = df_show.style.map(_colour_action, subset=["Action"])
     st.dataframe(styled, use_container_width=True, hide_index=True)
 
     # ── Export ────────────────────────────────────────────────────────────────

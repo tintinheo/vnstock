@@ -51,7 +51,7 @@ def render_equity_curve(results: dict[str, BacktestResult]) -> None:
         legend=dict(bgcolor="rgba(0,0,0,0)"),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, use_container_width=True, key="equity_curve_modes")
 
 
 def render_backtest_summary(results: dict[str, BacktestResult]) -> None:

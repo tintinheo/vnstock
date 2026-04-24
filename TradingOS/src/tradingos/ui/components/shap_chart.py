@@ -51,4 +51,5 @@ def render_shap_chart(mfpm_result: dict, ticker: str = "") -> None:
         xaxis=dict(gridcolor="#333"),
     )
 
-    st.plotly_chart(fig, use_container_width=True)
+    _key = f"shap_{ticker}" if ticker else "shap_chart"
+    st.plotly_chart(fig, use_container_width=True, key=_key)
