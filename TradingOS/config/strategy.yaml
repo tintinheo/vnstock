@@ -10,7 +10,7 @@ mfpm:
                              # this key is the WATCH gate (mfpm_score >= 50 → WATCH)
   mode_a_weight:        1.0
   mode_b_weight:        1.0
-  mode_w_sms_gate:      60   # SMS_raw must be >= this to activate Mode W gate
+  mode_w_sms_gate:      65   # Stricter VN filter: require clearer whale-flow quality before Mode W can assist BUY paths
   mc_min_prob_buy:      0.55 # Min Monte-Carlo win probability for BUY
   mc_min_prob_strong:   0.60 # Min MC for STRONG_BUY
   # [VN-FIX O4] 500 sims achieves equivalent decision stability for daily re-evaluation
@@ -31,7 +31,7 @@ mode_w:
   strong_buy_score:    95     # ModeW_score >= 95 AND AMF=PASS AND MC>=0.60
   buy_score:           80     # 80-94
   watch_score:         60     # 60-79
-  sms_raw_gate:        60     # SMS_raw gate to enter Mode W path
+  sms_raw_gate:        65     # Keep Mode W aligned with stricter MFPM gate to reduce proxy-flow false positives
 
 # ── Anti-Manipulation Filter ──────────────────────────────────────────────────
 amf:
@@ -55,9 +55,9 @@ whale:
   stealth_max_atr_pct:  0.015  # Giá hẹp: ATR/Price < 1.5%
   stealth_obv_min_chg:  0.03   # OBV tăng >= 3%
   stealth_z_vol_max:    1.5    # Z_vol < 1.5 (no spike)
-  # [VN-FIX VN-B2] Proxy whale detection gate — z-score min for volume anomaly
-  # Old hardcoded 0.5 caught ~30% of all sessions. 1.5 ≈ top 7% (statistically significant).
-  proxy_z_vol_min:      1.5
+  # [VN-FIX VN-B2] Proxy whale detection gate — z-score min for volume anomaly.
+  # Raised further for VN noise reduction so ordinary rotation days are less likely to look like whale activity.
+  proxy_z_vol_min:      1.8
 
 # ── Proxy Data Quality (4.3 FIX) ─────────────────────────────────────────────
 proxy_confidence_penalty:

@@ -31,8 +31,10 @@ class AuditService:
             "mfpm_score": mfpm_score,
             "sms_raw": sms_raw,
             "confidence": confidence,
+            "payload": {"confidence": confidence},
         }
         if extra:
+            record["payload"].update(extra)
             record.update(extra)
         cache.put_audit(record)
         log.info(f"AUDIT [{event_type}] {ticker} {action} score={mfpm_score}")

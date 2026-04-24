@@ -56,7 +56,7 @@ def _render_aggrid_filter(df: pd.DataFrame, key_prefix: str) -> pd.DataFrame:
         suppressFieldDotNotation=True,
     )
 
-    st.caption("Loc ngay tren tung cot de thu hep bang du lieu truoc khi xem chi tiet.")
+    st.caption("Lọc ngay trên từng cột để thu hẹp bảng dữ liệu trước khi xem chi tiết.")
     response = AgGrid(
         df,
         gridOptions=builder.build(),

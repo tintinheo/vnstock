@@ -8,7 +8,7 @@ import pandas as pd
 import streamlit as st
 
 from tradingos.engines.audit_service import AuditService
-from tradingos.ui.components.audit_timeline import render_audit_timeline, render_audit_stats
+from tradingos.ui.components.audit_timeline import render_audit_stats
 from tradingos.ui.components.dataframe_filter import filter_dataframe
 from tradingos.ui.components.tplus_explainer import (
     TPLUS_MAPPING_GUIDE,
@@ -150,6 +150,14 @@ def render() -> None:
         if action_filter and "action" in df.columns:
             df = df[df["action"].isin(action_filter)]
 
+        st.session_state["audit_results"] = df.copy()
+        st.session_state["audit_has_run"] = True
+
+    audit_has_run = st.session_state.get("audit_has_run", False)
+    df = st.session_state.get("audit_results") if audit_has_run else None
+
+    if audit_has_run and df is not None:
+        df = df.copy()
         if not df.empty:
             # ── Expand payload JSON into columns ──────────────────────────
             if "payload" in df.columns:
@@ -270,9 +278,9 @@ def render() -> None:
             filtered_tickers = df_display["ticker"].nunique() if "ticker" in df_display.columns else 0
             filtered_actions = df_display["action"].nunique() if "action" in df_display.columns else 0
             info_cols = st.columns(3)
-            info_cols[0].metric("Su kien dang hien thi", len(df_display), delta=f"/{total_events} tong")
-            info_cols[1].metric("Ma co phieu trong view", int(filtered_tickers))
-            info_cols[2].metric("Loai khuyen nghi trong view", int(filtered_actions))
+            info_cols[0].metric("Sự kiện đang hiển thị", len(df_display), delta=f"/{total_events} tổng")
+            info_cols[1].metric("Mã cổ phiếu trong view", int(filtered_tickers))
+            info_cols[2].metric("Loại khuyến nghị trong view", int(filtered_actions))
 
             # Format timestamp
             if "timestamp" in df_display.columns:

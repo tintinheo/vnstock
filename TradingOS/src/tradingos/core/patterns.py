@@ -288,17 +288,28 @@ def detect_all(df: pd.DataFrame) -> dict:
         detected.append(rsi_div)
 
     # Best pattern for MFPM bonus
+    # [VN-FIX V7] Differentiated by VN daily-data reliability.
+    # VCP has the strictest structural requirements and the strongest backtested
+    # edge on HOSE daily data.  Spring and CwH are valid but noisier (Spring can
+    # trigger on a single wick; CwH was designed for weekly data).
+    # RSI divergence is the weakest standalone signal.
+    # Best-wins iteration: all detected patterns are evaluated; highest bonus kept.
+    _PATTERN_BONUS: dict[str, int] = {
+        "VCP": 18,             # tightest structure, strongest edge on VN daily data
+        "WYCKOFF_SPRING": 12,  # valid but single-wick prone
+        "CUP_WITH_HANDLE": 10, # weekly-level pattern on daily data, lower weight
+        "RSI_DIV_BULLISH": 8,  # corroborating signal only
+    }
     pattern_bonus = 0
     pattern_name = "NONE"
     for p in detected:
         ptype = p.get("pattern", p.get("type", ""))
-        if ptype in ("WYCKOFF_SPRING", "VCP", "CUP_WITH_HANDLE"):
-            pattern_bonus = 15
+        if ptype == "BULLISH":          # RSI divergence type key
+            ptype = "RSI_DIV_BULLISH"
+        b = _PATTERN_BONUS.get(ptype, 0)
+        if b > pattern_bonus:
+            pattern_bonus = b
             pattern_name = ptype
-            break
-        elif ptype == "BULLISH":
-            pattern_bonus = 8
-            pattern_name = "RSI_DIV_BULLISH"
 
     return {
         "patterns_detected": detected,

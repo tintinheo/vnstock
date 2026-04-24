@@ -178,11 +178,11 @@ class TestSessionPhaseMidayBreak:
 
 
 # ════════════════════════════════════════════════════════════════════════════════
-# VN-B2 — proxy_whale_net z_vol threshold (default 1.5, was 0.5)
+# VN-B2 — proxy_whale_net z_vol threshold (default 1.8, was 0.5)
 # ════════════════════════════════════════════════════════════════════════════════
 
 class TestProxyWhaleZVolThreshold:
-    """VN-B2: proxy whale detection gate should use configurable z_vol_min (default 1.5)."""
+    """VN-B2: proxy whale detection gate should use configurable z_vol_min (default 1.8)."""
 
     def _uniform_df(self, n: int = 30) -> pd.DataFrame:
         """All same volume → z_vol ≈ 0 everywhere."""
@@ -207,7 +207,7 @@ class TestProxyWhaleZVolThreshold:
         })
 
     def test_uniform_volume_produces_zero_whale_net(self):
-        """All same volume → z_vol ≈ 0 < 1.5 → all whale_net should be 0."""
+        """All same volume → z_vol ≈ 0 < 1.8 → all whale_net should be 0."""
         from tradingos.core.money_flow import proxy_whale_net_from_daily
         result = proxy_whale_net_from_daily(self._uniform_df())
         assert (result["whale_net"] == 0).all(), (
@@ -215,32 +215,32 @@ class TestProxyWhaleZVolThreshold:
         )
 
     def test_large_spike_exceeds_threshold(self):
-        """5× volume spike → z_vol >> 1.5 → at least one whale_net != 0."""
+        """5× volume spike → z_vol >> 1.8 → at least one whale_net != 0."""
         from tradingos.core.money_flow import proxy_whale_net_from_daily
         result = proxy_whale_net_from_daily(self._spike_df(spike_mult=5.0, n_spike=3))
         spike_tail = result["whale_net"].tail(3)
         assert (spike_tail != 0).any(), (
-            "5× volume spike should produce nonzero whale_net (z_vol > 1.5)"
+            "5× volume spike should produce nonzero whale_net (z_vol > 1.8)"
         )
 
     def test_config_key_proxy_z_vol_min_exists_with_correct_value(self):
-        """strategy.yaml must have whale.proxy_z_vol_min = 1.5."""
+        """strategy.yaml must have whale.proxy_z_vol_min = 1.8."""
         from tradingos.utils.config import cfg
         val = cfg.strategy("whale", "proxy_z_vol_min", default=None)
         assert val is not None, "whale.proxy_z_vol_min must be set in strategy.yaml"
-        assert float(val) == 1.5, f"Expected proxy_z_vol_min=1.5, got {val}"
+        assert float(val) == 1.8, f"Expected proxy_z_vol_min=1.8, got {val}"
 
     def test_old_threshold_05_is_not_default(self):
         """The new default must not be the old hardcoded 0.5."""
         from tradingos.utils.config import cfg
-        val = float(cfg.strategy("whale", "proxy_z_vol_min", default=1.5))
+        val = float(cfg.strategy("whale", "proxy_z_vol_min", default=1.8))
         assert val != 0.5, (
             "proxy_z_vol_min should not be 0.5 (old value caused ~30% false-positive whale rate)"
         )
 
     def test_moderate_spike_below_old_but_above_new_threshold(self):
-        """A 2× spike may be near z_vol ~0.9 — below new threshold 1.5.
-        (Verifies old threshold 0.5 would have triggered but new 1.5 won't for small spikes.)
+        """A 2× spike may be near z_vol ~0.9 — below new threshold 1.8.
+        (Verifies old threshold 0.5 would have triggered but new 1.8 still won't for small spikes.)
         """
         from tradingos.core.money_flow import proxy_whale_net_from_daily
         # 2× spike with uniform baseline → z_vol depends on window variance.

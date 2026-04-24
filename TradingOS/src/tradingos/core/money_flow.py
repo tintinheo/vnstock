@@ -325,8 +325,12 @@ def compute_smart_money_score(
             else:
                 comps["cvd_today"] = 5
         elif cvd_data_quality == "OHLCV_PROXY":
+            # [VN-FIX V8] Cap proxy CVD at 6 (never reaches the W-6 gate of ≥7).
+            # OHLCV direction is a price-derived proxy, not real aggressor flow.
+            # Allowing it to score 7 let scanner-only runs satisfy Mode W's intraday-
+            # flow pre-condition without any actual institutional confirmation.
             if cvd_today > 0:
-                comps["cvd_today"] = 7 if intensity >= 0.12 else 6
+                comps["cvd_today"] = 6
             elif cvd_today < 0:
                 comps["cvd_today"] = 3 if intensity >= 0.12 else 4
             else:
@@ -357,6 +361,14 @@ def compute_smart_money_score(
         comps["pt_flow"] = 5  # No data — neutral (no information edge)
 
     sms = sum(comps.values())
+    # [VN-FIX V9] All-neutral quality cap: when every flow-information component
+    # (FOL, PT, CVD) returns the neutral fallback of 5 (no real data), the SMS
+    # inflates by 15 "free" points that carry zero information.  Subtract 5 to
+    # distinguish "neutral-because-no-data" from "neutral-because-balanced-flow".
+    # This only fires in scanner-only runs where none of the three components have
+    # real institutional data; live profiler runs with any real flow are unaffected.
+    if comps.get("fol", 0) == 5 and comps.get("pt_flow", 0) == 5 and comps.get("cvd_today", 0) == 5:
+        sms = max(0, sms - 5)
     sms = max(0, min(100, sms))
 
     # Label

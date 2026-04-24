@@ -173,7 +173,7 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
             rows.append({
                 "ticker": row.get("ticker"),
                 "date": str(row.get("timestamp", ""))[:10],
-                "confidence": payload.get("confidence", "—"),
+                "confidence": payload.get("confidence", row.get("confidence", "—")),
             })
         except Exception:
             pass
@@ -201,7 +201,12 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
         st.write("_Chưa đủ dữ liệu để hiển thị._")
         return
 
-    calib_df = pd.DataFrame(calib_rows)
+    calib_df = filter_dataframe(calib_df, key_prefix="perf_calib")
+    st.caption(f"Đang hiển thị {len(calib_df)} nhóm confidence sau khi lọc bảng calibration.")
+    if calib_df.empty:
+        st.info("Không còn nhóm confidence nào sau khi lọc bảng calibration.")
+        return
+
     colors = {"HIGH": "#00c851", "MEDIUM": "#ffbb33", "LOW": "#ff4444", "—": "#888888"}
 
     fig = go.Figure(go.Bar(
@@ -220,8 +225,5 @@ def _render_confidence_calibration(closed: pd.DataFrame) -> None:
         height=280,
     )
     st.plotly_chart(fig, use_container_width=True, key="perf_calibration")
-    
-    calib_df = filter_dataframe(calib_df, key_prefix="perf_calib")
-    st.caption(f"Đang hiển thị {len(calib_df)} nhóm confidence sau khi lọc bảng calibration.")
     st.dataframe(calib_df, hide_index=True, use_container_width=True)
 

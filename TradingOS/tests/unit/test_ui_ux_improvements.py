@@ -20,6 +20,16 @@ class TestAuditReadingGuide:
         assert "A×T+ Ý nghĩa" in src
         assert "T+ Exit" in src
 
+    def test_audit_uses_session_state_and_fixed_labels(self):
+        import tradingos.ui.pages.audit as audit_ui
+
+        src = inspect.getsource(audit_ui)
+        assert "audit_results" in src
+        assert "audit_has_run" in src
+        assert "Sự kiện đang hiển thị" in src
+        assert "Mã cổ phiếu trong view" in src
+        assert "Loại khuyến nghị trong view" in src
+
 
 class TestScannerFilteredSummary:
     def test_scanner_has_reading_guide_and_view_metrics(self):
@@ -71,6 +81,21 @@ class TestPerformanceFilteredSummary:
         src = inspect.getsource(perf_ui._render_confidence_calibration)
         assert "Đang hiển thị" in src
         assert "calibration" in src.lower()
+
+    def test_performance_calibration_filters_before_plot(self):
+        import tradingos.ui.pages.performance as perf_ui
+
+        src = inspect.getsource(perf_ui._render_confidence_calibration)
+        assert src.index("calib_df = filter_dataframe") < src.index("fig = go.Figure")
+        assert "Không còn nhóm confidence nào sau khi lọc bảng calibration." in src
+
+
+class TestSharedFilterCopy:
+    def test_aggrid_filter_caption_uses_vietnamese_accents(self):
+        import tradingos.ui.components.dataframe_filter as filter_ui
+
+        src = inspect.getsource(filter_ui)
+        assert "Lọc ngay trên từng cột" in src
 
 
 class TestProfilerTplusConsistency:

@@ -665,10 +665,11 @@ def compute_tplus_recommendation(
             log.debug(f"T+ detector {stype} error: {e}")
 
     # ── 3. Apply T+2.5 score boost ────────────────────────────────────────────
+    # Keep the confirmation light because detector scores already encode much of the same momentum/volume context.
     t25_score  = float((t25_result or {}).get("t25_score") or 0.0)
     t25_signal = str((t25_result or {}).get("t25_signal", ""))
     if t25_signal == "T25_BUY" and best_score > 3.0:
-        best_score = min(10.0, best_score + 1.5)
+        best_score = min(10.0, best_score + 0.5)
         best_reasons.append(f"T+2.5 score xác nhận ({t25_score:.0f}/100)")
     elif t25_signal == "T25_AVOID":
         best_score = max(0.0, best_score - 2.0)

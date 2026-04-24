@@ -194,7 +194,7 @@ def test_audit_page_e2e(browser_page) -> None:
     expect(browser_page.get_by_role("heading", name="🗂 Audit Log")).to_be_visible(timeout=10000)
     browser_page.get_by_role("button", name="🔍 Tìm kiếm").click()
     expect(browser_page.get_by_text("Cách đọc đúng theo hành vi thị trường Việt Nam")).to_be_visible()
-    expect(browser_page.get_by_text("Su kien dang hien thi", exact=False)).to_be_visible()
+    expect(browser_page.get_by_text("Sự kiện đang hiển thị", exact=False)).to_be_visible()
     expect(browser_page.get_by_text("sự kiện chi tiết", exact=False)).to_be_visible(timeout=10000)
 
 

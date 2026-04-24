@@ -60,6 +60,14 @@ The goal is not to remove classic indicators blindly, but to classify which ones
 - Let RSI, HMM, patterns, VWAP, and OBV explain or refine the setup.
 - Let ATR, R:R, and calibration guide risk management, not entry conviction.
 
+## Implemented Noise Retunes
+
+- `mode_w_sms_gate` and `mode_w.sms_raw_gate` were raised from `60` to `65` to reduce false positives from proxy-flow names that look strong on ordinary rotation days.
+- `whale.proxy_z_vol_min` was raised from `1.5` to `1.8` so moderate volume bursts are less likely to be labeled as whale activity in the VN market.
+- The T+ engine now applies only a light `+0.5` T+2.5 confirmation boost instead of `+1.5`, because detector scores already encode much of the same momentum and volume information.
+
+These changes intentionally avoid rewriting the scoring tree. They only tighten the noisiest overlap points while preserving the current app structure and test surface.
+
 ## Practical UI Interpretation Rule
 
 When presenting signals to users, the app should communicate them in this order:

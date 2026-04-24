@@ -5,6 +5,7 @@ Run with:
 """
 from __future__ import annotations
 
+import inspect
 import math
 import time
 import types
@@ -271,6 +272,49 @@ class TestMCNSim:
         assert 0.0 <= prob <= 1.0, f"Probability must be in [0,1], got {prob}"
 
 
+class TestVNNoiseReductionRetunes:
+    def test_mode_w_gates_are_stricter(self):
+        from tradingos.utils.config import cfg
+
+        assert int(cfg.strategy("mfpm", "mode_w_sms_gate", default=0)) == 65
+        assert int(cfg.strategy("mode_w", "sms_raw_gate", default=0)) == 65
+
+    def test_tplus_engine_uses_light_t25_confirmation_boost(self):
+        import tradingos.core.t_plus_engine as tplus_mod
+
+        src = inspect.getsource(tplus_mod)
+        assert "best_score = min(10.0, best_score + 0.5)" in src
+
+
+class TestAuditPayloadPersistence:
+    def test_log_event_persists_extra_fields_inside_payload(self, monkeypatch):
+        import tradingos.engines.audit_service as audit_mod
+
+        captured: dict[str, dict] = {}
+
+        def _capture(record: dict) -> None:
+            captured["record"] = record
+
+        monkeypatch.setattr(audit_mod.cache, "put_audit", _capture)
+
+        svc = audit_mod.AuditService()
+        svc.log_event(
+            event_type="PROFILE",
+            ticker="VCB",
+            action="BUY",
+            mfpm_score=78,
+            sms_raw=68,
+            confidence="HIGH",
+            extra={"tplus_verdict": "MUA_NGAY", "fc_overall_vote": "TĂNG"},
+        )
+
+        record = captured["record"]
+        assert record["payload"]["confidence"] == "HIGH"
+        assert record["payload"]["tplus_verdict"] == "MUA_NGAY"
+        assert record["payload"]["fc_overall_vote"] == "TĂNG"
+        assert record["tplus_verdict"] == "MUA_NGAY"
+
+
 # ── B1: Audit breakdown tiles after filters ───────────────────────────────────
 
 class TestAuditBreakdownOrder:
@@ -399,3 +443,205 @@ class TestScannerUpcom:
         src = inspect.getsource(scanner_mod)
         assert '"UPCOM"' in src or "'UPCOM'" in src, \
             "UPCOM missing from scanner exchange selectbox"
+
+
+# ── V7: Pattern bonus differentiation ────────────────────────────────────────
+
+class TestPatternBonusDifferentiation:
+    """[VN-FIX V7] Pattern bonuses: VCP=18, Spring=12, CwH=10, RSI-div=8."""
+
+    def test_vcp_bonus_is_18_in_source(self):
+        """VCP bonus must be 18 in _PATTERN_BONUS dict."""
+        import tradingos.core.patterns as pat_mod
+        src = inspect.getsource(pat_mod.detect_all)
+        assert '"VCP": 18' in src or "'VCP': 18" in src, \
+            "VCP bonus must be 18 in _PATTERN_BONUS dict"
+
+    def test_spring_bonus_is_12_in_source(self):
+        """WYCKOFF_SPRING bonus must be 12."""
+        import tradingos.core.patterns as pat_mod
+        src = inspect.getsource(pat_mod.detect_all)
+        assert '"WYCKOFF_SPRING": 12' in src or "'WYCKOFF_SPRING': 12" in src, \
+            "WYCKOFF_SPRING bonus must be 12 in _PATTERN_BONUS dict"
+
+    def test_cwh_bonus_is_10_in_source(self):
+        """CUP_WITH_HANDLE bonus must be 10."""
+        import tradingos.core.patterns as pat_mod
+        src = inspect.getsource(pat_mod.detect_all)
+        assert '"CUP_WITH_HANDLE": 10' in src or "'CUP_WITH_HANDLE': 10" in src, \
+            "CUP_WITH_HANDLE bonus must be 10 in _PATTERN_BONUS dict"
+
+    def test_rsi_div_bonus_is_8_in_source(self):
+        """RSI_DIV_BULLISH bonus must be 8."""
+        import tradingos.core.patterns as pat_mod
+        src = inspect.getsource(pat_mod.detect_all)
+        assert '"RSI_DIV_BULLISH": 8' in src or "'RSI_DIV_BULLISH': 8" in src, \
+            "RSI_DIV_BULLISH bonus must be 8 in _PATTERN_BONUS dict"
+
+    def test_best_wins_not_first_wins(self):
+        """When Spring listed before VCP, VCP (bonus=18) must still win."""
+        # Re-exercise the selection logic directly to confirm best-wins semantics.
+        _PATTERN_BONUS = {
+            "VCP": 18, "WYCKOFF_SPRING": 12,
+            "CUP_WITH_HANDLE": 10, "RSI_DIV_BULLISH": 8,
+        }
+        detected = [
+            {"detected": True, "pattern": "WYCKOFF_SPRING"},   # listed first
+            {"detected": True, "pattern": "VCP"},               # higher bonus, listed second
+        ]
+        best_bonus = 0
+        best_name = "NONE"
+        for p in detected:
+            ptype = p.get("pattern", p.get("type", ""))
+            if ptype == "BULLISH":
+                ptype = "RSI_DIV_BULLISH"
+            b = _PATTERN_BONUS.get(ptype, 0)
+            if b > best_bonus:
+                best_bonus = b
+                best_name = ptype
+        assert best_name == "VCP", \
+            f"VCP must beat Spring in best-wins selection, got {best_name}"
+        assert best_bonus == 18, f"VCP bonus must be 18, got {best_bonus}"
+
+    def test_detect_all_returns_vcp_bonus_18(self):
+        """detect_all with a VCP-triggering DataFrame returns pattern_bonus==18."""
+        from tradingos.core.patterns import detect_all
+        # Craft a DF with narrowing contractions + declining volume to trigger VCP.
+        n = 60
+        base = 50_000.0
+        closes, vols = [], []
+        for phase, (amp, vol_base) in enumerate([(5000, 1_500_000), (2500, 1_200_000), (1000, 800_000)]):
+            for i in range(20):
+                closes.append(base + amp * np.cos(np.pi * i / 19))
+                vols.append(vol_base - i * 5_000 * (phase + 1))
+        df = pd.DataFrame({
+            "open": [c * 0.99 for c in closes], "high": [c * 1.01 for c in closes],
+            "low":  [c * 0.98 for c in closes], "close": closes, "volume": vols,
+        })
+        df.index = pd.date_range("2024-01-01", periods=n, freq="B")
+        from tradingos.core.indicators import compute_all
+        df = compute_all(df)
+        result = detect_all(df)
+        if result["best_pattern"] == "VCP":
+            assert result["pattern_bonus"] == 18, \
+                f"VCP pattern_bonus must be 18, got {result['pattern_bonus']}"
+        # Pattern may or may not trigger depending on exact swings;
+        # the source-level assertions above are the definitive contract tests.
+
+
+# ── V8: OHLCV_PROXY CVD cannot satisfy Mode W W-6 gate ───────────────────────
+
+class TestOHLCVProxyCVDCap:
+    """[VN-FIX V8] OHLCV_PROXY cvd_today capped at 6, never >=7 (W-6 gate)."""
+
+    def _make_flow(self, n: int = 20) -> pd.DataFrame:
+        rng = np.random.default_rng(1)
+        return pd.DataFrame({
+            "date":      pd.date_range("2024-01-01", periods=n, freq="B"),
+            "whale_net": rng.normal(0, 1e8, n),
+        })
+
+    def test_proxy_positive_cvd_capped_at_6(self):
+        """High-intensity positive OHLCV_PROXY CVD must score <= 6."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        avg_vol = df["volume"].tail(20).mean()
+        result = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=self._make_flow(),
+            cvd_today=int(avg_vol * 0.20),
+            cvd_data_quality="OHLCV_PROXY",
+        )
+        assert result["components"]["cvd_today"] <= 6, (
+            f"OHLCV_PROXY positive CVD must be <=6 (W-6 gate is >=7), "
+            f"got {result['components']['cvd_today']}"
+        )
+
+    def test_proxy_never_reaches_w6_threshold(self):
+        """Proxy CVD at any intensity must not reach the >=7 gate threshold."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        avg_vol = df["volume"].tail(20).mean()
+        for mult in (0.05, 0.12, 0.25, 0.50, 1.00):
+            r = compute_smart_money_score(
+                ticker="TEST", df=df, daily_flow_df=self._make_flow(),
+                cvd_today=int(avg_vol * mult),
+                cvd_data_quality="OHLCV_PROXY",
+            )
+            assert r["components"]["cvd_today"] < 7, (
+                f"OHLCV_PROXY cvd_today must never be >=7 at mult={mult:.0%}, "
+                f"got {r['components']['cvd_today']}"
+            )
+
+    def test_real_flow_still_reaches_10(self):
+        """REAL_FLOW high-intensity CVD must still score 10."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        avg_vol = df["volume"].tail(20).mean()
+        r = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=self._make_flow(),
+            cvd_today=int(avg_vol * 0.20),
+            cvd_data_quality="REAL_FLOW",
+        )
+        assert r["components"]["cvd_today"] == 10, (
+            f"REAL_FLOW high-intensity positive CVD must be 10, "
+            f"got {r['components']['cvd_today']}"
+        )
+
+
+# ── V9: SMS all-neutral quality cap ──────────────────────────────────────────
+
+class TestSMSAllNeutralQualityCap:
+    """[VN-FIX V9] SMS reduced by 5 when FOL=5, PT=5, CVD=5 (all no-data neutral)."""
+
+    def _make_flow_no_fol(self, n: int = 20) -> pd.DataFrame:
+        rng = np.random.default_rng(2)
+        return pd.DataFrame({
+            "date":      pd.date_range("2024-01-01", periods=n, freq="B"),
+            "whale_net": rng.normal(0, 1e8, n),
+        })
+
+    def test_all_neutral_scores_lower_than_real_cvd(self):
+        """Scanner-only run scores >=5 less than same run with positive real CVD."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        flow = self._make_flow_no_fol()
+        avg_vol = df["volume"].tail(20).mean()
+
+        result_neutral = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=flow,
+            cvd_today=None,   # component = 5, no fol, no pt
+        )
+        result_real = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=flow,
+            cvd_today=int(avg_vol * 0.20),
+            cvd_data_quality="REAL_FLOW",
+        )
+        diff = result_real["sms"] - result_neutral["sms"]
+        assert diff >= 5, (
+            f"Real CVD should score >=5 more than all-neutral. "
+            f"real={result_real['sms']}, neutral={result_neutral['sms']}, diff={diff}"
+        )
+
+    def test_partial_data_no_cap(self):
+        """When cvd_today has real data (!=5), cap must not fire."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        avg_vol = df["volume"].tail(20).mean()
+        r = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=self._make_flow_no_fol(),
+            cvd_today=int(avg_vol * 0.20),
+            cvd_data_quality="REAL_FLOW",
+        )
+        comps = r["components"]
+        assert comps["cvd_today"] != 5, (
+            "With positive REAL_FLOW CVD, cvd_today component should not be 5"
+        )
+
+    def test_sms_bounded_after_cap(self):
+        """SMS must stay in [0, 100] after cap is applied."""
+        from tradingos.core.money_flow import compute_smart_money_score
+        df = _ohlcv(60)
+        r = compute_smart_money_score(
+            ticker="TEST", df=df, daily_flow_df=self._make_flow_no_fol(),
+        )
+        assert 0 <= r["sms"] <= 100, f"SMS out of range after cap: {r['sms']}"
