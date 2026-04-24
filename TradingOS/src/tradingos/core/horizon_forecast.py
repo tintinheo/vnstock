@@ -22,6 +22,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ..utils.config import cfg
+
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -263,10 +265,15 @@ def _forecast_long(df: pd.DataFrame, profile_context: dict) -> tuple[str, float,
         bear += 1.0; reasons.append(f"SMA200 giảm nhẹ ({sma200_slope:+.1f}%)")
 
     # Macro score
+    # [BUG-29 FIX] Use config-driven thresholds (accommodative_min / restrictive_max)
+    # instead of hardcoded ±20, which was inconsistent with the macro engine’s own ±15
+    # classification bands, causing vote mismatches at scores between ±15 and ±20.
+    _acc_thr  = float(cfg.strategy("macro", "accommodative_min", default=15))
+    _rest_thr = float(cfg.strategy("macro", "restrictive_max",   default=-15))
     if macro_score is not None:
-        if macro_score > 20:
+        if macro_score > _acc_thr:
             bull += 2.0; reasons.append(f"Kinh tế vĩ mô thuận ({macro_score:+.0f})")
-        elif macro_score < -20:
+        elif macro_score < _rest_thr:
             bear += 2.0; reasons.append(f"Kinh tế vĩ mô bất lợi ({macro_score:+.0f})")
     if macro_regime == "ACCOMMODATIVE":
         bull += 1.5; reasons.append("Chính sách tiền tệ nới lỏng")

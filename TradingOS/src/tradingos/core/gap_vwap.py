@@ -189,7 +189,14 @@ def _fetch_intraday_today(ticker: str) -> pd.DataFrame:
                 if col in df.columns:
                     df = df.set_index(pd.to_datetime(df[col]))
                     break
-        today_str = datetime.now().strftime("%Y-%m-%d")
+        # [NEW-8 FIX] Use VN-aware clock instead of system datetime.now().
+        # Around UTC/VN day boundary (UTC+7) the local time can be a day behind,
+        # filtering out today's intraday bars or including yesterday's.
+        try:
+            from ..utils.dates import vn_now as _vn_now
+            today_str = _vn_now().strftime("%Y-%m-%d")
+        except Exception:
+            today_str = datetime.now().strftime("%Y-%m-%d")
         df = df[df.index.strftime("%Y-%m-%d") == today_str]
         return df
     except Exception as e:

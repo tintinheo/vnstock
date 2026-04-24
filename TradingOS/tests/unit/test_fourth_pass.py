@@ -273,18 +273,22 @@ class TestS3FolNoDataScoresZero:
     fol_ratio == 0 fell through to the `else: comps["fol"] = 3` branch.
     This injected a phantom 3 pts on every single ticker, inflating all SMS scores
     by a constant that carried zero market information.
+
+    [VN-FIX] fol now uses OBV slope as institutional proxy when fol_net absent.
+    Score is OBV-direction-driven (0/3/6/10) instead of always-0 or phantom-3.
     """
 
     def test_no_fol_column_scores_zero(self):
-        """flow_df without fol_net column must produce comps['fol'] == 0."""
+        """flow_df without fol_net: comps['fol'] must be OBV-proxy (≤10, never phantom 3-for-free)."""
         from tradingos.core.money_flow import compute_smart_money_score
         df   = _make_indicators()
         flow = _make_flow(df)  # proxy_whale_net_from_daily never adds fol_net
         assert "fol_net" not in flow.columns, \
             "Test precondition: proxy flow must not have fol_net column"
         result = compute_smart_money_score("TEST", df, flow)
-        assert result["components"]["fol"] == 0, (
-            f"fol without fol_net data must score 0 not 3, got {result['components']['fol']}"
+        # OBV proxy: must be in [0, 10] — never exceeds real FOL max
+        assert 0 <= result["components"]["fol"] <= 10, (
+            f"OBV-proxy fol must be in [0,10], got {result['components']['fol']}"
         )
 
     def test_zero_fol_net_scores_zero(self):
@@ -325,24 +329,24 @@ class TestS3FolNoDataScoresZero:
 
     def test_sms_without_fol_lower_than_before(self):
         """
-        With the fix, a PROXY_OHLCV SMS score must be 3 pts lower than old behaviour
-        (because the phantom fol=3 is now removed).
-        Verify the component sum is correct: max without real data is now 82, not 85.
-        Max components without real data:
-            mcvd=20 (if UP+consistent), vqs=15, fol=0, obv=15, amd=10, cvd=5, pt=0
-            → max theoretical = 65 (mcvd realistically lower due to PROXY_OHLCV)
+        [VN-FIX] FOL now uses OBV proxy when no real data.
+        OBV proxy caps at 10 (vs real FOL 15), so phantom-3 inflation is gone.
+        Verify: fol component is OBV-derived (not a fixed phantom value),
+        and overall component sum is bounded sensibly.
         """
         from tradingos.core.money_flow import compute_smart_money_score
         df   = _make_indicators()
         flow = _make_flow(df)
         result = compute_smart_money_score("TEST", df, flow)
-        # Old cap was 85 (pt_flow=0), new cap is 82 (pt_flow=0, fol=0)
-        assert result["components"]["fol"] == 0
-        # Total must not include the phantom 3 pts
+        # OBV proxy: capped at 10 (never 15 which requires real FOL)
+        assert result["components"]["fol"] <= 10, (
+            f"Proxy fol must be <=10, got {result['components']['fol']}"
+        )
+        # Component sum without real data: mcvd+vqs+fol_proxy+obv+amd+cvd+pt
+        # Max theoretical: 20+15+10+15+10+10+0 = 80
         component_sum = sum(result["components"].values())
-        # pt_flow=0 and fol=0, so max from other 5 components = 20+15+15+10+10 = 70
-        assert component_sum <= 70, (
-            f"Without real fol/PT data, component sum should be <=70, got {component_sum}"
+        assert component_sum <= 80, (
+            f"Without real fol/PT data, component sum should be <=80, got {component_sum}"
         )
 
     def test_fol_source_has_no_data_guard(self):

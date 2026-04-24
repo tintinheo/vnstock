@@ -145,9 +145,9 @@ def _score_breakout(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 1.5; reasons.append("Giá phá dải Bollinger trên")
 
     # RSI in healthy range for breakout
-    if rsi and 50 <= rsi <= 72:
+    if rsi is not None and 50 <= rsi <= 72:
         score += 1.5; reasons.append(f"RSI vùng breakout ({rsi:.0f})")
-    elif rsi and rsi > 75:
+    elif rsi is not None and rsi > 75:
         score -= 1.0  # overbought at breakout = risky
 
     # MACD hist rising
@@ -155,7 +155,7 @@ def _score_breakout(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 1.0; reasons.append("MACD_hist tăng — momentum xác nhận")
 
     # ADX strong and DI+ leading
-    if adx and adx > 25 and di_plus and di_minus and di_plus > di_minus:
+    if adx is not None and adx > 25 and di_plus is not None and di_minus is not None and di_plus > di_minus:
         score += 1.0; reasons.append(f"ADX mạnh ({adx:.0f}), DI+ dẫn")
 
     return score, reasons
@@ -188,7 +188,7 @@ def _score_pullback_ema(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 1.5; reasons.append("Giá trên SMA200 — xu hướng dài hạn tăng")
 
     # RSI cool-down (pullback confirmation)
-    if rsi and 40 <= rsi <= 60:
+    if rsi is not None and 40 <= rsi <= 60:
         score += 2.0; reasons.append(f"RSI hạ nhiệt ({rsi:.0f}) — hồi khoẻ mạnh")
 
     # OBV not falling (institutions not selling into pullback)
@@ -228,9 +228,9 @@ def _score_support_bounce(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 2.5; reasons.append("Giá tại dải BB dưới — vùng mua technical")
 
     # RSI in recovery zone
-    if rsi and 35 <= rsi <= 52:
+    if rsi is not None and 35 <= rsi <= 52:
         score += 1.5; reasons.append(f"RSI phục hồi từ vùng trung tính ({rsi:.0f})")
-    elif rsi and rsi < 35:
+    elif rsi is not None and rsi < 35:
         score += 2.0; reasons.append(f"RSI vùng quá bán ({rsi:.0f}) — bật kỹ thuật")
 
     # MACD hist turning up
@@ -257,6 +257,20 @@ def _score_support_bounce(df: pd.DataFrame) -> tuple[float, list[str]]:
 
 def _score_oversold_recovery(df: pd.DataFrame) -> tuple[float, list[str]]:
     score, reasons = 0.0, []
+
+    # [VN-FIX] Sustained selling pressure guard.
+    # In VN, stocks under margin call or institutional exit continue falling
+    # after oscillators show "oversold" — there is no institutional counter-buying.
+    # Abort T_OVERSOLD_RECOVERY if price-direction volume ratio shows sustained sells.
+    if len(df) >= 10:
+        _delta = df["close"].diff().fillna(0)
+        _buy_v  = df["volume"].where(_delta > 0, 0).tail(20).sum()
+        _sell_v = df["volume"].where(_delta < 0, 0).tail(20).sum()
+        _total  = _buy_v + _sell_v
+        _pv_dir = (_buy_v - _sell_v) / max(_total, 1)
+        if _pv_dir < -0.3:
+            return 0.0, ["Áp lực bán dai dẳng — không vào T_OVERSOLD_RECOVERY trong TTCK VN"]
+
     rsi      = _f(df, "RSI14")
     stoch_k  = _f(df, "STOCH_K")
     stoch_d  = _f(df, "STOCH_D")
@@ -267,9 +281,11 @@ def _score_oversold_recovery(df: pd.DataFrame) -> tuple[float, list[str]]:
     stk_arr  = _arr(df, "STOCH_K", 3)
     std_arr  = _arr(df, "STOCH_D", 3)
 
-    if rsi and rsi < 30:
+    # [BUG-12 FIX] Use `is not None` guards throughout — truthiness skips valid
+    # 0.0 values (e.g. rsi=0 impossible in practice, but wr=0 and cci=0 can occur).
+    if rsi is not None and rsi < 30:
         score += 3.0; reasons.append(f"RSI quá bán sâu ({rsi:.0f}) — tỷ lệ bật kỹ thuật cao")
-    elif rsi and rsi < 40:
+    elif rsi is not None and rsi < 40:
         score += 1.5; reasons.append(f"RSI vùng quá bán ({rsi:.0f})")
 
     # Stochastic cross in oversold zone
@@ -280,11 +296,11 @@ def _score_oversold_recovery(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 3.0; reasons.append(f"Stochastic golden cross vùng quá bán ({stoch_k:.0f}) — tín hiệu mạnh")
 
     # Williams %R recovering
-    if wr and -90 <= wr <= -60:
+    if wr is not None and -90 <= wr <= -60:
         score += 1.5; reasons.append(f"Williams %R phục hồi từ quá bán ({wr:.0f})")
 
     # CCI recovering
-    if cci and -150 <= cci <= -80:
+    if cci is not None and -150 <= cci <= -80:
         score += 1.0; reasons.append(f"CCI quá bán ({cci:.0f}) — đang phục hồi")
 
     # MACD hist turning up from negative
@@ -327,12 +343,12 @@ def _score_range_break(df: pd.DataFrame) -> tuple[float, list[str]]:
         score += 3.0; reasons.append(f"BB cực hẹp ({bb_width_pct:.0%} so với trung bình) — năng lượng tích tụ")
 
     # ADX starting to rise from low (<20)
-    if adx and len(adx_arr) >= 3:
+    if adx is not None and len(adx_arr) >= 3:
         if adx < 25 and adx_arr[-1] > adx_arr[-3]:
             score += 2.0; reasons.append(f"ADX đang tăng từ vùng thấp ({adx:.0f}) — xu hướng hình thành")
 
     # DI cross (direction beginning to establish)
-    if adx and di_plus and di_minus:
+    if adx is not None and di_plus is not None and di_minus is not None:
         if di_plus > di_minus and adx > 15:
             score += 1.5; reasons.append("DI+ > DI- — hướng tăng đang chiếm ưu thế")
 
@@ -366,9 +382,9 @@ def _score_momentum_cont(df: pd.DataFrame) -> tuple[float, list[str]]:
     mh_arr  = _arr(df, "MACD_hist", 3)
 
     # Strong ADX trend
-    if adx and adx > 30 and di_plus and di_minus and di_plus > di_minus:
+    if adx is not None and adx > 30 and di_plus is not None and di_minus is not None and di_plus > di_minus:
         score += 4.0; reasons.append(f"ADX rất mạnh ({adx:.0f}) — xu hướng tăng bền vững")
-    elif adx and adx > 25 and di_plus and di_minus and di_plus > di_minus:
+    elif adx is not None and adx > 25 and di_plus is not None and di_minus is not None and di_plus > di_minus:
         score += 2.5; reasons.append(f"ADX mạnh ({adx:.0f}) — xu hướng tăng ổn định")
 
     # Full MA alignment
@@ -379,7 +395,7 @@ def _score_momentum_cont(df: pd.DataFrame) -> tuple[float, list[str]]:
             score += 1.5; reasons.append("Giá > SMA20 > SMA50 — xu hướng trung hạn tốt")
 
     # RSI in healthy trend zone
-    if rsi and 55 <= rsi <= 72:
+    if rsi is not None and 55 <= rsi <= 72:
         score += 1.5; reasons.append(f"RSI vùng momentum ({rsi:.0f}) — chưa quá mua")
 
     # OBV rising (institutional accumulation)
@@ -422,7 +438,7 @@ def _check_avoid(
 
     # RSI severely overbought — add risk warning but let other signals decide
     rsi = _f(df, "RSI14")
-    if rsi and rsi > 82:
+    if rsi is not None and rsi > 82:
         risks.append(f"RSI quá mua ({rsi:.0f}) — theo dõi áp lực chốt lời")
 
     # Price vs SMA200 — deep below SMA200 in bear context

@@ -38,7 +38,10 @@ def proxy_whale_net_from_daily(df: pd.DataFrame) -> pd.DataFrame:
     high_range = c["high"] - c["low"]
     c["range_pct"] = (c["close"] - c["low"]) / (high_range + 1e-9)
     mu = c["volume"].rolling(20).mean().fillna(c["volume"].mean())
-    sigma = c["volume"].rolling(20).std().fillna(1)
+    # [NEW-4 FIX] fillna(1) handles NaN (first 19 bars) but NOT zero (all-same-volume
+    # windows).  If std=0, division produces inf/ZeroDivisionError, causing false whale
+    # z_vol > 0.5 signals on halted or stagnant-volume stocks.  Added .replace(0, 1).
+    sigma = c["volume"].rolling(20).std().fillna(1).replace(0, 1)
     c["z_vol"] = (c["volume"] - mu) / sigma
     c["whale_net_proxy"] = c.apply(
         lambda r: int(r["volume"] * 0.3 * np.sign(r["range_pct"] - 0.5))
@@ -128,6 +131,11 @@ def compute_multiday_whale_flow(
             "mcvd_trend": "FLAT", "mcvd_vs_price": "UNKNOWN", "consistency": 0.5,
         }
 
+    # [NEW-6 FIX] Sort by date before tail() to guarantee chronological order.
+    # If upstream merges produce non-sorted rows (e.g. FOL merge reindexing),
+    # whale trend/slope is computed on wrong windows.
+    if "date" in daily_flow_df.columns:
+        daily_flow_df = daily_flow_df.sort_values("date").reset_index(drop=True)
     recent = daily_flow_df.tail(lookback_days).copy()
 
     # Respect .data_source column forwarded by proxy functions; only fall back to
@@ -161,7 +169,10 @@ def compute_multiday_whale_flow(
         slope = 0.0
 
     avg_daily_shares = recent["volume"].mean() if "volume" in recent.columns else max(abs(mcvd_20d) / lookback_days, 1)
-    slope_normalized = slope / max(avg_daily_shares / lookback_days, 1)
+    # [BUG-9 FIX] Correct normalizer is avg_daily_shares (total daily volume).
+    # Old bug: divided by lookback_days making denominator 20× too small
+    # and inflating slope_normalized 20× → FLAT trends mis-classified as UP/DOWN.
+    slope_normalized = slope / max(avg_daily_shares, 1)
 
     if slope_normalized > flat_thr:
         mcvd_trend = "UP"
@@ -226,7 +237,11 @@ def compute_smart_money_score(
     comps: dict[str, int] = {}
 
     # 1. M-CVD Trend (0–20) - [C6] Weight reduced from 25
-    mcvd = compute_multiday_whale_flow(daily_flow_df, lookback_days=20)
+    # [NEW-5 FIX] Do NOT pass lookback_days=20 explicitly here.
+    # compute_multiday_whale_flow uses `lookback_days or cfg_ld`, so passing a
+    # truthy 20 always overrides the config.  Omitting the arg lets the function
+    # read mcvd_lookback_days from strategy.yaml (default still 20 when unconfigured).
+    mcvd = compute_multiday_whale_flow(daily_flow_df)
     if mcvd["mcvd_trend"] == "UP" and mcvd["consistency"] >= 0.60:
         comps["mcvd"] = 20
     elif mcvd["mcvd_trend"] == "UP":
@@ -252,7 +267,23 @@ def compute_smart_money_score(
     fol_ratio = fol_net_5d / max(avg_vol * 5, 1)
     # [BUG3 FIX] No fol_net column → no information; score 0 not 3
     if not has_fol_data:
-        comps["fol"] = 0
+        # [VN-FIX] FOL column absent on all vnstock tickers (no public foreign-net feed).
+        # Redistribute the 15-pt FOL slot via OBV slope as institutional proxy.
+        # OBV rising strongly ≈ sustained accumulation; gives up to 10 pts (vs 15 for real FOL).
+        _obv_proxy = 0
+        if "OBV" in df.columns and len(df) >= 10:
+            _obv_10 = df["OBV"].iloc[-10]
+            _obv_now = df["OBV"].iloc[-1]
+            _obv_slope = (_obv_now - _obv_10) / max(abs(_obv_10), 1)
+            if _obv_slope > 0.05:
+                _obv_proxy = 10
+            elif _obv_slope > 0.02:
+                _obv_proxy = 6
+            elif _obv_slope > 0:
+                _obv_proxy = 3
+            else:
+                _obv_proxy = 0
+        comps["fol"] = _obv_proxy
     elif fol_ratio > 0.05:
         comps["fol"] = 15
     elif fol_ratio > 0.02:
@@ -349,7 +380,11 @@ def compute_smart_money_score(
         "components": comps,
         "mcvd_detail": mcvd,
         "fol_net_5d": fol_net_5d,
-        "fol_pct": round(max(0.0, fol_ratio) * 100, 2),
+        # [VN-10 FIX] Keep signed fol_pct so downstream logic can detect persistent
+        # net-sell pressure (negative = foreign outflow). Old max(0.0, ...) hid
+        # sell-side flow, making sustained foreign exit invisible to callers.
+        "fol_pct": round(fol_ratio * 100, 2),
+        "fol_direction": "NET_BUY" if fol_ratio > 0.01 else ("NET_SELL" if fol_ratio < -0.01 else "NEUTRAL"),
         "pt_net_5d": pt_net_5d,
         "pt_ratio_5d": round(pt_ratio, 3),
         "whale_pct_vol": round(max(0, fol_ratio) * 100, 1),
@@ -462,7 +497,12 @@ def detect_sector_rotation(
         if len(df) < lookback:
             continue
 
-        mom_5d = df["close"].iloc[-1] / max(df["close"].iloc[-5], 1) - 1
+        # [NEW-7 FIX] True 5-session momentum compares today (iloc[-1]) to 5 sessions
+        # ago (iloc[-6], 6th from end).  The old iloc[-5] compared to 4 days ago,
+        # overstating recent momentum by one bar.
+        if len(df) < 6:
+            continue
+        mom_5d = df["close"].iloc[-1] / max(df["close"].iloc[-6], 1) - 1
 
         obv_slope = 0.0
         if "OBV" in df.columns and len(df) >= 10:
@@ -517,9 +557,16 @@ def detect_sector_rotation(
 
 # ── FR-6.5: Mode W Entry Params ───────────────────────────────────────────────
 
-def mode_w_entry_params(df: pd.DataFrame, sms_result: dict) -> dict:
+def mode_w_entry_params(df: pd.DataFrame, sms_result: dict, signal_mode: str = "MODE_W") -> dict:
     """
-    Entry/SL/TP calculation for Mode W (Follow-the-Whale) — SRS §8.6.
+    Entry/SL/TP calculation for the active signal mode — SRS §8.6.
+
+    signal_mode : "MODE_W" | "MODE_A" | "MODE_B"
+        MODE_W — Follow-the-Whale: entry rebalances toward EMA9 (wait for retest).
+        MODE_A — Pullback: entry at or near SMA20/EMA20 support; EMA9 rebalance is
+                 acceptable since close is already at a pullback level.
+        MODE_B — Breakout: entry IS the breakout close; EMA9 pullback is WRONG
+                 here because it would mean entering below the breakout confirm point.
     """
     if df.empty:
         return {"entry": 0, "sl": 0, "sl_pct": 0, "tp1": 0, "tp2": 0, "rr": 0}
@@ -533,11 +580,16 @@ def mode_w_entry_params(df: pd.DataFrame, sms_result: dict) -> dict:
 
     close = float(last["close"])
     entry = round_to_tick(close)    # always align to exchange tick
-    ema9 = float(last.get("EMA9", entry))
-    if entry > ema9 * 1.01:  # rebalance entry toward EMA9
-        ema9_entry = round_to_tick(ema9 * 1.005)
-        # Cap pullback to 2% below close — prevents un-actionable entries on EMA9 lag
-        entry = round_to_tick(max(ema9_entry, close * 0.98))
+    # [BUG-22 FIX] EMA9 pullback rebalance is Mode W-specific (follow-whale reentry
+    # near EMA9). For Mode B breakout, the entry IS the breakout close; pulling back
+    # to EMA9 would mean entering BEFORE the breakout confirms — incorrect semantics.
+    # For Mode A pullback this rebalance is acceptable; for MODE_W it is intended.
+    if signal_mode != "MODE_B":
+        ema9 = float(last.get("EMA9", entry))
+        if entry > ema9 * 1.01:  # rebalance entry toward EMA9
+            ema9_entry = round_to_tick(ema9 * 1.005)
+            # Cap pullback to 2% below close — prevents un-actionable entries on EMA9 lag
+            entry = round_to_tick(max(ema9_entry, close * 0.98))
 
     # Minimum SL distance: 3% of entry (prevents noise-level SL on sub-5K VND stocks)
     sl_dist = max(atr * sl_mult, entry * 0.03)
@@ -596,9 +648,10 @@ def detect_whale_distribution(
         score += 3
 
     # Signal 2: OBV negative turn
-    if "OBV" in df.columns and len(df) >= 5:
+    if "OBV" in df.columns and len(df) >= 6:
         obv_now = df["OBV"].iloc[-1]
-        obv_prev = df["OBV"].iloc[-5]
+        # [NEW-7 FIX] Use iloc[-6] for true 5-session OBV lookback (iloc[-5] was 4 days).
+        obv_prev = df["OBV"].iloc[-6]
         if obv_prev != 0 and (obv_now - obv_prev) / abs(obv_prev) < -0.03:
             flags.append("OBV_NEGATIVE_TURN")
             score += 2
@@ -639,4 +692,114 @@ def detect_whale_distribution(
         "flags": flags,
         "score": score,
         "explanation": explanation,
+    }
+
+
+# ── FR-NEW: Normalized CVD (NCVD) ────────────────────────────────────────────
+
+def calculate_ncvd(
+    raw_cvd: float,
+    adtv_20d: float,
+    window_days: int = 5,
+) -> dict:
+    """
+    Normalize raw M-CVD by Average Daily Trading Volume to make it comparable
+    across tickers with vastly different liquidity profiles.
+
+    NCVD = raw_CVD / (ADTV × window_days)
+
+    Interpretation bands:
+      > +0.50 : VERY_BULLISH  (net accumulation > 50% of expected ADTV window)
+      > +0.10 : BULLISH
+      -0.10 to +0.10 : NEUTRAL
+      < -0.10 : BEARISH
+      < -0.50 : VERY_BEARISH
+    """
+    if adtv_20d <= 0 or window_days <= 0:
+        return {
+            "raw_cvd": raw_cvd, "adtv_20d": adtv_20d, "ncvd": 0.0,
+            "ncvd_pct": "0.0%", "label": "NEUTRAL",
+        }
+
+    expected_volume = adtv_20d * window_days
+    ncvd = raw_cvd / expected_volume
+
+    if ncvd > 0.50:
+        label = "VERY_BULLISH"
+    elif ncvd > 0.10:
+        label = "BULLISH"
+    elif ncvd > -0.10:
+        label = "NEUTRAL"
+    elif ncvd > -0.50:
+        label = "BEARISH"
+    else:
+        label = "VERY_BEARISH"
+
+    return {
+        "raw_cvd": raw_cvd,
+        "adtv_20d": adtv_20d,
+        "ncvd": round(ncvd, 4),
+        "ncvd_pct": f"{ncvd * 100:.2f}%",
+        "label": label,
+    }
+
+
+# ── FR-NEW: CVD Multi-Timeframe Conflict Resolution ───────────────────────────
+
+def resolve_cvd_conflict(
+    cvd_5d_trend: str,
+    cvd_20d_trend: str,
+    amd_phase: str = "RANGING",
+) -> dict:
+    """
+    Resolve a potential conflict between 5-day and 20-day M-CVD trend signals
+    using a Wyckoff-informed multi-timeframe priority matrix.
+
+    cvd_5d_trend / cvd_20d_trend : 'UP' | 'DOWN' | 'FLAT'
+    amd_phase                    : 'ACCUMULATION' | 'MARKUP' | 'DISTRIBUTION' | 'MARKDOWN' | 'RANGING'
+
+    Returns a dict with:
+      pattern, interpretation, action, confidence, dominant_timeframe, note
+    """
+    _MATRIX = {
+        ("UP",   "UP"):   ("FULL_BULL_ALIGNMENT",    "ENTRY_FAVORABLE",     "HIGH"),
+        ("UP",   "DOWN"): ("BOUNCE_IN_DISTRIBUTION",  "NO_NEW_ENTRY",        "HIGH"),
+        ("UP",   "FLAT"): ("EARLY_BREAKOUT",           "MONITOR_20D",         "MEDIUM"),
+        ("DOWN", "UP"):   ("PULLBACK_IN_ACCUM",        "WATCH_FOR_ENTRY",     "MEDIUM"),
+        ("DOWN", "DOWN"): ("FULL_BEAR_ALIGNMENT",      "AVOID",               "HIGH"),
+        ("DOWN", "FLAT"): ("LOSING_MOMENTUM",          "WAIT",                "LOW"),
+        ("FLAT", "UP"):   ("PAUSING_ACCUM",            "WAIT_RESUME",         "MEDIUM"),
+        ("FLAT", "DOWN"): ("DISTRIBUTION_SLOWING",     "NEUTRAL_WATCH",       "LOW"),
+        ("FLAT", "FLAT"): ("NO_DIRECTIONAL_SIGNAL",    "NO_ACTION",           "VERY_LOW"),
+    }
+
+    t5 = str(cvd_5d_trend).upper() if cvd_5d_trend in ("UP", "DOWN", "FLAT") else "FLAT"
+    t20 = str(cvd_20d_trend).upper() if cvd_20d_trend in ("UP", "DOWN", "FLAT") else "FLAT"
+    interpretation, action, confidence = _MATRIX.get(
+        (t5, t20), ("UNKNOWN", "NO_ACTION", "VERY_LOW")
+    )
+
+    note = f"AMD={amd_phase}"
+
+    # AMD override: if AMD=DISTRIBUTION, ENTRY_FAVORABLE is downgraded
+    if amd_phase == "DISTRIBUTION" and action == "ENTRY_FAVORABLE":
+        action = "CAUTION_AMD_DISTRIBUTION"
+        confidence = "MEDIUM"
+        note += " → ENTRY_FAVORABLE overridden by DISTRIBUTION"
+
+    # Wyckoff Spring: AMD=ACCUMULATION but short-term CVD is down (retail selling)
+    if amd_phase == "ACCUMULATION" and action == "NO_NEW_ENTRY":
+        interpretation = interpretation + "_POSSIBLE_WYCKOFF_SPRING"
+        action = "WATCH_SPRING_REVERSAL"
+        note += " → Possible institutional absorption of retail selling"
+
+    dominant = "20D" if t20 != "FLAT" else "5D"
+
+    return {
+        "pattern": f"CVD5d_{t5}__CVD20d_{t20}",
+        "interpretation": interpretation,
+        "action": action,
+        "confidence": confidence,
+        "dominant_timeframe": dominant,
+        "note": note,
     }

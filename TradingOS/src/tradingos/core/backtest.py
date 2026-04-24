@@ -121,11 +121,14 @@ def _simulate_single_trade(
         cl = float(row["close"])
 
         if lo <= sl:
-            # HOSE ±7% circuit breaker: real fill can be no worse than -7% from prev close.
-            # On a gap-down day the floor is prev_close * 0.93, not an arbitrary SL price.
+            # [BUG-17 FIX] Read limit-down pct from config instead of hardcoding 0.93
+            # for all tickers. HOSE = ±7% (floor 0.93), HNX = ±10%, UPCOM = ±15%.
+            # Defaulting to HOSE 0.93 is reasonable for most VN stocks, but can be
+            # overridden via strategy.yaml backtest.limit_down_pct.
+            limit_down_pct = float(cfg.strategy("backtest", "limit_down_pct", default=0.07))
             prev_close = float(df.iloc[i - 1]["close"]) if i > 0 else raw_entry
-            hose_floor = prev_close * 0.93
-            exit_price = max(sl, hose_floor)
+            limit_floor = prev_close * (1 - limit_down_pct)
+            exit_price = max(sl, limit_floor)
             exit_reason = "SL"
             exit_idx = i
             break
@@ -151,7 +154,9 @@ def _simulate_single_trade(
     hold_days = exit_idx - entry_idx
     effective_exit = exit_price * (1 - exit_cost_pct)
     pnl_pct = (effective_exit - entry_price) / entry_price
-    pnl = pnl_pct * raw_entry  # per share (notional)
+    # [BUG-18 FIX] pnl must be total trade VND for 100 shares, not per-share.
+    # Old: pnl_pct * raw_entry = per-share gain (100× understated vs real money).
+    pnl = round(pnl_pct * raw_entry * 100, 0)  # total VND for 1 lot (100 shares)
 
     return BacktestTrade(
         ticker=str(df.iloc[0].get("ticker", "—")) if "ticker" in df.columns else "—",
@@ -267,17 +272,22 @@ def run_backtest(
     sharpe = float(np.clip(sharpe, -20, 20))  # cap extreme values (1 trade edge case)
 
     # ── Walk-forward windows (H1: non-overlapping IS/OOS) ───────────────────────────
-    # Layout: data is split into (walk_forward_windows + 1) equal blocks.
-    # Block 0..W-1 = IS for window W; block W = OOS for window W.  No overlap.
+    # [BUG-C FIX] Use walk_forward_is_days and walk_forward_oos_days from
+    # strategy.yaml to size windows properly.  Old code divided data into
+    # (walk_forward_windows + 1) equal blocks that shrank as the window count
+    # grew, making the OOS block as small as ~20 days for walk_forward_windows=5.
+    # New: IS starts at 0, grows by _oos_days each window; OOS = next _oos_days block.
     wf_results = []
     n = len(df)
-    n_blocks = walk_forward_windows + 1
-    block = n // n_blocks
-    for w in range(walk_forward_windows):
-        is_start = 0
-        is_end   = (w + 1) * block          # IS: blocks 0 … w (inclusive)
+    _is_days  = int(cfg.strategy("backtest", "walk_forward_is_days",  default=252))
+    _oos_days = int(cfg.strategy("backtest", "walk_forward_oos_days", default=63))
+    _max_windows = max(0, (n - _is_days) // max(_oos_days, 1)) if n > _is_days else 0
+    _wf_count = min(walk_forward_windows, _max_windows)
+    for w in range(_wf_count):
+        is_start  = 0
+        is_end    = _is_days + w * _oos_days   # IS grows by one OOS block per window
         oos_start = is_end
-        oos_end   = min(oos_start + block, n)  # OOS: block w+1 exclusively
+        oos_end   = min(oos_start + _oos_days, n)
         if oos_start >= n:
             break
         oos_df = df.iloc[oos_start:oos_end]

@@ -137,37 +137,70 @@ def cvd_data_quality() -> str:
 
 # ── AMF — Anti-Manipulation Filter ───────────────────────────────────────────
 
-def run_amf(df: pd.DataFrame, order_book: dict | None = None) -> dict:
+def run_amf(
+    df: pd.DataFrame,
+    order_book: dict | None = None,
+    intraday_data: dict | None = None,
+) -> dict:
     """
     4-layer Anti-Manipulation Filter pipeline.
+
+    Args:
+        df             : OHLCV DataFrame
+        order_book     : optional legacy bid/ask dict (bids/asks as {price: vol})
+        intraday_data  : optional dict from fetch_intraday_features(); provides
+                         tfi (Trade Flow Imbalance) and obi_l3 for wash-sale
+                         directionality classification.
 
     Returns:
         decision    : PASS | WARN | BLOCK
         flags       : list of triggered flags
-        details     : per-layer results
+        wash_side   : BUY_WASH | SELL_WASH | NEUTRAL_WASH | NONE
+        details     : per-layer results (open_gap_pct, z_vol, tfi, obi_l3)
     """
     flags: list[str] = []
     order_book = order_book or {}
+    intraday_data = intraday_data or {}
 
     if df.empty or len(df) < 5:
-        return {"decision": "PASS", "flags": [], "details": {}}
+        return {"decision": "PASS", "flags": [], "wash_side": "NONE", "details": {}}
 
     # ── Layer 1: Open Spike ────────────────────────────────────────────────
-    open_spike_thr = cfg.strategy("amf", "open_spike_threshold", default=0.06)
+    # [BUG-4 FIX] Default raised from 0.06 → 0.09.
+    # HOSE circuit breaker is ±7% (±10% for UpCom). A gap of 5-6% is normal
+    # post-earnings or news-driven and does NOT indicate manipulation.
+    # 9% sits just inside the circuit breaker and only catches genuine wash gaps.
+    open_spike_thr = cfg.strategy("amf", "open_spike_threshold", default=0.09)
     last = df.iloc[-1]
     prev_close = df.iloc[-2]["close"] if len(df) >= 2 else last["close"]
     open_gap = abs(last["open"] - prev_close) / max(prev_close, 1)
     if open_gap > open_spike_thr:
         flags.append(f"OPEN_SPIKE_{open_gap*100:.1f}pct")
 
-    # ── Layer 2: Wash-Sale Volume ──────────────────────────────────────────
-    wash_mult = cfg.strategy("amf", "wash_sale_volume_mult", default=3.0)
+    # ── Layer 2: Wash-Sale Volume + Directionality ────────────────────────
+    # TFI threshold ±0.20: TCBS aggressor accuracy is ~80-85%; tighter
+    # thresholds produce too many false NEUTRAL_WASH classifications.
+    wash_mult       = cfg.strategy("amf", "wash_sale_volume_mult", default=3.0)
+    tfi_threshold   = float(cfg.strategy("amf", "wash_tfi_threshold", default=0.20))
     avg_vol_20 = df["volume"].tail(20).mean()
     z_vol_last = df["Z_vol"].iloc[-1] if "Z_vol" in df.columns else (
         (last["volume"] - avg_vol_20) / max(df["volume"].tail(20).std(), 1)
     )
+    wash_side = "NONE"
     if z_vol_last > wash_mult:
-        flags.append(f"WASH_SALE_VOLUME_Z{z_vol_last:.1f}")
+        tfi = float(intraday_data.get("tfi", 0.0))
+        if tfi > tfi_threshold:
+            # Buy-aggressor dominated: artificial price inflation (manipulation UP)
+            flags.append(f"WASH_SALE_BUY_DRIVEN_Z{z_vol_last:.1f}")
+            wash_side = "BUY_WASH"
+        elif tfi < -tfi_threshold:
+            # Sell-aggressor dominated: artificial price suppression (Wyckoff spring candidate)
+            flags.append(f"WASH_SALE_SELL_DRIVEN_Z{z_vol_last:.1f}")
+            wash_side = "SELL_WASH"
+        else:
+            # No intraday data or TFI near zero — direction unknown
+            flags.append(f"WASH_SALE_VOLUME_Z{z_vol_last:.1f}")
+            wash_side = "NEUTRAL_WASH"
 
     # ── Layer 3: Bid-Ask Imbalance ─────────────────────────────────────────
     bid_ask_thr = cfg.strategy("amf", "bid_ask_imbalance", default=0.70)
@@ -181,7 +214,11 @@ def run_amf(df: pd.DataFrame, order_book: dict | None = None) -> dict:
             flags.append(f"ORDER_BOOK_IMBALANCE_{side}_{imbalance*100:.0f}pct")
 
     # ── Layer 4: VWAP Deviation ────────────────────────────────────────────
-    vwap_dev_thr = cfg.strategy("amf", "vwap_deviation", default=0.03)
+    # [BUG-4 FIX] Default raised from 0.03 → 0.05.
+    # Rolling 20-bar VWAP vs daily close deviates 3-4% routinely for VN stocks
+    # with any intraday volatility (bluechips included). 5% better represents
+    # abnormal close-vs-VWAP divergence consistent with end-of-day manipulation.
+    vwap_dev_thr = cfg.strategy("amf", "vwap_deviation", default=0.05)
     if "VWAP_daily" in df.columns:
         vwap_now = df["VWAP_daily"].iloc[-1]
         close_now = last["close"]
@@ -200,8 +237,13 @@ def run_amf(df: pd.DataFrame, order_book: dict | None = None) -> dict:
     return {
         "decision": decision,
         "flags": flags,
+        "wash_side": wash_side,
         "details": {
-            "open_gap_pct": round(open_gap * 100, 2),
-            "z_vol": round(float(z_vol_last), 2),
+            "open_gap_pct":    round(open_gap * 100, 2),
+            "z_vol":           round(float(z_vol_last), 2),
+            "tfi":             round(float(intraday_data.get("tfi", 0.0)), 4),
+            "obi_l3":          round(float(intraday_data.get("obi_l3", 0.0)), 4),
+            "obi_reconstructed": round(float(intraday_data.get("obi_reconstructed", 0.0)), 4),
+            "mcvd":            int(intraday_data.get("mcvd", 0)),
         },
     }

@@ -27,6 +27,13 @@ def render() -> None:
         min_mfpm = col_right.slider("MFPM tối thiểu", 0, 120, 0)
         min_sms = col_right.slider("SMS tối thiểu", 0, 100, 0)
         max_workers = col_right.slider("Workers", 1, 16, 8)
+        # [BUG-6 FIX] include_blocked was hardcoded True — AMF filter never applied.
+        # Default False: exclude AMF-blocked tickers (manipulation suspected).
+        include_blocked = col_right.checkbox(
+            "Hiển thị mã bị AMF chặn",
+            value=False,
+            help="AMF (Anti-Manipulation Filter) — bỏ chọn để lọc mã nghi thao túng",
+        )
         submitted = st.form_submit_button("🔍 Quét ngay", use_container_width=True)
 
     if not submitted:
@@ -44,8 +51,8 @@ def render() -> None:
         limit=len(tickers) if tickers else 2000,
         min_mfpm_score=min_mfpm,
         min_sms=min_sms,
-        min_action="",        # hiển thị tất cả tín hiệu kể cả NO_ACTION
-        include_blocked=True, # kể cả mã bị AMF chặn
+        min_action="",          # hiển thị tất cả tín hiệu kể cả NO_ACTION
+        include_blocked=include_blocked,
     )
 
     svc = ScannerService(max_workers=max_workers)

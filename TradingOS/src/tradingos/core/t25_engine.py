@@ -24,7 +24,11 @@ class T25ExitAdvisory:
     exit_window: str         # e.g. "ATC 14:43"
     exit_pct: float          # fraction to exit (0.0–1.0)
     remark: str = ""
-    ts: datetime = field(default_factory=datetime.now)
+    # [BUG-21 FIX] Use vn_now() so the advisory timestamp is always in VN timezone
+    # (UTC+7). Using bare datetime.now() returns a naive local-system timestamp
+    # which is incorrect on non-VN servers and inconsistent with all other VN-aware
+    # helpers in this module (vn_now, vn_is_atc_time).
+    ts: datetime = field(default_factory=vn_now)
 
 
 def _is_atc_time() -> bool:
@@ -205,10 +209,13 @@ def compute_t25_entry_score(
             return []
 
     def _nbar(col: str, offset: int) -> float | None:
+        # [BUG-7 FIX] iloc[-offset] returns (offset-1) bars ago because iloc[-1] is
+        # the current bar.  e.g. offset=5: iloc[-5] = 4 bars ago, not 5.
+        # Correct: iloc[-(offset+1)] for true "offset bars ago" semantics.
         try:
-            if col not in df.columns or len(df) <= offset:
+            if col not in df.columns or len(df) <= offset + 1:
                 return None
-            v = df[col].iloc[-offset]
+            v = df[col].iloc[-(offset + 1)]
             return None if pd.isna(float(v)) else float(v)
         except Exception:
             return None
@@ -221,10 +228,7 @@ def compute_t25_entry_score(
     stoch_k  = _f("STOCH_K")
     stoch_k_arr = _arr("STOCH_K", 3)
     stoch_d_arr = _arr("STOCH_D", 3)
-    wr       = _f("WILLIAMS_R")
-    wr_5bar  = _nbar("WILLIAMS_R", 5)
-    cci_now  = _f("CCI")
-    cci_4bar = _nbar("CCI", 4)
+    # W%R and CCI removed from Group A — they triple-count with RSI for oversold
     ema9     = _f("EMA9");  ema21    = _f("EMA21")
     sma20    = _f("SMA20"); sma50    = _f("SMA50"); sma200 = _f("SMA200")
     bb_lower = _f("BB_lower"); bb_mid = _f("BB_mid")
@@ -232,7 +236,8 @@ def compute_t25_entry_score(
 
     vol_last  = _f("volume")
     vol_avg20 = float(df["volume"].tail(20).mean()) if "volume" in df.columns else None
-    vol_ratio = (vol_last / vol_avg20) if (vol_last and vol_avg20 and vol_avg20 > 0) else None
+    # [BUG-12 FIX] Use `is not None` guards — truthiness skips valid 0.0 values.
+    vol_ratio = (vol_last / vol_avg20) if (vol_last is not None and vol_avg20 is not None and vol_avg20 > 0) else None
     pct_chg   = None
     try:
         pct_chg = float(df["close"].pct_change().iloc[-1]) * 100
@@ -269,6 +274,10 @@ def compute_t25_entry_score(
     div_pts    = int((pattern_result or {}).get("rsi_div_pts", 0))
 
     # ── Group A: MOMENTUM (max 20 pts) ───────────────────────────────────────
+    # [VN-FIX] In BEAR_TREND, recovery oscillator signals (RSI bounce, Stoch cross)
+    # are unreliable — VN stocks under margin pressure continue falling.
+    # Block positive oscillator recovery pts; MACD and volume signals still count.
+    bear_regime = (regime == "BEAR_TREND")
     A: float = 0.0
     A_c: list[str] = []
     mh = mh_arr
@@ -279,24 +288,24 @@ def compute_t25_entry_score(
         if   mh[-3] < 0 < mh[-1]:  A += 4; A_c.append("MACD_cross↑")
         elif mh[-3] > 0 > mh[-1]:  A -= 2
     if rsi is not None and rsi_5bar is not None:
-        if   40 <= rsi <= 60 and rsi > rsi_5bar: A += 3; A_c.append(f"RSI_rec={rsi:.0f}")
-        elif 35 <= rsi < 40:                      A += 5; A_c.append(f"RSI_deep={rsi:.0f}")
+        if not bear_regime:
+            if   40 <= rsi <= 60 and rsi > rsi_5bar: A += 3; A_c.append(f"RSI_rec={rsi:.0f}")
+            elif 35 <= rsi < 40:                      A += 5; A_c.append(f"RSI_deep={rsi:.0f}")
+        elif rsi < 35:
+            A -= 3  # deep oversold in bear = sustained pressure, not bounce
     if vol_ratio is not None and pct_chg is not None:
         if   vol_ratio > 2.0 and pct_chg > 0: A += 5; A_c.append(f"BreakoutVol={vol_ratio:.1f}x")
         elif vol_ratio > 1.5 and pct_chg > 0: A += 3; A_c.append(f"BullVol={vol_ratio:.1f}x")
+    # [VN-FIX] Stoch cross only valid outside bear regime (W%R + CCI removed — triple-count)
     try:
-        if (stoch_k is not None and len(stoch_k_arr) >= 2 and len(stoch_d_arr) >= 2
+        if (not bear_regime
+                and stoch_k is not None and len(stoch_k_arr) >= 2 and len(stoch_d_arr) >= 2
                 and stoch_k_arr[-1] > stoch_d_arr[-1]
                 and stoch_k_arr[-2] < stoch_d_arr[-2]
                 and stoch_k < 40):
             A += 3; A_c.append(f"Stoch_cross={stoch_k:.0f}")
     except Exception:
         pass
-    if wr is not None and -80 <= wr <= -50 and wr_5bar is not None and wr > wr_5bar:
-        A += 2; A_c.append(f"W%R_rec={wr:.0f}")
-    if cci_now is not None and cci_4bar is not None:
-        if   cci_now > 0 and cci_4bar < 0:  A += 2; A_c.append("CCI_cross↑0")
-        elif cci_now < 0 and cci_4bar > 0:  A -= 2
     A = max(0.0, min(20.0, A))
 
     # ── Group B: STRUCTURE (max 20 pts) ──────────────────────────────────────
@@ -441,20 +450,24 @@ def compute_t25_multiframe(
         vol_avg20 = float(df["volume"].tail(20).mean()) if "volume" in df.columns else None
     except Exception:
         vol_avg20 = None
-    vol_ratio = (vol_now / vol_avg20) if (vol_now and vol_avg20 and vol_avg20 > 0) else 1.0
+    # [BUG-14 FIX] Use is not None guard (truthiness skips vol_now=0.0 valid value).
+    # Default to 0.0 not 1.0: zero volume is not "neutral" — it signals no liquidity.
+    vol_ratio = (vol_now / vol_avg20) if (vol_now is not None and vol_avg20 is not None and vol_avg20 > 0) else 0.0
 
     vwap_slope = float(vwap.get("vwap_intraday_slope") or 0.0)
+    # Bear regime from T25 result (already computed in compute_t25_entry_score)
+    bear_regime = (regime == "BEAR_TREND")
 
     reasons: list[str] = []
 
     # ── Morning window score ───────────────────────────────────────────────
     # Momentum + structure alignment → favours breakout entries at open
     morning = base_score * 0.55  # inherit 55% from T+2.5 entry score
-    if rsi and 40 <= rsi <= 65:
+    if rsi is not None and 40 <= rsi <= 65:
         morning += 10; reasons.append("RSI vùng tích lũy — sáng phù hợp mua breakout")
-    if mh_last and mh_last > 0:
+    if mh_last is not None and mh_last > 0:
         morning += 8
-    if adx and adx > 25:
+    if adx is not None and adx > 25:
         morning += 7
     if t25_sig == "T25_BUY":
         morning += 15; reasons.append("T+2.5 tín hiệu mua mạnh — sáng là cửa sổ tốt")
@@ -471,10 +484,13 @@ def compute_t25_multiframe(
         midday += 10; reasons.append(f"VWAP nội phiên đi lên (slope={vwap_slope:+.2f})")
     elif vwap_slope < 0:
         midday -= 8
-    if rsi and rsi < 45:
-        midday += 5  # oversold = potential bounce at midday
-    if stoch_k and stoch_k < 30:
-        midday += 8; reasons.append("Stoch quá bán — bounce giữa phiên có thể xảy ra")
+    # [VN-8 FIX] Gate oversold bounces — in BEAR_TREND, midday oversold scores promote
+    # knife-catching under margin-call cascades. Block positive oversold pts in bear.
+    if not bear_regime:
+        if rsi is not None and rsi < 45:
+            midday += 5  # oversold = potential bounce at midday
+        if stoch_k is not None and stoch_k < 30:
+            midday += 8; reasons.append("Stoch quá bán — bounce giữa phiên có thể xảy ra")
     midday = min(100.0, max(0.0, midday))
 
     # ── Afternoon window score (continuation / ATC fade) ──────────────────
@@ -482,11 +498,11 @@ def compute_t25_multiframe(
     afternoon = base_score * 0.45
     if t25_sig in ("T25_BUY",):
         afternoon += 12
-    if adx and di_plus and di_minus and adx > 20 and di_plus > di_minus:
+    if adx is not None and di_plus is not None and di_minus is not None and adx > 20 and di_plus > di_minus:
         afternoon += 10; reasons.append("Xu hướng tăng rõ — chiều là cửa sổ tích cực")
     if vol_ratio > 1.5:
         afternoon += 8; reasons.append(f"Khối lượng chiều cao ({vol_ratio:.1f}x)")
-    if rsi and rsi > 70:
+    if rsi is not None and rsi > 70:
         afternoon -= 8  # overbought — risky to buy near ATC
     afternoon = min(100.0, max(0.0, afternoon))
 

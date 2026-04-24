@@ -778,15 +778,25 @@ Thay vì dồn toàn bộ vốn vào một lần, hệ thống chia lệnh vào 
 
 ### Các bộ lọc người dùng
 
+**Nhóm 1 — Form quét ban đầu:**
+
 | Bộ lọc | Mặc định | Ý nghĩa |
 |---|---|---|
+| Danh sách mã tùy chọn | Trống | Nếu để trống, hệ thống quét toàn sàn đã chọn; nếu nhập mã, chỉ quét đúng danh sách đó |
 | Sàn (Exchange) | HOSE | Quét HOSE, HNX, hoặc cả hai |
-| Action tối thiểu | Hiển thị tất cả | Chỉ hiện BUY trở lên, hoặc tất cả |
-| MFPM tối thiểu | 0 | Lọc theo điểm tổng hợp |
-| SMS tối thiểu | 0 | Lọc theo điểm smart money |
-| Stealth Only | Tắt | Chỉ hiện mã có tích lũy ẩn |
-| Bao gồm AMF Blocked | Có | Ẩn/hiện mã bị gắn cờ thao túng |
-| Giới hạn kết quả | 30 mã | Số mã mặc định trả về (có thể điều chỉnh) |
+| MFPM tối thiểu | 0 | Lọc theo điểm tổng hợp ngay từ lúc tạo request |
+| SMS tối thiểu | 0 | Lọc theo điểm smart money ngay từ lúc tạo request |
+| Workers | 8 | Số worker chạy song song cho quá trình scan |
+
+**Nhóm 2 — Hậu lọc sau khi có kết quả:**
+
+| Bộ lọc | Mặc định | Ý nghĩa |
+|---|---|---|
+| Action | Tất cả | Lọc lại kết quả theo nhóm tín hiệu |
+| Mode | Tất cả | Lọc theo `MODE_A`, `MODE_B`, `MODE_W` |
+| Stealth Accum only | Tắt | Chỉ hiện mã có tích lũy ẩn |
+
+> **Lưu ý:** Ở UI hiện tại, Scanner luôn hiển thị cả mã `NO_ACTION` và luôn bao gồm cả mã bị AMF chặn trong kết quả gốc; người dùng hậu lọc trên bảng sau khi scan xong.
 
 ### Sắp xếp kết quả
 
@@ -802,9 +812,15 @@ Trong mỗi nhóm → sắp xếp theo MFPM score từ cao xuống thấp
 
 ### Các cột hiển thị trong bảng scanner
 
-`Mã | Action | Conf | MFPM | Macro | Sector | BCTC | W-Score | SMS | Mode | Giá | Vào | SL | TP1 | R:R | AMF | Pattern | HMM | Stealth | T+ Setup | T+ Verdict | T+ Conf | CVD | Tóm tắt NLP`
+`Mã | Action | Conf | MFPM | Macro | MacroScore | Sector Flow | BCTC Risk | FundScore | W-Score | SMS | SMS Label | Mode | Giá | Vào | SL | TP1 | R:R | AMF | Pattern | HMM | Stealth | T+ Setup | T+ Verdict | T+ Conf | CVD | Tóm tắt NLP`
 
 > **Cột CVD mới (2026-04-22):** Hiển thị tín hiệu CVD trong phiên (`BUYING` / `NEUTRAL` / `DISTRIBUTING`) cho phép lọc nhanh mã nào đang có dòng tiền vào trong phiên. Cột này lấy từ kết quả tính toán CVD Engine (Mục 4.5).
+
+**Chức năng phụ hiện có trong UI:**
+- Xuất kết quả ra CSV.
+- Hiển thị breakdown số lượng mã theo từng `Action`.
+- Hiển thị tối đa 20 tóm tắt NLP cho nhóm `STRONG_BUY` / `BUY` / `WATCH`.
+- Cho phép mở thẳng Profiler từ từng dòng kết quả.
 
 ---
 
@@ -814,17 +830,17 @@ Khi tra cứu một mã cụ thể, hệ thống hiển thị **13 tab** phân t
 
 | Tab | Nội dung |
 |---|---|
-| **📋 Horizon** | Bảng kế hoạch giao dịch theo thời gian (2d/3d/5d/7d/10d/15d): Action, Entry, SL, TP1, TP2 |
+| **📋 Horizon** | Bảng kế hoạch giao dịch theo thời gian (mặc định: 2d/3d/4d/5d/7d/10d/15d): Action, Entry, SL, TP1, TP2 |
 | **📊 SMS / M-CVD** | Biểu đồ dòng tiền cá voi, điểm SMS, M-CVD, phân kỳ giá-flow |
 | **🔬 SHAP** | Đóng góp của từng yếu tố vào điểm MFPM (phân tích nguyên nhân tín hiệu) |
-| **🧭 Overlay** | Biểu đồ nến với các đường MA, Bollinger, VWAP overlay |
+| **🧭 Overlay** | **Tên tab hiện tại còn giữ là “Overlay”, nhưng nội dung đang hiển thị snapshot vĩ mô / BCTC / fundamental / sector flow**, không phải chart overlay riêng |
 | **📈 Chỉ số** | Bảng giá trị tất cả chỉ báo kỹ thuật |
 | **📝 NLP Insights** | Phân tích toàn diện viết bằng ngôn ngữ tự nhiên tiếng Việt |
 | **🔰 Giải thích F0** | Giải thích đơn giản dành cho nhà đầu tư mới |
 | **⚡ T+2.5** | Điểm T+2.5, tín hiệu, phân tích 3 phiên (sáng/trưa/chiều) |
 | **⚠️ Trend Warning** | Cảnh báo cấu trúc xu hướng hiện tại + lý do |
 | **🔭 Dự báo** | Vote 3 khung: Ngắn / Trung / Dài hạn + Overall |
-| **🎯 T+ Setup** | Phán quyết T+ (MUA_NGAY/CHO_XAC_NHAN/THEO_DOI/TRANH_XA), vùng vào lệnh, mục tiêu, SL, phiên tốt nhất |
+| **🎯 T+ Setup** | Trạng thái kỹ thuật T+ (`MUA_NGAY` / `CHO_XAC_NHAN` / `THEO_DOI` / `TRANH_XA`), vùng vào lệnh, mục tiêu, SL, phiên tốt nhất |
 | **📊 CVD Intraday** *(Mới)* | Tín hiệu CVD trong phiên: BUYING/NEUTRAL/DISTRIBUTING, badge chất lượng dữ liệu (Real Flow / Proxy), % áp lực mua, phân kỳ CVD, CVD Score 0–10 |
 | **📖 Sổ lệnh** *(Mới)* | Order Book Imbalance: OBI%, tín hiệu BUYING_PRESSURE/BALANCED/SELLING_PRESSURE. Yêu cầu FiinQuant — hiển thị thông báo nếu chưa kết nối. |
 
@@ -892,10 +908,10 @@ FORCED_EXIT > EXIT > BLOCK (AMF) > Distribution Warning > Macro Gate
 
 | Giá trị | Tiếng Anh | Ý nghĩa tiếng Việt |
 |---|---|---|
-| `MUA_NGAY` | Buy Now | Vào lệnh khi giá xác nhận trigger |
-| `CHO_XAC_NHAN` | Wait for Confirmation | Chờ nến/KL phiên tiếp xác nhận |
-| `THEO_DOI` | Monitor | Đưa vào watchlist |
-| `TRANH_XA` | Avoid | Không giao dịch T+ mã này |
+| `MUA_NGAY` | Entry Timing Ready | Thích hợp giải ngân T+ ngay nếu người dùng muốn mở vị thế mới |
+| `CHO_XAC_NHAN` | Wait for Confirmation | Setup đang hình thành nhưng cần thêm xác nhận nến/khối lượng |
+| `THEO_DOI` | Monitor | Theo dõi tín hiệu T+, chưa đủ điều kiện vào |
+| `TRANH_XA` | Avoid | Không có điểm vào T+ an toàn ở thời điểm hiện tại |
 
 ### 19.3 Nhóm trường chính trong TickerProfile
 
@@ -912,7 +928,7 @@ FORCED_EXIT > EXIT > BLOCK (AMF) > Distribution Warning > Macro Gate
 | **T+ Setup** | `tplus_setup`, `tplus_verdict`, `tplus_entry_low`, `tplus_entry_high`, `tplus_target_t25`, `tplus_target_t5`, `tplus_stop`, `tplus_rr`, `tplus_confidence`, `tplus_session_vi` |
 | **CVD & OBI** *(Mới)* | `cvd_signal`, `cvd_divergence`, `cvd_buying_pressure_pct`, `cvd_score`, `cvd_data_quality`, `obi_pct`, `obi_signal`, `data_source_intraday` |
 | **Dự báo** | `fc_short_vote`, `fc_short_conf`, `fc_mid_vote`, `fc_mid_conf`, `fc_long_vote`, `fc_long_conf`, `fc_overall_vote` |
-| **Xu hướng** | `trend_warning`, `trend_warning_confidence`, `trend_warning_reasons` |
+| **Xu hướng** | `trend_warning`, `trend_warning_conf`, `trend_warning_reasons` |
 | **NLP** | `advisory_text`, `entry_window` |
 | **Sizing** | `sizing_pct`, `sizing_shares` |
 
@@ -1008,6 +1024,11 @@ Hệ thống **không bao giờ crash** khi thiếu nguồn — luôn tự độ
 
 Trang cũng hiển thị danh sách giao dịch đang mở (OPEN) và đã đóng (CLOSED) với PnL từng lệnh.
 
+**Tính năng hiện có thêm trong UI:**
+- Breakdown hiệu suất theo từng `signal_mode`.
+- Biểu đồ **Confidence Calibration**: đối chiếu `HIGH / MEDIUM / LOW` với tỷ lệ thắng thực tế trong trade ledger + audit log.
+- Bộ lọc hiển thị `Tất cả / OPEN / CLOSED` cho trade ledger.
+
 > **Lưu ý:** Đây là **paper trading** (giao dịch ảo). Hệ thống tự ghi nhận tín hiệu và theo dõi đến khi đạt SL/TP để tính toán hiệu suất.
 
 ### 22.2 Trang Dòng tiền — Money Flow Dashboard
@@ -1040,7 +1061,7 @@ So sánh hiệu quả 3 chế độ giao dịch (Mode A/B/W) trên dữ liệu l
 
 **Ràng buộc VN được tích hợp:**
 - **T+3:** Lệnh mua ngày T → thoát sớm nhất ngày T+2 (không cho phép thoát T+0 hoặc T+1)
-- **LOCK_SAN Simulation:** 5% trường hợp mô phỏng giá lock sàn → lệnh không khớp được (synthetic miss) — phản ánh rủi ro thực của thị trường VN
+- **LOCK_SAN Simulation:** Engine backtest dùng xác suất lock sàn **theo tier thanh khoản** (mã thanh khoản thấp có xác suất cao hơn mã thanh khoản cao). Đây vẫn là mô phỏng `synthetic miss`, nhưng gần thực tế VN hơn mô hình cố định 5% cho mọi mã.
 
 ### 22.4 Trang Audit — Nhật ký Sự kiện
 
@@ -1060,7 +1081,7 @@ Toàn bộ sự kiện của hệ thống được ghi vào **DuckDB** và có t
 |---|---|
 | **Config** | Xem cấu hình chiến lược hiện tại (strategy.yaml) theo từng section |
 | **Watchlist** | Thêm/xóa mã theo dõi — danh sách này được dùng chung trong trang Dòng tiền |
-| **DuckDB** | Xem danh sách các bảng database — kiểm tra trạng thái lưu trữ |
+| **Database** | Xem danh sách các bảng trong DuckDB và trạng thái lưu trữ hiện tại |
 
 ---
 

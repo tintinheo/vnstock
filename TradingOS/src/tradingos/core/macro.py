@@ -32,8 +32,13 @@ from ..utils.logging import get_logger
 log = get_logger("macro")
 
 # ── Regime thresholds (readable from strategy.yaml) ─────────────────────────
-_ACCOMMODATIVE_THRESHOLD = 30   # score > this → ACCOMMODATIVE
-_RESTRICTIVE_THRESHOLD   = -30  # score < this → RESTRICTIVE
+# [BUG-24 FIX] These were hardcoded at ±30, but config has accommodative_min=15
+# and restrictive_max=-15.  Using hardcoded ±30 meant the macro regime would
+# switch 2× too late (score had to be twice as extreme as the config specifies).
+# Now _regime_from_score() reads from config at call time so strategy.yaml is
+# the single source of truth.  Module-level constants kept only as fallbacks.
+_ACCOMMODATIVE_THRESHOLD = 15   # fallback; real value comes from config
+_RESTRICTIVE_THRESHOLD   = -15  # fallback; real value comes from config
 _HYSTERESIS              = 10   # must cross threshold by this much to change regime
 
 
@@ -146,25 +151,36 @@ def _score_bond_yield(df: pd.DataFrame) -> tuple[float, str]:
 
 
 def _staleness_penalty(staleness_days: int) -> float:
-    """Reduce score magnitude by 5pts/day after 3 days."""
-    if staleness_days <= 3:
+    """Reduce score magnitude by cfg-driven pts/day after grace period."""
+    # [BUG-26 FIX] Read staleness constants from config (strategy.yaml macro section)
+    # instead of hardcoding 3, 5, 40.  Values happen to be identical but must flow
+    # through a single source of truth per SRS §9.4.
+    grace    = int(cfg.strategy("macro", "staleness_grace_days",  default=3))
+    pts_day  = float(cfg.strategy("macro", "staleness_pts_per_day", default=5))
+    cap      = float(cfg.strategy("macro", "staleness_cap_pts",     default=40))
+    if staleness_days <= grace:
         return 0.0
-    return float(min((staleness_days - 3) * 5, 40))   # cap penalty at 40
+    return float(min((staleness_days - grace) * pts_day, cap))
 
 
 def _regime_from_score(score: float, prev_regime: str = "NEUTRAL") -> str:
     """Map continuous score to regime with hysteresis."""
-    # Hysteresis: only change regime when crossing threshold by _HYSTERESIS
+    # [BUG-24 FIX] Read thresholds from config so strategy.yaml is the sole
+    # source of truth.  Old module constants were ±30; config specifies ±15.
+    acc_thr  = float(cfg.strategy("macro", "accommodative_min", default=_ACCOMMODATIVE_THRESHOLD))
+    rest_thr = float(cfg.strategy("macro", "restrictive_max",   default=_RESTRICTIVE_THRESHOLD))
+    hyst     = float(_HYSTERESIS)
+    # Hysteresis: only change regime when crossing threshold by hyst
     if prev_regime == "ACCOMMODATIVE":
-        if score < _ACCOMMODATIVE_THRESHOLD - _HYSTERESIS:
+        if score < acc_thr - hyst:
             return "NEUTRAL"
     elif prev_regime == "RESTRICTIVE":
-        if score > _RESTRICTIVE_THRESHOLD + _HYSTERESIS:
+        if score > rest_thr + hyst:
             return "NEUTRAL"
 
-    if score > _ACCOMMODATIVE_THRESHOLD:
+    if score > acc_thr:
         return "ACCOMMODATIVE"
-    elif score < _RESTRICTIVE_THRESHOLD:
+    elif score < rest_thr:
         return "RESTRICTIVE"
     return "NEUTRAL"
 
@@ -292,22 +308,22 @@ def compute_macro_regime(
 
 def macro_sizing_multiplier(macro_result: MacroResult) -> float:
     """
-    Return a multiplier (0.3 – 1.0) to apply to kelly_max_pct.
-
-    ACCOMMODATIVE → 1.0  (full sizing)
-    NEUTRAL        → 0.75
-    RESTRICTIVE    → 0.40 (severely reduced)
-    LOW confidence → further 0.80 haircut on any regime
-
-    Example: RESTRICTIVE + LOW → 0.40 × 0.80 = 0.32
+    Return a multiplier (0.32–1.0) to apply to kelly_max_pct.
+    Reads multipliers from strategy.yaml (macro section).
     """
+    # [BUG-25 FIX] Hardcoded NEUTRAL=0.75 and RESTRICTIVE=0.40 disagree with config
+    # sizing_neutral=0.65 and sizing_restrictive=0.32.  Read from config so all
+    # threshold changes flow through a single source of truth per SRS §9.4.
     if macro_result is None:
         return 1.0
+    acc_mult  = float(cfg.strategy("macro", "sizing_accommodative", default=1.00))
+    neu_mult  = float(cfg.strategy("macro", "sizing_neutral",       default=0.65))
+    rest_mult = float(cfg.strategy("macro", "sizing_restrictive",   default=0.32))
     regime_mult = {
-        "ACCOMMODATIVE": 1.00,
-        "NEUTRAL":        0.75,
-        "RESTRICTIVE":    0.40,
-    }.get(macro_result.macro_regime, 0.75)
+        "ACCOMMODATIVE": acc_mult,
+        "NEUTRAL":       neu_mult,
+        "RESTRICTIVE":   rest_mult,
+    }.get(macro_result.macro_regime, neu_mult)
 
     confidence_mult = {
         "HIGH":   1.00,

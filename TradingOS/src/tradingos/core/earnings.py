@@ -18,8 +18,9 @@ This module:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from enum import Enum
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -72,14 +73,20 @@ def compute_earnings_risk(
     and gate_delta fields populated.
     """
     if current_date is None:
-        current_date = date.today()
+        # [BUG-11 FIX] Using VN timezone (UTC+7) instead of the system clock.
+        # A UTC server past 17:00 UTC would return the next calendar day,
+        # shifting CAUTION/HIGH_RISK windows incorrectly by one day.
+        current_date = datetime.now(ZoneInfo("Asia/Ho_Chi_Minh")).date()
 
     # Thresholds from strategy.yaml (with sensible defaults)
     caution_days   = int(cfg.strategy("earnings", "caution_days_before",   default=14))
     high_risk_days = int(cfg.strategy("earnings", "high_risk_days_before", default=5))
 
-    # Lazy-fetch if not provided
-    if earnings_df is None or earnings_df.empty:
+    # [BUG-EARN FIX] Only lazy-fetch when earnings_df was NOT provided at all.
+    # Previously, an explicitly-passed empty DataFrame still triggered a live fetch,
+    # which returned CAUTION from the real fiscal calendar even when the caller
+    # intended "no upcoming events" (e.g., tests or offline contexts).
+    if earnings_df is None:
         try:
             from ..data.fetcher import fetch_earnings_calendar
             earnings_df = fetch_earnings_calendar(ticker, lookforward_days=caution_days + 5)

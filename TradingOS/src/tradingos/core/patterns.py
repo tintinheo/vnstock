@@ -223,8 +223,10 @@ def second_mouse_gate(df: pd.DataFrame, breakout_level: float, lookback: int = 5
     avg_vol = recent["volume"].mean()
 
     # Find the first bar that broke and closed above the level
+    # [BUG-28 FIX] Start at i=1 to avoid iloc[i-1] wrapping to the last row when i=0,
+    # which caused false breakout detection using an unrelated bar's low.
     breakout_bar_idx = -1
-    for i in range(len(recent)):
+    for i in range(1, len(recent)):
         if recent["close"].iloc[i] > breakout_level and recent["low"].iloc[i-1] < breakout_level:
             breakout_bar_idx = i
             break

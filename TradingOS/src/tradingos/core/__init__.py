@@ -11,7 +11,7 @@ from .money_flow import (
 from .patterns import detect_all as detect_patterns
 from .gmo import detect_hmm_state, compute_omega, compute_vn30f_basis
 from .mfpm import compute_mfpm
-from .sizing import compute_position_size, progressive_entry_plan
+from .sizing import compute_position_size, progressive_entry_plan, compute_atr_position_size
 from .gap_vwap import (
     detect_gaps,
     compute_vwap_result,
@@ -33,6 +33,7 @@ from .horizon_forecast import compute_multi_horizon_forecast
 from .t_plus_engine import compute_tplus_recommendation
 from .intraday_cvd import compute_intraday_cvd
 from .orderbook import compute_order_book_imbalance
+from .risk_model import compute_var, calibrate_stop_with_var
 
 __all__ = [
     "compute_indicators",
@@ -42,7 +43,7 @@ __all__ = [
     "detect_patterns",
     "detect_hmm_state", "compute_omega", "compute_vn30f_basis",
     "compute_mfpm",
-    "compute_position_size", "progressive_entry_plan",
+    "compute_position_size", "progressive_entry_plan", "compute_atr_position_size",
     "detect_gaps", "compute_vwap_result", "compute_vwap_intraday_result",
     "compute_monthly_pivots", "compute_fibonacci_levels",
     "t25_exit_check", "compute_t25_entry_score", "compute_t25_multiframe",
@@ -61,4 +62,5 @@ __all__ = [
     "compute_tplus_recommendation",
     "compute_intraday_cvd",
     "compute_order_book_imbalance",
+    "compute_var", "calibrate_stop_with_var",
 ]

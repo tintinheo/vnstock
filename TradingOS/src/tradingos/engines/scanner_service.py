@@ -28,7 +28,7 @@ from ..core import (
     compute_tplus_recommendation,
 )
 from ..core.money_flow import compute_multiday_whale_flow, compute_whale_net_from_pt_deals
-from .money_flow_service import MoneyFlowService, sector_flow_lookup
+from .money_flow_service import MoneyFlowService, sector_flow_lookup, infer_sector_name
 from ..utils.logging import get_logger
 from ..utils.config import cfg
 
@@ -172,12 +172,13 @@ class ScannerService:
                 continue
             if request.min_action and _ACTION_RANK.get(item.action, 9) > _min_action_rank:
                 continue
-            if request.sector_filter and item.ticker not in [
-                t for t in request.sector_filter
-            ]:
-                # sector_filter is a list of sectors; filter by item.sector_flow is not
-                # available in ScanResultItem, so honour it as a ticker allow-list when set
-                pass  # sector_filter applied at universe stage — no per-item sector field yet
+            # [BUG-A FIX] sector_filter now filters by canonical sector name
+            # (e.g. "Ngân hàng", "BĐS", "Thép") populated via infer_sector_name().
+            # Old behavior was a ticker allow-list (misleading field name from BUG-3).
+            # If no sector could be resolved (item.sector == ""), the item passes
+            # the filter to avoid silently dropping tickers with unmapped sectors.
+            if request.sector_filter and item.sector and item.sector not in request.sector_filter:
+                continue
             if request.stealth_only and not item.stealth_accum:
                 continue
             if not request.include_blocked and item.amf_decision == "BLOCK":
@@ -236,10 +237,17 @@ class ScannerService:
             log.debug(f"FOL merge skipped for {ticker}: {_fol_err}")
 
         mcvd = compute_multiday_whale_flow(flow_df)
+        # [BUG-33 FIX] Scanner historically omitted cvd_today/cvd_data_quality, while
+        # Profiler pre-fetches intraday CVD and passes it.  Adding full intraday fetch
+        # inside the scanner's per-ticker hot loop is too expensive for batch scanning.
+        # Pass explicit None/"NONE" defaults so the call signature matches Profiler
+        # and any future scanner upgrade can slot in real CVD without logic change.
         sms_result = compute_smart_money_score(
             ticker, df, flow_df,
             pt_deals_df=pt_deals_df, order_book=None, quote=None,
             amd_phase=amd,
+            cvd_today=None,
+            cvd_data_quality="NONE",
         )
         sms_raw = sms_result.get("sms", 0)
 
@@ -260,13 +268,24 @@ class ScannerService:
         sector_flow = sector_flow_lookup(sector_rotation or {"rankings": []}, ticker)
         sms_result["sector_flow"] = sector_flow
 
+        # [BUG-A FIX] Resolve canonical sector name so Stage 8 can filter by sector
+        # (e.g. "Ngân hàng", "BĐS") rather than using a ticker allow-list.
+        ticker_sector = infer_sector_name(ticker)
+
         earnings_risk = compute_earnings_risk(
             ticker,
             earnings_df=fetch_earnings_calendar(ticker, lookforward_days=30),
         )
+        # [BUG-32 FIX] Profiler passes fol_pct (foreign ownership limit) to
+        # compute_fundamental_snapshot so the foreign room penalty can be applied.
+        # Scanner was calling without fol_pct, producing different fundamental scores
+        # for the same ticker at the same time.  Use fol_pct from sms_result (already
+        # populated by compute_smart_money_score via flow data).
+        _fol_pct = float(sms_result.get("fol_pct", 0.0))
         fundamental_snapshot = compute_fundamental_snapshot(
             ticker,
             statements=fetch_financial_statements(ticker, quarters=8),
+            fol_pct=_fol_pct,
         )
 
         mfpm = compute_mfpm(
@@ -275,15 +294,22 @@ class ScannerService:
                 **sms_result,
                 "stealth_detail": stealth,
                 "distribution_warning": dist_warning,
-                # [D8 FIX] Use actual data_source tag from sms_result, not hardcoded.
-                "mcvd_detail": {**mcvd, "data_source": sms_result.get("data_source", "PROXY_OHLCV")},
+                # [BUG-13 FIX] data_source lives in mcvd_detail (returned by
+                # compute_multiday_whale_flow), not at sms_result top level.
+                # Reading sms_result.get("data_source") always returned None and
+                # fell back to PROXY_OHLCV — same root cause as BUG-10 in profiler.
+                "mcvd_detail": {**mcvd, "data_source": mcvd.get("data_source", "PROXY_OHLCV")},
             },
             amf_result=amf,
             pattern_result=pattern_result,
             hmm_state=hmm,
             amd_phase=amd,
             sector_flow=sector_flow,
-            horizons=[5],
+            # [BUG-31 FIX] Scanner was forcing horizons=[5] while Profiler uses
+            # request.horizons or [2,3,5,7,10].  This caused systematically different
+            # action/confidence scores between scan and profile for the same ticker.
+            # Scanner now uses the same multi-horizon default as Profiler.
+            horizons=[2, 3, 5, 7, 10],
             macro_result=macro_result,
             earnings_risk=earnings_risk,
             fundamental_snapshot=fundamental_snapshot,
@@ -315,6 +341,7 @@ class ScannerService:
             sms_label=sms_result.get("sms_label", "RETAIL_DRIVEN"),
             signal_mode=mfpm["signal_mode"],
             stealth_accum=bool(stealth.get("detected", False)),
+            sector=ticker_sector,
             close=float(last["close"]),
             entry=mfpm["entry"],
             sl=mfpm["sl"],

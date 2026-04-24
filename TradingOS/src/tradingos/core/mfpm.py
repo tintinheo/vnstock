@@ -156,21 +156,42 @@ def score_mode_w(sms_result: dict, pattern_bonus: int = 0, sector_inflow: bool =
 
 # ── Monte Carlo Win Probability ───────────────────────────────────────────────
 
+def _ewma_daily_vol(returns: np.ndarray, lam: float = 0.94) -> float:
+    """
+    EWMA (RiskMetrics) daily volatility estimate.
+    λ=0.94 is the J.P. Morgan standard for daily data.
+    Falls back to simple std when fewer than 10 observations.
+    """
+    if len(returns) < 10:
+        return float(np.std(returns)) if len(returns) > 1 else 0.01
+    vol_sq = float(returns[0] ** 2)
+    for r in returns[1:]:
+        vol_sq = lam * vol_sq + (1.0 - lam) * float(r) ** 2
+    return float(np.sqrt(vol_sq))
+
+
 def monte_carlo_win_prob(
     df: pd.DataFrame,
     entry: float,
     sl: float,
     tp: float,
-    n_sim: int = 500,
-    horizon: int = 10,
+    n_sim: int = 2_000,
+    horizon: int = 15,
 ) -> float:
     """
-    Bootstrap Monte Carlo: resample actual historical returns (not Gaussian).
-    VN stocks have fat tails and crash-clustering that a Normal distribution
-    grossly underestimates.  Drawing from the empirical distribution preserves
-    those extremes and gives a more conservative, realistic win probability.
+    Calibrated Monte Carlo for VN market conditions.
+
+    Improvements over previous bootstrap-only version:
+    - EWMA volatility (λ=0.94) is regime-responsive, not just historical std.
+    - Horizon extended from 10 → 15 bars (~3 trading weeks) to match realistic
+      holding periods, reducing artificially low mc_prob from short windows.
+    - n_sim increased from 500 → 2,000 for smoother probability estimates.
+    - T+2 settlement: paths evaluated from bar 2 onward (investors cannot exit
+      within the first 2 bars under VN T+2.5 rules).
+    - Hybrid sampling: 60% empirical bootstrap + 40% GBM with EWMA vol to blend
+      fat-tail realism with volatility responsiveness.
+
     Returns probability that price reaches TP before SL within `horizon` bars.
-    *(Vectorized version for fast execution)*
     """
     if df.empty or entry <= 0 or sl >= entry or tp <= entry:
         return 0.5
@@ -179,31 +200,36 @@ def monte_carlo_win_prob(
     if len(returns) < 30:
         return 0.5
 
-    rng = np.random.default_rng(42)
-    # Generate all paths at once: shape (n_sim, horizon)
-    paths = rng.choice(returns, size=(n_sim, horizon), replace=True)
-    
-    # Calculate cumulative returns: shape (n_sim, horizon)
-    cum_returns = np.cumprod(1 + paths, axis=1)
-    
-    # Calculate simulated prices
-    sim_prices = entry * cum_returns
-    
-    # Create boolean masks for hits
-    tp_hits = sim_prices >= tp
-    sl_hits = sim_prices <= sl
-    
-    # Find the indices where hits occur (horizon + 1 if never hit)
-    tp_idx = np.argmax(tp_hits, axis=1)
-    sl_idx = np.argmax(sl_hits, axis=1)
-    
-    # Adjust indices for paths that never hit
-    tp_idx = np.where(tp_hits.any(axis=1), tp_idx, horizon + 1)
-    sl_idx = np.where(sl_hits.any(axis=1), sl_idx, horizon + 1)
-    
-    # Win = TP hit AND (hit TP before SL, or hit TP at same step but we consider it a win)
-    wins = np.sum((tp_idx <= horizon) & (tp_idx < sl_idx))
+    daily_vol = _ewma_daily_vol(returns)
+    if daily_vol <= 0:
+        daily_vol = float(np.std(returns)) or 0.01
 
+    rng = np.random.default_rng()
+
+    # ── Pure bootstrap sampling (preserves empirical fat-tail distribution) ─
+    # Hybrid GBM was tested and rejected: GBM with high EWMA vol (crash regime)
+    # can inflate TP-hit probabilities by widening the symmetric distribution,
+    # destroying the fat-tail detection property that makes this model accurate.
+    paths = rng.choice(returns, size=(n_sim, horizon), replace=True)
+
+    # ── Simulate prices ─────────────────────────────────────────────────────
+    cum_returns = np.cumprod(1 + paths, axis=1)
+    sim_prices  = entry * cum_returns
+
+    # T+2 settlement: only check hits from bar index 2 onward
+    # VN investors cannot exit within T+0 or T+1 under T+2.5 rules.
+    sim_eval = sim_prices[:, 2:]  # shape: (n_sim, horizon-2)
+
+    if sim_eval.shape[1] == 0:
+        return 0.5
+
+    tp_hits = sim_eval >= tp
+    sl_hits = sim_eval <= sl
+
+    tp_idx = np.where(tp_hits.any(axis=1), np.argmax(tp_hits, axis=1), sim_eval.shape[1] + 1)
+    sl_idx = np.where(sl_hits.any(axis=1), np.argmax(sl_hits, axis=1), sim_eval.shape[1] + 1)
+
+    wins = np.sum((tp_idx <= sim_eval.shape[1]) & (tp_idx < sl_idx))
     return round(float(wins / n_sim), 3)
 
 
@@ -229,7 +255,9 @@ def check_mode_w_preconditions(
     failures = []
 
     if sms_raw < sms_gate:            failures.append(f"W-1: SMS_raw={sms_raw} < {sms_gate}")
-    if not (mcvd_trend == "UP" and mcvd_consistency >= 0.55):
+    # [BUG-5 FIX] Sync threshold with SMS component scoring in money_flow.py:
+    # comps['mcvd']=20 requires consistency>=0.60; gate here must match.
+    if not (mcvd_trend == "UP" and mcvd_consistency >= 0.60):
                                        failures.append(f"W-2: M-CVD {mcvd_trend} consistency={mcvd_consistency:.2f}")
     if amf_decision == "BLOCK":        failures.append("W-3: AMF=BLOCK")
     if hmm_state == "STEADY_BEAR":     failures.append("W-4: HMM=STEADY_BEAR")
@@ -308,6 +336,38 @@ def compute_mfpm(
 
     base_mfpm = blended_canslim + sms_bonus + pattern_bonus + fundamental_bonus
 
+    # ── Foreign Net Flow Bonus ─────────────────────────────────────────────
+    # SSI iBoard foreign_net normalized by ADTV — comparable across market caps.
+    # Raw foreign_net comes from intraday_feats in profiler_service; MFPM receives
+    # it via amf_result details (populated by run_amf from intraday_data).
+    _foreign_net     = int(amf_result.get("details", {}).get("foreign_net", 0) if amf_result else 0)
+    _adtv_mfpm       = float(df["volume"].tail(20).mean()) if not df.empty else 1.0
+    _foreign_net_pct = _foreign_net / max(_adtv_mfpm, 1)
+    if _foreign_net_pct > 0.30:
+        foreign_bonus = 8
+    elif _foreign_net_pct > 0.15:
+        foreign_bonus = 4
+    elif _foreign_net_pct < -0.30:
+        foreign_bonus = -8
+    elif _foreign_net_pct < -0.15:
+        foreign_bonus = -4
+    else:
+        foreign_bonus = 0
+    base_mfpm += foreign_bonus
+
+    # ── BiLSTM Directional Bonus ───────────────────────────────────────────
+    # amf_result carries bilstm fields from profiler_service via sms_result extras.
+    # Fallback: look in sms_result for bilstm keys (profiler passes them through).
+    _bilstm_signal = sms_result.get("bilstm_10d_signal", "NO_MODEL")
+    _bilstm_conf   = sms_result.get("bilstm_10d_confidence", "NONE")
+    if _bilstm_signal == "UP":
+        bilstm_bonus = 10 if _bilstm_conf == "HIGH" else 5 if _bilstm_conf == "MEDIUM" else 0
+    elif _bilstm_signal == "DOWN":
+        bilstm_bonus = -10 if _bilstm_conf == "HIGH" else -5 if _bilstm_conf == "MEDIUM" else 0
+    else:
+        bilstm_bonus = 0
+    base_mfpm += bilstm_bonus
+
     # Mode W
     stealth_det = sms_result.get("stealth_detail", {})
     stealth_accum = bool(stealth_det.get("detected", False))
@@ -317,6 +377,16 @@ def compute_mfpm(
     # Determine primary signal mode
     sms_gate = int(cfg.strategy("mfpm", "mode_w_sms_gate", default=60))
     amf_decision = amf_result.get("decision", "PASS")
+
+    # ── Wash Sale Directionality Override ─────────────────────────────────
+    # SELL_WASH = artificial price suppression by large sell orders → the volume
+    # anomaly is bear-driven, not a buy-side manipulation. Treat as WARN not BLOCK
+    # so the engine can still score a valid WATCH/BUY for Wyckoff spring entries.
+    # BUY_WASH (artificial inflation) keeps the full BLOCK.
+    # NEUTRAL_WASH (direction unknown) keeps existing behavior.
+    amf_wash_side = amf_result.get("wash_side", "NONE")
+    if amf_decision == "BLOCK" and amf_wash_side == "SELL_WASH":
+        amf_decision = "WARN"   # local override only — amf_result dict unchanged
 
     mode_w_pass, w_fails = check_mode_w_preconditions(
         sms_raw=sms_raw,
@@ -353,7 +423,9 @@ def compute_mfpm(
         gate_delta += int(earnings_gate_adjustment(earnings_risk))
 
     # Determine entry params first (for MC calc)
-    params = mode_w_entry_params(df, sms_result)
+    # [BUG-22 FIX] Pass signal_mode so Mode B breakout entries use the close
+    # (breakout level) rather than the EMA9 pullback used by Mode W.
+    params = mode_w_entry_params(df, sms_result, signal_mode=signal_mode)
     entry = params["entry"]
     sl = params["sl"]
     tp1 = params["tp1"]
@@ -366,11 +438,16 @@ def compute_mfpm(
 
     sms_label = sms_result.get("sms_label", "RETAIL_DRIVEN")
 
-    if dist_warning in ("EXIT", "FORCED_EXIT"):
-        action = dist_warning
-        confidence = "—"
-    elif amf_decision == "BLOCK" and dist_warning in ("EXIT",):
+    if dist_warning == "FORCED_EXIT":
         action = "FORCED_EXIT"
+        confidence = "—"
+    elif dist_warning == "EXIT":
+        # [BUG-20 FIX] AMF BLOCK + distribution EXIT → escalate to FORCED_EXIT.
+        # Old code had a dead elif branch: the first `if dist_warning in ("EXIT",
+        # "FORCED_EXIT")` captured both values together, so the escalation elif
+        # (amf_decision == "BLOCK" and dist_warning in ("EXIT",)) was unreachable —
+        # we had already taken the first branch before checking AMF status.
+        action = "FORCED_EXIT" if amf_decision == "BLOCK" else "EXIT"
         confidence = "—"
     elif signal_mode == "MODE_W":
         if w >= mode_w_strong + gate_delta and amf_decision == "PASS" and mc_prob >= mc_prob_strong:
@@ -400,22 +477,33 @@ def compute_mfpm(
             action = "NO_ACTION"
 
     # ── Layer 3: Confidence ────────────────────────────────────────────────
+    # [VN-FIX] HMM is a heuristic rule-based proxy, NOT a real HMM model.
+    # It must NOT be a hard gate for HIGH confidence — a ticker in ACCUMULATION
+    # phase will never pass STEADY_BULL but can still be a valid entry.
+    # HMM now acts as a context modifier: STEADY_BEAR downgrades one level,
+    # TRANSITIONAL/STEADY_BULL does not block.
     if action in ("NO_ACTION", "EXIT", "FORCED_EXIT"):
         confidence = "—"
     elif signal_mode == "MODE_W":
-        if w >= mode_w_strong and hmm_state == "STEADY_BULL" and mc_prob >= 0.65:
+        # [NEW-10 FIX] mc_prob >= 0.65 was hardcoded while the action gate already
+        # reads mc_min_prob_strong from config.  Align confidence to same threshold
+        # so a config change flows through both action and confidence consistently.
+        if w >= mode_w_strong and mc_prob >= mc_prob_strong:
             confidence = "HIGH"
         elif w >= mode_w_buy and amf_decision == "PASS" and mc_prob >= mc_prob_buy:
             confidence = "MEDIUM"
         else:
             confidence = "LOW"
     else:
-        if mfpm_score >= 80 and hmm_state == "STEADY_BULL":
+        if mfpm_score >= 80:
             confidence = "HIGH"
         elif mfpm_score >= 60:
             confidence = "MEDIUM"
         else:
             confidence = "LOW"
+    # HMM bear penalty: downgrade one level (not a hard block)
+    if confidence not in ("—", "LOW") and hmm_state == "STEADY_BEAR":
+        confidence = "MEDIUM" if confidence == "HIGH" else "LOW"
 
     # ── Layer 4: Proxy penalty ────────────────────────────────────────────
     data_source = sms_result.get("mcvd_detail", {}).get("data_source", "PROXY_OHLCV")

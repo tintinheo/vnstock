@@ -4,14 +4,77 @@ Indicators: SMA/EMA/RSI/ATR/OBV/VWAP/Hurst/Z_vol/OFI/Bollinger
 """
 from __future__ import annotations
 
+from pathlib import Path
+from typing import Any
+
 import numpy as np
 import pandas as pd
+
+# ── PSO-optimized RSI threshold cache ────────────────────────────────────────
+# Loaded once at module import from config/rsi_thresholds.yaml (if present).
+# Falls back to hardcoded _RSI_BASE + _RSI_SECTOR_ADJ tables silently.
+
+_RSI_YAML_CACHE: dict[str, Any] | None = None
+_RSI_YAML_LOADED = False   # sentinel — load attempted exactly once
+
+
+def _load_rsi_yaml() -> dict[str, Any] | None:
+    global _RSI_YAML_CACHE, _RSI_YAML_LOADED
+    if _RSI_YAML_LOADED:
+        return _RSI_YAML_CACHE
+    _RSI_YAML_LOADED = True
+    # config/rsi_thresholds.yaml is two levels up from this file:
+    # indicators.py → core/ → tradingos/ → src/ → TradingOS/ → config/
+    config_path = Path(__file__).resolve().parents[3] / "config" / "rsi_thresholds.yaml"
+    if not config_path.exists():
+        return None
+    try:
+        import yaml  # PyYAML — already a transitive dep
+        with open(config_path, "r", encoding="utf-8") as f:
+            data = yaml.safe_load(f)
+        _RSI_YAML_CACHE = data.get("rsi_thresholds") if data else None
+        return _RSI_YAML_CACHE
+    except Exception:
+        return None
 
 
 # ── Moving Averages ───────────────────────────────────────────────────────────
 
 def sma(series: pd.Series, period: int) -> pd.Series:
     return series.rolling(period).mean()
+
+
+def sma_with_confidence(
+    series: pd.Series,
+    period: int = 200,
+) -> tuple[float | None, str]:
+    """
+    Compute a single SMA value for the last bar with a data-quality confidence tier.
+
+    Returns (value, confidence) where confidence is one of:
+      'HIGH'   — >= period clean bars available  (full SMA)
+      'MEDIUM' — 80–99% of period available      (partial SMA, labelled ~SMA{period})
+      'LOW'    — 50–79% of period available      (EMA proxy)
+      'NONE'   — < 50% of period available       (not computed; value=None)
+
+    Uses EMA as a proxy when insufficient history exists so downstream code
+    always has a numeric fallback rather than NaN.
+    """
+    clean = series.dropna()
+    n = len(clean)
+
+    if n >= period:
+        value = float(clean.iloc[-period:].mean())
+        return value, "HIGH"
+    elif n >= int(period * 0.8):
+        value = float(clean.mean())
+        return value, "MEDIUM"
+    elif n >= int(period * 0.5):
+        # EMA is a reasonable proxy when we have at least half the required history
+        value = float(clean.ewm(span=period, adjust=False).mean().iloc[-1])
+        return value, "LOW"
+    else:
+        return None, "NONE"
 
 
 def ema(series: pd.Series, period: int) -> pd.Series:
@@ -93,7 +156,8 @@ def hurst_exponent(series: pd.Series, max_lag: int = 40) -> float:
     if len(series) < max_lag * 2:
         return 0.5
     lags = range(2, max_lag)
-    rs_values = []
+    rs_values: list[float] = []
+    valid_lags: list[int] = []   # [BUG-30 FIX] track actual lags that produced R/S values
     for lag in lags:
         chunks = [series.values[i:i+lag] for i in range(0, len(series) - lag, lag)]
         if not chunks:
@@ -110,10 +174,15 @@ def hurst_exponent(series: pd.Series, max_lag: int = 40) -> float:
                 rs_list.append(r / s)
         if rs_list:
             rs_values.append(np.mean(rs_list))
+            valid_lags.append(lag)   # [BUG-30 FIX] record the lag that succeeded
     if len(rs_values) < 2:
         return 0.5
     try:
-        h, _ = np.polyfit(np.log(list(lags)[:len(rs_values)]), np.log(rs_values), 1)
+        # [BUG-30 FIX] Use valid_lags (actual lag values that produced R/S estimates)
+        # instead of list(lags)[:len(rs_values)].  The old approach assumed all lags
+        # produced values sequentially, but some lags can be skipped when chunks are
+        # too small or std=0, biasing the regression slope (Hurst estimate).
+        h, _ = np.polyfit(np.log(valid_lags), np.log(rs_values), 1)
         return float(np.clip(h, 0.0, 1.0))
     except Exception:
         return 0.5
@@ -151,6 +220,108 @@ def macd_components(
     macd_line = fast_ema - slow_ema
     signal_line = ema(macd_line, signal_p)
     return macd_line, signal_line, macd_line - signal_line
+
+
+# ── Adaptive RSI Thresholds ───────────────────────────────────────────────────
+
+# Base thresholds per market regime
+_RSI_BASE: dict[str, dict[str, float]] = {
+    "BULL_TREND":      {"overbought": 80.0, "warning": 75.0, "oversold": 45.0},
+    "BEAR_TREND":      {"overbought": 65.0, "warning": 60.0, "oversold": 30.0},
+    "SIDEWAYS":        {"overbought": 70.0, "warning": 65.0, "oversold": 35.0},
+    "HIGH_VOLATILITY": {"overbought": 75.0, "warning": 68.0, "oversold": 30.0},
+    "TRANSITIONAL":    {"overbought": 72.0, "warning": 67.0, "oversold": 32.0},
+    "STEADY_BULL":     {"overbought": 80.0, "warning": 75.0, "oversold": 45.0},
+    "STEADY_BEAR":     {"overbought": 65.0, "warning": 60.0, "oversold": 30.0},
+}
+
+# VN-specific sector adjustments (additive delta on overbought / oversold)
+_RSI_SECTOR_ADJ: dict[str, dict[str, float]] = {
+    "BANKING":        {"overbought": +3.0, "oversold": +3.0},
+    "REAL_ESTATE":    {"overbought": +5.0, "oversold": -5.0},
+    "STEEL_MATERIAL": {"overbought": -3.0, "oversold": -3.0},
+    "SECURITIES":     {"overbought": +2.0, "oversold": +2.0},
+    "INFRASTRUCTURE": {"overbought":  0.0, "oversold":  0.0},
+    "GENERAL":        {"overbought":  0.0, "oversold":  0.0},
+}
+
+
+def get_adaptive_rsi_thresholds(
+    regime: str = "SIDEWAYS",
+    sector: str = "GENERAL",
+) -> dict[str, float]:
+    """
+    Return RSI thresholds (overbought / warning / oversold) adapted to the
+    current market regime and VN-specific sector characteristics.
+
+    Priority:
+      1. PSO-optimized values from config/rsi_thresholds.yaml (if present)
+      2. Hardcoded _RSI_BASE + _RSI_SECTOR_ADJ tables (fallback)
+
+    regime : one of BULL_TREND | BEAR_TREND | SIDEWAYS | HIGH_VOLATILITY |
+             TRANSITIONAL | STEADY_BULL | STEADY_BEAR  (from gmo.py)
+    sector : one of BANKING | REAL_ESTATE | STEEL_MATERIAL | SECURITIES |
+             INFRASTRUCTURE | GENERAL
+
+    Returns dict with keys: overbought, warning, oversold
+    """
+    # Try PSO-optimized thresholds first
+    yaml_data = _load_rsi_yaml()
+    if yaml_data is not None:
+        regime_data = yaml_data.get(regime) or yaml_data.get("TRANSITIONAL", {})
+        combo = regime_data.get(sector) or regime_data.get("GENERAL")
+        if combo and all(k in combo for k in ("overbought", "warning", "oversold")):
+            return {
+                "overbought": float(combo["overbought"]),
+                "warning":    float(combo["warning"]),
+                "oversold":   float(combo["oversold"]),
+            }
+
+    # Fallback: hardcoded tables
+    base = _RSI_BASE.get(regime, _RSI_BASE["SIDEWAYS"]).copy()
+    adj  = _RSI_SECTOR_ADJ.get(sector, _RSI_SECTOR_ADJ["GENERAL"])
+    base["overbought"] = min(95.0, base["overbought"] + adj["overbought"])
+    base["oversold"]   = max(10.0, base["oversold"]   + adj["oversold"])
+    return base
+
+
+def evaluate_rsi_signal(
+    rsi_value: float,
+    regime: str = "SIDEWAYS",
+    sector: str = "GENERAL",
+) -> dict:
+    """
+    Classify an RSI reading relative to regime-adaptive thresholds.
+
+    Returns dict with keys: label, action_hint, overbought, warning, oversold
+      label       : OVERBOUGHT | ELEVATED | HEALTHY | NEUTRAL | OVERSOLD
+      action_hint : WAIT_PULLBACK | MONITOR_CLOSELY | FAVORABLE | NO_SIGNAL | WATCH_REVERSAL
+    """
+    th = get_adaptive_rsi_thresholds(regime, sector)
+
+    if rsi_value >= th["overbought"]:
+        label  = "OVERBOUGHT"
+        action = "WAIT_PULLBACK"
+    elif rsi_value >= th["warning"]:
+        label  = "ELEVATED"
+        action = "MONITOR_CLOSELY"
+    elif rsi_value <= th["oversold"]:
+        label  = "OVERSOLD"
+        action = "WATCH_REVERSAL"
+    elif rsi_value >= 45.0:
+        label  = "HEALTHY"
+        action = "FAVORABLE"
+    else:
+        label  = "NEUTRAL"
+        action = "NO_SIGNAL"
+
+    return {
+        "label":       label,
+        "action_hint": action,
+        "overbought":  th["overbought"],
+        "warning":     th["warning"],
+        "oversold":    th["oversold"],
+    }
 
 
 # ── Stochastic Oscillator ─────────────────────────────────────────────────────

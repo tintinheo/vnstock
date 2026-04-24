@@ -24,6 +24,7 @@ from ..core import (
     detect_hmm_state, compute_omega,
     compute_mfpm,
     compute_position_size,
+    compute_atr_position_size,
     generate_signal_text,
     advise_entry_window,
     compute_macro_regime, macro_sizing_multiplier, macro_score_gate_adjustment,
@@ -33,8 +34,16 @@ from ..core import (
     compute_multi_horizon_forecast,
     compute_t25_multiframe,
     compute_tplus_recommendation,
+    compute_var,
+    calibrate_stop_with_var,
 )
-from ..core.money_flow import compute_multiday_whale_flow, proxy_whale_net_from_daily, compute_whale_net_from_pt_deals
+from ..core.money_flow import (
+    compute_multiday_whale_flow, proxy_whale_net_from_daily,
+    compute_whale_net_from_pt_deals, calculate_ncvd, resolve_cvd_conflict,
+)
+from ..core.indicators import sma_with_confidence, get_adaptive_rsi_thresholds, evaluate_rsi_signal
+from ..core.bilstm_predictor import BiLSTMPredictor
+from ..data.intraday_collector import fetch_intraday_features
 from .money_flow_service import MoneyFlowService, sector_flow_lookup
 from ..utils.logging import get_logger
 
@@ -54,6 +63,8 @@ def _extract_exchange(quote: dict) -> str:
 class ProfilerService:
     def __init__(self, portfolio_value: float = 300_000_000):
         self.portfolio_value = portfolio_value
+        # BiLSTM predictor — loads model once; no-ops if model file absent
+        self._bilstm = BiLSTMPredictor()
 
     def run(self, request: ProfilerRequest) -> TickerProfile:
         """
@@ -86,8 +97,12 @@ class ProfilerService:
         volume = float(last["volume"])
         avg_vol = float(df["volume"].tail(20).mean())
 
-        # ── 3. Anti-manipulation ──────────────────────────────────────────
-        amf_result = run_amf(df, order_book=None)
+        # ── 3. Anti-manipulation + Intraday Features ────────────────────
+        # Fetch intraday TFI/OBI features (always succeeds — silent fallback on error)
+        intraday_feats = fetch_intraday_features(ticker)
+        amf_result = run_amf(df, order_book=None, intraday_data=intraday_feats)
+        # Inject foreign_net into amf_result details so MFPM can use it for scoring
+        amf_result.setdefault("details", {})["foreign_net"] = intraday_feats.get("foreign_net", 0)
         amd_phase = detect_amd_phase(df)
         vqs_result = volume_quality_score(df, order_book=None)
         vqs = float(vqs_result.get("vqs_score", 0.0))
@@ -270,6 +285,10 @@ class ProfilerService:
         except Exception as _fc_err:
             log.debug(f"Horizon forecast skipped for {ticker}: {_fc_err}")
 
+        # ── 6f. BiLSTM 10-day directional prediction ─────────────────────────
+        # Must run before MFPM so the bonus can be applied in compute_mfpm()
+        _bilstm_result = self._bilstm.predict(df)
+
         # ── 7. MFPM scoring ───────────────────────────────────────────────
         try:
             sector_rotation = MoneyFlowService().get_sector_flows()
@@ -285,8 +304,15 @@ class ProfilerService:
                 "distribution_warning": dist_warning,
                 "mcvd_detail": {
                     **mcvd_detail,
-                    "data_source": sms_result.get("data_source", "PROXY_OHLCV"),
+                    # [BUG-10 FIX] data_source lives in mcvd_detail, not at
+                    # sms_result top level.  Reading from the wrong key always
+                    # returned None → fell back to PROXY_OHLCV → harshest penalty
+                    # applied even for PARTIAL_PROXY data.
+                    "data_source": mcvd_detail.get("data_source", "PROXY_OHLCV"),
                 },
+                # Pass BiLSTM signal so MFPM can apply directional bonus
+                "bilstm_10d_signal":     _bilstm_result.get("signal",     "NO_MODEL"),
+                "bilstm_10d_confidence": _bilstm_result.get("confidence", "NONE"),
             },
             amf_result=amf_result,
             pattern_result=pattern_result,
@@ -356,13 +382,55 @@ class ProfilerService:
         sma10 = float(last.get("SMA10", 0))
         sma20 = float(last.get("SMA20", 0))
         sma50 = float(last.get("SMA50", 0))
-        sma200 = float(last.get("SMA200", 0))
+        sma200_raw, sma200_conf = sma_with_confidence(df["close"], 200)
+        sma200 = sma200_raw if sma200_raw is not None else float(last.get("SMA200", 0) or 0)
         ema50  = float(last.get("EMA50",  0))
         ema200 = float(last.get("EMA200", 0))
         rsi14 = float(last.get("RSI14", 50))
         atr14 = float(last.get("ATR14", 0))
         obv_val = float(last.get("OBV", 0))
-        macd = float(last.get("EMA9", 0)) - float(last.get("EMA21", 0))
+
+        # ── 8b. ATR-based position sizing (Phase II) ─────────────────────
+        _atr_sizing = compute_atr_position_size(
+            entry_price=entry,
+            atr14=atr14,
+            portfolio_value=self.portfolio_value,
+            amf_decision=amf_result.get("decision", "PASS"),
+        )
+
+        # ── 8c. GJR-GARCH VaR / CVaR (Phase III) ────────────────────────
+        _risk_model = compute_var(df)
+        _stop_loss_var = calibrate_stop_with_var(
+            entry_price=entry,
+            atr_stop=float(_atr_sizing["atr_stop_price"]),
+            var_99=float(_risk_model.var_99),
+        )
+
+        # [BUG-2 FIX] MACD = EMA12 - EMA26 (standard formula).
+        # Using EMA9-EMA21 was wrong: EMA9 is the signal line, not MACD fast.
+        # Use the already-computed MACD_line column from indicators.py.
+        macd = float(last.get("MACD_line", 0.0))
+
+        # ── 11a. Derived signal enrichments ─────────────────────────────────
+        # NCVD: normalize raw M-CVD by ADTV so cross-ticker comparison is meaningful
+        _adtv = float(df["volume"].tail(20).mean())
+        _ncvd_5d  = calculate_ncvd(mcvd_detail.get("mcvd_5d",  0), _adtv, window_days=5)
+        _ncvd_20d = calculate_ncvd(mcvd_detail.get("mcvd_20d", 0), _adtv, window_days=20)
+
+        # CVD conflict resolution (5d trend vs 20d trend with AMD override)
+        _cvd_conflict = resolve_cvd_conflict(
+            cvd_5d_trend=mcvd_detail.get("mcvd_trend", "FLAT"),   # 5d slope trend
+            cvd_20d_trend=(
+                "UP"   if mcvd_detail.get("mcvd_20d", 0) > 0 else
+                "DOWN" if mcvd_detail.get("mcvd_20d", 0) < 0 else "FLAT"
+            ),
+            amd_phase=amd_phase,
+        )
+
+        # Adaptive RSI: map HMM state + sector to regime-adjusted thresholds
+        _hmm_regime = hmm_state  # STEADY_BULL | TRANSITIONAL | STEADY_BEAR
+        _sector_tag = sms_result.get("sector", "GENERAL")
+        _rsi_signal = evaluate_rsi_signal(rsi14, regime=_hmm_regime, sector=_sector_tag)
 
         profile = TickerProfile(
             # Identity
@@ -425,6 +493,14 @@ class ProfilerService:
             whale_pct_vol=float(sms_result.get("whale_pct_vol", 0.0)),
             sizing_pct=sizing.get("size_pct", 0.0),
             sizing_shares=sizing.get("shares", 0),
+            # ATR-based position sizing (Phase II)
+            atr_position_shares = _atr_sizing["atr_position_shares"],
+            atr_stop_price      = _atr_sizing["atr_stop_price"],
+            atr_stop_distance   = _atr_sizing["atr_stop_distance"],
+            atr_position_value  = _atr_sizing["atr_position_value"],
+            atr_risk_amount     = _atr_sizing["atr_risk_amount"],
+            atr_risk_pct_actual = _atr_sizing["atr_risk_pct_actual"],
+            atr_size_pct        = _atr_sizing["atr_size_pct"],
             advisory_text=advisory_vi,
             entry_window=exec_adv.get("window", "—"),
             horizons=mfpm_result.get("horizons", []),
@@ -525,6 +601,40 @@ class ProfilerService:
             obi_pct                 = _obi_result.get("obi_pct",                 0.0),
             obi_signal              = _obi_result.get("obi_signal",              "BALANCED"),
             data_source_intraday    = _intraday_source,
+            # NCVD (normalized M-CVD)
+            ncvd_5d                 = _ncvd_5d["ncvd"],
+            ncvd_5d_label           = _ncvd_5d["label"],
+            ncvd_20d                = _ncvd_20d["ncvd"],
+            ncvd_20d_label          = _ncvd_20d["label"],
+            # CVD conflict resolution
+            cvd_conflict_pattern    = _cvd_conflict["pattern"],
+            cvd_conflict_action     = _cvd_conflict["action"],
+            cvd_conflict_confidence = _cvd_conflict["confidence"],
+            # SMA200 data quality
+            sma200_confidence       = sma200_conf,
+            # Adaptive RSI
+            rsi_label               = _rsi_signal["label"],
+            rsi_action_hint         = _rsi_signal["action_hint"],
+            rsi_ob_threshold        = _rsi_signal["overbought"],
+            # AMF Wash Sale Directionality
+            amf_wash_side           = amf_result.get("wash_side", "NONE"),
+            amf_tfi                 = float(intraday_feats.get("tfi", 0.0)),
+            amf_obi                 = float(intraday_feats.get("obi_l3", 0.0)),
+            amf_obi_reconstructed   = float(intraday_feats.get("obi_reconstructed", 0.0)),
+            amf_foreign_net         = int(intraday_feats.get("foreign_net", 0)),
+            amf_mcvd                = int(intraday_feats.get("mcvd", 0)),
+            # BiLSTM 10-day directional signal
+            bilstm_10d_signal       = _bilstm_result["signal"],
+            bilstm_10d_up_prob      = float(_bilstm_result["up_prob"]),
+            bilstm_10d_confidence   = _bilstm_result["confidence"],
+            # GJR-GARCH Risk Model (Phase III)
+            var_95                  = float(_risk_model.var_95),
+            var_99                  = float(_risk_model.var_99),
+            cvar_95                 = float(_risk_model.cvar_95),
+            tail_regime             = _risk_model.tail_regime,
+            var_model               = _risk_model.var_model,
+            var_cond_vol            = float(_risk_model.cond_vol),
+            stop_loss_var           = float(_stop_loss_var),
         )
 
         # ── 12. Audit log ─────────────────────────────────────────────────

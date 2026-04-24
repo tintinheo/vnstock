@@ -118,6 +118,24 @@ class TickerProfile(BaseModel):
     sizing_pct      : float
     sizing_shares   : int
 
+    # ATR-Based Position Sizing (Phase II — proposal implementation)
+    atr_position_shares : int   = 0      # lot-rounded shares (ATR method)
+    atr_stop_price      : float = 0.0    # entry - ATR14 × atr_mult
+    atr_stop_distance   : float = 0.0    # ATR14 × atr_mult (VND)
+    atr_position_value  : float = 0.0    # atr_position_shares × entry_price (VND)
+    atr_risk_amount     : float = 0.0    # VND at risk if stop is hit
+    atr_risk_pct_actual : float = 0.0    # actual risk / portfolio_value
+    atr_size_pct        : float = 0.0    # position_value / portfolio_value
+
+    # GJR-GARCH Risk Model (Phase III — fat-tail VaR / CVaR)
+    var_95              : float = 0.0    # GJR-GARCH VaR 95% (% loss, negative)
+    var_99              : float = 0.0    # GJR-GARCH VaR 99% (% loss, negative)
+    cvar_95             : float = 0.0    # Conditional VaR / Expected Shortfall 95% (negative)
+    tail_regime         : str   = "NORMAL_TAIL"  # FAT_TAIL | NORMAL_TAIL
+    var_model           : str   = "NONE"         # GJR_GARCH | HISTORICAL | NONE
+    var_cond_vol        : float = 0.0    # Current conditional volatility (%)
+    stop_loss_var       : float = 0.0    # Calibrated stop: max(atr_stop, var99_stop)
+
     # NLP + advisory
     advisory_text   : str = ""
     entry_window    : str = "—"
@@ -238,6 +256,38 @@ class TickerProfile(BaseModel):
     obi_signal              : str   = "BALANCED"
     data_source_intraday    : str   = "NONE"   # FIINQUANT | DNSE | SSI_5M | NONE
 
+    # ── NCVD — Normalized M-CVD (cross-ticker comparable) ───────────────────────────
+    ncvd_5d                 : float = 0.0      # raw_cvd_5d / (ADTV × 5)
+    ncvd_5d_label           : str   = "NEUTRAL"  # VERY_BULLISH|BULLISH|NEUTRAL|BEARISH|VERY_BEARISH
+    ncvd_20d                : float = 0.0
+    ncvd_20d_label          : str   = "NEUTRAL"
+
+    # ── CVD Multi-Timeframe Conflict Resolution ──────────────────────────────────────
+    cvd_conflict_pattern    : str   = "CVD5d_FLAT__CVD20d_FLAT"
+    cvd_conflict_action     : str   = "NO_ACTION"
+    cvd_conflict_confidence : str   = "VERY_LOW"
+
+    # ── SMA200 Data Quality ──────────────────────────────────────────────────────────
+    sma200_confidence       : str   = "HIGH"   # HIGH|MEDIUM|LOW|NONE
+
+    # ── Adaptive RSI Signal ──────────────────────────────────────────────────────────
+    rsi_label               : str   = "NEUTRAL"  # OVERBOUGHT|ELEVATED|HEALTHY|NEUTRAL|OVERSOLD
+    rsi_action_hint         : str   = "NO_SIGNAL"
+    rsi_ob_threshold        : float = 70.0     # regime+sector adjusted overbought threshold
+
+    # ── AMF Wash Sale Directionality ─────────────────────────────────────────────────
+    amf_wash_side           : str   = "NONE"   # BUY_WASH|SELL_WASH|NEUTRAL_WASH|NONE
+    amf_tfi                 : float = 0.0      # Trade Flow Imbalance [-1, +1] (TCBS aggressor)
+    amf_obi                 : float = 0.0      # Order Book Imbalance L3 [-1, +1] (SSI iBoard)
+    amf_obi_reconstructed   : float = 0.0      # OBI from reconstructed LOB L5-L10
+    amf_foreign_net         : int   = 0        # foreign buy - sell volume (shares, SSI iBoard)
+    amf_mcvd                : int   = 0        # Micro-CVD: net tick aggressor volume (TCBS)
+
+    # ── BiLSTM 10-day Direction Signal ───────────────────────────────────────────────
+    bilstm_10d_signal       : str   = "NO_MODEL"  # UP|DOWN|FLAT|NO_MODEL
+    bilstm_10d_up_prob      : float = 0.5
+    bilstm_10d_confidence   : str   = "NONE"      # HIGH|MEDIUM|LOW|NONE
+
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
 
@@ -263,6 +313,7 @@ class ScanResultItem(BaseModel):
     sms_label       : SMS_LABEL = "RETAIL_DRIVEN"   # SRS §4.4
     signal_mode     : SIGNAL_MODE
     stealth_accum   : bool = False                  # SRS §4.4
+    sector          : str  = ""                     # canonical sector (e.g. "Ngân hàng", "BĐS")
     close           : float
     entry           : float
     sl              : float

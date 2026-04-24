@@ -23,10 +23,10 @@ mode_w:
 
 # ── Anti-Manipulation Filter ──────────────────────────────────────────────────
 amf:
-  open_spike_threshold:  0.06  # > ±6% at open → flag
+  open_spike_threshold:  0.09  # [BUG-4 FIX] → 9%: HOSE circuit breaker ±7%; 6% is normal news-day gap
   wash_sale_volume_mult: 3.0   # Volume > 3× avg → suspect
   bid_ask_imbalance:     0.70  # > 70% one-sided order book
-  vwap_deviation:        0.03  # > 3% from VWAP → alert
+  vwap_deviation:        0.05  # [BUG-4 FIX] → 5%: 3% triggered too often for normal VN volatility
 
 # ── Whale / Large Money Flow ──────────────────────────────────────────────────
 whale:
@@ -71,6 +71,16 @@ sizing:
   min_position_pct: 3.0   # Do not open position < 3% portfolio
   max_positions:   10     # Max concurrent open positions
 
+# ── ATR-Based Position Sizing (Phase II) ─────────────────────────────────────
+# Complementary to Kelly sizing. Uses fixed-risk-per-trade approach:
+#   stop_distance = ATR14 × atr_mult
+#   shares = (portfolio_value × risk_pct) / stop_distance
+# AMF WARN → size × warn_size_multiplier; AMF BLOCK → 0 shares
+position_sizing:
+  risk_pct:             0.01   # 1% of portfolio risked per trade
+  atr_mult:             2.0    # stop_distance = ATR14 × 2.0
+  warn_size_multiplier: 0.50   # AMF WARN reduces size to 50%
+
 # ── Backtesting ───────────────────────────────────────────────────────────────
 backtest:
   commission_bps:   15    # 15 bps per side (0.15%)
@@ -78,6 +88,9 @@ backtest:
   tax_sell_bps:     10    # 0.1% tax on sell (VN regulation)
   t2_settlement:    True  # T+2 settlement; cannot sell same day (speculative T+0 blocked)
   lock_san_prob:    0.02  # default (large-cap); overridden per liquidity tier below
+  # [BUG-17 FIX] limit_down_pct: HOSE=7% (0.07), HNX=10% (0.10), UPCOM=15% (0.15).
+  # Using a single HOSE default here; override per-ticker when exchange is known.
+  limit_down_pct:   0.07  # HOSE ±7% circuit breaker
   # Tiered lock_san (limit-down) probability by 20-day avg daily volume
   # Small-caps experience lock_san 5–15× more frequently than large-caps.
   lock_san_by_liquidity:
