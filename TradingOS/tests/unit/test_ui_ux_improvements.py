@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import inspect
 
+import math
+import pandas as pd
+
 
 class TestAuditReadingGuide:
     def test_audit_has_vn_behavior_reading_guide(self):
@@ -29,6 +32,30 @@ class TestAuditReadingGuide:
         assert "Sự kiện đang hiển thị" in src
         assert "Mã cổ phiếu trong view" in src
         assert "Loại khuyến nghị trong view" in src
+
+
+class TestAuditTimestampFormatting:
+    def test_timestamp_formatter_accepts_datetime_series(self):
+        from tradingos.ui.pages.audit import _format_timestamp_display
+
+        series = pd.Series([pd.Timestamp("2026-04-24 09:15:00")])
+        result = _format_timestamp_display(series)
+        assert result.iloc[0] == "2026-04-24 09:15"
+
+    def test_timestamp_formatter_accepts_string_series(self):
+        from tradingos.ui.pages.audit import _format_timestamp_display
+
+        series = pd.Series(["2026-04-24 09:15:00"])
+        result = _format_timestamp_display(series)
+        assert result.iloc[0] == "2026-04-24 09:15"
+
+    def test_timestamp_formatter_preserves_unparseable_text(self):
+        from tradingos.ui.pages.audit import _format_timestamp_display
+
+        series = pd.Series(["not-a-date", None])
+        result = _format_timestamp_display(series)
+        assert result.iloc[0] == "not-a-date"
+        assert result.iloc[1] == ""
 
 
 class TestScannerFilteredSummary:
@@ -64,6 +91,18 @@ class TestTplusExplainer:
         assert "SL 95.0" in text
         assert "T+2.5 108.0" in text
         assert "T+5 114.0" in text
+
+    def test_nan_inputs_do_not_crash_explainer(self):
+        from tradingos.ui.components.tplus_explainer import build_action_tplus_explanation
+
+        text = build_action_tplus_explanation("BUY", math.nan)
+        assert "quan sat" in text.lower() or "tin hieu" in text.lower()
+
+    def test_nan_verdict_does_not_crash_exit_plan(self):
+        from tradingos.ui.components.tplus_explainer import build_tplus_exit_plan
+
+        text = build_tplus_exit_plan(math.nan, 95, 108, 114, 100, 102)
+        assert "SL 95.0" in text
 
 
 class TestPerformanceFilteredSummary:

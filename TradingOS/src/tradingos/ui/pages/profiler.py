@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import io
+from datetime import datetime
+from pathlib import Path
 import pandas as pd
 import streamlit as st
 
@@ -21,7 +23,22 @@ from tradingos.ui.components.tplus_explainer import (
     verdict_row_tint,
     verdict_style,
 )
+from tradingos.ui.components.ohlcv_chart import render_ohlcv_chart
+from tradingos.ui.components.t25_countdown import render_t25_countdown
 from tradingos.core.nlp import generate_indicator_explanation, generate_f0_explanation
+from tradingos.engines.portfolio_tracker import portfolio_tracker as _tracker
+
+_RESULT_DIR = Path(__file__).resolve().parents[4] / "data" / "result"
+
+
+def _save_csv(df: pd.DataFrame, prefix: str) -> Path:
+    """Save df to data/result/<prefix>-YYYYMMDD_HHMMSS.csv and return the path."""
+    _RESULT_DIR.mkdir(parents=True, exist_ok=True)
+    ts   = datetime.now().strftime("%Y%m%d_%H%M%S")
+    path = _RESULT_DIR / f"{prefix}-{ts}.csv"
+    df.to_csv(path, index=False, encoding="utf-8-sig")
+    return path
+
 
 _ALL_ACTIONS = ["ALL", "STRONG_BUY", "BUY", "WATCH", "NO_ACTION", "EXIT", "FORCED_EXIT"]
 
@@ -127,10 +144,62 @@ def _render_detail(profile, idx: int = 0) -> None:
 
     render_signal_card(profile)
 
-    tab1, tab2, tab3, tab4, tab5, tab_nlp, tab_f0, tab_t25, tab_tw, tab_fc, tab_tplus, tab_cvd, tab_ob = st.tabs([
+    # ── Quick action row: OHLCV chart + Add to Portfolio ─────────────────────
+    _chart_col, _action_col = st.columns([3, 1])
+    with _chart_col:
+        render_ohlcv_chart(
+            ticker=profile.ticker,
+            entry_price=profile.entry_price,
+            stop_loss=profile.stop_loss,
+            tp1=profile.tp1,
+            tp2=profile.tp2,
+            sma20=profile.sma20,
+            sma50=profile.sma50,
+            days=20,
+            key_suffix=f"_{idx}",
+        )
+    with _action_col:
+        st.markdown("**📥 Vào lệnh**")
+        if profile.action in ("STRONG_BUY", "BUY"):
+            if st.button(
+                "📥 Thêm vào danh mục",
+                key=f"add_portfolio_{profile.ticker}_{idx}",
+                use_container_width=True,
+                type="primary",
+            ):
+                _tracker.add_position(
+                    ticker=profile.ticker,
+                    entry_price=profile.entry_price,
+                    initial_sl=profile.stop_loss,
+                    signal_mode=profile.signal_mode,
+                    mfpm_score=profile.mfpm_score,
+                    mc_prob=profile.mc_win_prob,
+                    tp1=profile.tp1,
+                    tp2=profile.tp2,
+                )
+                st.success(f"✅ Đã thêm {profile.ticker}")
+        else:
+            st.caption(f"Action = {profile.action}\nChỉ thêm khi BUY/STRONG_BUY.")
+
+        st.divider()
+        st.caption("**T+2.5 Quick**")
+        render_t25_countdown(
+            ticker=profile.ticker,
+            entry_price=profile.entry_price,
+            tplus_target_t25=profile.tplus_target_t25,
+            tplus_stop=profile.tplus_stop,
+            tplus_entry_low=profile.tplus_entry_low,
+            tplus_entry_high=profile.tplus_entry_high,
+            tplus_verdict=profile.tplus_verdict,
+            tplus_confidence=profile.tplus_confidence,
+            key_suffix=f"_{idx}",
+        )
+
+    # ── Tabs: Decision-first ordering ────────────────────────────────────────
+    tab_tplus, tab_t25, tab_tw, tab_fc, tab1, tab2, tab3, tab4, tab5, tab_nlp, tab_f0, tab_cvd, tab_ob = st.tabs([
+        "🎯 T+ Setup", "⚡ T+2.5", "⚠️ Trend Warning", "🔭 Dự báo",
         "📋 Horizon", "📊 SMS / M-CVD", "🔬 SHAP", "🧭 Overlay",
-        "📈 Chỉ số", "📝 NLP Insights", "🔰 Giải thích F0", "⚡ T+2.5",
-        "⚠️ Trend Warning", "🔭 Dự báo", "🎯 T+ Setup",
+        "📈 Chỉ số", "📝 NLP Insights", "🔰 Giải thích F0",
         "📊 CVD Intraday", "📖 Sổ lệnh",
     ])
 
@@ -621,7 +690,7 @@ def render() -> None:
 
         ticker_input = col1.text_area(
             "Mã chứng khoán (mỗi mã một dòng, hoặc dán dạng CSV)",
-            value=st.session_state.get("profiler_ticker", "VCB"),
+            value=st.session_state.pop("profiler_ticker", "VCB"),
             height=120,
             placeholder="VCB\nHPG\nSSI",
         )
@@ -692,6 +761,11 @@ def render() -> None:
         # Store results in session_state so filters don't cause page reset
         st.session_state["profiler_profiles"] = profiles
         st.session_state["profiler_errors"]   = errors
+        # Auto-export to data/result/
+        if profiles:
+            _df_export = pd.DataFrame([_profile_to_row(p) for p in profiles])
+            _saved = _save_csv(_df_export, "Profiler")
+            st.session_state["profiler_csv_path"] = str(_saved)
 
     # ── Retrieve from session_state (survives filter reruns) ─────────────────
     profiles = st.session_state.get("profiler_profiles")
@@ -713,6 +787,8 @@ def render() -> None:
 
     # ── Summary table with signal filter ─────────────────────────────────────
     st.subheader(f"📋 Kết quả — {len(profiles)} mã")
+    if "profiler_csv_path" in st.session_state:
+        st.caption(f"💾 Đã lưu CSV: `{st.session_state['profiler_csv_path']}`")
 
     rows = [_profile_to_row(p) for p in profiles]
     df_all = pd.DataFrame(rows)

@@ -176,7 +176,12 @@ def fetch_ohlcv(
     if use_cache:
         cached = cache.get_ohlcv(ticker, start, end)
         if not cached.empty and len(cached) > 50:
-            return _normalize_ohlcv_frame(cached)
+            # [P2.2] Staleness check: if today's bar is in cache but stale, re-fetch.
+            # ohlcv_is_fresh() checks the fetched_at timestamp vs ohlcv_ttl_today (default 30 min).
+            if cache.ohlcv_is_fresh(ticker, end):
+                return _normalize_ohlcv_frame(cached)
+            # Cache has data but today's bar is stale — fall through to re-fetch live
+            log.debug(f"[{ticker}] Cached OHLCV is stale for {end}, re-fetching")
 
     df = _fetch_ohlcv_ssi(ticker, start, end)
     if df.empty:

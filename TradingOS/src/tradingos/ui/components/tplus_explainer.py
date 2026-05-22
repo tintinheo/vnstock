@@ -37,6 +37,20 @@ _VERDICT_ROW_TINT = {
 }
 
 
+def _normalized_token(value: object) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, str):
+        return value.strip().upper()
+    if isinstance(value, (float, int)):
+        try:
+            if math.isnan(float(value)):
+                return ""
+        except (TypeError, ValueError):
+            pass
+    return str(value).strip().upper()
+
+
 def _as_price(value: float | int | None) -> float | None:
     if value is None:
         return None
@@ -57,20 +71,21 @@ def _price_text(value: float | int | None) -> str:
 
 
 def verdict_style(verdict: str) -> str:
-    return _VERDICT_STYLES.get(verdict or "", "")
+    return _VERDICT_STYLES.get(_normalized_token(verdict), "")
 
 
 def verdict_row_tint(verdict: str) -> str:
-    return _VERDICT_ROW_TINT.get(verdict or "", "")
+    return _VERDICT_ROW_TINT.get(_normalized_token(verdict), "")
 
 
 def verdict_label(verdict: str, verdict_vi: str = "") -> str:
-    return verdict_vi or _VERDICT_LABELS.get(verdict or "", verdict or "")
+    verdict_key = _normalized_token(verdict)
+    return verdict_vi or _VERDICT_LABELS.get(verdict_key, verdict_key)
 
 
 def build_action_tplus_explanation(action: str, verdict: str) -> str:
-    action = (action or "").upper()
-    verdict = (verdict or "").upper()
+    action = _normalized_token(action)
+    verdict = _normalized_token(verdict)
 
     if action in {"EXIT", "FORCED_EXIT"}:
         return "Action uu tien thoat vi the; T+ chi dung de tham chieu muc stop/target, khong mo vi the moi."
@@ -109,7 +124,7 @@ def build_tplus_exit_plan(
     entry_low: float | int | None = None,
     entry_high: float | int | None = None,
 ) -> str:
-    verdict = (verdict or "").upper()
+    verdict = _normalized_token(verdict)
     stop_text = _price_text(stop)
     t25_text = _price_text(target_t25)
     t5_text = _price_text(target_t5)

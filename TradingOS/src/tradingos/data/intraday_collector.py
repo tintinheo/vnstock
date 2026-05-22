@@ -353,17 +353,29 @@ def fetch_intraday_features(symbol: str) -> dict:
         foreign_net       : int    foreign_buy - foreign_sell
         reconstruction_depth : int  number of synthetic LOB levels added
     """
+    # [P2.1] Zero-fallback includes quality markers so callers can detect silent failure.
     _zero = {
         "tfi": 0.0, "obi_l3": 0.0, "obi_reconstructed": 0.0,
         "foreign_buy": 0, "foreign_sell": 0, "foreign_net": 0,
         "reconstruction_depth": 0,
         "mcvd": 0,
+        # Quality metadata
+        "intraday_source":       "ZERO_FALLBACK",
+        "intraday_fresh":        False,
+        "intraday_completeness": 0.0,
+        "cvd_quality_label":     "NONE",
     }
     try:
         trades = fetch_tcbs_trades(symbol)
     except Exception as e:
         log.debug(f"[{symbol}] TCBS fetch failed: {e}")
         trades = []
+
+    # [P2.1] Determine source and freshness
+    _trades_ok = bool(trades)
+    _source    = "ZERO_FALLBACK"
+    if _trades_ok:
+        _source = "TCBS_REAL"
 
     try:
         ob = fetch_ssi_orderbook(symbol)
@@ -377,9 +389,31 @@ def fetch_intraday_features(symbol: str) -> dict:
             ob = fetch_vndirect_orderbook(symbol)
             if ob:
                 log.debug(f"[{symbol}] VNDirect orderbook fallback used")
+                if _source == "ZERO_FALLBACK":
+                    _source = "VNDIRECT_PARTIAL"
+                elif _source == "TCBS_REAL":
+                    _source = "TCBS_REAL"   # trades real even if OB from fallback
         except Exception as e:
             log.debug(f"[{symbol}] VNDirect orderbook fallback failed: {e}")
             ob = None
+
+    # [P2.1] Completeness: 4 components (trades, ob, foreign, mcvd)
+    _n_components_ok = sum([
+        bool(trades),
+        ob is not None,
+        ob is not None and (ob.get("foreign_buy", 0) > 0 or ob.get("foreign_sell", 0) > 0),
+        bool(trades),   # mcvd comes from trades
+    ])
+    _completeness = _n_components_ok / 4.0
+
+    # [P2.3] CVD quality label based on trade tick count
+    _n_trades = len(trades) if trades else 0
+    if _n_trades >= 50:
+        _cvd_quality = "REAL"
+    elif _n_trades >= 10:
+        _cvd_quality = "PARTIAL"
+    else:
+        _cvd_quality = "NONE"
 
     try:
         tfi    = compute_tfi(trades)
@@ -403,6 +437,12 @@ def fetch_intraday_features(symbol: str) -> dict:
             "foreign_net":        foreign_buy - foreign_sell,
             "reconstruction_depth": rec_depth,
             "mcvd":               mcvd,
+            # [P2.1] Quality metadata
+            "intraday_source":       _source,
+            "intraday_fresh":        _trades_ok,
+            "intraday_completeness": _completeness,
+            # [P2.3] CVD quality label
+            "cvd_quality_label":     _cvd_quality,
         }
     except Exception as e:
         log.debug(f"[{symbol}] Intraday feature computation failed: {e}")

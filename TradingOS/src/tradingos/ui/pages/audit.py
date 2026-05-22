@@ -59,6 +59,12 @@ _VN_BEHAVIOR_GUIDE = """
 """
 
 
+def _format_timestamp_display(series: pd.Series) -> pd.Series:
+    timestamps = pd.to_datetime(series, errors="coerce")
+    formatted = timestamps.dt.strftime("%Y-%m-%d %H:%M")
+    return formatted.fillna(series.astype("string").fillna(""))
+
+
 def render() -> None:
     st.title("🗂 Audit Log")
     st.caption("Lịch sử tín hiệu và sự kiện — truy xuất từ DuckDB.")
@@ -79,7 +85,7 @@ def render() -> None:
         ticker = c1.text_input("Lọc mã (để trống = tất cả)", "")
         event_type = c2.selectbox(
             "Loại sự kiện",
-            ["", "PROFILE", "SCAN", "BACKTEST", "POSITION_OPEN"],
+            ["", "PROFILE", "SCAN", "BACKTEST", "POSITION_OPEN", "ERROR"],
             index=0,
         )
         action_filter = c3.multiselect(
@@ -215,6 +221,8 @@ def render() -> None:
             # ── Column ordering ───────────────────────────────────────────
             priority_cols = [
                 "timestamp", "ticker", "event_type", "action", "confidence",
+                # [P3.2] ERROR events: show reason (empty for non-ERROR rows)
+                "rejected_reason",
                 # Scores (from base row — payload versions prefixed p_*)
                 "mfpm_score", "p_mode_a_score", "p_mode_b_score", "p_mode_w_score", "p_mc_prob",
                 # Signal context
@@ -233,7 +241,7 @@ def render() -> None:
             ]
             display_cols = [c for c in priority_cols if c in df.columns]
             # Append any remaining columns not in priority list and not internal
-            _skip = {"audit_id", "signal_id", "rejected_reason", "amf_decision",
+            _skip = {"audit_id", "signal_id", "amf_decision",
                      "signal_mode", "close", "entry", "sl", "tp1", "tp2", "rr"}
             display_cols += [c for c in df.columns if c not in display_cols
                               and c not in _skip]
@@ -284,7 +292,7 @@ def render() -> None:
 
             # Format timestamp
             if "timestamp" in df_display.columns:
-                df_display["timestamp"] = df_display["timestamp"].dt.strftime("%Y-%m-%d %H:%M")
+                df_display["timestamp"] = _format_timestamp_display(df_display["timestamp"])
 
             # Round floats
             for col in ["p_close", "p_entry", "p_sl", "p_tp1", "p_tp2", "p_vwap_daily", "p_sma20", "p_sma50"]:

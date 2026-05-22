@@ -709,6 +709,14 @@ class ProfilerService:
                 # Sizing
                 "sizing_pct":    sizing.get("size_pct", 0.0),
                 "sector":        sms_result.get("sector", ""),
+                # [P3.1] Previously missing fields — now included for full auditability
+                "macro_score":            macro_result.macro_score if macro_result else None,
+                "fc_overall_vote":        fc_result.get("overall_vote", ""),
+                "tplus_verdict":          tplus_result.get("verdict", "THEO_DOI"),
+                "cvd_data_quality":       _cvd_result.get("data_quality", "NONE"),
+                "data_source_intraday":   _intraday_source,
+                "bilstm_10d_signal":      _bilstm_result["signal"],
+                "bilstm_10d_confidence":  _bilstm_result["confidence"],
             },
         })
 
@@ -719,7 +727,10 @@ class ProfilerService:
         cache.put_audit({
             "event_type": "ERROR",
             "ticker": ticker,
+            "action": "ERROR",
             "rejected_reason": error,
+            # [P3.1] Persist rejected_reason in payload so it survives DuckDB serialization
+            "payload": {"rejected_reason": error},
         })
         return TickerProfile(
             ticker=ticker,

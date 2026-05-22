@@ -101,11 +101,15 @@ def _simulate_single_trade(
     if entry_idx >= len(df) - 2:
         return None
 
-    entry_row = df.iloc[entry_idx]
-    raw_entry   = float(entry_row["close"])
-    entry_price = raw_entry * (1 + entry_cost_pct)   # effective cost basis
+    # [P1.1 — LOOKAHEAD FIX] Entry fills at next bar's open, not signal bar close.
+    # Signal fires at bar entry_idx (close-derived indicators); actual order is
+    # placed at the open of bar entry_idx+1, which is the earliest executable price.
+    entry_row     = df.iloc[entry_idx]           # signal bar (for date reference)
+    exec_row      = df.iloc[entry_idx + 1]       # execution bar
+    raw_entry     = float(exec_row.get("open", exec_row["close"]))  # open, fallback close
+    entry_price   = raw_entry * (1 + entry_cost_pct)   # effective cost basis
     # H2: prefer the 'date' column (real ISO date after run_backtest preserves it)
-    entry_date  = str(entry_row.get("date", entry_row.name))[:10]
+    entry_date    = str(entry_row.get("date", entry_row.name))[:10]
 
     sl  = raw_entry * (1 - sl_pct)
     tp1 = raw_entry * (1 + tp1_pct)
@@ -211,8 +215,10 @@ def run_backtest(
     if _date_col is not None:
         df["date"] = _date_col.values
 
-    # C3: compute per-ticker avg volume for tiered lock-san selection
-    avg_vol_20d = float(df["volume"].tail(20).mean()) if "volume" in df.columns else None
+    # [P1.2 — ROLLING LIQUIDITY] avg_vol_20d is now computed per signal bar inside
+    # the loop so only bars *before* the signal are used. The tail(20) snapshot
+    # was a future data leak when the signal appeared near the start of the window.
+    _has_volume = "volume" in df.columns
 
     max_hold = int(cfg.strategy("backtest", "max_hold_days", default=15))
     t2_settlement = bool(cfg.strategy("backtest", "t2_settlement", default=False))
@@ -234,6 +240,11 @@ def run_backtest(
     for idx in entry_indices:
         if idx < last_exit + t_settle:  # T+2 or T+3 capital lockup (from config)
             continue
+        # [P1.2 — ROLLING LIQUIDITY] Use only bars strictly before the signal bar.
+        avg_vol_20d = (
+            float(df["volume"].iloc[max(0, idx - 20):idx].mean())
+            if _has_volume and idx > 0 else None
+        )
         trade = _simulate_single_trade(
             df, idx, sl_pct, tp1_pct, tp2_pct, max_hold, mode,
             avg_vol_20d=avg_vol_20d,  # C3: wire tiered lock-san

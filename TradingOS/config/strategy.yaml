@@ -18,6 +18,28 @@ mfpm:
   # [VN-FIX V1] Volume confirmation for Mode A — VN "nến xanh" requires ≥1.5× avg volume
   mode_a_vol_confirm:   1.5  # multiplier vs 20-day avg volume (was 0.8)
 
+  # [P4.1] SMS composite bonus ladder (applied to Mode A/B base score)
+  # These defaults reproduce the previously hardcoded values exactly.
+  sms_bonus_strong:    20   # sms_raw >= 75
+  sms_bonus_moderate:  12   # sms_raw >= 60
+  sms_bonus_weak:       5   # sms_raw >= 40
+  sms_penalty_low:    -10   # sms_raw <  20
+  sms_penalty_mcvd:   -25   # mcvd_vs_price == DIVERGE_BEARISH (overrides other SMS bonus)
+
+  # [P4.2] Foreign net-flow bonus ladder (net/ADTV fraction)
+  # Defaults reproduce the previously hardcoded values exactly.
+  foreign_bonus_strong:    8   # foreign_net_pct >  0.30
+  foreign_bonus_moderate:  4   # foreign_net_pct >  0.15
+  foreign_penalty_strong: -8   # foreign_net_pct < -0.30
+  foreign_penalty_moderate: -4 # foreign_net_pct < -0.15
+
+  # [P4.3] BiLSTM directional bonus ladder (signal=UP/DOWN × confidence=HIGH/MEDIUM)
+  # Defaults reproduce the previously hardcoded values exactly.
+  bilstm_bonus_up_high:      10
+  bilstm_bonus_up_medium:     5
+  bilstm_penalty_down_high:  -10
+  bilstm_penalty_down_medium: -5
+
 # ── Horizon Forecast Weights ─────────────────────────────────────────────────
 # [VN-FIX V2] VN is a T+2.5 settlement market — retail traders hold 1–5 sessions.
 # Short-term forecast should carry more weight than long-term.
@@ -39,6 +61,17 @@ amf:
   wash_sale_volume_mult: 3.0   # Volume > 3× avg → suspect
   bid_ask_imbalance:     0.70  # > 70% one-sided order book
   vwap_deviation:        0.05  # [BUG-4 FIX] → 5%: 3% triggered too often for normal VN volatility
+  # [P4.4] Weighted flag severity — prevents mild flags from triggering BLOCK.
+  # Each flag type has a severity weight; decision uses weighted sum not raw count.
+  flag_weights:
+    OPEN_SPIKE:            2.0  # extreme gap — likely manipulation
+    WASH_SALE_BUY_DRIVEN:  1.5  # confirmed buy-side wash (price inflation)
+    WASH_SALE_VOLUME:      1.0  # high volume, direction unknown
+    WASH_SALE_SELL_DRIVEN: 0.5  # sell-side wash (Wyckoff spring candidate; lower severity)
+    ORDER_BOOK_IMBALANCE:  1.0  # one-sided order book
+    VWAP_DEV:              0.5  # mild VWAP drift (normal for VN small-caps)
+  block_weighted_threshold: 3.0  # weighted_sum >= 3.0 → BLOCK  (≈ 3 medium flags or 1 severe + 1 medium)
+  warn_weighted_threshold:  0.5  # weighted_sum >= 0.5 → WARN   (any single flag still warns)
 
 # ── Whale / Large Money Flow ──────────────────────────────────────────────────
 whale:

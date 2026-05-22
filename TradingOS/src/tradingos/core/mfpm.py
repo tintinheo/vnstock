@@ -307,18 +307,24 @@ def compute_mfpm(
     # SMS bonus for Mode A/B
     sms_raw = sms_result.get("sms", 0)
     sms_bonus = 0
+    # [P4.1] Read SMS bonus ladder from strategy.yaml (defaults = prior hardcoded values)
+    _sms_bonus_strong   = int(cfg.strategy("mfpm", "sms_bonus_strong",   default=20))
+    _sms_bonus_moderate = int(cfg.strategy("mfpm", "sms_bonus_moderate", default=12))
+    _sms_bonus_weak     = int(cfg.strategy("mfpm", "sms_bonus_weak",     default=5))
+    _sms_penalty_low    = int(cfg.strategy("mfpm", "sms_penalty_low",    default=-10))
+    _sms_penalty_mcvd   = int(cfg.strategy("mfpm", "sms_penalty_mcvd",   default=-25))
     if sms_raw >= 75:
-        sms_bonus = 20
+        sms_bonus = _sms_bonus_strong
     elif sms_raw >= 60:
-        sms_bonus = 12
+        sms_bonus = _sms_bonus_moderate
     elif sms_raw >= 40:
-        sms_bonus = 5
+        sms_bonus = _sms_bonus_weak
     elif sms_raw < 20:
-        sms_bonus = -10
+        sms_bonus = _sms_penalty_low
 
     mcvd_detail = sms_result.get("mcvd_detail", {})
     if mcvd_detail.get("mcvd_vs_price") == "DIVERGE_BEARISH":
-        sms_bonus = -25
+        sms_bonus = _sms_penalty_mcvd
 
     technical_score = max(a, b)
     blended_canslim = technical_score
@@ -346,14 +352,19 @@ def compute_mfpm(
     _foreign_net     = int(amf_result.get("details", {}).get("foreign_net", 0) if amf_result else 0)
     _adtv_mfpm       = float(df["volume"].tail(20).mean()) if not df.empty else 1.0
     _foreign_net_pct = _foreign_net / max(_adtv_mfpm, 1)
+    # [P4.2] Read foreign bonus ladder from strategy.yaml (defaults = prior hardcoded values)
+    _fb_strong   = int(cfg.strategy("mfpm", "foreign_bonus_strong",    default=8))
+    _fb_moderate = int(cfg.strategy("mfpm", "foreign_bonus_moderate",  default=4))
+    _fp_strong   = int(cfg.strategy("mfpm", "foreign_penalty_strong",  default=-8))
+    _fp_moderate = int(cfg.strategy("mfpm", "foreign_penalty_moderate", default=-4))
     if _foreign_net_pct > 0.30:
-        foreign_bonus = 8
+        foreign_bonus = _fb_strong
     elif _foreign_net_pct > 0.15:
-        foreign_bonus = 4
+        foreign_bonus = _fb_moderate
     elif _foreign_net_pct < -0.30:
-        foreign_bonus = -8
+        foreign_bonus = _fp_strong
     elif _foreign_net_pct < -0.15:
-        foreign_bonus = -4
+        foreign_bonus = _fp_moderate
     else:
         foreign_bonus = 0
     base_mfpm += foreign_bonus
@@ -363,10 +374,15 @@ def compute_mfpm(
     # Fallback: look in sms_result for bilstm keys (profiler passes them through).
     _bilstm_signal = sms_result.get("bilstm_10d_signal", "NO_MODEL")
     _bilstm_conf   = sms_result.get("bilstm_10d_confidence", "NONE")
+    # [P4.3] Read BiLSTM bonus ladder from strategy.yaml (defaults = prior hardcoded values)
+    _bl_up_high   = int(cfg.strategy("mfpm", "bilstm_bonus_up_high",       default=10))
+    _bl_up_med    = int(cfg.strategy("mfpm", "bilstm_bonus_up_medium",      default=5))
+    _bl_dn_high   = int(cfg.strategy("mfpm", "bilstm_penalty_down_high",    default=-10))
+    _bl_dn_med    = int(cfg.strategy("mfpm", "bilstm_penalty_down_medium",  default=-5))
     if _bilstm_signal == "UP":
-        bilstm_bonus = 10 if _bilstm_conf == "HIGH" else 5 if _bilstm_conf == "MEDIUM" else 0
+        bilstm_bonus = _bl_up_high if _bilstm_conf == "HIGH" else _bl_up_med if _bilstm_conf == "MEDIUM" else 0
     elif _bilstm_signal == "DOWN":
-        bilstm_bonus = -10 if _bilstm_conf == "HIGH" else -5 if _bilstm_conf == "MEDIUM" else 0
+        bilstm_bonus = _bl_dn_high if _bilstm_conf == "HIGH" else _bl_dn_med if _bilstm_conf == "MEDIUM" else 0
     else:
         bilstm_bonus = 0
     base_mfpm += bilstm_bonus

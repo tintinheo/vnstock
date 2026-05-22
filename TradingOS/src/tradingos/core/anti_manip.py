@@ -227,9 +227,34 @@ def run_amf(
             flags.append(f"VWAP_DEV_{dev*100:.1f}pct")
 
     # ── Decision ──────────────────────────────────────────────────────────
-    if len(flags) >= 3:
+    # [P4.4] Weighted decision: sum flag severity weights instead of counting raw flags.
+    # This prevents mild flags (VWAP drift, sell-wash) from triggering BLOCK
+    # when combined with other mild flags.  Three equal-medium-weight flags still
+    # produce BLOCK; confirmed wash-trade + any second signal still BLOCK.
+    _flag_weights_cfg = cfg.strategy("amf", "flag_weights", default={}) or {}
+    _block_thr        = float(cfg.strategy("amf", "block_weighted_threshold", default=3.0))
+    _warn_thr         = float(cfg.strategy("amf", "warn_weighted_threshold",  default=0.5))
+    _DEFAULT_WEIGHTS  = {
+        "OPEN_SPIKE":            2.0,
+        "WASH_SALE_BUY_DRIVEN":  1.5,
+        "WASH_SALE_VOLUME":      1.0,
+        "WASH_SALE_SELL_DRIVEN": 0.5,
+        "ORDER_BOOK_IMBALANCE":  1.0,
+        "VWAP_DEV":              0.5,
+    }
+    # Config overrides defaults; unknown prefixes fall back to 1.0
+    _weights = {**_DEFAULT_WEIGHTS, **{str(k): float(v) for k, v in _flag_weights_cfg.items()}}
+
+    def _flag_weight(flag: str) -> float:
+        for prefix, w in _weights.items():
+            if flag.startswith(prefix):
+                return w
+        return 1.0
+
+    weighted_score = sum(_flag_weight(f) for f in flags)
+    if weighted_score >= _block_thr:
         decision = "BLOCK"
-    elif len(flags) >= 1:
+    elif weighted_score >= _warn_thr:
         decision = "WARN"
     else:
         decision = "PASS"
