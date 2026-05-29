@@ -8,7 +8,7 @@ from typing import Any
 import pandas as pd
 
 from tradingos.data.cache import cache
-from tradingos.utils.dates import trading_day_offset, is_trading_day
+from tradingos.utils.dates import trading_day_offset, trading_days_between, is_trading_day
 from tradingos.core.t25_engine import t25_exit_check
 
 
@@ -65,7 +65,7 @@ class PortfolioTracker:
             if entry_d is None:
                 continue
             t2 = trading_day_offset(entry_d, 2)
-            hold_days = max(0, (today - entry_d).days)
+            hold_days = trading_days_between(entry_d, today)  # trading days, not calendar
 
             entry_price = float(row.get("entry_price") or 0)
             initial_sl  = float(row.get("initial_sl") or 0)
@@ -169,13 +169,16 @@ class PortfolioTracker:
 def _to_date(value: Any) -> date | None:
     if value is None:
         return None
-    if isinstance(value, date):
+    # Import here to avoid shadowing; check datetime BEFORE date (subclass)
+    from datetime import datetime as _dt, date as _date
+    if isinstance(value, _dt):
+        return value.date()
+    if isinstance(value, _date):
         return value
     try:
-        from datetime import datetime
-        if hasattr(value, "date"):
+        if hasattr(value, "date") and callable(value.date):
             return value.date()
-        return date.fromisoformat(str(value)[:10])
+        return _date.fromisoformat(str(value)[:10])
     except Exception:
         return None
 

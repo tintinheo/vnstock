@@ -21,10 +21,10 @@ def vn_session_phase() -> str:
     """
     now = vn_now().time()
     if now < time(9, 0):      return "PRE_MARKET"
-    elif now < time(9, 15):   return "PRE_ATO"
-    elif now < time(9, 30):   return "ATO"
-    elif now < time(11, 30):  return "MORNING"
-    elif now < time(13, 0):   return "LUNCH"
+    elif now < time(9, 15):   return "PRE_ATO"   # ATO order input 9:00-9:15
+    elif now < time(9, 20):   return "ATO"        # ATO matching + settle buffer 9:15-9:20
+    elif now < time(11, 30):  return "MORNING"    # HOSE continuous morning 9:20-11:30
+    elif now < time(13, 0):   return "LUNCH"      # HOSE break 11:30-13:00
     elif now < time(14, 30):  return "AFTERNOON"
     elif now < time(14, 43):  return "NEAR_ATC"
     elif now <= time(14, 45): return "ATC"
@@ -51,6 +51,13 @@ _VN_HOLIDAYS: set[date] = {
     date(2026, 2, 19), date(2026, 2, 20),
     date(2026, 4, 17), date(2026, 4, 30), date(2026, 5, 1),
     date(2026, 9, 2),
+    # 2027  (Lỳ Tết Ất Tỵ 2027 = 28/1; các ngày nghỉ lễ)
+    date(2027, 1, 1),
+    date(2027, 1, 25), date(2027, 1, 26), date(2027, 1, 27),
+    date(2027, 1, 28), date(2027, 1, 29),
+    date(2027, 4, 6),   # Giỗ Tổ Hùng Vương (10/3 âm lịch)
+    date(2027, 4, 30), date(2027, 5, 1),
+    date(2027, 9, 2),
 }
 
 

@@ -1,7 +1,7 @@
 """Scanner page — batch universe screener."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, date as _date_cls
 from pathlib import Path
 import streamlit as st
 import pandas as pd
@@ -60,29 +60,39 @@ _CORE_COLUMNS = ["Mã", "Action", "Conf", "MFPM", "SMS", "T+ Verdict", "T+ Conf"
                  "Giá", "Vào", "SL", "R:R", "AMF", "Pattern"]
 
 
-def render() -> None:
-    st.title("📡 Scanner")
-    st.caption("Quét toàn bộ universe theo MFPM score — lọc cơ hội mua theo Mode A/B/W.")
-
-    # ── Market Breadth Banner ─────────────────────────────────────────────────
-    macro_score  = None
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_scanner_macro() -> tuple[float | None, str, dict]:
+    """Cache macro + sector-flow for 5 min to avoid repeated API calls on each filter/rerun."""
+    from tradingos.core.macro import get_macro_regime
+    from tradingos.engines.money_flow_service import MoneyFlowService
+    macro_score: float | None = None
     macro_regime = ""
     sector_flows: dict = {}
     try:
-        from tradingos.core.macro import get_macro_regime
         m = get_macro_regime()
         macro_score  = m.get("score")
         macro_regime = m.get("regime", "")
     except Exception:
         pass
     try:
-        from tradingos.engines.money_flow_service import MoneyFlowService
         rotation = MoneyFlowService().get_sector_flows()
         if isinstance(rotation, dict):
             s = rotation.get("sectors", {})
             sector_flows = {k: v.get("flow_status", "NEUTRAL") for k, v in s.items()} if isinstance(s, dict) else {}
     except Exception:
         pass
+    return macro_score, macro_regime, sector_flows
+
+
+def render() -> None:
+    st.title("📡 Scanner")
+    st.caption("Quét toàn bộ universe theo MFPM score — lọc cơ hội mua theo Mode A/B/W.")
+
+    # ── Market Breadth Banner (cached 5 min) ───────────────────────────────────
+    try:
+        macro_score, macro_regime, sector_flows = _load_scanner_macro()
+    except Exception:
+        macro_score, macro_regime, sector_flows = None, "", {}
     render_market_breadth(macro_score, macro_regime, sector_flows, macro_score is None or macro_score >= 30)
 
     with st.expander("🧭 Cách đọc kết quả Scanner", expanded=False):
@@ -180,6 +190,21 @@ def render() -> None:
             f"✅ Quét xong: **{result.tickers_scanned}** mã → "
             f"hiển thị **{result.tickers_passed}** kết quả"
         )
+        # Save to cache so Morning Briefing can display latest opportunities
+        try:
+            import uuid, dataclasses
+            _cache_rows = []
+            for _r in result.results:
+                _row = dataclasses.asdict(_r) if dataclasses.is_dataclass(_r) else dict(vars(_r))
+                _cache_rows.append(_row)
+            cache.put_scan_result(
+                scan_id=str(uuid.uuid4()),
+                scan_type="FULL",
+                scan_date=_date_cls.today(),
+                data={"results": _cache_rows},
+            )
+        except Exception:
+            pass
         # Auto-export to data/result/
         _df_export = pd.DataFrame([
             {

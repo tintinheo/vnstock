@@ -1,7 +1,7 @@
 """Performance page — paper trading ledger, metrics, and confidence calibration."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 
 import numpy as np
 import pandas as pd
@@ -12,7 +12,6 @@ from tradingos.data.cache import cache
 from tradingos.engines.portfolio_tracker import portfolio_tracker as _tracker
 from tradingos.ui.components.dataframe_filter import filter_dataframe
 from tradingos.ui.components.position_card import render_position_card, render_close_dialog
-from tradingos.utils.dates import trading_day_offset
 
 
 _PERFORMANCE_READING_GUIDE = """
@@ -31,10 +30,14 @@ def _max_drawdown(pnl_series: pd.Series) -> float:
 def _to_date(value) -> date | None:
     if value is None:
         return None
+    # Check datetime BEFORE date (datetime is a subclass of date)
+    if isinstance(value, datetime):
+        return value.date()
     if isinstance(value, date):
         return value
     try:
-        if hasattr(value, "date"):
+        # pd.Timestamp and other objects that expose .date()
+        if hasattr(value, "date") and callable(value.date):
             return value.date()
         return date.fromisoformat(str(value)[:10])
     except Exception:

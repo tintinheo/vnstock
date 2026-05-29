@@ -26,6 +26,17 @@ def render() -> None:
     phase   = vn_session_phase()
     time_str = now_vn.strftime("%H:%M")
 
+    # ── Auto-refresh JS during active phases ──────────────────────────────────
+    if phase == "ATC":
+        st.markdown('<script>setTimeout(()=>window.location.reload(true),15000);</script>',
+                    unsafe_allow_html=True)
+    elif phase == "NEAR_ATC":
+        st.markdown('<script>setTimeout(()=>window.location.reload(true),20000);</script>',
+                    unsafe_allow_html=True)
+    elif phase == "AFTERNOON":
+        st.markdown('<script>setTimeout(()=>window.location.reload(true),60000);</script>',
+                    unsafe_allow_html=True)
+
     # ── Phase banner ──────────────────────────────────────────────────────────
     is_active = phase in ("NEAR_ATC", "ATC", "AFTERNOON", "CLOSED")
     if phase == "ATC":

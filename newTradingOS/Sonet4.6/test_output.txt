@@ -1,0 +1,198 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-9.0.2, pluggy-1.6.0 -- C:\Users\TheCaptain7th\AppData\Local\Microsoft\WindowsApps\PythonSoftwareFoundation.Python.3.13_qbz5n2kfra8p0\python.exe
+cachedir: .pytest_cache
+rootdir: D:\portfolio\vnstock\newTradingOS\Sonet4.6
+configfile: pytest.ini
+plugins: anyio-4.13.0
+collecting ... collected 159 items
+
+tests/test_backtest.py::TestRunBacktest::test_returns_backtest_result[1W] PASSED [  0%]
+tests/test_backtest.py::TestRunBacktest::test_returns_backtest_result[2W] PASSED [  1%]
+tests/test_backtest.py::TestRunBacktest::test_returns_backtest_result[1M] PASSED [  1%]
+tests/test_backtest.py::TestRunBacktest::test_returns_backtest_result[3M] PASSED [  2%]
+tests/test_backtest.py::TestRunBacktest::test_returns_backtest_result[5M] PASSED [  3%]
+tests/test_backtest.py::TestRunBacktest::test_equity_starts_at_initial PASSED [  3%]
+tests/test_backtest.py::TestRunBacktest::test_equity_is_list PASSED      [  4%]
+tests/test_backtest.py::TestRunBacktest::test_equity_length_gt_zero PASSED [  5%]
+tests/test_backtest.py::TestRunBacktest::test_trades_is_list PASSED      [  5%]
+tests/test_backtest.py::TestRunBacktest::test_all_equity_non_negative PASSED [  6%]
+tests/test_backtest.py::TestRunBacktest::test_short_data_no_crash PASSED [  6%]
+tests/test_backtest.py::TestT2Enforcement::test_sell_not_before_t2 PASSED [  7%]
+tests/test_backtest.py::TestT2Enforcement::test_t2_constant_is_2 PASSED  [  8%]
+tests/test_backtest.py::TestFees::test_pnl_accounts_for_fees PASSED      [  8%]
+tests/test_backtest.py::TestBacktestTrade::test_pnl_pct_positive_on_winning_trade PASSED [  9%]
+tests/test_backtest.py::TestBacktestTrade::test_pnl_pct_negative_on_stop PASSED [ 10%]
+tests/test_backtest.py::TestMultiTFBacktest::test_returns_dict_with_all_tfs PASSED [ 10%]
+tests/test_backtest.py::TestMultiTFBacktest::test_each_result_is_backtest_result PASSED [ 11%]
+tests/test_backtest.py::TestSummariseResults::test_returns_dataframe PASSED [ 11%]
+tests/test_backtest.py::TestSummariseResults::test_one_row_per_tf PASSED [ 12%]
+tests/test_backtest.py::TestSummariseResults::test_columns_present PASSED [ 13%]
+tests/test_backtest.py::TestTradesToDf::test_empty_trades PASSED         [ 13%]
+tests/test_backtest.py::TestTradesToDf::test_has_trades PASSED           [ 14%]
+tests/test_data_fetcher.py::TestNormalizePriceScale::test_detects_raw_vnd PASSED [ 15%]
+tests/test_data_fetcher.py::TestNormalizePriceScale::test_scales_up_small_prices PASSED [ 15%]
+tests/test_data_fetcher.py::TestNormalizePriceScale::test_volume_unchanged PASSED [ 16%]
+tests/test_data_fetcher.py::TestCleanDf::test_drops_duplicate_index FAILED [ 16%]
+tests/test_data_fetcher.py::TestCleanDf::test_drops_zero_close PASSED    [ 17%]
+tests/test_data_fetcher.py::TestCleanDf::test_sorted_asc PASSED          [ 18%]
+tests/test_data_fetcher.py::TestCleanDf::test_required_columns_present PASSED [ 18%]
+tests/test_data_fetcher.py::TestParseUdf::test_returns_dataframe PASSED  [ 19%]
+tests/test_data_fetcher.py::TestParseUdf::test_columns PASSED            [ 20%]
+tests/test_data_fetcher.py::TestParseUdf::test_length PASSED             [ 20%]
+tests/test_data_fetcher.py::TestParseUdf::test_returns_empty_on_error_status PASSED [ 21%]
+tests/test_data_fetcher.py::TestParseUdf::test_returns_empty_on_empty_body PASSED [ 22%]
+tests/test_data_fetcher.py::TestDownloadData::test_uses_dnse_on_success PASSED [ 22%]
+tests/test_data_fetcher.py::TestDownloadData::test_fallback_on_dnse_failure PASSED [ 23%]
+tests/test_data_fetcher.py::TestDownloadData::test_returns_tuple PASSED  [ 23%]
+tests/test_data_fetcher.py::TestGetLatestPrice::test_returns_float PASSED [ 24%]
+tests/test_data_fetcher.py::TestGetLatestPrice::test_returns_zero_on_failure PASSED [ 25%]
+tests/test_ensemble.py::TestRedistributeWeights::test_available_weights_sum_to_1 PASSED [ 25%]
+tests/test_ensemble.py::TestRedistributeWeights::test_unavailable_models_zero PASSED [ 26%]
+tests/test_ensemble.py::TestRedistributeWeights::test_all_available_unchanged PASSED [ 27%]
+tests/test_ensemble.py::TestRedistributeWeights::test_empty_available_returns_equal PASSED [ 27%]
+tests/test_ensemble.py::TestForecastResult::test_target_price_set PASSED [ 28%]
+tests/test_ensemble.py::TestForecastResult::test_bull_above_base PASSED  [ 28%]
+tests/test_ensemble.py::TestForecastResult::test_bear_below_base PASSED  [ 29%]
+tests/test_ensemble.py::TestForecastResult::test_upside_pct_finite PASSED [ 30%]
+tests/test_ensemble.py::TestEnsembleForecast::test_returns_forecast_result[1W] PASSED [ 30%]
+tests/test_ensemble.py::TestEnsembleForecast::test_returns_forecast_result[2W] PASSED [ 31%]
+tests/test_ensemble.py::TestEnsembleForecast::test_returns_forecast_result[1M] PASSED [ 32%]
+tests/test_ensemble.py::TestEnsembleForecast::test_returns_forecast_result[3M] PASSED [ 32%]
+tests/test_ensemble.py::TestEnsembleForecast::test_returns_forecast_result[5M] PASSED [ 33%]
+tests/test_ensemble.py::TestEnsembleForecast::test_prices_list_non_empty PASSED [ 33%]
+tests/test_ensemble.py::TestEnsembleForecast::test_weights_used_sum_to_1 PASSED [ 34%]
+tests/test_ensemble.py::TestEnsembleForecast::test_model_preds_non_empty PASSED [ 35%]
+tests/test_ensemble.py::TestEnsembleForecast::test_insufficient_data_fallback PASSED [ 35%]
+tests/test_indicators.py::TestSMA::test_basic PASSED                     [ 36%]
+tests/test_indicators.py::TestSMA::test_min_periods PASSED               [ 37%]
+tests/test_indicators.py::TestSMA::test_longer_series PASSED             [ 37%]
+tests/test_indicators.py::TestEMA::test_basic PASSED                     [ 38%]
+tests/test_indicators.py::TestEMA::test_no_nan PASSED                    [ 38%]
+tests/test_indicators.py::TestRSI::test_range_0_100 PASSED               [ 39%]
+tests/test_indicators.py::TestRSI::test_all_up_near_100 FAILED           [ 40%]
+tests/test_indicators.py::TestRSI::test_all_down_near_0 PASSED           [ 40%]
+tests/test_indicators.py::TestRSI::test_short_series PASSED              [ 41%]
+tests/test_indicators.py::TestMACD::test_returns_three_series PASSED     [ 42%]
+tests/test_indicators.py::TestMACD::test_histogram_equals_line_minus_signal PASSED [ 42%]
+tests/test_indicators.py::TestMACD::test_no_nan PASSED                   [ 43%]
+tests/test_indicators.py::TestATR::test_non_negative PASSED              [ 44%]
+tests/test_indicators.py::TestATR::test_length PASSED                    [ 44%]
+tests/test_indicators.py::TestBollingerBands::test_upper_gt_lower FAILED [ 45%]
+tests/test_indicators.py::TestBollingerBands::test_pctb_range PASSED     [ 45%]
+tests/test_indicators.py::TestADX::test_range PASSED                     [ 46%]
+tests/test_indicators.py::TestVolumeIndicators::test_volume_ratio_gt_zero PASSED [ 47%]
+tests/test_indicators.py::TestVolumeIndicators::test_obv_monotone_on_all_up PASSED [ 47%]
+tests/test_indicators.py::TestVolumeIndicators::test_mfi_range PASSED    [ 48%]
+tests/test_indicators.py::TestROC::test_flat_series_returns_zero PASSED  [ 49%]
+tests/test_indicators.py::TestManipulationScore::test_range_0_100 PASSED [ 49%]
+tests/test_indicators.py::TestManipulationScore::test_spike_raises_score PASSED [ 50%]
+tests/test_indicators.py::TestComputeAll::test_adds_expected_columns[1W] PASSED [ 50%]
+tests/test_indicators.py::TestComputeAll::test_adds_expected_columns[2W] PASSED [ 51%]
+tests/test_indicators.py::TestComputeAll::test_adds_expected_columns[1M] PASSED [ 52%]
+tests/test_indicators.py::TestComputeAll::test_adds_expected_columns[3M] PASSED [ 52%]
+tests/test_indicators.py::TestComputeAll::test_adds_expected_columns[5M] PASSED [ 53%]
+tests/test_indicators.py::TestComputeAll::test_no_crash_on_minimal_data PASSED [ 54%]
+tests/test_indicators.py::TestGoldenCross::test_detects_crossover PASSED [ 54%]
+tests/test_portfolio.py::TestKellyFraction::test_positive_edge PASSED    [ 55%]
+tests/test_portfolio.py::TestKellyFraction::test_max_cap PASSED          [ 55%]
+tests/test_portfolio.py::TestKellyFraction::test_min_floor PASSED        [ 56%]
+tests/test_portfolio.py::TestKellyFraction::test_zero_win_rate PASSED    [ 57%]
+tests/test_portfolio.py::TestKellyFraction::test_zero_avg_loss PASSED    [ 57%]
+tests/test_portfolio.py::TestPositionSize::test_multiple_of_lot PASSED   [ 58%]
+tests/test_portfolio.py::TestPositionSize::test_positive_shares PASSED   [ 59%]
+tests/test_portfolio.py::TestPositionSize::test_vnd_within_capital PASSED [ 59%]
+tests/test_portfolio.py::TestAllocateBudget::test_all_timeframes_present PASSED [ 60%]
+tests/test_portfolio.py::TestAllocateBudget::test_sum_le_capital PASSED  [ 61%]
+tests/test_portfolio.py::TestAllocateBudget::test_profiles PASSED        [ 61%]
+tests/test_portfolio.py::TestTradeStats::test_update_win PASSED          [ 62%]
+tests/test_portfolio.py::TestTradeStats::test_update_loss PASSED         [ 62%]
+tests/test_portfolio.py::TestTradeStats::test_win_rate PASSED            [ 63%]
+tests/test_portfolio.py::TestTradeStats::test_kelly_property PASSED      [ 64%]
+tests/test_portfolio.py::TestPortfolio::test_open_position PASSED        [ 64%]
+tests/test_portfolio.py::TestPortfolio::test_insufficient_cash PASSED    [ 65%]
+tests/test_portfolio.py::TestPortfolio::test_cash_decreases_after_open PASSED [ 66%]
+tests/test_portfolio.py::TestPortfolio::test_close_position PASSED       [ 66%]
+tests/test_portfolio.py::TestPortfolio::test_close_nonexistent_ticker PASSED [ 67%]
+tests/test_portfolio.py::TestPortfolio::test_realised_pnl_positive_on_profit PASSED [ 67%]
+tests/test_portfolio.py::TestPortfolio::test_save_load PASSED            [ 68%]
+tests/test_portfolio.py::TestPortfolio::test_positions_df PASSED         [ 69%]
+tests/test_portfolio.py::TestPortfolio::test_trades_df PASSED            [ 69%]
+tests/test_portfolio.py::TestPortfolioMetrics::test_growing_equity PASSED [ 70%]
+tests/test_portfolio.py::TestPortfolioMetrics::test_drawdown_negative PASSED [ 71%]
+tests/test_portfolio.py::TestPortfolioMetrics::test_sharpe_positive_on_profits PASSED [ 71%]
+tests/test_portfolio.py::TestPortfolioMetrics::test_empty_curve PASSED   [ 72%]
+tests/test_regime.py::TestRegimeResult::test_fields PASSED               [ 72%]
+tests/test_regime.py::TestRegimeResult::test_valid_regime_values PASSED  [ 73%]
+tests/test_regime.py::TestRuleDetection::test_bull_trending_up PASSED    [ 74%]
+tests/test_regime.py::TestRuleDetection::test_bear_trending_down PASSED  [ 74%]
+tests/test_regime.py::TestRuleDetection::test_sideways_flat PASSED       [ 75%]
+tests/test_regime.py::TestRuleDetection::test_probability_between_0_1 PASSED [ 76%]
+tests/test_regime.py::TestRuleDetection::test_history_length PASSED      [ 76%]
+tests/test_regime.py::TestRuleDetection::test_method_label PASSED        [ 77%]
+tests/test_regime.py::TestDetectRegime::test_empty_series PASSED         [ 77%]
+tests/test_regime.py::TestDetectRegime::test_none_series PASSED          [ 78%]
+tests/test_regime.py::TestDetectRegime::test_short_series_fallback PASSED [ 79%]
+tests/test_regime.py::TestDetectRegime::test_long_series_rule PASSED     [ 79%]
+tests/test_regime.py::TestHelpers::test_regime_color PASSED              [ 80%]
+tests/test_regime.py::TestHelpers::test_regime_emoji PASSED              [ 81%]
+tests/test_regime.py::TestHelpers::test_label_vi PASSED                  [ 81%]
+tests/test_scoring.py::TestComputeScore::test_returns_signal_result[1W] PASSED [ 82%]
+tests/test_scoring.py::TestComputeScore::test_returns_signal_result[2W] PASSED [ 83%]
+tests/test_scoring.py::TestComputeScore::test_returns_signal_result[1M] PASSED [ 83%]
+tests/test_scoring.py::TestComputeScore::test_returns_signal_result[3M] PASSED [ 84%]
+tests/test_scoring.py::TestComputeScore::test_returns_signal_result[5M] PASSED [ 84%]
+tests/test_scoring.py::TestComputeScore::test_score_in_range[1W] PASSED  [ 85%]
+tests/test_scoring.py::TestComputeScore::test_score_in_range[2W] PASSED  [ 86%]
+tests/test_scoring.py::TestComputeScore::test_score_in_range[1M] PASSED  [ 86%]
+tests/test_scoring.py::TestComputeScore::test_score_in_range[3M] PASSED  [ 87%]
+tests/test_scoring.py::TestComputeScore::test_score_in_range[5M] PASSED  [ 88%]
+tests/test_scoring.py::TestComputeScore::test_action_valid[1W] PASSED    [ 88%]
+tests/test_scoring.py::TestComputeScore::test_action_valid[2W] PASSED    [ 89%]
+tests/test_scoring.py::TestComputeScore::test_action_valid[1M] PASSED    [ 89%]
+tests/test_scoring.py::TestComputeScore::test_action_valid[3M] PASSED    [ 90%]
+tests/test_scoring.py::TestComputeScore::test_action_valid[5M] PASSED    [ 91%]
+tests/test_scoring.py::TestComputeScore::test_price_equals_last_close PASSED [ 91%]
+tests/test_scoring.py::TestComputeScore::test_stop_loss_below_price PASSED [ 92%]
+tests/test_scoring.py::TestComputeScore::test_take_profit_above_price PASSED [ 93%]
+tests/test_scoring.py::TestComputeScore::test_rr_ratio_matches_config PASSED [ 93%]
+tests/test_scoring.py::TestComputeScore::test_insufficient_data_returns_zero_score PASSED [ 94%]
+tests/test_scoring.py::TestComputeScore::test_breakdown_keys_present PASSED [ 94%]
+tests/test_scoring.py::TestComputeScore::test_breakdown_sum_close_to_score PASSED [ 95%]
+tests/test_scoring.py::TestRegimeFilter::test_1w_bear_regime_downgrades_buy PASSED [ 96%]
+tests/test_scoring.py::TestRegimeFilter::test_3m_accepts_bear_regime PASSED [ 96%]
+tests/test_scoring.py::TestBatchScore::test_returns_list PASSED          [ 97%]
+tests/test_scoring.py::TestBatchScore::test_sorted_by_score PASSED       [ 98%]
+tests/test_scoring.py::TestBatchScore::test_min_score_filter PASSED      [ 98%]
+tests/test_scoring.py::TestBatchScore::test_empty_dict_returns_empty PASSED [ 99%]
+tests/test_scoring.py::TestBatchScore::test_skips_empty_df PASSED        [100%]
+
+================================== FAILURES ===================================
+E   AssertionError: assert not np.True_
+     +  where np.True_ = <built-in method any of numpy.ndarray object at 0x00000203E44200F0>()
+     +    where <built-in method any of numpy.ndarray object at 0x00000203E44200F0> = array([False,  True, False,  True, False, False, False, False, False,\n       False, False, False]).any
+     +      where array([False,  True, False,  True, False, False, False, False, False,\n       False, False, False]) = duplicated()
+     +        where duplicated = DatetimeIndex(['2026-01-01', '2026-01-01', '2026-01-02', '2026-01-02',\n               '2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08',\n               '2026-01-09', '2026-01-12', '2026-01-13', '2026-01-14'],\n              dtype='datetime64[ns]', freq=None).duplicated
+     +          where DatetimeIndex(['2026-01-01', '2026-01-01', '2026-01-02', '2026-01-02',\n               '2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08',\n               '2026-01-09', '2026-01-12', '2026-01-13', '2026-01-14'],\n              dtype='datetime64[ns]', freq=None) =              Open   High   Low  Close   Volume\n2026-01-01  100.0  101.0  99.0  100.5  1000000\n2026-01-01  100.0  101.0  99.0  100.5  1000000\n2026-01-02  100.0  101.0  99.0  100.5  1000000\n2026-01-02  100.0  101.0  99.0  100.5  1000000\n2026-01-05  100.0  101.0  99.0  100.5  1000000\n2026-01-06  100.0  101.0  99.0  100.5  1000000\n2026-01-07  100.0  101.0  99.0  100.5  1000000\n2026-01-08  100.0  101.0  99.0  100.5  1000000\n2026-01-09  100.0  101.0  99.0  100.5  1000000\n2026-01-12  100.0  101.0  99.0  100.5  1000000\n2026-01-13  100.0  101.0  99.0  100.5  1000000\n2026-01-14  100.0  101.0  99.0  100.5  1000000.index
+D:\portfolio\vnstock\newTradingOS\Sonet4.6\tests\test_data_fetcher.py:78: AssertionError: assert not np.True_
+E   AssertionError: RSI should have non-NaN values on trending series
+    assert 0 > 0
+     +  where 0 = len(Series([], dtype: float64))
+D:\portfolio\vnstock\newTradingOS\Sonet4.6\tests\test_indicators.py:69: AssertionError: RSI should have non-NaN values on trending series
+E   assert np.False_
+     +  where np.False_ = all()
+     +    where all = Date\n2024-07-01    False\n2024-07-02     True\n2024-07-03     True\n2024-07-04     True\n2024-07-05     True\n              ...  \n2026-05-25     True\n2026-05-26     True\n2026-05-27     True\n2026-05-28     True\n2026-05-29     True\nFreq: B, Name: Close, Length: 500, dtype: bool.all
+D:\portfolio\vnstock\newTradingOS\Sonet4.6\tests\test_indicators.py:124: assert np.False_
+=========================== short test summary info ===========================
+FAILED tests/test_data_fetcher.py::TestCleanDf::test_drops_duplicate_index - AssertionError: assert not np.True_
+ +  where np.True_ = <built-in method any of numpy.ndarray object at 0x00000203E44200F0>()
+ +    where <built-in method any of numpy.ndarray object at 0x00000203E44200F0> = array([False,  True, False,  True, False, False, False, False, False,\n       False, False, False]).any
+ +      where array([False,  True, False,  True, False, False, False, False, False,\n       False, False, False]) = duplicated()
+ +        where duplicated = DatetimeIndex(['2026-01-01', '2026-01-01', '2026-01-02', '2026-01-02',\n               '2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08',\n               '2026-01-09', '2026-01-12', '2026-01-13', '2026-01-14'],\n              dtype='datetime64[ns]', freq=None).duplicated
+ +          where DatetimeIndex(['2026-01-01', '2026-01-01', '2026-01-02', '2026-01-02',\n               '2026-01-05', '2026-01-06', '2026-01-07', '2026-01-08',\n               '2026-01-09', '2026-01-12', '2026-01-13', '2026-01-14'],\n              dtype='datetime64[ns]', freq=None) =              Open   High   Low  Close   Volume\n2026-01-01  100.0  101.0  99.0  100.5  1000000\n2026-01-01  100.0  101.0  99.0  100.5  1000000\n2026-01-02  100.0  101.0  99.0  100.5  1000000\n2026-01-02  100.0  101.0  99.0  100.5  1000000\n2026-01-05  100.0  101.0  99.0  100.5  1000000\n2026-01-06  100.0  101.0  99.0  100.5  1000000\n2026-01-07  100.0  101.0  99.0  100.5  1000000\n2026-01-08  100.0  101.0  99.0  100.5  1000000\n2026-01-09  100.0  101.0  99.0  100.5  1000000\n2026-01-12  100.0  101.0  99.0  100.5  1000000\n2026-01-13  100.0  101.0  99.0  100.5  1000000\n2026-01-14  100.0  101.0  99.0  100.5  1000000.index
+FAILED tests/test_indicators.py::TestRSI::test_all_up_near_100 - AssertionError: RSI should have non-NaN values on trending series
+assert 0 > 0
+ +  where 0 = len(Series([], dtype: float64))
+FAILED tests/test_indicators.py::TestBollingerBands::test_upper_gt_lower - assert np.False_
+ +  where np.False_ = all()
+ +    where all = Date\n2024-07-01    False\n2024-07-02     True\n2024-07-03     True\n2024-07-04     True\n2024-07-05     True\n              ...  \n2026-05-25     True\n2026-05-26     True\n2026-05-27     True\n2026-05-28     True\n2026-05-29     True\nFreq: B, Name: Close, Length: 500, dtype: bool.all
+================== 3 failed, 156 passed in 215.75s (0:03:35) ==================

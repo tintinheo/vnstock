@@ -43,8 +43,8 @@ def _session_phase() -> str:
         return "ATO"
     elif now < time(11, 30):
         return "CONTINUOUS"
-    elif now < time(12, 45):
-        return "BREAK"           # [VN-FIX VN-B4] HOSE midday break 11:30–12:45; exchange closed
+    elif now < time(13, 0):
+        return "BREAK"           # HOSE midday break 11:30–13:00 (exchange closed)
     elif now < time(14, 30):
         return "CONTINUOUS"
     elif now < time(14, 43):

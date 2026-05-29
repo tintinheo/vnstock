@@ -1,7 +1,7 @@
 """Morning Briefing page — default homepage for TradingOS."""
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime, time as dtime
 
 import pandas as pd
 import streamlit as st
@@ -11,6 +11,32 @@ from tradingos.engines.portfolio_tracker import portfolio_tracker
 from tradingos.ui.components.market_breadth import render_market_breadth
 from tradingos.ui.components.position_card import render_position_card, render_close_dialog
 from tradingos.utils.dates import vn_now, vn_session_phase, trading_day_offset
+
+
+@st.cache_data(ttl=300, show_spinner=False)
+def _load_macro_data() -> tuple[float | None, str, dict]:
+    """Cache macro + sector-flow data for 5 minutes to avoid repeated API calls."""
+    from tradingos.engines.money_flow_service import MoneyFlowService
+    from tradingos.core.macro import get_macro_regime
+    sector_flows: dict = {}
+    macro_score: float | None = None
+    macro_regime: str = ""
+    try:
+        mf_svc = MoneyFlowService()
+        rotation = mf_svc.get_sector_flows()
+        if isinstance(rotation, dict):
+            sectors = rotation.get("sectors", {})
+            sector_flows = {k: v.get("flow_status", "NEUTRAL") for k, v in sectors.items()} if isinstance(sectors, dict) else {}
+    except Exception:
+        pass
+    try:
+        macro_data   = get_macro_regime()
+        macro_score  = macro_data.get("score")
+        macro_regime = macro_data.get("regime", "")
+    except Exception:
+        pass
+    return macro_score, macro_regime, sector_flows
+
 
 _PHASE_VN = {
     "PRE_MARKET":  "Chưa mở phiên",
@@ -36,6 +62,55 @@ _ACTION_ICON = {
 }
 
 
+def _session_countdown(phase: str) -> str:
+    """Return a short string: 'ATC in 12:34' or 'Opens in 01:15:00'."""
+    now = vn_now()
+    t   = now.time()
+
+    def _delta_str(target_h: int, target_m: int, target_s: int = 0) -> str:
+        tgt = now.replace(hour=target_h, minute=target_m, second=target_s, microsecond=0)
+        secs = max(0, int((tgt - now).total_seconds()))
+        h, rem = divmod(secs, 3600)
+        m, s   = divmod(rem, 60)
+        if h:
+            return f"{h}h {m:02d}m"
+        return f"{m:02d}:{s:02d}"
+
+    if phase == "PRE_MARKET":
+        return f"⏳ Mở phiên sau {_delta_str(9, 0)}"
+    if phase == "PRE_ATO":
+        return f"⏳ ATO sau {_delta_str(9, 15)}"
+    if phase == "ATO":
+        return f"⏳ Phiên sáng sau {_delta_str(9, 20)}"
+    if phase == "MORNING":
+        return f"⏳ Nghỉ trưa sau {_delta_str(11, 30)}"
+    if phase == "LUNCH":
+        return f"⏳ Phiên chiều sau {_delta_str(13, 0)}"
+    if phase == "AFTERNOON":
+        return f"⚡ ATC sau {_delta_str(14, 43)}"
+    if phase == "NEAR_ATC":
+        return f"🔴 ATC bắt đầu sau {_delta_str(14, 43)}"
+    if phase == "ATC":
+        return "🔴 ATC đang diễn ra (14:43–14:45)"
+    return "📴 Phiên đã đóng"
+
+
+def _autorefresh(phase: str) -> None:
+    """Inject JS to auto-reload the page. Near ATC: 20s; active: 60s; closed: none."""
+    if phase in ("NEAR_ATC", "ATC"):
+        ms = 20_000
+    elif phase in ("AFTERNOON",):
+        ms = 60_000
+    elif phase in ("MORNING", "PRE_ATO", "ATO", "LUNCH"):
+        ms = 120_000
+    else:
+        return  # PRE_MARKET / CLOSED — no need to burn resources
+    st.markdown(
+        f'<script>setTimeout(()=>window.location.reload(true),{ms});</script>',
+        unsafe_allow_html=True,
+    )
+
+
 def render() -> None:
     now_vn   = vn_now()
     today    = now_vn.date()
@@ -43,37 +118,63 @@ def render() -> None:
     phase    = vn_session_phase()
     phase_vn = _PHASE_VN.get(phase, phase)
     time_str = now_vn.strftime("%H:%M")
+    countdown = _session_countdown(phase)
 
-    st.markdown(
-        f'<h2 style="margin-bottom:4px;">☀️ Morning Briefing</h2>'
-        f'<p style="color:#64748b;margin-top:0;">{weekday}, {today.strftime("%d/%m/%Y")} — {time_str} | {phase_vn}</p>',
+    # ── Auto-refresh JS ───────────────────────────────────────────────────────
+    _autorefresh(phase)
+
+    # ── Header ────────────────────────────────────────────────────────────────
+    hdr_col, search_col = st.columns([3, 2])
+    hdr_col.markdown(
+        f'<h2 style="margin-bottom:2px;">☀️ Morning Briefing</h2>'
+        f'<p style="color:#64748b;margin-top:0;font-size:13px;">'
+        f'{weekday}, {today.strftime("%d/%m/%Y")} — {time_str} &nbsp;|&nbsp; '
+        f'{phase_vn} &nbsp;|&nbsp; <b style="color:#f59e0b;">{countdown}</b></p>',
         unsafe_allow_html=True,
     )
+
+    # ── Quick ticker search — top of page ─────────────────────────────────────
+    with search_col:
+        st.markdown('<div style="margin-top:12px;"></div>', unsafe_allow_html=True)
+        q_col1, q_col2 = st.columns([3, 1])
+        quick_ticker = q_col1.text_input(
+            "Tra cứu nhanh",
+            placeholder="VCB, HPG, FPT...",
+            label_visibility="collapsed",
+            key="mb_quick_ticker",
+        ).strip().upper()
+        if q_col2.button("→ Phân tích", use_container_width=True, key="mb_quick_go"):
+            if quick_ticker:
+                st.session_state["_nav_pending"] = "🔍 Profiler"
+                st.session_state["profiler_ticker"] = quick_ticker
+                st.rerun()
+
+    # ── Portfolio summary strip ───────────────────────────────────────────────
+    try:
+        summary = portfolio_tracker.summary()
+        if summary["open"] > 0 or summary["closed"] > 0:
+            s1, s2, s3, s4 = st.columns(4)
+            s1.metric("📂 Đang nắm", summary["open"])
+            s2.metric("📊 Đã đóng", summary["closed"])
+            s3.metric("🏆 Win rate",
+                      f"{summary['win_rate']:.0%}" if summary["closed"] > 0 else "—")
+            s4.metric("📈 P&L TB",
+                      f"{summary['avg_pnl']:+.2f}%" if summary["closed"] > 0 else "—")
+    except Exception:
+        pass
 
     # ── Market Breadth Banner ─────────────────────────────────────────────────
     macro_score  = None
     macro_regime = ""
     sector_flows: dict = {}
     try:
-        from tradingos.engines.money_flow_service import MoneyFlowService
-        mf_svc = MoneyFlowService()
-        rotation = mf_svc.get_sector_flows()
-        if isinstance(rotation, dict):
-            sectors = rotation.get("sectors", {})
-            sector_flows = {k: v.get("flow_status", "NEUTRAL") for k, v in sectors.items()} if isinstance(sectors, dict) else {}
-    except Exception:
-        pass
-
-    try:
-        from tradingos.core.macro import get_macro_regime
-        macro_data   = get_macro_regime()
-        macro_score  = macro_data.get("score")
-        macro_regime = macro_data.get("regime", "")
+        macro_score, macro_regime, sector_flows = _load_macro_data()
     except Exception:
         pass
 
     scan_ok = macro_score is None or macro_score >= 30
     render_market_breadth(macro_score, macro_regime, sector_flows, scan_ok)
+
 
     # ── Section 1: Actions needed today ──────────────────────────────────────
     due_today = portfolio_tracker.get_positions_due_today()
@@ -169,23 +270,6 @@ def render() -> None:
             st.session_state["_nav_pending"] = "📡 Scanner"
             st.rerun()
 
-    # ── Section 4: Quick ticker lookup ────────────────────────────────────────
-    st.divider()
-    st.markdown("### 🔍 Tra cứu nhanh")
-    col_q, col_btn = st.columns([3, 1])
-    quick_ticker = col_q.text_input(
-        "Nhập mã cổ phiếu",
-        placeholder="VCB, HPG, FPT...",
-        label_visibility="collapsed",
-        key="mb_quick_ticker",
-    ).strip().upper()
-    if col_btn.button("→ Phân tích", use_container_width=True, key="mb_quick_go"):
-        if quick_ticker:
-            st.session_state["_nav_pending"] = "🔍 Profiler"
-            st.session_state["profiler_ticker"] = quick_ticker
-            st.rerun()
-
-
 def _render_scan_cards(results: list[dict]) -> None:
     """Render top BUY/STRONG_BUY from cached scan results as cards."""
     buy_results = [
@@ -270,10 +354,13 @@ def _render_scan_cards(results: list[dict]) -> None:
 def _to_date(value) -> date | None:
     if value is None:
         return None
+    from datetime import datetime as _dt
+    if isinstance(value, _dt):      # must check datetime BEFORE date (datetime subclasses date)
+        return value.date()
     if isinstance(value, date):
         return value
     try:
-        if hasattr(value, "date"):
+        if hasattr(value, "date") and callable(value.date):
             return value.date()
         return date.fromisoformat(str(value)[:10])
     except Exception:

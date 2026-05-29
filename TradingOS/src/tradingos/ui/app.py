@@ -51,80 +51,72 @@ with st.sidebar:
     try:
         from tradingos.engines.portfolio_tracker import portfolio_tracker as _tracker
         _due = _tracker.get_positions_due_today()
-        if _due is not None and not _due.empty:
+        if _due:  # returns list[dict], not DataFrame
             _atc_badge = f" 🔴{len(_due)}"
     except Exception:
         pass
 
-    # ── HÀNH ĐỘNG section ─────────────────────────────────────────────────
+    # ── Single radio with all pages (section labels shown via st.caption) ──
     st.caption("── HÀNH ĐỘNG ──")
+    _VALID_PAGES = {
+        "🌅 Morning Briefing",
+        f"⚡ ATC Alert{_atc_badge}",
+        "📂 Danh mục & Hiệu suất",
+        "🔍 Profiler",
+        "📡 Scanner",
+        "🐳 Dòng tiền",
+        "📊 Backtest",
+        "🗂 Audit",
+        "⚙️ Cài đặt",
+    }
+    _all_options = [
+        "🌅 Morning Briefing",
+        f"⚡ ATC Alert{_atc_badge}",
+        "📂 Danh mục & Hiệu suất",
+        "🔍 Profiler",
+        "📡 Scanner",
+        "── PHÂN TÍCH ──",
+        "🐳 Dòng tiền",
+        "📊 Backtest",
+        "── HỆ THỐNG ──",
+        "🗂 Audit",
+        "⚙️ Cài đặt",
+    ]
     page = st.radio(
         "Navigation",
-        options=[
-            "🌅 Morning Briefing",
-            f"⚡ ATC Alert{_atc_badge}",
-            "📂 Danh mục & Hiệu suất",
-            "🔍 Profiler",
-            "📡 Scanner",
-        ],
+        options=_all_options,
         key="nav",
-    )
-    st.caption("── PHÂN TÍCH ──")
-    page_analysis = st.radio(
-        "Analysis",
-        options=[
-            "🐳 Dòng tiền",
-            "📊 Backtest",
-        ],
-        key="nav_analysis",
-        label_visibility="collapsed",
-    )
-    st.caption("── HỆ THỐNG ──")
-    page_system = st.radio(
-        "System",
-        options=[
-            "🗂 Audit",
-            "⚙️ Cài đặt",
-        ],
-        key="nav_system",
         label_visibility="collapsed",
     )
 
-    # Merge: last-clicked group wins
-    _all_pages = [page, page_analysis, page_system]
-    _last_nav = st.session_state.get("_last_nav")
-    # Detect which group changed relative to last render
-    if "nav_last_action" not in st.session_state:
-        st.session_state["nav_last_action"] = "nav"
+    # ── Quick ticker search ───────────────────────────────────────────────
+    st.divider()
+    st.caption("🔍 Tra cứu nhanh")
+    _qs_col1, _qs_col2 = st.columns([3, 1])
+    _quick_t = _qs_col1.text_input(
+        "ticker_search",
+        placeholder="VCB, FPT...",
+        label_visibility="collapsed",
+        key="sidebar_quick_ticker",
+    ).strip().upper()
+    if _qs_col2.button("→", key="sidebar_quick_go", use_container_width=True):
+        if _quick_t:
+            st.session_state["profiler_ticker"] = _quick_t
+            st.session_state["_nav_pending"] = "🔍 Profiler"
+            st.rerun()
 
     st.divider()
     st.caption("⚠️ Advisory only — không phải khuyến nghị đầu tư.")
     st.caption("[H1] Hệ thống không đặt lệnh tự động.")
     st.caption("v1.2 Alpha")
 
-# ── Determine active page (track which radio last changed) ────────────────────
-# We store the previous values to detect which group the user just clicked
-_prev_main     = st.session_state.get("_prev_nav",     "🌅 Morning Briefing")
-_prev_analysis = st.session_state.get("_prev_analysis","🐳 Dòng tiền")
-_prev_system   = st.session_state.get("_prev_system",  "🗂 Audit")
+# ── Normalise page (strip ATC badge suffix) ───────────────────────────────────
+_active_norm = page.replace(_atc_badge, "") if _atc_badge else page
 
-if page != _prev_main:
-    active_page = page
-    st.session_state["_prev_nav"]      = page
-elif page_analysis != _prev_analysis:
-    active_page = page_analysis
-    st.session_state["_prev_analysis"] = page_analysis
-elif page_system != _prev_system:
-    active_page = page_system
-    st.session_state["_prev_system"]   = page_system
-else:
-    # No change — use the stored active page (default Morning Briefing)
-    active_page = st.session_state.get("_active_page", "🌅 Morning Briefing")
+# Track last valid page so separator-click can revert gracefully
+if _active_norm in _VALID_PAGES or _active_norm.replace(_atc_badge, "") in _VALID_PAGES:
+    st.session_state["_last_valid_nav"] = _active_norm
 
-st.session_state["_active_page"] = active_page
-
-# Normalise ATC badge variant
-_active_norm = active_page.replace(_atc_badge, "") if _atc_badge else active_page
 
 # ── Route to pages ────────────────────────────────────────────────────────────
 from tradingos.ui.pages import (  # noqa: E402
@@ -151,5 +143,11 @@ elif _active_norm == "🗂 Audit":
 elif _active_norm == "⚙️ Cài đặt":
     settings.render()
 else:
+    # Section separator was accidentally clicked — revert nav to last valid page
+    _revert_to = st.session_state.get("_last_valid_nav", "🌅 Morning Briefing")
+    if st.session_state.get("nav") != _revert_to:
+        st.session_state["nav"] = _revert_to
+        st.rerun()
+    # Fallback: re-render Morning Briefing if revert target is also invalid
     morning_briefing.render()
 

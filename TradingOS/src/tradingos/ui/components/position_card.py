@@ -5,7 +5,7 @@ from datetime import date
 
 import streamlit as st
 
-from tradingos.utils.dates import trading_day_offset
+from tradingos.utils.dates import trading_day_offset, trading_days_between
 
 
 def render_position_card(
@@ -28,7 +28,8 @@ def render_position_card(
     """
     today = date.today()
     t2_date = trading_day_offset(entry_date, 2)
-    days_left = max(0, (t2_date - today).days)
+    # Use trading days remaining, not calendar days (avoids weekend inflation)
+    days_left = max(0, trading_days_between(today, t2_date))
 
     current_price = rt_price if rt_price and rt_price > 0 else entry_price
     pnl_pct = (current_price - entry_price) / max(entry_price, 1) * 100
