@@ -5,6 +5,8 @@ Returns normalised 0-100 score + action + full breakdown.
 """
 from __future__ import annotations
 
+import logging
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from typing import Optional
 
@@ -13,6 +15,8 @@ import pandas as pd
 
 from config import TIMEFRAME_CONFIG, score_to_action
 from core.indicators import compute_all
+
+logger = logging.getLogger("TradingOS.scoring")
 
 
 @dataclass
@@ -121,9 +125,10 @@ def compute_score(
     if vol_r > 1.5:   vol += 7
     if vol_r > 2.5:   vol += 5   # extra for very strong spike
     if vol_r > 2.0 and price > last["SMA_fast"]: vol += 3  # breakout volume
-    # Accumulation (3-day avg > 1.2× SMA)
-    recent_vol_ma = df["Volume"].iloc[-3:].mean()
-    if recent_vol_ma > df["Volume"].rolling(cfg["volume_ma"]).mean().iloc[-1] * 1.2:
+    # Accumulation (3-day avg > 1.2× SMA) — use pre-computed Vol_MA column
+    recent_vol_avg = df["Volume"].iloc[-3:].mean()
+    vol_ma_last    = float(df["Vol_MA"].iloc[-1]) if "Vol_MA" in df.columns and not pd.isna(df["Vol_MA"].iloc[-1]) else 0.0
+    if vol_ma_last > 0 and recent_vol_avg > vol_ma_last * 1.2:
         vol += 3
     if mfi_v > 50: vol += 2
     vol = min(vol, 20.0)
@@ -224,21 +229,32 @@ def batch_score(
     """
     Score a dictionary of {ticker: (df, source)} for a given timeframe.
     Returns list sorted by score descending.
+    Workers run in a thread pool; numpy releases the GIL for C-level ops.
     """
-    results = []
     ff = foreign_flows or {}
 
-    for ticker, (df, _src) in data_dict.items():
+    def _score_one(item: tuple) -> Optional[SignalResult]:
+        ticker, (df, _src) = item
         if df is None or df.empty:
-            continue
-        sig = compute_score(
-            df, tf,
-            regime=regime,
-            foreign_flow_net=ff.get(ticker, {}).get("net_buy_value", 0.0),
-            macro_score=macro_score,
-            ticker=ticker,
-        )
-        results.append(sig)
+            return None
+        try:
+            return compute_score(
+                df, tf,
+                regime=regime,
+                foreign_flow_net=ff.get(ticker, {}).get("net_buy_value", 0.0),
+                macro_score=macro_score,
+                ticker=ticker,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning("batch_score: %s skipped — %s", ticker, exc)
+            return None
+
+    n_workers = min(6, max(1, len(data_dict)))
+    with ThreadPoolExecutor(max_workers=n_workers) as pool:
+        results = [
+            sig for sig in pool.map(_score_one, data_dict.items())
+            if sig is not None
+        ]
 
     results.sort(key=lambda s: s.score, reverse=True)
 

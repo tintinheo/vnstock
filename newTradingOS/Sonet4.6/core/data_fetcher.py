@@ -203,12 +203,16 @@ def download_data(
 def batch_download(
     symbols: list[str],
     days: int = 730,
-    max_workers: int = 6,
-    delay: float = 0.1,
+    max_workers: int = 8,
+    delay: float = 0.05,
+    on_progress=None,   # callable(done: int, total: int, sym: str) | None
 ) -> dict[str, tuple[pd.DataFrame, str]]:
     """
     Download multiple tickers concurrently.
     Returns dict[symbol -> (df, source)].
+
+    on_progress is called in the calling thread after each ticker completes,
+    making it safe to call Streamlit UI functions from the callback.
     """
     results: dict[str, tuple[pd.DataFrame, str]] = {}
 
@@ -217,11 +221,17 @@ def batch_download(
         df, src = download_data(sym, days)
         return sym, df, src
 
+    total = len(symbols)
     with ThreadPoolExecutor(max_workers=max_workers) as pool:
         futures = {pool.submit(_worker, s): s for s in symbols}
         for fut in as_completed(futures):
             sym, df, src = fut.result()
             results[sym] = (df, src)
+            if on_progress is not None:
+                try:
+                    on_progress(len(results), total, sym)
+                except Exception:
+                    pass  # never let UI errors block data fetching
 
     return results
 

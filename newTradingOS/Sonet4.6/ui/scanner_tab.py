@@ -63,32 +63,45 @@ def render_scanner_tab(
 ) -> None:
     """
     Compute ALL tickers unconditionally, write audit log, and display the
-    complete result table. No rows are hidden — the user sorts/filters using
-    the Streamlit dataframe column headers and the search toolbar.
+    complete result table. Scan results are cached in session_state; re-scoring
+    is skipped unless data version, regime, or macro_score changes.
     """
     cfg   = TIMEFRAME_CONFIG[tf]
     label = cfg["label"] if lang == "VI" else cfg["label_en"]
 
     st.subheader(f"📡 Scanner — {label}")
 
-    # ── Score every ticker (no min_score filter) ──────────────
-    with st.spinner(f"Đang quét {len(data_dict)} mã ({tf})…"):
-        all_results: list[SignalResult] = batch_score(
-            data_dict, tf,
-            regime=regime,
-            macro_score=macro_score,
-            foreign_flows=foreign_flows,
-            min_score=None,
+    # ── Session-state scan cache ──────────────────────────────
+    data_version = st.session_state.get("data_version", 0)
+    cache_key    = f"{tf}|{regime}|{macro_score:.2f}|{data_version}"
+    scan_cache   = st.session_state.setdefault("_scan_cache", {})
+
+    if cache_key in scan_cache:
+        all_results: list[SignalResult] = scan_cache[cache_key]
+        st.caption(
+            f"📋 Cached  |  {len(all_results)} mã  |  "
+            f"v{data_version}  |  {datetime.now().strftime('%H:%M:%S')}"
+        )
+    else:
+        with st.spinner(f"Đang quét {len(data_dict)} mã ({tf})…"):
+            all_results = batch_score(
+                data_dict, tf,
+                regime=regime,
+                macro_score=macro_score,
+                foreign_flows=foreign_flows,
+                min_score=None,
+            )
+        scan_cache[cache_key] = all_results
+        # Write audit only on fresh scan runs
+        audit_path = _write_audit(tf, all_results, regime, macro_score)
+        st.caption(
+            f"🗂️ Audit → `{audit_path}`  |  {len(all_results)} mã  |  "
+            f"{datetime.now().strftime('%H:%M:%S')}"
         )
 
     if not all_results:
         st.warning("Không có dữ liệu để quét.")
         return
-
-    # ── Audit log ─────────────────────────────────────────────
-    audit_path = _write_audit(tf, all_results, regime, macro_score)
-    st.caption(f"🗂️ Audit → `{audit_path}`  |  {len(all_results)} mã  |  "
-               f"{datetime.now().strftime('%H:%M:%S')}")
 
     # ── Summary metrics (full unfiltered set) ─────────────────
     buy_count  = sum(1 for r in all_results if r.action in ("BUY", "STRONG BUY"))

@@ -9,6 +9,11 @@ font = "monospace"
 [server]
 headless = true
 port = 8501
+maxUploadSize = 200
+enableWebsocketCompression = false
 
 [browser]
 gatherUsageStats = false
+
+[runner]
+fastReruns = true

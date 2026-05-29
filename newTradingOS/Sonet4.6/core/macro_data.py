@@ -63,16 +63,19 @@ def _yahoo_price(yf_symbol: str, period: str = "3mo") -> Optional[dict]:
 
 def fetch_world_markets() -> dict[str, Optional[dict]]:
     """
-    Fetch all world market indicators.
+    Fetch all world market indicators in parallel.
 
     Returns
     -------
     dict[name → {current, pct_1d, pct_5d, pct_20d, prices, timestamps}]
     """
-    results = {}
-    for name, yf_sym in WORLD_SYMBOLS.items():
-        results[name] = _yahoo_price(yf_sym)
-    return results
+    from concurrent.futures import ThreadPoolExecutor
+    with ThreadPoolExecutor(max_workers=min(8, len(WORLD_SYMBOLS))) as pool:
+        futures = {
+            name: pool.submit(_yahoo_price, yf_sym)
+            for name, yf_sym in WORLD_SYMBOLS.items()
+        }
+        return {name: fut.result() for name, fut in futures.items()}
 
 
 # ─────────────────────────────────────────────────────────────

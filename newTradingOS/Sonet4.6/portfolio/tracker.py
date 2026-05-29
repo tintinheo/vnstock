@@ -19,6 +19,8 @@ from config import BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL, LOT_SIZE
 
 logger = logging.getLogger("TradingOS.tracker")
 
+from core.audit import log_event, ACTION_OPEN, ACTION_CLOSE
+
 PORTFOLIO_FILE = os.path.join(
     os.path.dirname(__file__), "..", "data", "portfolio.json"
 )
@@ -101,6 +103,19 @@ class Portfolio:
         self.positions.append(pos)
         logger.info("Opened %s x%d @ %.0f (%.0f VND)",
                     pos.ticker, pos.n_shares, pos.entry_price, pos.cost_vnd)
+        log_event(
+            ACTION_OPEN,
+            ticker=pos.ticker,
+            timeframe=pos.timeframe,
+            detail={
+                "entry_price": pos.entry_price,
+                "n_shares":    pos.n_shares,
+                "cost_vnd":    pos.cost_vnd,
+                "stop_loss":   pos.stop_loss,
+                "take_profit": pos.take_profit,
+                "entry_date":  pos.entry_date,
+            },
+        )
         return True
 
     def close_position(
@@ -122,6 +137,23 @@ class Portfolio:
                 logger.info(
                     "Closed %s @ %.0f | PnL: %.2f%%",
                     ticker, exit_price, (pos.pnl_pct or 0) * 100,
+                )
+                log_event(
+                    ACTION_CLOSE,
+                    ticker=ticker,
+                    timeframe=pos.timeframe,
+                    detail={
+                        "entry_price": pos.entry_price,
+                        "exit_price":  exit_price,
+                        "n_shares":    pos.n_shares,
+                        "pnl_pct":     round((pos.pnl_pct or 0) * 100, 2),
+                        "pnl_vnd":     pos.pnl_vnd,
+                        "reason":      reason,
+                        "entry_date":  pos.entry_date,
+                        "exit_date":   pos.exit_date,
+                        "sessions":    pos.sessions_held,
+                    },
+                    result="ok",
                 )
                 return pos
         return None

@@ -230,17 +230,22 @@ def compute_all(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     df["ATR"]       = atr(high, low, close, cfg["atr_period"])
     df["BB_upper"], df["BB_mid"], df["BB_lower"] = bollinger_bands(
         close, cfg["bb_period"], cfg["bb_std"])
-    df["BB_pctB"]   = bb_percent_b(close, cfg["bb_period"], cfg["bb_std"])
 
-    # Volume
-    df["Vol_ratio"] = volume_ratio(volume, cfg["volume_ma"])
+    # Volume — compute vol_ma once, reuse for Vol_ratio (avoids recomputing in scoring)
+    _vol_ma         = volume.rolling(cfg["volume_ma"], min_periods=1).mean()
+    df["Vol_MA"]    = _vol_ma
+    df["Vol_ratio"] = volume / _vol_ma.replace(0, np.nan)
     df["OBV"]       = obv(close, volume)
     df["MFI"]       = money_flow_index(high, low, close, volume)
 
     # Trend strength
-    df["ADX"]       = adx(high, low, close, cfg["adx_period"])
+    df["ADX"]         = adx(high, low, close, cfg["adx_period"])
 
     # Manipulation
     df["Manip_score"] = manipulation_score(close, volume)
+
+    # BB %B — inline using already-stored BB columns (avoids double bollinger_bands call)
+    _bb_denom     = (df["BB_upper"] - df["BB_lower"]).replace(0, np.nan)
+    df["BB_pctB"] = (close - df["BB_lower"]) / _bb_denom
 
     return df

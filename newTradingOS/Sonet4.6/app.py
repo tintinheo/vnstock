@@ -53,6 +53,7 @@ from config import (
 from core.data_fetcher import batch_download
 from core.macro_data import fetch_macro_indicators, get_macro_score
 from core.regime import detect_regime
+from core.audit import log_event, ACTION_LOAD, ACTION_MACRO
 from portfolio.tracker import Portfolio
 
 # ─── Logging ─────────────────────────────────────────────────
@@ -62,6 +63,20 @@ logging.basicConfig(
     handlers=[logging.StreamHandler()],
 )
 logger = logging.getLogger("TradingOS.app")
+
+# Suppress harmless tornado WebSocket-closed noise that floods the terminal
+# when the browser reconnects while a long batch_download is still running.
+class _SuppressWsNoise(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if record.levelno >= logging.ERROR:
+            msg = record.getMessage()
+            if "WebSocketClosedError" in msg or "Stream is closed" in msg:
+                return False
+        return True
+
+_asyncio_log = logging.getLogger("asyncio")
+if not any(isinstance(f, _SuppressWsNoise) for f in _asyncio_log.filters):
+    _asyncio_log.addFilter(_SuppressWsNoise())
 
 # ─────────────────────────────────────────────────────────────
 # SESSION STATE INITIALISATION
@@ -83,6 +98,8 @@ def _init_session():
         st.session_state.lang          = "VI"
     if "watchlist" not in st.session_state:
         st.session_state.watchlist     = DEFAULT_WATCHLIST.copy()
+    if "data_version" not in st.session_state:
+        st.session_state.data_version  = 0
 
 _init_session()
 lang = st.session_state.lang
@@ -139,11 +156,40 @@ if sb.button("🔄 Tải Dữ Liệu", type="primary", key="btn_load"):
         elif _u == "HOSE":    _sym.update(HOSE_LIST)
         elif _u == "HNX":     _sym.update(HNX_LIST)
     symbols = sorted(_sym) if _sym else st.session_state.watchlist
-    with st.spinner(f"Đang tải {len(symbols)} mã…"):
-        st.session_state.data_dict = batch_download(symbols, days=days_back)
-    st.success(
-        f"✅ Loaded {sum(1 for df, _ in st.session_state.data_dict.values() if not df.empty)}"
-        f"/{len(symbols)} tickers"
+    _total = len(symbols)
+    _prog  = sb.progress(0, text=f"0 / {_total} mã…")
+    _stat  = sb.empty()
+    _last_upd: list[float] = [0.0]   # mutable sentinel for closure
+    import time as _t
+    def _on_progress(done: int, total: int, sym: str) -> None:
+        now = _t.monotonic()
+        # Throttle: max 1 WebSocket write/second to keep Tornado queue small.
+        # Always flush at 100 % so the bar reaches completion.
+        if done == total or now - _last_upd[0] >= 1.0:
+            _prog.progress(done / max(total, 1),
+                           text=f"{done} / {total} — {sym}")
+            _stat.caption(f"⏳ {sym}")
+            _last_upd[0] = now
+    st.session_state.data_dict = batch_download(
+        symbols, days=days_back, on_progress=_on_progress
+    )
+    _prog.empty()
+    _stat.empty()
+    _loaded = sum(1 for df, _ in st.session_state.data_dict.values() if not df.empty)
+    sb.success(f"✅ Đã tải {_loaded}/{_total} mã")
+    # Bump version so scanner cache is invalidated for new data
+    st.session_state.data_version += 1
+    st.session_state.pop("_scan_cache", None)
+    log_event(
+        ACTION_LOAD,
+        detail={
+            "universe":    universe_choices or ["Watchlist"],
+            "symbols":     symbols,
+            "days_back":   days_back,
+            "loaded":      _loaded,
+            "total":       _total,
+        },
+        result="ok" if _loaded == _total else "partial",
     )
 
 if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
@@ -161,6 +207,15 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
     st.success("✅ Macro updated")
+    log_event(
+        ACTION_MACRO,
+        detail={
+            "macro_score":  st.session_state.macro_score,
+            "macro_regime": st.session_state.macro_regime,
+            "regime":       st.session_state.regime_result.regime
+                            if st.session_state.regime_result else "unknown",
+        },
+    )
 
 sb.divider()
 from ml.lstm_model import TF_AVAILABLE
@@ -224,7 +279,8 @@ tabs = st.tabs([
     "🧠 ML Forecast",
     "🧪 Backtest",
     "💼 Portfolio",
-    "📖 Hướng Dẫn",
+    "� Audit Log",
+    "�📖 Hướng Dẫn",
 ])
 
 # ── Tab 0: Macro Pulse ────────────────────────────────────────
@@ -278,8 +334,13 @@ with tabs[8]:
     updated_pf = render_portfolio_tab(portfolio, data_dict, lang)
     st.session_state.portfolio = updated_pf
 
-# ── Tab 9: Guide ─────────────────────────────────────────────
+# ── Tab 9: Audit Log ──────────────────────────────────────────
 with tabs[9]:
+    from ui.audit_tab import render_audit_tab
+    render_audit_tab(lang)
+
+# ── Tab 10: Guide ─────────────────────────────────────────────
+with tabs[10]:
     st.header("📖 Hướng Dẫn Sử Dụng NewTradingOS v14.0")
     st.markdown("""
 ### 🚀 Quick Start

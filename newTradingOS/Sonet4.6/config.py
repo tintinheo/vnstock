@@ -21,7 +21,7 @@ VN_SESSIONS_YEAR = 240           # ~240 trading sessions/year
 # ─────────────────────────────────────────────────────────────
 # API CONSTANTS
 # ─────────────────────────────────────────────────────────────
-API_TIMEOUT  = 12   # seconds
+API_TIMEOUT  = 6    # seconds (reduced from 12; limits worst-case per-ticker wait)
 CACHE_TTL    = 300  # seconds (5-minute cache for price data)
 
 DNSE_URL  = "https://services.entrade.com.vn/chart-api/v2/ohlcs/stock"
