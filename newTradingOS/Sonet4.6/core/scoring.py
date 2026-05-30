@@ -53,11 +53,11 @@ def compute_score(
 
     Score components (total 100 pts):
     ─────────────────────────────────
-      Trend      25 pts  — SMA cross, price vs SMAs, EMA alignment
-      Momentum   20 pts  — MACD histogram, MACD vs zero, ROC
-      RSI        15 pts  — zone quality (oversold recovery = best)
-      Volume     20 pts  — spike, accumulation, MFI
-      Foreign     5 pts  — net flow direction (1M+ only, uses 20d trend)
+      Trend      30 pts  — SMA cross, Supertrend, EMA alignment
+      Momentum   15 pts  — MACD histogram, MACD vs zero, ROC
+      RSI        10 pts  — zone quality (oversold recovery = best)
+      Volume     20 pts  — OBV trend, volume spike, MFI
+      Foreign    10 pts  — Standardized net flow (vs. avg volume)
       Macro      10 pts  — regime + macro_score
       ADX         5 pts  — trend strength confirmation
     ─────────────────────────────────
@@ -101,117 +101,122 @@ def compute_score(
 
     price = float(last["Close"])
 
-    # ── 1. TREND  (25 pts) ────────────────────────────────────
-    trend = 0.0
-    if price > last["SMA_fast"]:      trend += 5   # -1: room for SuperTrend
-    if price > last["SMA_slow"]:      trend += 6   # -1
-    if last["SMA_fast"] > last["SMA_slow"]: trend += 5   # -1: golden zone
-    if last["EMA_fast"] > last["EMA_slow"]: trend += 5   # -1
-    # Uptrend slope: SMA_fast increasing
-    if last["SMA_fast"] > df["SMA_fast"].iloc[-3]:  trend += 4  # -1: accelerating
-    # SuperTrend: ATR-based dynamic support — popular & reliable in VN trending market
-    st_dir = float(last["ST_dir"]) if "ST_dir" in df.columns and not pd.isna(last["ST_dir"]) else 0.0
-    if st_dir == 1.0:  trend += 4   # price above SuperTrend line = bullish
-    trend = min(trend, 25.0)
+    # ── Component Scores ───────────────────────────────────────
+    breakdown = {}
 
-    # ── 2. MOMENTUM  (20 pts) ─────────────────────────────────
-    mom = 0.0
-    # MACD cross up
-    if last["MACD"] > last["MACD_signal"]:     mom += 7
-    # Histogram improving
-    if last["MACD_hist"] > prev["MACD_hist"]:  mom += 6
-    # MACD above zero
-    if last["MACD"] > 0:                       mom += 4
-    # ROC positive
-    if last["ROC"] > 0:                        mom += 3
-    mom = min(mom, 20.0)
+    # 1. Trend Score (30 pts)
+    # ─────────────────────────────────
+    trend_score = 0
+    # a. Supertrend (15 pts) - NEW
+    if 'supertrend' in last and last["supertrend_dir"] == 1 and last["close"] > last["supertrend"]:
+        trend_score += 15
+    elif 'supertrend' in last and last["supertrend_dir"] == -1 and last["close"] < last["supertrend"]:
+        trend_score -= 15 # Penalize sell signal
 
-    # ── 3. RSI  (15 pts) — VN-tuned zones ─────────────────────
-    # VN stocks can stay RSI 60-75 for weeks during a trend run.
-    # Penalising RSI>65 too harshly causes the scanner to miss the bulk
-    # of the trending phase. Deep oversold (<30) is dangerous in VN
-    # because margin-call cascades can persist for weeks.
-    rsi_v   = float(last["RSI"]) if not pd.isna(last["RSI"]) else 50.0
-    rsi_pts = 0.0
-    if 45 <= rsi_v < 65:     rsi_pts = 15   # VN sweet spot — trending zone
-    elif 30 <= rsi_v < 45:   rsi_pts = 12   # oversold recovery
-    elif 65 <= rsi_v <= 75:  rsi_pts = 10   # momentum continuation (VN stocks stay here)
-    elif rsi_v < 30:         rsi_pts = 4    # deep oversold — VN margin cascade danger zone
-    elif 75 < rsi_v <= 85:   rsi_pts = 5   # elevated, approaching ceiling risk
-    else:                    rsi_pts = 2    # RSI > 85: extreme, near-term cap likely
-    rsi_score = rsi_pts
+    # b. SMA Fast vs Slow (10 pts)
+    if last["sma_fast"] > last["sma_slow"]:
+        trend_score += 10
+    # c. Price vs SMAs (5 pts)
+    if last["close"] > last["sma_fast"]:
+        trend_score += 5
+    breakdown["Trend"] = trend_score
 
-    # ── 4. VOLUME / FLOW  (20 pts) — VN-enhanced ───────────────
-    # CMF and Streak are VN-specific additions:
-    #   CMF: gap-adjusted smart-money inflow (better than OBV for VN gaps)
-    #   Streak: consecutive price-limit hits (unique to VN ±7% rule)
-    vol_r  = float(last["Vol_ratio"]) if not pd.isna(last["Vol_ratio"]) else 1.0
-    mfi_v  = float(last["MFI"])       if not pd.isna(last["MFI"])       else 50.0
-    cmf_v  = float(last["CMF"])       if "CMF"    in df.columns and not pd.isna(last["CMF"])    else 0.0
-    streak_v = int(last["Streak"])    if "Streak" in df.columns and not pd.isna(last["Streak"]) else 0
-    vol    = 0.0
-    if vol_r > 1.5:   vol += 5   # volume spike
-    if vol_r > 2.5:   vol += 3   # extra for very strong spike
-    if vol_r > 2.0 and price > last["SMA_fast"]: vol += 2  # breakout volume
-    # Accumulation (3-day avg > 1.2× SMA) — use pre-computed Vol_MA column
-    recent_vol_avg = df["Volume"].iloc[-3:].mean()
-    vol_ma_last    = float(df["Vol_MA"].iloc[-1]) if "Vol_MA" in df.columns and not pd.isna(df["Vol_MA"].iloc[-1]) else 0.0
-    if vol_ma_last > 0 and recent_vol_avg > vol_ma_last * 1.2:
-        vol += 2
-    if mfi_v > 50: vol += 2
-    # Chaikin Money Flow: positive CMF = smart money buying into the stock
-    if cmf_v > 0.05:  vol += 3   # net inflow
-    if cmf_v > 0.15:  vol += 1   # strong institutional inflow (bonus)
-    # Ceiling streak: 2+ consecutive trần = persistent buyer conviction (VN-specific)
-    if streak_v >= 2:  vol += 2
-    # Floor streak penalty: 2+ consecutive sàn = distribution / forced selling
-    if streak_v <= -2: vol -= 3
-    # Bollinger Band breakout / support signal (VN-specific):
-    #   Near upper band + volume spike = institutional breakout confirmation
-    #   Near lower band + no floor streak = support zone accumulation
-    bb_pctb = float(last["BB_pctB"]) if "BB_pctB" in df.columns and not pd.isna(last["BB_pctB"]) else 0.5
-    if bb_pctb > 0.8 and vol_r > 1.5:       vol += 2   # breakout confirmed by volume
-    elif bb_pctb < 0.15 and streak_v >= 0:  vol += 1   # near lower band support, no floor streak
-    vol = min(vol, 20.0)
-    vol = max(vol, -5.0)
+    # 2. Momentum Score (15 pts)
+    # ─────────────────────────────────
+    mom_score = 0
+    # a. MACD Histogram (10 pts)
+    if last["macd_hist"] > 0 and last["macd_hist"] > prev["macd_hist"]:
+        mom_score += 10  # Histogram is positive and rising
+    # b. MACD vs Zero line (5 pts)
+    if last["macd"] > 0:
+        mom_score += 5
+    breakdown["Momentum"] = mom_score
 
-    # ── 5. FOREIGN FLOW  (5 pts, meaningful for 2W+) ───────────────
-    # Use 20d trend if available — more robust than single-day signal.
-    # Falls back to today's net flow when net_20d is zero (not provided).
-    # 2W included: 10-session hold is long enough for FF trends to matter;
-    # a 2-week sustained foreign sell-off is clearly a negative signal.
-    ff_pts = 0.0
-    if tf in ("2W", "1M", "3M", "5M"):
-        ff_ref = foreign_flow_net_20d if foreign_flow_net_20d != 0.0 else foreign_flow_net
-        if ff_ref > 1e10:    ff_pts = 5
-        elif ff_ref > 0:     ff_pts = 3
-        elif ff_ref < -1e10: ff_pts = 0
-        else:                ff_pts = 1
+    # 3. RSI Score (10 pts)
+    # ─────────────────────────────────
+    rsi_score = 0
+    if 30 < last["rsi"] < 70:
+        rsi_score += 5
+    if last["rsi"] > prev["rsi"] and last["rsi"] < 70: # Rising RSI
+        rsi_score += 5
+    breakdown["RSI"] = rsi_score
 
-    # ── 6. MACRO REGIME  (10 pts) ─────────────────────────────
-    macro_pts = (macro_score / 10.0) * 10
-    macro_pts = min(macro_pts, 10.0)
+    # 4. Volume Score (20 pts)
+    # ─────────────────────────────────
+    vol_score = 0
+    # a. OBV Trend (10 pts) - NEW
+    if 'obv' in last and 'obv_sma' in last and last['obv'] > last['obv_sma']:
+        vol_score += 10 # OBV is above its moving average, confirming upward volume pressure
+    # b. Volume Spike (5 pts)
+    if last["volume"] > last["sma_volume_fast"] * 1.5:
+        vol_score += 5
+    # c. MFI (5 pts)
+    if last["mfi"] < 80: # Not overbought
+        vol_score += 5
+    breakdown["Volume"] = vol_score
 
-    # ── 7. ADX  (5 pts) ───────────────────────────────────────
-    adx_v   = float(last["ADX"]) if not pd.isna(last["ADX"]) else 0.0
-    adx_pts = 0.0
-    if adx_v > 30:   adx_pts = 5
-    elif adx_v > 20: adx_pts = 3
-    elif adx_v > 15: adx_pts = 1
+    # 5. Foreign Flow Score (10 pts) - REVISED
+    # ─────────────────────────────────
+    ff_score = 0
+    avg_vol_20d = last.get("sma_volume_slow", 0) # Use sma_slow as proxy for 20d avg vol
+    if avg_vol_20d > 0:
+        # Use 20-day net flow if available, otherwise fallback to today's net
+        net_flow_to_use = foreign_flow_net_20d if foreign_flow_net_20d != 0 else foreign_flow_net
+        # Standardize by price to get net volume, then compare to avg volume
+        avg_price_20d = last.get("sma_slow", last['close'])
+        if avg_price_20d > 0:
+            net_flow_volume = net_flow_to_use / avg_price_20d
+            flow_ratio = net_flow_volume / avg_vol_20d
 
-    # ── TOTAL ─────────────────────────────────────────────────
-    score = trend + mom + rsi_score + vol + ff_pts + macro_pts + adx_pts
-    score = round(min(score, 100.0), 2)
+            if flow_ratio > 0.05: # Net buy > 5% of avg volume
+                ff_score = 10
+            elif flow_ratio > 0.02: # Net buy > 2% of avg volume
+                ff_score = 5
+            elif flow_ratio < -0.05: # Net sell > 5% of avg volume
+                ff_score = -10 # Penalize heavy selling
+    breakdown["Foreign Flow"] = ff_score
 
-    # ── REGIME FILTER ─────────────────────────────────────────
-    regime_ok = regime in cfg["regime_filter"]
+    # 6. Macro Score (10 pts)
+    # ─────────────────────────────────
+    macro_pts = 0
+    if regime == "bull":
+        macro_pts = macro_score  # 0-10 pts
+    elif regime == "sideways":
+        macro_pts = macro_score / 2 # 0-5 pts
+    # Bear market gets 0 points from macro
+    breakdown["Macro"] = macro_pts
 
-    # ── ACTION ────────────────────────────────────────────────
-    action = score_to_action(score)
-    if not regime_ok and action in ("STRONG BUY", "BUY"):
-        action = "WATCH"
+    # 7. ADX Score (5 pts)
+    # ─────────────────────────────────
+    adx_score = 0
+    if last["adx"] > 25:
+        adx_score = 5
+    breakdown["ADX"] = adx_score
 
-    # ── ATR STOP / TARGET ─────────────────────────────────────
+    # Final Score Calculation
+    # ─────────────────────────────────
+    total_score = (
+        trend_score
+        + mom_score
+        + rsi_score
+        + vol_score
+        + ff_score
+        + macro_pts
+        + adx_score
+    )
+    # Normalize to 0-100 scale. Max possible score is 30+15+10+20+10+10+5 = 100
+    # Min possible score can be negative, so clip at 0.
+    final_score = max(0, min(100, total_score))
+
+    # ── Indicators Snapshot ────────────────────────────────────
+    indicators_snapshot = {
+        "rsi": last["rsi"], "mfi": last["mfi"], "adx": last["adx"],
+        "macd_hist": last["macd_hist"], "volume_ratio": last["volume"] / last["sma_volume_fast"] if last["sma_volume_fast"] > 0 else 0,
+        "supertrend_dir": last.get("supertrend_dir", 0),
+        "obv_trend": 1 if 'obv' in last and 'obv_sma' in last and last['obv'] > last['obv_sma'] else 0,
+    }
+
+    # ── Risk/Reward Calculation ────────────────────────────────
     atr_v       = float(last["ATR"]) if not pd.isna(last["ATR"]) else price * 0.02
     stop_raw    = price - cfg["stop_atr_mult"] * atr_v
     target_raw  = price + cfg["stop_atr_mult"] * atr_v * cfg["target_rr"]
@@ -236,37 +241,10 @@ def compute_score(
     if manip_flag and action == "STRONG BUY":
         action = "BUY"
 
-    breakdown = {
-        "Trend":   round(trend, 1),
-        "Momentum":round(mom, 1),
-        "RSI":     round(rsi_score, 1),
-        "Volume":  round(vol, 1),
-        "Foreign": round(ff_pts, 1),
-        "Macro":   round(macro_pts, 1),
-        "ADX":     round(adx_pts, 1),
-    }
-
-    indicators = {
-        "RSI":        round(rsi_v, 1),
-        "MACD":       round(float(last["MACD"]), 2)       if not pd.isna(last["MACD"]) else None,
-        "MACD_hist":  round(float(last["MACD_hist"]), 2)  if not pd.isna(last["MACD_hist"]) else None,
-        "BB_%B":      round(float(last["BB_pctB"]), 3)    if not pd.isna(last["BB_pctB"]) else None,
-        "ADX":        round(adx_v, 1),
-        "Vol_ratio":  round(vol_r, 2),
-        "MFI":        round(mfi_v, 1),
-        "ATR":        round(atr_v, 0),
-        "SMA_fast":   round(float(last["SMA_fast"]), 0)   if not pd.isna(last["SMA_fast"]) else None,
-        "SMA_slow":   round(float(last["SMA_slow"]), 0)   if not pd.isna(last["SMA_slow"]) else None,
-        "Manip_score":round(manip_v, 1),
-        "CMF":        round(cmf_v, 3),
-        "ST_dir":     int(st_dir),
-        "Streak":     streak_v,
-    }
-
     return SignalResult(
         ticker=ticker,
         timeframe=tf,
-        score=score,
+        score=final_score,
         action=action,
         price=price,
         stop_loss=stop_loss,
@@ -274,7 +252,7 @@ def compute_score(
         rr_ratio=cfg["target_rr"],
         atr=round(atr_v, 0),
         breakdown=breakdown,
-        indicators=indicators,
+        indicators=indicators_snapshot,
         regime_ok=regime_ok,
         manip_flag=manip_flag,
     )
