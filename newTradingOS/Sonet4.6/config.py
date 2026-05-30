@@ -47,7 +47,8 @@ WORLD_SYMBOLS = {
 # ─────────────────────────────────────────────────────────────
 TICKER_EXCHANGE: dict[str, str] = {
     # HNX
-    "PVS":"HNX","TNG":"HNX","VNA":"HNX","SHB":"HNX","ACB":"HNX",
+    # NOTE: ACB chuyển sang HOSE T6/2021; SHB chuyển sang HOSE 2022 — không được liệt ở đây.
+    "PVS":"HNX","TNG":"HNX","VNA":"HNX",
     "NVB":"HNX","BVS":"HNX","MBS":"HNX","VCS":"HNX","PVI":"HNX",
     "CEO":"HNX","HHC":"HNX","VGS":"HNX","SCI":"HNX","NTP":"HNX",
     "PGC":"HNX","BCC":"HNX","VKC":"HNX","TVN":"HNX","SCG":"HNX",

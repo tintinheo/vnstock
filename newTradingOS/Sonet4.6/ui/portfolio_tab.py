@@ -40,6 +40,37 @@ def render_portfolio_tab(
     # ── Open Positions ────────────────────────────────────────
     st.subheader("📂 Vị Thế Đang Mở")
     if portfolio.open_positions:
+        # Mark-to-market: lấy giá hiện tại từ data_dict để tính MTM
+        _prices = {
+            t: float(df["Close"].iloc[-1])
+            for t, (df, _) in data_dict.items()
+            if df is not None and not df.empty
+        }
+        _unreal = portfolio.unrealized_pnl(_prices)
+        _mtm    = portfolio.market_value(_prices)
+        _unreal_pct = (_unreal / (_mtm - _unreal) * 100) if (_mtm - _unreal) > 0 else 0.0
+
+        cm1, cm2 = st.columns(2)
+        cm1.metric(
+            "💰 Giá trị thị trường (MTM)",
+            f"{_mtm:,.0f} VND",
+            delta=f"Đầu tư: {(_mtm - portfolio.cash):,.0f} VND",
+        )
+        cm2.metric(
+            "📈 Lãi/Lỗ chưa thực hiện",
+            f"{_unreal:+,.0f} VND",
+            delta=f"{_unreal_pct:+.2f}%",
+        )
+
+        # Break-even trailing stop tự động khi lãi ≥ 15%
+        _updated_stops = portfolio.update_stops(_prices)
+        if _updated_stops:
+            portfolio.save()
+            st.info(
+                f"🔒 Break-even stop tự động nâng lên giá vào: **{', '.join(_updated_stops)}**\n\n"
+                "Stop đã được nâng lên mức hoà vốn để bảo toàn lợi nhuận (lãi ≥ 15%)."
+            )
+
         pos_df = portfolio.positions_df()
         st.dataframe(pos_df, width="stretch", hide_index=True)
 
@@ -110,11 +141,16 @@ def render_portfolio_tab(
         st.dataframe(t_df, width="stretch", hide_index=True)
 
         pnls = [(t.pnl_pct or 0) for t in portfolio.trades]
-        capital_curve = [portfolio.capital]
-        c = portfolio.capital
-        for p in reversed(pnls):
-            c_prev = c / (1 + p) if (1 + p) != 0 else c
-            capital_curve.insert(0, c_prev)
+        # Equity curve đúng: cộng pnl_vnd thực từng trade theo thứ tự thời gian.
+        # Cách cũ dùng pnl_pct trên 100% vốn là sai (mỗi position chỉ dùng 10-25% vốn).
+        _sorted_trades  = sorted(portfolio.trades, key=lambda t: t.exit_date or "")
+        _total_pnl_vnd  = sum(t.pnl_vnd or 0 for t in _sorted_trades)
+        _start_capital  = max(portfolio.capital - _total_pnl_vnd, 0.0)
+        capital_curve   = [_start_capital]
+        _running        = _start_capital
+        for _t in _sorted_trades:
+            _running += (_t.pnl_vnd or 0)
+            capital_curve.append(max(_running, 0.0))
         if len(capital_curve) > 2:
             fig = equity_chart(capital_curve, INITIAL_CAPITAL,
                                title="Historical P&L Curve")

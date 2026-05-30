@@ -82,7 +82,36 @@ class Portfolio:
 
     @property
     def total_value(self) -> float:
+        """Giá trị danh mục theo giá vào (không phản ánh lãi/lỗ chưa thực hiện).
+        Dùng market_value() khi cần giá trị mark-to-market.
+        """
         return self.cash + sum(p.current_value for p in self.open_positions)
+
+    def market_value(self, price_dict: dict) -> float:
+        """Mark-to-market: tổng giá trị danh mục theo giá thị trường hiện tại.
+
+        Parameters
+        ----------
+        price_dict : dict[ticker -> current_price (float)]
+            Nếu ticker không có trong dict, fallback về entry_price.
+        """
+        mtm = sum(
+            price_dict.get(p.ticker, p.entry_price) * p.n_shares
+            for p in self.open_positions
+        )
+        return self.cash + mtm
+
+    def unrealized_pnl(self, price_dict: dict) -> float:
+        """Tổng lãi/lỗ chưa thực hiện (VND) trên tất cả vị thế đang mở.
+
+        Parameters
+        ----------
+        price_dict : dict[ticker -> current_price (float)]
+        """
+        return sum(
+            (price_dict.get(p.ticker, p.entry_price) - p.entry_price) * p.n_shares
+            for p in self.open_positions
+        )
 
     @property
     def realised_pnl(self) -> float:
@@ -158,11 +187,37 @@ class Portfolio:
                 return pos
         return None
 
-    def update_stops(self) -> None:
-        """Trailing stop: raise stop_loss to break-even after 20% gain."""
+    def update_stops(self, price_dict: dict | None = None) -> list:
+        """Break-even trailing stop: nâng stop lên giá vào khi lãi ≥ 15%.
+
+        Phù hợp thị trường VN: 15% ≈ 2× biên độ trần HOSE — đây là mốc
+        trader VN thường dùng để bảo toàn vốn sau đợt tăng mạnh.
+
+        Parameters
+        ----------
+        price_dict : dict[ticker -> current_price] | None
+            Nếu None hoặc ticker không có, bỏ qua vị thế đó.
+
+        Returns
+        -------
+        list[str] — danh sách ticker đã được nâng stop.
+        """
+        if not price_dict:
+            return []
+        updated = []
         for pos in self.open_positions:
-            if pos.entry_price > 0:
-                pass  # Extend here for trailing stop logic
+            cur = price_dict.get(pos.ticker)
+            if cur is None or pos.entry_price <= 0:
+                continue
+            gain_pct = (cur - pos.entry_price) / pos.entry_price
+            # Break-even: nâng stop lên entry_price khi lãi >= 15%
+            # Chỉ nâng khi stop hiện tại còn thấp hơn entry (tránh gọi lại)
+            if gain_pct >= 0.15 and pos.stop_loss < pos.entry_price:
+                pos.stop_loss = pos.entry_price
+                updated.append(pos.ticker)
+                logger.info("Break-even stop: %s stop nâng lên %.0f",
+                            pos.ticker, pos.entry_price)
+        return updated
 
     def to_dict(self) -> dict:
         return {

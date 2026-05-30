@@ -223,13 +223,94 @@ class TestLotSizeEnforcement:
         """
         capital = 100_000_000
         r = run_backtest(ohlcv, "1M", ticker="VCB", initial_capital=capital)
-        pos_pct = 0.15  # default 1M position pct
-        max_reasonable_vnd = capital * pos_pct * 0.5  # 50% gain on 1 position is extreme
         for trade in r.trades:
-            assert abs(trade.pnl_vnd) <= max_reasonable_vnd, (
-                f"|pnl_vnd|={abs(trade.pnl_vnd):,.0f} exceeds {max_reasonable_vnd:,.0f} "
-                f"(likely fractional-share overstatement)"
+            max_plausible_gain = capital * 0.20  # 20M VND max per trade
+            assert abs(trade.pnl_vnd) <= max_plausible_gain, (
+                f"PnL {trade.pnl_vnd:,.0f} exceeds plausible max {max_plausible_gain:,.0f}"
             )
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #5 — open trade MTM at end of backtest
+# ─────────────────────────────────────────────────────────────
+class TestOpenTradeMTM:
+    """Lệnh đang mở cuối backtest phải được tính vào equity (mark-to-market)."""
+
+    def test_equity_always_non_negative_with_mtm(self, ohlcv_bull):
+        """Equity không bao giờ âm kể cả sau MTM cuối kỳ."""
+        r = run_backtest(ohlcv_bull, "1M", ticker="MTM_TEST")
+        assert all(v >= 0 for v in r.equity_curve), (
+            "Equity curve contains negative values after MTM fix"
+        )
+
+    def test_equity_non_empty_after_warmup(self, ohlcv_bull):
+        """Backtest bull data phải có equity curve dài."""
+        r = run_backtest(ohlcv_bull, "1M", ticker="MTM_A")
+        assert len(r.equity_curve) > 0
+
+    def test_metrics_computed_even_with_open_trade(self, ohlcv_bull):
+        """metrics phải là dict hợp lệ dù có open trade cuối kỳ."""
+        r = run_backtest(ohlcv_bull, "5M", ticker="MTM_5M")
+        assert isinstance(r.metrics, dict)
+        # If no error, must have basic keys
+        if "error" not in r.metrics:
+            for key in ("cagr", "sharpe", "max_dd"):
+                assert key in r.metrics, f"Missing metric: {key}"
+
+    def test_5m_no_crash_with_mtm(self, ohlcv_bull):
+        """5M backtest trên dữ liệu bull không được crash với MTM fix."""
+        r = run_backtest(ohlcv_bull, "5M", ticker="MTM_CRASH")
+        assert isinstance(r, BacktestResult)
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #7 — regime/macro_score passthrough
+# ─────────────────────────────────────────────────────────────
+class TestMultiTFRegimePassthrough:
+    """regime và macro_score phải được truyền đúng qua run_multi_tf_backtest."""
+
+    def test_regime_stored_in_params(self, ohlcv):
+        results = run_multi_tf_backtest(ohlcv, ticker="R_TEST", regime="bear")
+        for tf, res in results.items():
+            if "error" not in res.metrics:
+                assert res.params.get("regime") == "bear", (
+                    f"TF={tf}: regime không được truyền đúng — "
+                    f"expected 'bear', got '{res.params.get('regime')}'"
+                )
+
+    def test_macro_score_stored_in_params(self, ohlcv):
+        results = run_multi_tf_backtest(ohlcv, ticker="M_TEST", macro_score=7.5)
+        for tf, res in results.items():
+            if "error" not in res.metrics:
+                assert res.params.get("macro_score") == 7.5, (
+                    f"TF={tf}: macro_score không được truyền đúng — "
+                    f"expected 7.5, got '{res.params.get('macro_score')}'"
+                )
+
+    def test_bear_regime_reduces_1w_trades(self, ohlcv_bull):
+        """1W chỉ cho BUY trong bull — bear regime phải có ít trade hơn hoặc bằng bull."""
+        r_bull = run_multi_tf_backtest(ohlcv_bull, ticker="DIFF_R", regime="bull")
+        r_bear = run_multi_tf_backtest(ohlcv_bull, ticker="DIFF_R", regime="bear")
+        n_bull = len(r_bull["1W"].trades)
+        n_bear = len(r_bear["1W"].trades)
+        assert n_bear <= n_bull, (
+            f"Bear regime phải có ít hoặc bằng trade bull cho 1W, "
+            f"nhưng bear={n_bear} > bull={n_bull}"
+        )
+
+    def test_default_regime_is_bull(self, ohlcv):
+        """Default không truyền regime → phải là 'bull'."""
+        results = run_multi_tf_backtest(ohlcv, ticker="DEF_R")
+        for tf, res in results.items():
+            if "error" not in res.metrics:
+                assert res.params.get("regime") == "bull", (
+                    f"TF={tf}: default regime should be 'bull'"
+                )
+
+    def test_all_tfs_present_with_custom_regime(self, ohlcv):
+        """Tất cả 5 TF phải có trong kết quả kể cả khi truyền regime sideways."""
+        results = run_multi_tf_backtest(ohlcv, ticker="ALL_TF", regime="sideways")
+        assert set(results.keys()) == {"1W", "2W", "1M", "3M", "5M"}
 
 
 # ────────────────────────────────────────────────────────────

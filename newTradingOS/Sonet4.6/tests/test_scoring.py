@@ -391,3 +391,98 @@ class TestBBBreakoutVolumeBonus:
         # Not a strict guarantee but directionally correct for synthetic data
         assert sig_bull.breakdown.get("Volume", 0) >= sig_bear.breakdown.get("Volume", -5)
 
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #4 — _precomputed flag
+# ─────────────────────────────────────────────────────────────
+class TestPrecomputedFlag:
+    """_precomputed=True bỏ qua compute_all — tối ưu cho backtest loop (O(n²)→O(n))."""
+
+    def test_precomputed_same_score_as_normal(self, ohlcv):
+        """_precomputed=True phải cho điểm giống hệt normal mode."""
+        from core.indicators import compute_all
+        tf  = "1M"
+        cfg = TIMEFRAME_CONFIG[tf]
+        df_ind = compute_all(ohlcv.copy(), cfg)
+
+        sig_normal = compute_score(ohlcv, tf, ticker="PRE_A")
+        sig_pre    = compute_score(df_ind, tf, ticker="PRE_A", _precomputed=True)
+
+        assert abs(sig_normal.score - sig_pre.score) < 0.01, (
+            f"Normal={sig_normal.score:.3f} vs Precomputed={sig_pre.score:.3f}"
+        )
+        assert sig_normal.action == sig_pre.action
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_precomputed_all_timeframes(self, ohlcv, tf):
+        """_precomputed mode phải hoạt động cho tất cả 5 TF."""
+        from core.indicators import compute_all
+        cfg    = TIMEFRAME_CONFIG[tf]
+        df_ind = compute_all(ohlcv.copy(), cfg)
+        sig    = compute_score(df_ind, tf, _precomputed=True)
+        assert isinstance(sig, SignalResult)
+        assert 0 <= sig.score <= 100
+
+    def test_precomputed_false_default(self, ohlcv):
+        """Default _precomputed=False phải hoạt động bình thường."""
+        sig = compute_score(ohlcv, "1M")
+        assert isinstance(sig, SignalResult)
+        assert 0 <= sig.score <= 100
+
+    def test_precomputed_stop_below_price(self, ohlcv):
+        """Với _precomputed=True, stop_loss vẫn phải < price."""
+        from core.indicators import compute_all
+        df_ind = compute_all(ohlcv.copy(), TIMEFRAME_CONFIG["1M"])
+        sig = compute_score(df_ind, "1M", _precomputed=True)
+        if sig.price > 0:
+            assert sig.stop_loss < sig.price
+
+    def test_precomputed_target_above_price(self, ohlcv):
+        """Với _precomputed=True, take_profit vẫn phải > price."""
+        from core.indicators import compute_all
+        df_ind = compute_all(ohlcv.copy(), TIMEFRAME_CONFIG["1M"])
+        sig = compute_score(df_ind, "1M", _precomputed=True)
+        if sig.price > 0:
+            assert sig.take_profit > sig.price
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #1 — ACB/SHB exchange mapping (HOSE, not HNX)
+# ─────────────────────────────────────────────────────────────
+class TestExchangeMapping:
+    """ACB chuyển HOSE 2021, SHB chuyển HOSE 2022 — giá limit phải là ±7%."""
+
+    def test_acb_is_hose_price_limit(self):
+        from config import get_price_limit
+        assert get_price_limit("ACB") == 0.07, (
+            "ACB chuyển sang HOSE năm 2021 — phải dùng giá limit ±7% (HOSE), không phải ±10% (HNX)"
+        )
+
+    def test_shb_is_hose_price_limit(self):
+        from config import get_price_limit
+        assert get_price_limit("SHB") == 0.07, (
+            "SHB chuyển sang HOSE năm 2022 — phải dùng giá limit ±7% (HOSE), không phải ±10% (HNX)"
+        )
+
+    def test_pvs_still_hnx(self):
+        from config import get_price_limit, TICKER_EXCHANGE
+        assert TICKER_EXCHANGE.get("PVS") == "HNX"
+        assert get_price_limit("PVS") == 0.10
+
+    def test_oil_still_upcom(self):
+        from config import get_price_limit, TICKER_EXCHANGE
+        assert TICKER_EXCHANGE.get("OIL") == "UPCOM"
+        assert get_price_limit("OIL") == 0.15
+
+    def test_acb_not_in_hnx_map(self):
+        from config import TICKER_EXCHANGE
+        assert TICKER_EXCHANGE.get("ACB") is None, (
+            "ACB không được liệt trong TICKER_EXCHANGE — default về HOSE"
+        )
+
+    def test_shb_not_in_hnx_map(self):
+        from config import TICKER_EXCHANGE
+        assert TICKER_EXCHANGE.get("SHB") is None, (
+            "SHB không được liệt trong TICKER_EXCHANGE — default về HOSE"
+        )
+

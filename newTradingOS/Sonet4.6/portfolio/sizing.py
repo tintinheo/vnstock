@@ -161,7 +161,9 @@ def compute_portfolio_metrics(
     cagr       = (1 + total_ret) ** (VN_SESSIONS_YEAR / n_sessions) - 1
 
     # Sharpe (annualised)
-    rf_daily = 0.03 / VN_SESSIONS_YEAR   # 3% annual risk-free
+    # Lãi suất phi rủi ro tham chiếu: tiền gửi VN 2025 dao động 4.5-5.5%/năm (NHNN).
+    # Dùng 4.5% để phản ánh đúng chi phí cơ hội thực tế của nhà đầu tư VN.
+    rf_daily = 0.045 / VN_SESSIONS_YEAR  # 4.5% VN deposit rate (NHNN benchmark)
     excess   = returns - rf_daily
     sharpe   = (excess.mean() / (excess.std() + 1e-9)) * np.sqrt(VN_SESSIONS_YEAR)
 

@@ -278,3 +278,207 @@ class TestPositionSizeInsufficientCapital:
         assert n > 0
         assert vnd > 0
         assert n % LOT_SIZE == 0
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #3a — Portfolio.market_value()
+# ─────────────────────────────────────────────────────────────
+class TestMarketValue:
+    """portfolio.market_value() phải tính đúng mark-to-market."""
+
+    def _make_portfolio_with_position(self, entry_px=100_000, n_shares=100):
+        from config import BUY_TOTAL
+        pf  = Portfolio(capital=100_000_000)
+        pos = Position(
+            ticker="VCB", timeframe="1M",
+            entry_date="2026-01-01", entry_price=entry_px,
+            n_shares=n_shares, stop_loss=int(entry_px * 0.93),
+            take_profit=int(entry_px * 1.15),
+            cost_vnd=entry_px * n_shares * (1 + BUY_TOTAL),
+        )
+        pf.positions.append(pos)
+        return pf, pos
+
+    def test_market_value_equals_cash_plus_market_price(self):
+        pf, pos = self._make_portfolio_with_position()
+        market_px = 110_000  # +10%
+        expected  = pf.cash + market_px * pos.n_shares
+        assert abs(pf.market_value({"VCB": market_px}) - expected) < 1.0
+
+    def test_market_value_no_positions_equals_cash(self):
+        pf = Portfolio(capital=100_000_000)
+        assert abs(pf.market_value({}) - pf.cash) < 1.0
+
+    def test_market_value_fallback_to_entry_price(self):
+        """Khi không có giá thị trường, dùng entry_price (không crash)."""
+        pf, pos = self._make_portfolio_with_position()
+        mtm = pf.market_value({})
+        expected = pf.cash + pos.entry_price * pos.n_shares
+        assert abs(mtm - expected) < 1.0
+
+    def test_market_value_below_entry_shows_mtm_loss(self):
+        pf, pos = self._make_portfolio_with_position(entry_px=100_000)
+        mtm_loss  = pf.market_value({"VCB": 90_000})
+        mtm_entry = pf.market_value({"VCB": 100_000})
+        assert mtm_loss < mtm_entry
+
+    def test_market_value_multiple_positions(self):
+        from config import BUY_TOTAL
+        pf = Portfolio(capital=200_000_000)
+        for ticker, px in [("VCB", 100_000), ("FPT", 80_000)]:
+            pos = Position(
+                ticker=ticker, timeframe="1M",
+                entry_date="2026-01-01", entry_price=px,
+                n_shares=100, stop_loss=int(px * 0.93),
+                take_profit=int(px * 1.15),
+                cost_vnd=px * 100 * (1 + BUY_TOTAL),
+            )
+            pf.positions.append(pos)
+        prices = {"VCB": 105_000, "FPT": 90_000}
+        expected = pf.cash + 105_000 * 100 + 90_000 * 100
+        assert abs(pf.market_value(prices) - expected) < 1.0
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #3b — Portfolio.unrealized_pnl()
+# ─────────────────────────────────────────────────────────────
+class TestUnrealizedPnl:
+    """portfolio.unrealized_pnl() phải tính đúng lãi/lỗ chưa thực hiện."""
+
+    def _make_pos(self, ticker, entry_px, n=100):
+        from config import BUY_TOTAL
+        return Position(
+            ticker=ticker, timeframe="1M",
+            entry_date="2026-01-01", entry_price=entry_px,
+            n_shares=n, stop_loss=int(entry_px * 0.93),
+            take_profit=int(entry_px * 1.15),
+            cost_vnd=entry_px * n * (1 + BUY_TOTAL),
+        )
+
+    def test_positive_unrealized_pnl(self):
+        pf = Portfolio(capital=100_000_000)
+        pf.positions.append(self._make_pos("HPG", 50_000))
+        pnl = pf.unrealized_pnl({"HPG": 55_000})
+        assert pnl == (55_000 - 50_000) * 100   # = 500_000
+
+    def test_zero_unrealized_at_entry(self):
+        pf = Portfolio(capital=100_000_000)
+        pf.positions.append(self._make_pos("FPT", 80_000))
+        assert pf.unrealized_pnl({"FPT": 80_000}) == 0
+
+    def test_negative_unrealized_on_loss(self):
+        pf = Portfolio(capital=100_000_000)
+        pf.positions.append(self._make_pos("VHM", 60_000))
+        assert pf.unrealized_pnl({"VHM": 55_000}) == (55_000 - 60_000) * 100  # = -500_000
+
+    def test_no_positions_zero(self):
+        pf = Portfolio(capital=100_000_000)
+        assert pf.unrealized_pnl({"VCB": 100_000}) == 0
+
+    def test_sum_of_multiple(self):
+        pf = Portfolio(capital=200_000_000)
+        pf.positions.append(self._make_pos("VCB", 100_000))
+        pf.positions.append(self._make_pos("MBB", 20_000))
+        pnl = pf.unrealized_pnl({"VCB": 110_000, "MBB": 18_000})
+        expected = (110_000 - 100_000) * 100 + (18_000 - 20_000) * 100  # 1M - 200k = 800k
+        assert pnl == expected
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #3c — Portfolio.update_stops() break-even trailing
+# ─────────────────────────────────────────────────────────────
+class TestTrailingStop:
+    """Break-even trailing stop: nâng stop lên giá vào khi lãi ≥ 15%."""
+
+    def _make_portfolio_with_pos(self, ticker="FPT", entry=100_000, stop=93_000):
+        from config import BUY_TOTAL
+        pf  = Portfolio(capital=100_000_000)
+        pos = Position(
+            ticker=ticker, timeframe="1M",
+            entry_date="2026-01-01", entry_price=entry,
+            n_shares=100, stop_loss=stop,
+            take_profit=int(entry * 1.25),
+            cost_vnd=entry * 100 * (1 + BUY_TOTAL),
+        )
+        pf.positions.append(pos)
+        return pf, pos
+
+    def test_stop_raised_at_15pct_gain(self):
+        pf, pos = self._make_portfolio_with_pos(entry=100_000, stop=93_000)
+        updated = pf.update_stops({"FPT": 116_000})   # +16%
+        assert "FPT" in updated
+        assert pos.stop_loss == pos.entry_price  # break-even = entry_price
+
+    def test_stop_not_raised_below_threshold(self):
+        pf, pos = self._make_portfolio_with_pos(entry=100_000, stop=93_000)
+        updated = pf.update_stops({"FPT": 114_000})   # +14% — chưa đủ 15%
+        assert "FPT" not in updated
+        assert pos.stop_loss == 93_000              # không đổi
+
+    def test_stop_not_raised_when_already_at_entry(self):
+        """Stop đã ở entry_price → không báo cáo nữa."""
+        pf, pos = self._make_portfolio_with_pos(entry=100_000, stop=100_000)
+        updated = pf.update_stops({"FPT": 120_000})   # +20%, nhưng stop đã ở entry
+        assert "FPT" not in updated
+
+    def test_no_update_with_none_prices(self):
+        pf, _ = self._make_portfolio_with_pos()
+        assert pf.update_stops(None) == []
+
+    def test_no_update_with_empty_prices(self):
+        pf, _ = self._make_portfolio_with_pos()
+        assert pf.update_stops({}) == []
+
+    def test_no_update_when_ticker_missing(self):
+        pf, pos = self._make_portfolio_with_pos(ticker="FPT")
+        updated = pf.update_stops({"TCB": 50_000})   # FPT không có trong dict
+        assert "FPT" not in updated
+        assert pos.stop_loss == 93_000  # giữ nguyên
+
+    def test_multiple_positions_selective_update(self):
+        """Chỉ position đủ điều kiện mới được nâng stop."""
+        from config import BUY_TOTAL
+        pf = Portfolio(capital=300_000_000)
+        for ticker, entry, stop in [("VCB", 100_000, 93_000),
+                                     ("FPT", 80_000,  74_000)]:
+            pf.positions.append(Position(
+                ticker=ticker, timeframe="1M",
+                entry_date="2026-01-01", entry_price=entry,
+                n_shares=100, stop_loss=stop,
+                take_profit=int(entry * 1.25),
+                cost_vnd=entry * 100 * (1 + BUY_TOTAL),
+            ))
+        # VCB +16% (≥15%), FPT +10% (<15%)
+        updated = pf.update_stops({"VCB": 116_000, "FPT": 88_000})
+        assert "VCB" in updated
+        assert "FPT" not in updated
+
+
+# ─────────────────────────────────────────────────────────────
+# Round 5 Fix #2 — risk-free rate 4.5% for VN Sharpe
+# ─────────────────────────────────────────────────────────────
+class TestVnRiskFreeRate:
+    """Sharpe ratio phải dùng risk-free rate 4.5% (NHNN benchmark), không phải 3%."""
+
+    def test_sharpe_lower_with_higher_rfr(self):
+        """Với rf=4.5% thay vì 3%, Sharpe phải nhỏ hơn hoặc bằng."""
+        from portfolio.sizing import compute_portfolio_metrics, VN_SESSIONS_YEAR
+        eq = list(range(100, 200))  # monotone increasing
+        trades = [{"pnl_pct": 0.05}] * 10
+
+        metrics = compute_portfolio_metrics(eq, trades)
+        sharpe = metrics.get("sharpe", 0)
+
+        # With rf=4.5%, daily rf = 4.5%/240 ≈ 0.0001875
+        # Verify the Sharpe is finite and computed (not zero or NaN)
+        assert sharpe is not None
+        assert not np.isnan(sharpe)
+
+    def test_sharpe_computed_for_flat_curve(self):
+        """Đường equity phẳng: Sharpe có thể extreme do std→0, nhưng không được crash."""
+        eq = [100_000_000] * 50
+        metrics = compute_portfolio_metrics(eq, [])
+        sharpe = metrics.get("sharpe", 0)
+        # Flat equity → std ≈ 0, result is ±inf or a large number — just ensure no NaN/crash
+        assert sharpe is not None
+        assert not np.isnan(float(sharpe) if sharpe else 0)

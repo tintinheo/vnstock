@@ -33,6 +33,24 @@ def render_backtest_tab(
     with c3:
         run_all_tf = st.toggle("Chạy tất cả TF", value=True, key="bt_all_tf")
 
+    # ── Regime & Macro controls ──────────────────────────────
+    c4, c5 = st.columns(2)
+    with c4:
+        regime_bt = st.selectbox(
+            "Regime thị trường",
+            ["bull", "sideways", "bear"],
+            index=0,
+            key="bt_regime",
+            help="Chọn chế độ thị trường để backtest. bull=tăng, sideways=đi ngang, bear=giảm.\n"
+                 "Ảnh hưởng trực tiếp đến regime_filter của từng TF: 1W chỉ cho BUY khi bull.",
+        )
+    with c5:
+        macro_bt = st.slider(
+            "Macro Score", 0.0, 10.0, 6.0, step=0.5,
+            key="bt_macro",
+            help="Điểm vĩ mô (0–10) áp dụng cho scoring. 10 = môi trường rất thuận lợi.",
+        )
+
     if st.button("⚡ Chạy Backtest", type="primary", key="bt_run"):
         df_raw, src = data_dict.get(ticker, (None, "N/A"))
         if df_raw is None or df_raw.empty:
@@ -41,7 +59,9 @@ def render_backtest_tab(
 
         with st.spinner("Đang chạy backtest…"):
             results = run_multi_tf_backtest(df_raw, ticker=ticker,
-                                             initial_capital=capital)
+                                             initial_capital=capital,
+                                             regime=regime_bt,
+                                             macro_score=macro_bt)
 
         # ── Summary table ─────────────────────────────────────
         st.subheader(f"📊 Kết quả — {ticker} | {src}")

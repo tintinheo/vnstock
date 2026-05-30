@@ -46,6 +46,7 @@ def compute_score(
     macro_score: float = 5.0,
     ticker: str = "UNKNOWN",
     exchange: str = "HOSE",
+    _precomputed: bool = False,
 ) -> SignalResult:
     """
     Compute multi-component signal score for one ticker + timeframe.
@@ -75,6 +76,12 @@ def compute_score(
     ticker             : symbol for labelling
     exchange           : 'HOSE' |’HNX' | 'UPCOM' — controls price-limit threshold
                          for Streak indicator (fixed: was always HOSE before).
+    _precomputed       : set True khi df đã được compute_all() xử lý sẵn.
+                         Backtest engine dùng flag này để tránh tính lại chỉ báo
+                         O(n²) trong vòng loop — giảm từ O(n²) xuống O(n).
+                         Tất cả rolling indicators đều có tính causal: giá trị tại
+                         bar i không phụ thuộc bars tương lai nên an toàn khi
+                         dùng df toàn bộ thay vì df.iloc[:i+1].
     """
     cfg  = TIMEFRAME_CONFIG[tf]
     min_rows = cfg["sma_slow"] + 20
@@ -86,8 +93,9 @@ def compute_score(
             message=f"Insufficient data (need {min_rows} rows, got {len(df) if df is not None else 0})",
         )
 
-    # Compute all indicators (pass exchange so streak uses correct price limit)
-    df = compute_all(df.copy(), cfg, exchange=exchange)
+    # Compute all indicators (bỏ qua nếu caller đã tính sẵn — backtest loop dùng _precomputed=True)
+    if not _precomputed:
+        df = compute_all(df.copy(), cfg, exchange=exchange)
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else last
 

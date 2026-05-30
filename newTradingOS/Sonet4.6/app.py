@@ -295,7 +295,13 @@ if regime_result:
 else:
     c2.metric("VNI Regime", "—")
 c3.metric("Macro Score", f"{macro_score:.1f}/10")
-c4.metric("Portfolio Value", f"{portfolio.total_value:,.0f} VND")
+# Portfolio value: mark-to-market dùng giá hiện tại (thay vì total_value dùng giá vào)
+_mtm_prices = {
+    t: float(df["Close"].iloc[-1])
+    for t, (df, _) in data_dict.items()
+    if df is not None and not df.empty
+}
+c4.metric("Portfolio Value", f"{portfolio.market_value(_mtm_prices):,.0f} VND")
 
 # Persistent stale-data banner (shown below metrics, cleared on next successful macro update)
 _stale = st.session_state.get("macro_stale", [])

@@ -95,6 +95,9 @@ def run_backtest(
         )
 
     pos_pct  = position_pct or cfg["position_pct"]
+    # Precompute indicators once — tránh O(n²) khi gọi compute_score trong vòng lặp.
+    # Tất cả rolling indicators có tính causal: giá trị tại bar i hoàn toàn
+    # được xác định bởi dữ liệu <= bar i → an toàn khi dùng df toàn bộ.
     df       = compute_all(df.copy(), cfg)
     df       = df.dropna(subset=["SMA_slow", "ATR"])
 
@@ -119,12 +122,14 @@ def run_backtest(
         price = float(row["Close"])
 
         if not in_trade:
-            # Compute signal on data up to and including bar i
+            # Compute signal trên df[:i+1] với _precomputed=True — bỏ qua compute_all
+            # vì indicators đã được tính từ trước (O(n) thay vì O(n²) mỗi bar).
             sig = compute_score(
                 df.iloc[: i + 1], tf,
                 regime=regime,
                 macro_score=macro_score,
                 ticker=ticker,
+                _precomputed=True,
             )
 
             if sig.action in ("BUY", "STRONG BUY") and sig.regime_ok:
@@ -173,6 +178,7 @@ def run_backtest(
                     regime=regime,
                     macro_score=macro_score,
                     ticker=ticker,
+                    _precomputed=True,
                 )
                 if sig_exit.action == "SELL":
                     exit_reason = "signal"
@@ -209,13 +215,15 @@ def run_backtest(
 
         equity.append(capital)
 
-    # Handle open position at end (mark to market)
-    if in_trade and len(df) > 0:
-        last_price = float(df["Close"].iloc[-1])
+    # Handle open position at end: mark-to-market điểm equity cuối cùng.
+    # Tránh bỏ qua unrealized P&L khi backtest kết thúc đang giữ lệnh —
+    # nếu không, CAGR/Sharpe/MaxDD bị tính thiếu phần lãi/lỗ chưa thực hiện.
+    if in_trade and equity:
+        last_price  = float(df["Close"].iloc[-1])
         last_px_net = last_price * (1 - SELL_TOTAL)
         open_pnl    = (last_px_net / entry_px) - 1
-        open_vnd    = capital * pos_pct * open_pnl
-        # Don't add to capital — just note it
+        open_vnd    = _vnd_committed * open_pnl
+        equity[-1]  = max(equity[-1] + open_vnd, 1.0)  # cập nhật điểm equity cuối
 
     metrics = compute_portfolio_metrics(equity, [{"pnl_pct": t.pnl_pct} for t in trades])
     metrics["n_trades"]   = len(trades)
@@ -249,9 +257,16 @@ def run_multi_tf_backtest(
     df: pd.DataFrame,
     ticker: str = "UNKNOWN",
     initial_capital: float = INITIAL_CAPITAL,
+    regime: str = "bull",
+    macro_score: float = 6.0,
 ) -> dict[str, BacktestResult]:
     """
     Run backtest for all 5 timeframes on the same OHLCV data.
+
+    Parameters
+    ----------
+    regime      : chế độ thị trường áp dụng cho tất cả timeframes.
+    macro_score : điểm vĩ mô (0–10) áp dụng cho scoring.
 
     Returns
     -------
@@ -260,7 +275,10 @@ def run_multi_tf_backtest(
     results = {}
     for tf in TIMEFRAME_CONFIG:
         results[tf] = run_backtest(
-            df.copy(), tf, ticker=ticker, initial_capital=initial_capital
+            df.copy(), tf, ticker=ticker,
+            initial_capital=initial_capital,
+            regime=regime,
+            macro_score=macro_score,
         )
     return results
 
