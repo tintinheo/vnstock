@@ -2,7 +2,7 @@
 ## NewTradingOS v14.0
 
 **PMBOK Baseline:** Technical Baseline  
-**Document Version:** 2.0  
+**Document Version:** 3.0  
 **Date:** 2026-05-30
 
 ---
@@ -100,7 +100,7 @@
 | `BB_upper/mid/lower` | Bollinger(close, 20, 2) | 20 bars |
 | `BB_pctB` | (close − lower) / (upper − lower) | 20 bars |
 | `ATR` | Average True Range(H, L, C, cfg["atr_period"]) | per timeframe |
-| `ADX` | Average Directional Index(H, L, C, 14) | 14 bars |
+| `ADX` | Average Directional Index — **Wilder-smoothed EWM (alpha=1/period)** | 14 bars |
 | `OBV` | On-Balance Volume ∑ | cumulative |
 | `Vol_MA` | SMA(volume, cfg["volume_ma"]) | per timeframe |
 | `Vol_ratio` | volume / Vol_MA | — |
@@ -110,7 +110,7 @@
 | `CMF` | Chaikin Money Flow(H, L, C, V, period) | per timeframe |
 | `ST` | SuperTrend line | — |
 | `ST_dir` | SuperTrend direction (+1 bull / −1 bear) | — |
-| `Streak` | Ceiling/Floor streak counter | — |
+| `Streak` | Ceiling/Floor streak counter — threshold = `limit_pct × 0.97`; exchange-specific limit via `compute_all(exchange=)` | — |
 
 **VN-specific functions (added 2026-05):**
 
@@ -125,9 +125,19 @@ def supertrend(high, low, close, atr_period=10, multiplier=3.0) -> tuple[pd.Seri
     # Ratchets: upper_band never rises, lower_band never falls (trend-direction dependent)
 
 def ceiling_floor_streak(close, limit_pct=0.07) -> pd.Series:
+    # Exchange-aware: HOSE=0.07, HNX=0.10, UPCoM=0.15 (via config.EXCHANGE_PRICE_LIMIT)
     # Threshold = limit_pct * 0.97 (3% tolerance for rounding)
     # +N = N consecutive ceiling days (trần)
     # -N = N consecutive floor days (sàn)
+
+def manipulation_score(close, volume, atc_vol_ratio=None) -> pd.Series:
+    # Base: spike detection heuristic (0–100)
+    # atc_vol_ratio: optional ATC concentration series; adds up to 25 bonus pts
+    # Uses config.ATC_RATIO_THRESH = 0.40 as scaling denominator
+
+def _wilder_smooth(series, period) -> pd.Series:
+    # EWM with alpha=1/period (authentic Wilder smoothing for ADX/ATR)
+    # Different from SMA: faster response to recent price action
 ```
 
 ---
@@ -143,8 +153,8 @@ def ceiling_floor_streak(close, limit_pct=0.07) -> pd.Series:
 | Trend | 25 | SMA/EMA alignment, momentum direction, SuperTrend direction | SuperTrend adds 4pts for confirmation |
 | Momentum | 20 | MACD cross, histogram, ROC | Cross = 8pts, histogram positive = 6pts, ROC > 5% = 6pts |
 | RSI | 15 | Zone scoring | 45-65 = 15pts (VN sweet spot); 65-75 = 10pts (momentum continuation) |
-| Volume/Flow | 20 | Vol ratio, MFI, CMF, Streak | CMF > 0.05 = +3pts; consecutive ceiling ≥ 2 = +2pts; floor ≤ -2 = -3pts |
-| Foreign Flow | 5 | Net foreign buy | 1M/3M/5M timeframes only |
+| Volume/Flow | 20 | Vol ratio, MFI, CMF, Streak | CMF > 0.05 = +3pts; consecutive ceiling ≥ 2 = +2pts; floor ≤ -2 = -3pts; Streak uses exchange-specific limit |
+| Foreign Flow | 5 | Net foreign buy (20-session trend) | 1M/3M/5M timeframes only; uses `net_20d` from `fetch_foreign_flow_ticker()` when available |
 | Macro Regime | 10 | Composite macro score | macro_score / 10 |
 | ADX Strength | 5 | ADX trend quality gate | ADX > 25 = 5pts |
 

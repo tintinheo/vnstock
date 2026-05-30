@@ -3,7 +3,7 @@
 
 **PMBOK Knowledge Area:** Quality Management  
 **Process Group:** Planning → Monitoring & Controlling  
-**Document Version:** 2.0  
+**Document Version:** 3.0  
 **Date:** 2026-05-30
 
 ---
@@ -12,7 +12,7 @@
 
 | ID | Quality Objective | Metric | Target | Current |
 |---|---|---|---|---|
-| QO-1 | All core logic is unit-tested and passing | Test pass rate | 100% | 159/159 ✅ |
+| QO-1 | All core logic is unit-tested and passing | Test pass rate | 100% | 237/237 ✅ |
 | QO-2 | Scoring performance meets latency SLA | Tickers scored per second | 60 tickers < 2s | 1.04s ✅ |
 | QO-3 | World market data retrieval meets latency SLA | Fetch wall-clock time | < 3s | ~2s ✅ |
 | QO-4 | No unhandled exceptions during normal use | Error rate | 0 in happy path | ✅ |
@@ -31,21 +31,23 @@
 | Framework | `pytest` 9.0.2 |
 | Config file | `pytest.ini` at project root |
 | Command | `python -m pytest` or `python -m pytest -v` |
-| Total tests | **159** |
-| Typical run time | ~330 seconds (5m 30s) |
+| Total tests | **237** |
+| Typical run time | ~550 seconds (9m 10s) |
 | Test data | Synthetic DataFrames generated in fixtures; no live API calls in tests |
 
 ### 2.2 Test Files and Coverage
 
 | File | Tests | Module Covered | Focus |
 |---|---|---|---|
-| `tests/test_indicators.py` | ~45 | `core/indicators.py` | Each indicator function; compute_all column presence; no-NaN on sufficient data; VN-specific formulas (CMF, SuperTrend ratchet, Streak counter) |
-| `tests/test_scoring.py` | ~30 | `core/scoring.py` | Score range [0,100]; breakdown sum; regime downgrade; manipulation downgrade; stop/target formula; batch_score performance |
+| `tests/test_indicators.py` | ~50 | `core/indicators.py` | Each indicator function; compute_all column presence; no-NaN on sufficient data; VN-specific formulas (CMF, SuperTrend ratchet, Streak counter); Wilder ADX smoothing; exchange-aware Streak (HNX ±10%, UPCoM ±15%); ATC manipulation bonus |
+| `tests/test_scoring.py` | ~30 | `core/scoring.py` | Score range [0,100]; breakdown sum; regime downgrade; manipulation downgrade; stop/target formula; batch_score performance; `exchange_map` routing; `foreign_flow_net_20d` usage |
+| `tests/test_macro_data.py` | ~17 | `core/macro_data.py` | `get_macro_score()` 3-tuple return; score range [0,10]; label thresholds; stale field detection; `fetch_foreign_flow_ticker()` net_20d accumulate/distribute/neutral |
+| `tests/test_scanner_wiring.py` | 12 | `ui/scanner_tab.py`, `core/scoring.py`, `app.py` | `render_scanner_tab()` signature has `exchange_map`; HNX ticker routed with `exchange='HNX'`; `net_20d` forwarded to `compute_score`; `app.py` reads `foreign_flows_cache` from session_state |
 | `tests/test_portfolio.py` | ~25 | `portfolio/tracker.py` | Lot-size calculation; P&L net of fees; T+2 pending state; JSON round-trip persistence; audit event fired on open/close |
 | `tests/test_backtest.py` | ~20 | `backtest/engine.py` | VN cost model; CAGR formula; Sharpe ratio; Max Drawdown; trade entry/exit simulation |
 | `tests/test_data_fetcher.py` | ~15 | `core/data_fetcher.py` | Fallback chain (mock APIs); timeout handling; output schema validation |
-| `tests/test_ensemble.py` | ~14 | `ml/ensemble.py` | Forecast not NaN; LSTM fallback without TensorFlow; ensemble weight sum = 1.0 |
-| `tests/test_regime.py` | ~10 | `core/regime.py`, `core/macro_data.py` | HMM label output (bull/sideways/bear); macro score range [0,10]; parallel world market fetch |
+| `tests/test_ensemble.py` | ~22 | `ml/ensemble.py` | Forecast not NaN; LSTM fallback without TensorFlow; ensemble weight sum = 1.0; walk-forward 80/20 train/test split; `_walk_forward_mape()` non-negative and finite |
+| `tests/test_regime.py` | 21 | `core/regime.py` | HMM label output (bull/sideways/bear); macro score range [0,10]; parallel world market fetch; `detect_market_regime` alias; VNI uptrend/downtrend detection; history length/label validity |
 
 ### 2.3 Test Categories
 

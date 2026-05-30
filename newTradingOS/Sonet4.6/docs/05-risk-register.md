@@ -3,7 +3,7 @@
 
 **PMBOK Knowledge Area:** Risk Management  
 **Process Group:** Planning → Monitoring & Controlling  
-**Document Version:** 2.0  
+**Document Version:** 3.0  
 **Date:** 2026-05-30
 
 ---
@@ -34,7 +34,7 @@
 |---|---|---|---|---|---|---|---|---|---|
 | RT-001 | DNSE API URL changes or adds authentication, breaking primary data fetch | Technical / API | 2 | 3 | 6 | Critical | Maintain 3-level fallback chain (DNSE → SSI → CafeF); monitor API responses for HTTP 401/403; add automated health check test | Dev | Open |
 | RT-002 | CafeF HTML structure changes break HTML scraper (tertiary fallback) | Technical / API | 3 | 2 | 6 | Critical | Add HTML parsing tests with snapshot fixtures; consider adding a 4th fallback (manual CSV upload) | Dev | Open |
-| RT-003 | Yahoo Finance API rate-limiting causes world market data failure | Technical / API | 2 | 2 | 4 | High | Cache last-successful world market result for ≤ 30 min; show stale-data warning in UI | Dev | Open |
+| RT-003 | Yahoo Finance API rate-limiting causes world market data failure | Technical / API | 2 | 2 | 4 | High | Cache last-successful world market result for ≤ 30 min; `get_macro_score()` returns `stale_fields` list; UI shows stale-data warning banner when fields are missing | Dev | **Mitigated** |
 | RT-004 | ThreadPoolExecutor thread leaks under abnormal process termination | Technical | 1 | 2 | 2 | Medium | Use `with ThreadPoolExecutor() as ex:` pattern throughout; validated in current codebase | Dev | Mitigated |
 | RT-005 | SuperTrend iterative ratchet introduces subtle off-by-one across different pandas versions | Technical | 2 | 2 | 4 | High | Pinned unit test with known dataset; runs in CI | Dev | Open |
 | RT-006 | ML model returns NaN forecast for tickers with insufficient history | Technical / ML | 2 | 2 | 4 | High | All models guard against < 30 rows; fallback to heuristic forecast; unit tested | Dev | Mitigated |
@@ -50,10 +50,10 @@
 | ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
 |---|---|---|---|---|---|---|---|---|---|
 | RM-001 | SSC moves HoSE to T+1 settlement, making T+2.5 position logic stale | Market / Regulatory | 3 | 2 | 6 | Critical | Expose `SETTLEMENT_T_PLUS` in `config.py`; update value to 1.0 when rule changes; no code changes required | Dev | Open |
-| RM-002 | HoSE raises daily price limit from ±7% to ±10% (trial announced) | Market / Regulatory | 2 | 2 | 4 | High | All limit references use `HOSE_LIMIT_PCT` constant; Streak counter threshold configurable via `limit_pct` parameter | Dev | Open |
+| RM-002 | HoSE raises daily price limit from ±7% to ±10% (trial announced) | Market / Regulatory | 2 | 2 | 4 | High | All limit references use per-exchange constants in `config.EXCHANGE_PRICE_LIMIT` (HOSE=0.07, HNX=0.10, UPCoM=0.15); `ceiling_floor_streak()` accepts `limit_pct` param; `compute_all(exchange=)` routes per ticker; `batch_score(exchange_map=)` and `render_scanner_tab(exchange_map=)` wire exchange data end-to-end | Dev | **Mitigated** |
 | RM-003 | Scoring model trained on 2015–2025 data becomes less accurate in structural regime shifts (e.g. post-pandemic) | Market | 2 | 2 | 4 | High | Periodic backtesting review; compare win rate vs benchmark; ML ensemble provides model-diverse forecasts | Dev | Open |
 | RM-004 | Thin liquidity tickers (HNX small-cap) produce misleading signals due to low volume | Market | 3 | 2 | 6 | Critical | Minimum volume filter applied before scoring; flagged in UI; review thresholds quarterly | Dev | Open |
-| RM-005 | Foreign flow data from CafeF delayed or inaccurate, skewing score component 5 | Market / Data | 2 | 1 | 2 | Medium | Foreign flow component contributes only 5/100 pts; limited blast radius; show data timestamp in UI | Dev | Open |
+| RM-005 | Foreign flow data from CafeF delayed or inaccurate, skewing score component 5 | Market / Data | 2 | 1 | 2 | Medium | `fetch_foreign_flow_ticker()` now aggregates 20-session net buy (`net_20d`) and classifies trend (`accumulate`/`distribute`/`neutral`); cached in `session_state.foreign_flows_cache` on Macro update; shows data timestamp in UI | Dev | **Mitigated** |
 
 ---
 
@@ -61,7 +61,7 @@
 
 | ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| RML-001 | ML models overfit to 2020–2022 bull run patterns | ML | 2 | 3 | 6 | Critical | Use out-of-sample holdout test (20% test set); ensemble diversity reduces single-model overfit | Dev | Open |
+| RML-001 | ML models overfit to 2020–2022 bull run patterns | ML | 2 | 3 | 6 | Critical | RF now uses 80/20 walk-forward train/test split; `_walk_forward_mape()` reports out-of-sample MAPE; ensemble diversity reduces single-model overfit | Dev | **Mitigated** |
 | RML-002 | Prophet model fails on tickers with public holidays creating gaps | ML | 2 | 1 | 2 | Medium | Prophet handles missing dates natively; `fill_holes=True` set in training config | Dev | Mitigated |
 | RML-003 | Monte Carlo simulation uses Gaussian returns (fat tails underestimated in VN market) | ML | 3 | 2 | 6 | Critical | Confidence intervals are advisory only, not position sizing input; document this limitation in Guide | Dev | Open |
 | RML-004 | XGBoost feature set grows stale as new indicators added but retraining not triggered | ML | 2 | 2 | 4 | High | Document retraining procedure; version model artifacts; alert when indicator set changes | Dev | Open |

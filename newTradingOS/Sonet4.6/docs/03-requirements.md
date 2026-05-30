@@ -3,7 +3,7 @@
 
 **PMBOK Knowledge Area:** Scope Management  
 **Process Group:** Planning  
-**Document Version:** 2.0  
+**Document Version:** 3.0  
 **Date:** 2026-05-30
 
 ---
@@ -19,7 +19,7 @@
 | FR-005 | `compute_all()` shall produce no all-NaN indicator series for sufficient data (≥ 30 rows) | Must | 1.2.8 | `core/indicators.py` | `test_indicators::test_no_all_nan` |
 | FR-006 | Chaikin Money Flow (CMF) shall use (close-low-(high-close))/(high-low) × volume formula | Must | 1.2.6 | `core/indicators.py` | `test_indicators::test_cmf_formula` |
 | FR-007 | SuperTrend indicator shall ratchet bands (never widen against prevailing trend direction) | Must | 1.2.6 | `core/indicators.py` | `test_indicators::test_supertrend_ratchet` |
-| FR-008 | Ceiling/Floor Streak shall count consecutive ±7% limit days (HoSE threshold with 3% tolerance) | Must | 1.2.6 | `core/indicators.py` | `test_indicators::test_streak_counter` |
+| FR-008 | Ceiling/Floor Streak shall count consecutive limit days using the correct exchange price limit (HOSE ±7%, HNX ±10%, UPCoM ±15%) with 3% tolerance | Must | 1.2.6 | `core/indicators.py` | `test_indicators::TestCeilingFloorStreak` |
 | FR-009 | Score shall be a float in [0, 100] for any valid input DataFrame | Must | 1.3 | `core/scoring.py` | `test_scoring::test_score_range` |
 | FR-010 | Score breakdown dict values shall sum to ≤ score + 0.5 tolerance | Must | 1.3 | `core/scoring.py` | `test_scoring::test_breakdown_sum` |
 | FR-011 | BUY signal shall be downgraded to WATCH when macro regime is BEAR or EXTREME_BEAR | Must | 1.3.9 | `core/scoring.py` | `test_scoring::test_regime_downgrade` |
@@ -27,8 +27,8 @@
 | FR-013 | ATR-based stop loss shall be calculated as: entry − (ATR × stop_atr_mult per timeframe) | Must | 1.3.8 | `core/scoring.py` | `test_scoring::test_stop_target_calc` |
 | FR-014 | ATR-based target shall be calculated as: entry + (risk_distance × target_rr) | Must | 1.3.8 | `core/scoring.py` | `test_scoring::test_stop_target_calc` |
 | FR-015 | `batch_score()` shall accept a list of tickers and return results in ≤ 2s for 60 tickers | Must | 1.3.11 | `core/scoring.py` | `test_scoring::test_batch_performance` |
-| FR-016 | Macro score shall aggregate world market performance, VN breadth, and foreign flow | Must | 1.4.4 | `core/macro_data.py` | `test_regime::test_macro_score_range` |
-| FR-017 | HMM regime detection shall classify market as one of: bull / sideways / bear | Must | 1.4.5 | `core/regime.py` | `test_regime::test_hmm_labels` |
+| FR-016 | Macro score shall aggregate world market performance, VN breadth, and foreign flow; `get_macro_score()` shall return a 3-tuple `(score, label, stale_fields)` and detect stale/missing data sources | Must | 1.4.4 | `core/macro_data.py` | `test_macro_data::TestGetMacroScoreReturnType` |
+| FR-017 | HMM regime detection shall classify VN-Index market state as one of: bull / sideways / bear; `detect_regime()` shall only be called on VNINDEX data, not individual stocks | Must | 1.4.5 | `core/regime.py` | `test_regime::TestDetectRegimeVNIndex` |
 | FR-018 | ML ensemble shall produce a price forecast for each requested timeframe | Must | 1.5.8 | `ml/ensemble.py` | `test_ensemble::test_forecast_not_nan` |
 | FR-019 | Ensemble shall fall back gracefully when LSTM (TensorFlow) is not installed | Must | 1.5.2 | `ml/ensemble.py` | `test_ensemble::test_lstm_fallback` |
 | FR-020 | Backtesting engine shall simulate trades using VN cost model (0.30% sell total) | Must | 1.6.2 | `backtest/engine.py` | `test_backtest::test_cost_model` |
@@ -41,6 +41,12 @@
 | FR-027 | Scanner tab shall cache results per (timeframe, regime, macro_score, data_version) key | Should | 1.9.2 | `ui/scanner_tab.py` | Manual |
 | FR-028 | Application shall render all 11 tabs without exception on valid data | Must | 1.9 | `app.py` | Manual + smoke test |
 | FR-029 | World market data fetch shall complete within 3 seconds via parallel fetching | Should | 1.1.3 | `core/macro_data.py` | `test_regime::test_world_fetch_speed` |
+| FR-030 | `fetch_foreign_flow_ticker()` shall return net foreign flow over 20 trading sessions (`net_20d`) and trend direction (`trend_20d`: accumulate/distribute/neutral) | Must | 1.4.4 | `core/macro_data.py` | `test_macro_data::TestFetchForeignFlowTicker20d` |
+| FR-031 | `batch_score()` and `render_scanner_tab()` shall accept an `exchange_map` dict to route each ticker to its correct exchange price limit | Must | 1.3.11 | `core/scoring.py`, `ui/scanner_tab.py` | `test_scanner_wiring::TestBatchScoreExchangeMap` |
+| FR-032 | `app.py` Macro update shall fetch per-ticker foreign flow in parallel (≤ 8 workers) and cache result in `session_state.foreign_flows_cache` | Must | 1.4.4 | `app.py` | `test_scanner_wiring::TestAppForeignFlowsCacheKey` |
+| FR-033 | ADX shall use Wilder smoothing (EWM alpha = 1/period) rather than SMA for authentic directional index calculation | Must | 1.2.6 | `core/indicators.py` | `test_indicators::TestWilderSmooth` |
+| FR-034 | ML Random Forest shall use 80/20 train/test walk-forward split; `_walk_forward_mape()` shall report out-of-sample MAPE | Must | 1.5.3 | `ml/classical_models.py` | `test_ensemble::TestWalkForwardRF` |
+| FR-035 | ATC (end-of-session) volume concentration shall be accepted as optional input to `manipulation_score()` and contribute up to 25 bonus points | Should | 1.2.7 | `core/indicators.py` | `test_indicators::TestManipulationScoreATC` |
 
 ---
 
@@ -73,8 +79,9 @@
 | Data layer (FR-001 to FR-003) | 3 | `test_data_fetcher.py` |
 | Indicators (FR-004 to FR-008) | 5 | `test_indicators.py` |
 | Scoring engine (FR-009 to FR-015) | 7 | `test_scoring.py` |
-| Macro / Regime (FR-016 to FR-017) | 2 | `test_regime.py` |
-| ML Ensemble (FR-018 to FR-019) | 2 | `test_ensemble.py` |
+| Macro / Regime (FR-016 to FR-017, FR-030, FR-032) | 4 | `test_macro_data.py`, `test_regime.py` |
+| ML Ensemble (FR-018 to FR-019, FR-034) | 3 | `test_ensemble.py` |
+| Scanner wiring (FR-031, FR-032) | 2 | `test_scanner_wiring.py` |
 | Backtesting (FR-020 to FR-021) | 2 | `test_backtest.py` |
 | Portfolio (FR-022 to FR-026) | 5 | `test_portfolio.py` |
 | UI / Application (FR-027 to FR-029) | 3 | Manual |
