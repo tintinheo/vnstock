@@ -116,6 +116,44 @@ def get_price_limit(ticker: str) -> float:
     exchange = TICKER_EXCHANGE.get(ticker, "HOSE")
     return EXCHANGE_PRICE_LIMIT.get(exchange, 0.07)
 
+
+# ─────────────────────────────────────────────────────────────
+# VN PRICE TICK SIZES  (HOSE Circular 2023, HNX/UPCOM uniform)
+# ─────────────────────────────────────────────────────────────
+def get_tick_size(price: float, exchange: str = "HOSE") -> int:
+    """Return the minimum tick size (VND) for a given price on the given VN exchange.
+
+    HOSE price bands (per HoSE circular):
+      price < 10,000 VND    → tick = 10 VND
+      10,000 ≤ price < 50,000 VND → tick = 50 VND
+      price ≥ 50,000 VND   → tick = 100 VND
+    HNX / UPCOM: uniform 100 VND tick for all price bands.
+    """
+    exch = exchange.upper()
+    if exch in ("HNX", "UPCOM"):
+        return 100
+    # HOSE price-band ticks
+    if price < 10_000:
+        return 10
+    if price < 50_000:
+        return 50
+    return 100
+
+
+def round_to_tick(price: float, exchange: str = "HOSE") -> float:
+    """Round a VND price to the nearest valid tick for the given exchange.
+
+    Used for stop-loss and take-profit levels so they always land on
+    broker-valid price points. Prevents order rejections due to invalid prices.
+
+    Examples (HOSE):
+      45_023  → 45_000  (tick=50, nearest multiple)
+      45_026  → 45_050
+      120_080 → 120_100 (tick=100)
+    """
+    tick = get_tick_size(price, exchange)
+    return float(round(price / tick) * tick)
+
 # ─────────────────────────────────────────────────────────────
 # EXCHANGE-BASED UNIVERSE LISTS
 # ─────────────────────────────────────────────────────────────

@@ -351,3 +351,176 @@ class TestFetchForeignFlowTicker20d:
         result = fetch_foreign_flow_ticker("VCB")
         assert result["net_buy_value"] == 0
         assert result["trend_20d"] == "neutral"
+
+
+# ─────────────────────────────────────────────────────────────
+# FIX Audit Round 2 — S&P 500 + CSI 300 in macro_score
+# ─────────────────────────────────────────────────────────────
+def _macro_with_world(**world_overrides):
+    """Macro dict with world market data for S&P 500 / CSI 300 tests.
+
+    Starts from a neutral baseline (dxy neutral, vix normal, ad_ratio 0.5,
+    no foreign flow). Only the specified world symbols are provided.
+    """
+    world = {k: None for k in [
+        "Gold (XAU/USD)", "WTI Oil", "Natural Gas", "DXY (USD Index)",
+        "S&P 500", "VIX", "CSI 300 (CN)", "Nikkei 225",
+    ]}
+    for sym, data in world_overrides.items():
+        world[sym] = data
+    return {
+        "dxy_trend":    "neutral",
+        "vix_level":    "normal",
+        "foreign_flow": {"net_buy": 0},
+        "ad_ratio":     0.5,
+        "stale_fields": [],
+        "world":        world,
+    }
+
+
+def _world_entry(pct_5d: float) -> dict:
+    """Helper: create a minimal world market entry with given 5d return."""
+    return {"current": 100.0, "pct_1d": 0.0, "pct_5d": pct_5d, "pct_20d": 0.0,
+            "prices": [100.0], "timestamps": []}
+
+
+class TestMacroScoreWorldIndices:
+    """S&P 500 and CSI 300 contributions to macro_score.
+
+    CSI 300 is the single most correlated regional index with VN-Index
+    (steel, chemicals, trade flows). S&P 500 drives global risk appetite
+    and EM capital flows. Both ignored in prior versions — fixed in Round 2.
+    """
+
+    # ── S&P 500 ───────────────────────────────────────────────
+    def test_sp500_strong_rally_improves_score(self):
+        """S&P 500 +3% in 5d → +0.5 pts to macro score."""
+        macro_no_sp  = _macro_with_world()
+        macro_sp_up  = _macro_with_world(**{"S&P 500": _world_entry(3.0)})
+        score_base, _, _ = get_macro_score(macro_no_sp)
+        score_up,   _, _ = get_macro_score(macro_sp_up)
+        assert score_up > score_base, (
+            f"S&P 500 +3% should improve score (base={score_base}, up={score_up})"
+        )
+
+    def test_sp500_mild_rally_small_improvement(self):
+        """S&P 500 +1% in 5d → +0.25 pts."""
+        macro_base  = _macro_with_world()
+        macro_up    = _macro_with_world(**{"S&P 500": _world_entry(1.0)})
+        s_base, _, _ = get_macro_score(macro_base)
+        s_up,   _, _ = get_macro_score(macro_up)
+        assert s_up > s_base
+        assert abs((s_up - s_base) - 0.25) < 1e-6
+
+    def test_sp500_crash_reduces_score(self):
+        """S&P 500 -3% in 5d → risk-off, reduces macro score."""
+        macro_base  = _macro_with_world()
+        macro_down  = _macro_with_world(**{"S&P 500": _world_entry(-3.0)})
+        s_base, _, _ = get_macro_score(macro_base)
+        s_down, _, _ = get_macro_score(macro_down)
+        assert s_down < s_base, (
+            f"S&P -3% should reduce score (base={s_base}, down={s_down})"
+        )
+
+    def test_sp500_crash_reduction_exceeds_rally_gain(self):
+        """Downside S&P impact (-0.75) is larger than upside (+0.5) — asymmetric.
+
+        VN market reacts faster to S&P crashes than to S&P rallies due to
+        risk-off foreign outflows being quicker than accumulated inflows.
+        """
+        macro_up   = _macro_with_world(**{"S&P 500": _world_entry(3.0)})
+        macro_down = _macro_with_world(**{"S&P 500": _world_entry(-3.0)})
+        macro_base = _macro_with_world()
+        s_base, _, _  = get_macro_score(macro_base)
+        s_up,   _, _  = get_macro_score(macro_up)
+        s_down, _, _  = get_macro_score(macro_down)
+        gain     = s_up   - s_base
+        penalty  = s_base - s_down
+        assert penalty > gain, f"Crash penalty {penalty} should exceed rally gain {gain}"
+
+    def test_sp500_absent_no_change(self):
+        """If S&P 500 data is None (API failure), score should be unchanged."""
+        macro_no_sp  = _macro_with_world()                      # S&P = None
+        macro_sp_0   = _macro_with_world(**{"S&P 500": _world_entry(0.0)})
+        s_no, _, _   = get_macro_score(macro_no_sp)
+        s_0,  _, _   = get_macro_score(macro_sp_0)
+        # pct_5d=0 → no adjustment; but None still maps to no change
+        assert abs(s_no - s_0) < 0.5  # tolerance: neutral 0% move vs no data
+
+    # ── CSI 300 ───────────────────────────────────────────────
+    def test_csi300_strong_rally_improves_score(self):
+        """CSI 300 +3% in 5d → +0.5 pts (China rally positive for VN sentiment)."""
+        macro_base  = _macro_with_world()
+        macro_csi   = _macro_with_world(**{"CSI 300 (CN)": _world_entry(3.0)})
+        s_base, _, _ = get_macro_score(macro_base)
+        s_csi,  _, _ = get_macro_score(macro_csi)
+        assert s_csi > s_base, (
+            f"CSI 300 +3% should improve macro score (base={s_base}, csi={s_csi})"
+        )
+
+    def test_csi300_mild_rally_adds_0_25(self):
+        """CSI 300 +1% → +0.25 pts."""
+        macro_base  = _macro_with_world()
+        macro_csi   = _macro_with_world(**{"CSI 300 (CN)": _world_entry(1.0)})
+        s_base, _, _ = get_macro_score(macro_base)
+        s_csi,  _, _ = get_macro_score(macro_csi)
+        assert abs((s_csi - s_base) - 0.25) < 1e-6
+
+    def test_csi300_crash_reduces_score(self):
+        """CSI 300 -3% in 5d → reduces macro score (China crash hits VN commodities)."""
+        macro_base  = _macro_with_world()
+        macro_down  = _macro_with_world(**{"CSI 300 (CN)": _world_entry(-3.0)})
+        s_base, _, _ = get_macro_score(macro_base)
+        s_down, _, _ = get_macro_score(macro_down)
+        assert s_down < s_base
+
+    def test_csi300_absent_no_change(self):
+        """Missing CSI 300 data must not change the score."""
+        macro_no   = _macro_with_world()
+        macro_zero = _macro_with_world(**{"CSI 300 (CN)": _world_entry(0.0)})
+        s_no, _, _ = get_macro_score(macro_no)
+        s_z,  _, _ = get_macro_score(macro_zero)
+        assert abs(s_no - s_z) < 0.5
+
+    # ── Combined effect ───────────────────────────────────────
+    def test_combined_sp500_csi_rally_improves_more_than_individual(self):
+        """Both S&P 500 and CSI 300 rallying should improve score more than either alone."""
+        macro_both = _macro_with_world(**{
+            "S&P 500":     _world_entry(3.0),
+            "CSI 300 (CN)": _world_entry(3.0),
+        })
+        macro_sp_only  = _macro_with_world(**{"S&P 500":     _world_entry(3.0)})
+        macro_csi_only = _macro_with_world(**{"CSI 300 (CN)": _world_entry(3.0)})
+        s_both, _, _    = get_macro_score(macro_both)
+        s_sp,   _, _    = get_macro_score(macro_sp_only)
+        s_csi,  _, _    = get_macro_score(macro_csi_only)
+        assert s_both > s_sp, "Both rallying should beat S&P alone"
+        assert s_both > s_csi, "Both rallying should beat CSI alone"
+
+    def test_macro_score_still_capped_at_10(self):
+        """Even with all world markets rallying, score must not exceed 10."""
+        macro = _macro_with_world(**{
+            "S&P 500":     _world_entry(10.0),
+            "CSI 300 (CN)": _world_entry(10.0),
+        })
+        # Also set all other factors to max
+        macro["dxy_trend"]    = "strong_down"
+        macro["vix_level"]    = "normal"
+        macro["foreign_flow"] = {"net_buy": 2e10}
+        macro["ad_ratio"]     = 0.80
+        score, _, _ = get_macro_score(macro)
+        assert score <= 10.0, f"Score must be capped at 10, got {score}"
+
+    def test_macro_score_still_floored_at_0(self):
+        """Even with all factors negative, score must not go below 0."""
+        macro = _macro_with_world(**{
+            "S&P 500":     _world_entry(-10.0),
+            "CSI 300 (CN)": _world_entry(-10.0),
+        })
+        macro["dxy_trend"]    = "strong_up"
+        macro["vix_level"]    = "fear"
+        macro["foreign_flow"] = {"net_buy": -2e10}
+        macro["ad_ratio"]     = 0.20
+        score, _, _ = get_macro_score(macro)
+        assert score >= 0.0, f"Score must be floored at 0, got {score}"
+

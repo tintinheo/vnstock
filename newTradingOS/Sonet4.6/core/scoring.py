@@ -13,7 +13,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from config import TIMEFRAME_CONFIG, score_to_action
+from config import TIMEFRAME_CONFIG, score_to_action, round_to_tick, get_tick_size
 from core.indicators import compute_all
 
 logger = logging.getLogger("TradingOS.scoring")
@@ -161,11 +161,13 @@ def compute_score(
     vol = min(vol, 20.0)
     vol = max(vol, -5.0)
 
-    # ── 5. FOREIGN FLOW  (5 pts, meaningful for 1M+) ─────────
+    # ── 5. FOREIGN FLOW  (5 pts, meaningful for 2W+) ───────────────
     # Use 20d trend if available — more robust than single-day signal.
     # Falls back to today's net flow when net_20d is zero (not provided).
+    # 2W included: 10-session hold is long enough for FF trends to matter;
+    # a 2-week sustained foreign sell-off is clearly a negative signal.
     ff_pts = 0.0
-    if tf in ("1M", "3M", "5M"):
+    if tf in ("2W", "1M", "3M", "5M"):
         ff_ref = foreign_flow_net_20d if foreign_flow_net_20d != 0.0 else foreign_flow_net
         if ff_ref > 1e10:    ff_pts = 5
         elif ff_ref > 0:     ff_pts = 3
@@ -197,8 +199,16 @@ def compute_score(
 
     # ── ATR STOP / TARGET ─────────────────────────────────────
     atr_v       = float(last["ATR"]) if not pd.isna(last["ATR"]) else price * 0.02
-    stop_loss   = round(price - cfg["stop_atr_mult"] * atr_v, 0)
-    take_profit = round(price + cfg["stop_atr_mult"] * atr_v * cfg["target_rr"], 0)
+    stop_raw    = price - cfg["stop_atr_mult"] * atr_v
+    target_raw  = price + cfg["stop_atr_mult"] * atr_v * cfg["target_rr"]
+    # Round to valid VN exchange tick (HOSE: 10/50/100 VND by price band;
+    # HNX/UPCOM: 100 VND flat). Prevents broker order-rejection on invalid prices.
+    stop_loss   = round_to_tick(stop_raw,   exchange)
+    take_profit = round_to_tick(target_raw, exchange)
+    # Safety: stop must be strictly below price, target above
+    tick = get_tick_size(price, exchange)
+    if stop_loss  >= price:   stop_loss   = price - tick
+    if take_profit <= price:  take_profit = price + tick
 
     # ── MANIPULATION CHECK ────────────────────────────────────
     manip_v    = float(last["Manip_score"]) if not pd.isna(last["Manip_score"]) else 0.0

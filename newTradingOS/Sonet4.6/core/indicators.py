@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+from typing import Optional
 
 
 # ─────────────────────────────────────────────────────────────
@@ -35,11 +36,21 @@ def golden_cross(fast: pd.Series, slow: pd.Series) -> pd.Series:
 # MOMENTUM
 # ─────────────────────────────────────────────────────────────
 def rsi(close: pd.Series, period: int = 14) -> pd.Series:
+    """RSI using Wilder's original EWM smoothing (alpha=1/period).
+
+    Wilder (1978) specified exponential smoothing, not SMA, for both the
+    average gain and average loss. Using EWM ensures RSI responds correctly
+    to momentum shifts — important for VN stocks that can sustain extreme
+    RSI levels (>80 in strong runs) due to the daily price-limit mechanism.
+    """
     delta = close.diff()
-    gain  = delta.clip(lower=0).rolling(period, min_periods=1).mean()
-    loss  = (-delta.clip(upper=0)).rolling(period, min_periods=1).mean()
+    gain  = _wilder_smooth(delta.clip(lower=0), period)
+    loss  = _wilder_smooth((-delta).clip(lower=0), period)
     rs    = gain / loss.replace(0, np.nan)
-    return 100 - (100 / (1 + rs))
+    rsi_v = 100 - (100 / (1 + rs))
+    # When loss==0 and gain>0: RS → ∞ → RSI should be 100 (not NaN)
+    rsi_v = rsi_v.where(~((loss == 0) & (gain > 0)), 100.0)
+    return rsi_v
 
 
 def macd(close: pd.Series,
@@ -76,13 +87,20 @@ def roc(close: pd.Series, period: int = 10) -> pd.Series:
 # ─────────────────────────────────────────────────────────────
 def atr(high: pd.Series, low: pd.Series, close: pd.Series,
         period: int = 14) -> pd.Series:
-    """Average True Range."""
+    """Average True Range using Wilder's EWM smoothing (alpha=1/period).
+
+    Wilder (1978) used his own exponential smoothing method for ATR as well
+    as ADX. Using EWM (vs plain SMA) makes ATR more responsive to sudden
+    volatility expansions — critical for VN market where T-floor/ceiling
+    streaks can compress then violently expand volatility overnight.
+    Consistent with the ADX implementation which also uses Wilder EWM.
+    """
     tr = pd.concat([
         high - low,
         (high - close.shift()).abs(),
         (low  - close.shift()).abs(),
     ], axis=1).max(axis=1)
-    return tr.rolling(period, min_periods=1).mean()
+    return _wilder_smooth(tr, period)
 
 
 def bollinger_bands(close: pd.Series,

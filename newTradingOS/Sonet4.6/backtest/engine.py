@@ -21,11 +21,11 @@ import pandas as pd
 
 from config import (
     BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL,
-    TIMEFRAME_CONFIG, VN_SESSIONS_YEAR,
+    TIMEFRAME_CONFIG, VN_SESSIONS_YEAR, LOT_SIZE,
 )
 from core.indicators import compute_all, atr as _atr
 from core.scoring import compute_score
-from portfolio.sizing import compute_portfolio_metrics, TradeStats
+from portfolio.sizing import compute_portfolio_metrics, TradeStats, position_size_vnd
 
 logger = logging.getLogger("TradingOS.backtest")
 
@@ -47,6 +47,7 @@ class BacktestTrade:
     pnl_vnd:      float
     hold_sessions:int
     exit_reason:  str   # 'stop' | 'target' | 'time' | 'signal'
+    n_shares:     int   = 0  # VN lot-size-aligned share count (multiple of LOT_SIZE)
 
 
 @dataclass
@@ -107,6 +108,8 @@ def run_backtest(
     entry_idx    = 0
     stop_loss    = 0.0
     take_profit  = 0.0
+    _n_shares    = 0        # lot-aligned share count for current open trade
+    _vnd_committed = 0.0   # actual VND invested (lot-aligned) for current trade
 
     # Warm-up: need enough rows to compute all indicators
     warm_up = cfg["sma_slow"] + 10
@@ -125,10 +128,15 @@ def run_backtest(
             )
 
             if sig.action in ("BUY", "STRONG BUY") and sig.regime_ok:
-                entry_px    = price * (1 + BUY_TOTAL)   # slippage + fee
+                entry_px    = price * (1 + BUY_TOTAL)   # slippage + fee per share
                 entry_idx   = i
                 stop_loss   = sig.stop_loss
                 take_profit = sig.take_profit
+                # VN LOT_SIZE enforcement: position size rounded down to nearest
+                # 100-share lot so simulated trades match real broker constraints.
+                _n_shares, _vnd_committed = position_size_vnd(
+                    capital, pos_pct, price, lot_size=LOT_SIZE
+                )
                 in_trade    = True
 
         else:
@@ -171,7 +179,9 @@ def run_backtest(
             if exit_reason:
                 exit_px_net = exit_px * (1 - SELL_TOTAL)
                 trade_pnl   = (exit_px_net / entry_px) - 1
-                trade_vnd   = capital * pos_pct * trade_pnl
+                # Use lot-size-aligned position value for realistic VND P&L.
+                # This prevents fractional-share overstatement on small accounts.
+                trade_vnd   = _vnd_committed * trade_pnl
 
                 capital     += trade_vnd
                 capital      = max(capital, 1)   # prevent negative
@@ -189,6 +199,7 @@ def run_backtest(
                     pnl_vnd      = round(trade_vnd, 0),
                     hold_sessions= sessions_held,
                     exit_reason  = exit_reason,
+                    n_shares     = _n_shares,
                 )
                 trades.append(t)
                 trade_stats.update(trade_pnl)

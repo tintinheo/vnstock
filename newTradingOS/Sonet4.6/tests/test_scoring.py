@@ -177,3 +177,89 @@ class TestForeignFlow20d:
         assert sig_no_ff.breakdown.get("Foreign", 0) == 0
         assert sig_ff.breakdown.get("Foreign", 0) == 0
 
+
+# ─────────────────────────────────────────────────────────────
+# FIX Audit Round 2 — 2W Foreign Flow active
+# ─────────────────────────────────────────────────────────────
+class TestForeignFlow2W:
+    """Foreign flow should affect 2W scores (10-session hold is meaningful for FF).
+
+    VN-specific: foreign investors tend to trend for 2+ weeks. A sustained
+    foreign buy over 10 sessions signals institutional accumulation and is
+    predictive of continued price appreciation.
+    """
+
+    def test_ff_active_on_2w_strong_buy(self, ohlcv):
+        """A strong 20d foreign buy (>1e10) should give +5 Foreign pts on 2W."""
+        sig = compute_score(ohlcv, "2W", foreign_flow_net_20d=2e10, ticker="VCB")
+        assert sig.breakdown.get("Foreign", 0) == 5.0, (
+            f"Expected Foreign=5 on 2W with strong buy, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_zero_on_2w_gives_1pt(self, ohlcv):
+        """Zero foreign flow on 2W should give baseline 1 pt (not 0)."""
+        sig = compute_score(ohlcv, "2W", foreign_flow_net=0.0,
+                            foreign_flow_net_20d=0.0, ticker="VCB")
+        assert sig.breakdown.get("Foreign", -1) == 1.0, (
+            f"Expected Foreign=1 for neutral flow on 2W, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_strong_sell_on_2w_gives_0pt(self, ohlcv):
+        """A strong sustained foreign sell on 2W should give 0 Foreign pts."""
+        sig = compute_score(ohlcv, "2W", foreign_flow_net_20d=-2e10, ticker="VCB")
+        assert sig.breakdown.get("Foreign", -1) == 0.0, (
+            f"Expected Foreign=0 for strong sell on 2W, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_improves_2w_score_vs_no_ff(self, ohlcv):
+        """Strong FF buy on 2W should produce higher score than no FF."""
+        sig_no_ff = compute_score(ohlcv, "2W", foreign_flow_net=0.0,
+                                  foreign_flow_net_20d=0.0, ticker="VCB")
+        sig_ff    = compute_score(ohlcv, "2W", foreign_flow_net=0.0,
+                                  foreign_flow_net_20d=2e10, ticker="VCB")
+        assert sig_ff.score > sig_no_ff.score, (
+            f"2W score with strong FF buy ({sig_ff.score}) should exceed "
+            f"no-FF score ({sig_no_ff.score})"
+        )
+
+    def test_ff_still_zero_on_1w(self, ohlcv):
+        """Adding 2W does NOT change 1W — FF must remain 0 for 1W."""
+        sig = compute_score(ohlcv, "1W", foreign_flow_net=1e12,
+                            foreign_flow_net_20d=1e12, ticker="VCB")
+        assert sig.breakdown.get("Foreign", 0) == 0
+
+
+# ─────────────────────────────────────────────────────────────
+# FIX Audit Round 2 — VN Tick Rounding in scoring output
+# ─────────────────────────────────────────────────────────────
+class TestScoringTickRounding:
+    """Stop-loss and take-profit from compute_score must be at valid VN tick prices."""
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_stop_loss_at_valid_tick_all_tf(self, ohlcv, tf):
+        """Stop-loss must be a valid HOSE tick multiple for all timeframes."""
+        from config import get_tick_size
+        sig  = compute_score(ohlcv, tf, exchange="HOSE", ticker="VCB")
+        stop = sig.stop_loss
+        tick = get_tick_size(stop, "HOSE")
+        assert stop % tick == 0, f"TF={tf}: stop {stop} not multiple of tick {tick}"
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_take_profit_at_valid_tick_all_tf(self, ohlcv, tf):
+        """Take-profit must be a valid HOSE tick multiple for all timeframes."""
+        from config import get_tick_size
+        sig  = compute_score(ohlcv, tf, exchange="HOSE", ticker="VCB")
+        tp   = sig.take_profit
+        tick = get_tick_size(tp, "HOSE")
+        assert tp % tick == 0, f"TF={tf}: take_profit {tp} not multiple of tick {tick}"
+
+    def test_hnx_stop_is_100_tick(self, ohlcv):
+        """On HNX exchange, stop_loss must be a multiple of 100."""
+        sig  = compute_score(ohlcv, "1M", exchange="HNX", ticker="PVS")
+        assert sig.stop_loss % 100 == 0
+
+    def test_upcom_stop_is_100_tick(self, ohlcv):
+        """On UPCOM exchange, stop_loss must be a multiple of 100."""
+        sig  = compute_score(ohlcv, "1M", exchange="UPCOM", ticker="ACV")
+        assert sig.stop_loss % 100 == 0
+

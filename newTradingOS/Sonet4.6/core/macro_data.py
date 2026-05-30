@@ -310,6 +310,30 @@ def get_macro_score(macro: dict) -> tuple[float, str, list[str]]:
     if ad_ratio > 0.65:  score += 1.0
     elif ad_ratio < 0.35: score -= 1.0
 
+    # ── S&P 500 — global risk-on/risk-off signal ──────────────────────────
+    # S&P 500 and VN-Index show moderate positive correlation (~0.4-0.6).
+    # A sustained S&P rally signals global risk appetite and drives EM inflows.
+    # A S&P crash (>-2% in 5d) triggers foreign outflows from VN within 1-3 days.
+    sp500 = macro.get("world", {}).get("S&P 500")
+    if sp500:
+        sp5_pct = sp500.get("pct_5d", 0) or 0
+        if sp5_pct > 2.0:    score += 0.50   # global risk-on
+        elif sp5_pct > 0.5:  score += 0.25
+        elif sp5_pct < -2.0: score -= 0.75   # risk-off: faster VN reaction
+        elif sp5_pct < -0.5: score -= 0.25
+
+    # ── CSI 300 — China's market, major driver for VN sectors ────────────
+    # CSI 300 has the HIGHEST regional correlation with VN-Index (~0.55-0.70).
+    # Key channels: commodity pricing (steel/HPG, coal, chemicals), FDI from
+    # Chinese firms, and VN export demand from Chinese buyers.
+    csi300 = macro.get("world", {}).get("CSI 300 (CN)")
+    if csi300:
+        csi_pct = csi300.get("pct_5d", 0) or 0
+        if csi_pct > 2.0:    score += 0.50   # China rally → positive for VN
+        elif csi_pct > 0.5:  score += 0.25
+        elif csi_pct < -2.0: score -= 0.50   # China selloff → VN sells
+        elif csi_pct < -0.5: score -= 0.25
+
     score = max(0.0, min(10.0, score))
 
     if score >= 7.5:    label = "bull"
