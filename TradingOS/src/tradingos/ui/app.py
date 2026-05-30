@@ -68,6 +68,7 @@ with st.sidebar:
         "📊 Backtest",
         "🗂 Audit",
         "⚙️ Cài đặt",
+        "📖 Hướng dẫn",
     }
     _all_options = [
         "🌅 Morning Briefing",
@@ -81,6 +82,7 @@ with st.sidebar:
         "── HỆ THỐNG ──",
         "🗂 Audit",
         "⚙️ Cài đặt",
+        "📖 Hướng dẫn",
     ]
     page = st.radio(
         "Navigation",
@@ -121,7 +123,7 @@ if _active_norm in _VALID_PAGES or _active_norm.replace(_atc_badge, "") in _VALI
 # ── Route to pages ────────────────────────────────────────────────────────────
 from tradingos.ui.pages import (  # noqa: E402
     profiler, scanner, money_flow, backtest, audit, settings, performance,
-    morning_briefing, atc_alert,
+    morning_briefing, atc_alert, guide,
 )
 
 if _active_norm == "🌅 Morning Briefing":
@@ -142,6 +144,8 @@ elif _active_norm == "🗂 Audit":
     audit.render()
 elif _active_norm == "⚙️ Cài đặt":
     settings.render()
+elif _active_norm == "📖 Hướng dẫn":
+    guide.render()
 else:
     # Section separator was accidentally clicked — revert nav to last valid page
     _revert_to = st.session_state.get("_last_valid_nav", "🌅 Morning Briefing")
