@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/audit_tab.py — NewTradingOS v14.0
 In-app audit log viewer with business-relevant filters.
 """
@@ -202,7 +202,7 @@ def render_audit_tab(lang: str = "VI") -> None:
         return ""
 
     styled = df.style.map(_highlight_result, subset=["Kết quả"])
-    st.dataframe(styled, use_container_width=True, hide_index=True)
+    st.dataframe(styled, width="stretch", hide_index=True)
 
     # ── Export ─────────────────────────────────────────────────
     csv = df.to_csv(index=False).encode("utf-8-sig")

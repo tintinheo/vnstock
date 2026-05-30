@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/ml_tab.py — NewTradingOS v14.0
 ML Ensemble forecast tab — single stock deep dive with all models.
 """
@@ -76,7 +76,7 @@ def render_ml_tab(
         lookback_bars = {"1W": 60, "2W": 90, "1M": 120, "3M": 200, "5M": 300}.get(tf, 120)
         fig = candlestick_chart(df_ind.tail(lookback_bars), ticker, tf,
                                  forecast=fc, height=550)
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")
 
         # ── Forecast summary ─────────────────────────────────
         c1, c2, c3, c4 = st.columns(4)
@@ -101,7 +101,7 @@ def render_ml_tab(
                 "Upside %": f"{((end_p / fc.current_price) - 1) * 100:+.1f}%"
                              if (end_p and fc.current_price) else "N/A",
             })
-        st.dataframe(pd.DataFrame(weight_rows), use_container_width=True,
+        st.dataframe(pd.DataFrame(weight_rows), width="stretch",
                      hide_index=True)
 
         # ── Individual model curves ───────────────────────────
@@ -163,4 +163,4 @@ def render_ml_tab(
             legend=dict(orientation="h"),
             margin=dict(l=40, r=40, t=60, b=30),
         )
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")

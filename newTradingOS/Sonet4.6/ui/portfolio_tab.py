@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/portfolio_tab.py — NewTradingOS v14.0
 Portfolio tracker tab UI.
 """
@@ -41,7 +41,7 @@ def render_portfolio_tab(
     st.subheader("📂 Vị Thế Đang Mở")
     if portfolio.open_positions:
         pos_df = portfolio.positions_df()
-        st.dataframe(pos_df, use_container_width=True, hide_index=True)
+        st.dataframe(pos_df, width="stretch", hide_index=True)
 
         # Quick close
         col_close1, col_close2, col_close3 = st.columns(3)
@@ -107,7 +107,7 @@ def render_portfolio_tab(
     st.subheader("📋 Lịch Sử Giao Dịch")
     if portfolio.trades:
         t_df = portfolio.trades_df()
-        st.dataframe(t_df, use_container_width=True, hide_index=True)
+        st.dataframe(t_df, width="stretch", hide_index=True)
 
         pnls = [(t.pnl_pct or 0) for t in portfolio.trades]
         capital_curve = [portfolio.capital]
@@ -118,7 +118,7 @@ def render_portfolio_tab(
         if len(capital_curve) > 2:
             fig = equity_chart(capital_curve, INITIAL_CAPITAL,
                                title="Historical P&L Curve")
-            st.plotly_chart(fig, use_container_width=True)
+            st.plotly_chart(fig, width="stretch")
 
         metrics = compute_portfolio_metrics(
             capital_curve, [{"pnl_pct": p} for p in pnls]

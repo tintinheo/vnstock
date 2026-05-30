@@ -205,10 +205,11 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         st.session_state.macro_regime = ml
         st.session_state.macro_stale  = stale
 
-        # Detect regime from VNI (market-level — never use individual stock data)
-        from core.data_fetcher import download_data as _dl
-        vni_df, _ = _dl("VNINDEX", days=365)
-        if not vni_df.empty:
+        # Detect regime from VNI — use fetch_vni_data() which has a
+        # Yahoo Finance fallback when DNSE/SSI cannot serve index data.
+        from core.macro_data import fetch_vni_data as _fetch_vni
+        vni_df = _fetch_vni(days=365)
+        if not vni_df.empty and "Close" in vni_df.columns:
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
 

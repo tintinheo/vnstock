@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/backtest_tab.py — NewTradingOS v14.0
 Backtest tab UI.
 """
@@ -46,7 +46,7 @@ def render_backtest_tab(
         # ── Summary table ─────────────────────────────────────
         st.subheader(f"📊 Kết quả — {ticker} | {src}")
         summary_df = summarise_results(results)
-        st.dataframe(summary_df, use_container_width=True, hide_index=True)
+        st.dataframe(summary_df, width="stretch", hide_index=True)
 
         # ── Per-TF equity curves ──────────────────────────────
         st.subheader("📈 Equity Curves")
@@ -68,12 +68,12 @@ def render_backtest_tab(
                     res.equity_curve, capital,
                     title=f"{ticker} — {tf} | {len(res.trades)} trades",
                 )
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
 
                 # Trade log
                 if res.trades:
                     t_df = trades_to_df(res)
-                    st.dataframe(t_df, use_container_width=True, hide_index=True)
+                    st.dataframe(t_df, width="stretch", hide_index=True)
 
                     # Exit reason distribution
                     reasons = pd.Series([t.exit_reason for t in res.trades])
@@ -90,4 +90,4 @@ def render_backtest_tab(
                         margin=dict(l=0, r=0, t=30, b=0),
                         title="Exit Reasons",
                     )
-                    st.plotly_chart(fig_r, use_container_width=True)
+                    st.plotly_chart(fig_r, width="stretch")

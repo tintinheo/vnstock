@@ -89,8 +89,8 @@ def fetch_vni_data(days: int = 365) -> pd.DataFrame:
     from core.data_fetcher import _fetch_dnse
     df = _fetch_dnse("VNINDEX", days=days)
     if df.empty:
-        # fallback: Yahoo Finance
-        data = _yahoo_price("^VN30", "2y")
+        # fallback: Yahoo Finance — ^VNINDEX is the correct symbol for VN-Index
+        data = _yahoo_price("^VNINDEX", "2y")
         if data and data["prices"]:
             df = pd.DataFrame({"Close": data["prices"]})
     return df
@@ -103,8 +103,8 @@ def fetch_market_breadth() -> dict:
     """
     url = "https://iboard-query.ssi.com.vn/v2/market/advance-decline"
     try:
-        r = requests.get(url, timeout=API_TIMEOUT,
-                         headers={"User-Agent": "Mozilla/5.0"})
+        from core.data_fetcher import _SSI_SESSION
+        r = _SSI_SESSION.get(url, timeout=API_TIMEOUT)
         r.raise_for_status()
         data = r.json()
         return {
@@ -187,8 +187,8 @@ def fetch_market_foreign_flow(days: int = 20) -> dict:
     """
     url = "https://iboard-query.ssi.com.vn/v2/market/foreign-trading"
     try:
-        r = requests.get(url, timeout=API_TIMEOUT,
-                         headers={"User-Agent": "Mozilla/5.0"})
+        from core.data_fetcher import _SSI_SESSION
+        r = _SSI_SESSION.get(url, timeout=API_TIMEOUT)
         r.raise_for_status()
         data = r.json()
         net = float(data.get("foreignBuyValue", 0) or 0) \

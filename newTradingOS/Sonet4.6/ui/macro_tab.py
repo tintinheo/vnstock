@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/macro_tab.py — NewTradingOS v14.0
 Macro Pulse dashboard tab.
 """
@@ -98,7 +98,7 @@ def render_macro_tab(
             "Tác động": impact_map.get(name, ""),
         })
     df_w = pd.DataFrame(rows)
-    st.dataframe(df_w, use_container_width=True, hide_index=True)
+    st.dataframe(df_w, width="stretch", hide_index=True)  # noqa: deprecated-arg
 
     st.divider()
 
@@ -129,7 +129,7 @@ def render_macro_tab(
         })
 
     df_tf = pd.DataFrame(rows_tf)
-    st.dataframe(df_tf, use_container_width=True, hide_index=True)
+    st.dataframe(df_tf, width="stretch", hide_index=True)  # noqa: deprecated-arg
 
     # ── Regime History Chart ──────────────────────────────────
     if regime_result.history and len(regime_result.history) > 20:
@@ -153,4 +153,4 @@ def render_macro_tab(
             margin=dict(l=40, r=10, t=20, b=20),
             showlegend=False,
         )
-        st.plotly_chart(fig, use_container_width=True)
+        st.plotly_chart(fig, width="stretch")  # noqa: deprecated-arg

@@ -1,4 +1,4 @@
-"""
+﻿"""
 ui/scanner_tab.py — NewTradingOS v14.0
 Reusable scanner tab for all 5 timeframes.
 """
@@ -162,7 +162,7 @@ def render_scanner_tab(
             "Click tiêu đề cột để sắp xếp.")
     st.dataframe(
         styled,
-        use_container_width=True,
+        width="stretch",
         hide_index=True,
         column_config={
             "Score":     st.column_config.NumberColumn("Score", format="%.1f",
@@ -331,7 +331,7 @@ def render_scanner_tab(
                                 df_ind.tail(lookback_bars), r.ticker, tf,
                                 signal=r, height=480,
                             )
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
                         else:
                             st.info("Không có dữ liệu biểu đồ.")
 
@@ -390,7 +390,7 @@ def _render_audit_viewer(tf: str) -> None:
         for res in run["results"]
     ]
     df_audit = pd.DataFrame(rows)
-    st.dataframe(df_audit, use_container_width=True, hide_index=True)
+    st.dataframe(df_audit, width="stretch", hide_index=True)
 
     csv = df_audit.to_csv(index=False).encode("utf-8-sig")
     st.download_button(
