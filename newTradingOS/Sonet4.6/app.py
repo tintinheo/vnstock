@@ -218,20 +218,11 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         # Runs in background after world market fetch to minimise UI wait time.
         _loaded_tickers = list(st.session_state.get("data_dict", {}).keys())
         if _loaded_tickers:
-            from core.macro_data import fetch_foreign_flow_ticker
-            from concurrent.futures import ThreadPoolExecutor
-            _ff_cache: dict[str, dict] = {}
-            with ThreadPoolExecutor(max_workers=min(8, len(_loaded_tickers))) as _pool:
-                _futures = {
-                    _pool.submit(fetch_foreign_flow_ticker, t): t
-                    for t in _loaded_tickers
-                }
-                for _fut, _t in _futures.items():
-                    try:
-                        _ff_cache[_t] = _fut.result()
-                    except Exception:
-                        _ff_cache[_t] = {"net_buy_value": 0, "net_20d": 0, "trend_20d": "neutral"}
-            st.session_state.foreign_flows_cache = _ff_cache
+            from core.macro_data import fetch_foreign_flow_tickers
+
+            st.session_state.foreign_flows_cache = fetch_foreign_flow_tickers(
+                _loaded_tickers
+            )
 
     if stale:
         st.warning(

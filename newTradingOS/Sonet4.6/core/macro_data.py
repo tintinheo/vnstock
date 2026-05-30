@@ -166,6 +166,59 @@ def fetch_market_breadth() -> dict:
 # ─────────────────────────────────────────────────────────────
 # FOREIGN FLOW
 # ─────────────────────────────────────────────────────────────
+def _empty_foreign_flow() -> dict:
+    return {
+        "net_buy_value": 0,
+        "buy_value": 0,
+        "sell_value": 0,
+        "net_20d": 0,
+        "trend_20d": "neutral",
+    }
+
+
+def _foreign_flow_from_snapshot_item(item: dict | None) -> dict:
+    if not item:
+        return _empty_foreign_flow()
+
+    cp  = float(item.get("CP", 0) or 0)
+    fb  = float(item.get("FB", 0) or 0)
+    fs  = float(item.get("FS", 0) or 0)
+    net = (fb - fs) * cp
+    buy = fb * cp
+    sel = fs * cp
+    if net > 5e10:
+        trend_20d = "accumulate"
+    elif net < -5e10:
+        trend_20d = "distribute"
+    else:
+        trend_20d = "neutral"
+    return {
+        "net_buy_value": net,
+        "buy_value":     buy,
+        "sell_value":    sel,
+        # Single-session snapshot: use today's net as 20d proxy
+        # (conservative: callers see today's signal, not cumulative)
+        "net_20d":   net,
+        "trend_20d": trend_20d,
+    }
+
+
+def fetch_foreign_flow_tickers(symbols: list[str]) -> dict[str, dict]:
+    """Fetch foreign-flow data for many symbols using a single KBS snapshot."""
+    if not symbols:
+        return {}
+
+    data = _fetch_kbs_market_snapshot()
+    lookup = {
+        (item.get("SB", "") or "").upper(): item
+        for item in data
+    }
+    return {
+        symbol: _foreign_flow_from_snapshot_item(lookup.get(symbol.upper()))
+        for symbol in symbols
+    }
+
+
 def fetch_foreign_flow_ticker(symbol: str) -> dict:
     """
     Fetch foreign buy/sell for a specific ticker from KBS IIS snapshot.
@@ -181,30 +234,9 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
     sym_upper = symbol.upper()
     for item in data:
         if (item.get("SB", "") or "").upper() == sym_upper:
-            cp  = float(item.get("CP", 0) or 0)
-            fb  = float(item.get("FB", 0) or 0)
-            fs  = float(item.get("FS", 0) or 0)
-            net = (fb - fs) * cp
-            buy = fb * cp
-            sel = fs * cp
-            if net > 5e10:
-                trend_20d = "accumulate"
-            elif net < -5e10:
-                trend_20d = "distribute"
-            else:
-                trend_20d = "neutral"
-            return {
-                "net_buy_value": net,
-                "buy_value":     buy,
-                "sell_value":    sel,
-                # Single-session snapshot: use today's net as 20d proxy
-                # (conservative: callers see today's signal, not cumulative)
-                "net_20d":   net,
-                "trend_20d": trend_20d,
-            }
+            return _foreign_flow_from_snapshot_item(item)
     # Ticker not found in snapshot (may be halted or not in top 500)
-    return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
-            "net_20d": 0, "trend_20d": "neutral"}
+    return _empty_foreign_flow()
 
 
 def fetch_market_foreign_flow(days: int = 20) -> dict:

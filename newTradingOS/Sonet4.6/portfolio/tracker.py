@@ -153,38 +153,49 @@ class Portfolio:
         exit_price: float,
         exit_date: str | None = None,
         reason: str = "signal",
+        timeframe: str | None = None,
+        entry_date: str | None = None,
     ) -> Optional[Position]:
-        """Close the first matching open position."""
+        """Close the first matching open position.
+
+        When multiple open legs share the same ticker, callers can disambiguate
+        by timeframe and/or entry_date so the intended position is closed.
+        """
         for pos in self.positions:
-            if pos.ticker == ticker and pos.status == "open":
-                pos.close(exit_price, exit_date or date.today().isoformat(), reason)
-                self.trades.append(pos)
-                self.positions = [p for p in self.positions if p is not pos]
-                # Realise cash
-                proceeds = exit_price * pos.n_shares * (1 - SELL_TOTAL)
-                self.capital = self.capital - pos.cost_vnd + proceeds
-                logger.info(
-                    "Closed %s @ %.0f | PnL: %.2f%%",
-                    ticker, exit_price, (pos.pnl_pct or 0) * 100,
-                )
-                log_event(
-                    ACTION_CLOSE,
-                    ticker=ticker,
-                    timeframe=pos.timeframe,
-                    detail={
-                        "entry_price": pos.entry_price,
-                        "exit_price":  exit_price,
-                        "n_shares":    pos.n_shares,
-                        "pnl_pct":     round((pos.pnl_pct or 0) * 100, 2),
-                        "pnl_vnd":     pos.pnl_vnd,
-                        "reason":      reason,
-                        "entry_date":  pos.entry_date,
-                        "exit_date":   pos.exit_date,
-                        "sessions":    pos.sessions_held,
-                    },
-                    result="ok",
-                )
-                return pos
+            if pos.ticker != ticker or pos.status != "open":
+                continue
+            if timeframe is not None and pos.timeframe != timeframe:
+                continue
+            if entry_date is not None and pos.entry_date != entry_date:
+                continue
+            pos.close(exit_price, exit_date or date.today().isoformat(), reason)
+            self.trades.append(pos)
+            self.positions = [p for p in self.positions if p is not pos]
+            # Realise cash
+            proceeds = exit_price * pos.n_shares * (1 - SELL_TOTAL)
+            self.capital = self.capital - pos.cost_vnd + proceeds
+            logger.info(
+                "Closed %s @ %.0f | PnL: %.2f%%",
+                ticker, exit_price, (pos.pnl_pct or 0) * 100,
+            )
+            log_event(
+                ACTION_CLOSE,
+                ticker=ticker,
+                timeframe=pos.timeframe,
+                detail={
+                    "entry_price": pos.entry_price,
+                    "exit_price":  exit_price,
+                    "n_shares":    pos.n_shares,
+                    "pnl_pct":     round((pos.pnl_pct or 0) * 100, 2),
+                    "pnl_vnd":     pos.pnl_vnd,
+                    "reason":      reason,
+                    "entry_date":  pos.entry_date,
+                    "exit_date":   pos.exit_date,
+                    "sessions":    pos.sessions_held,
+                },
+                result="ok",
+            )
+            return pos
         return None
 
     def update_stops(self, price_dict: dict | None = None) -> list:

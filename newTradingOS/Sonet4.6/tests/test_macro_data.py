@@ -129,6 +129,32 @@ class TestGetMacroScoreValues:
         assert expected == expected_label
 
 
+class TestForeignFlowBatch:
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_foreign_flow_tickers_reuses_single_snapshot(self, mock_snapshot):
+        from core.macro_data import fetch_foreign_flow_tickers
+
+        mock_snapshot.return_value = [
+            {"SB": "VCB", "CP": 50_000, "FB": 2_000_000, "FS": 500_000},
+            {"SB": "MBB", "CP": 25_000, "FB": 300_000, "FS": 800_000},
+        ]
+
+        result = fetch_foreign_flow_tickers(["VCB", "MBB", "FPT"])
+
+        assert mock_snapshot.call_count == 1
+        assert result["VCB"]["net_buy_value"] == 75_000_000_000
+        assert result["VCB"]["trend_20d"] == "accumulate"
+        assert result["MBB"]["net_buy_value"] == -12_500_000_000
+        assert result["MBB"]["trend_20d"] == "neutral"
+        assert result["FPT"] == {
+            "net_buy_value": 0,
+            "buy_value": 0,
+            "sell_value": 0,
+            "net_20d": 0,
+            "trend_20d": "neutral",
+        }
+
+
 # ─────────────────────────────────────────────────────────────
 # FIX #3 — stale_fields propagation
 # ─────────────────────────────────────────────────────────────

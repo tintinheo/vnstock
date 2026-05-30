@@ -75,11 +75,15 @@ def render_portfolio_tab(
         st.dataframe(pos_df, width="stretch", hide_index=True)
 
         # Quick close
+        close_options = {
+            f"{p.ticker} | {p.timeframe} | {p.entry_date}": p
+            for p in portfolio.open_positions
+        }
         col_close1, col_close2, col_close3 = st.columns(3)
         with col_close1:
-            close_ticker = st.selectbox(
+            close_label = st.selectbox(
                 "Đóng vị thế",
-                [p.ticker for p in portfolio.open_positions],
+                list(close_options.keys()),
                 key="close_ticker",
             )
         with col_close2:
@@ -89,22 +93,27 @@ def render_portfolio_tab(
             )
         with col_close3:
             if st.button("🔴 Đóng lệnh", key="btn_close"):
+                selected_pos = close_options[close_label]
                 # Get current price
-                df_t, _ = data_dict.get(close_ticker, (None, None))
+                df_t, _ = data_dict.get(selected_pos.ticker, (None, None))
                 if df_t is not None and not df_t.empty:
                     cur_price = float(df_t["Close"].iloc[-1])
                     from datetime import date
                     pos = portfolio.close_position(
-                        close_ticker, cur_price,
-                        str(date.today()), close_reason,
+                        selected_pos.ticker,
+                        cur_price,
+                        str(date.today()),
+                        close_reason,
+                        timeframe=selected_pos.timeframe,
+                        entry_date=selected_pos.entry_date,
                     )
                     if pos:
                         portfolio.save()
                         pnl_pct = (pos.pnl_pct or 0) * 100
                         if pnl_pct >= 0:
-                            st.success(f"✅ Đóng {close_ticker} +{pnl_pct:.2f}%")
+                            st.success(f"✅ Đóng {selected_pos.ticker} +{pnl_pct:.2f}%")
                         else:
-                            st.error(f"❌ Đóng {close_ticker} {pnl_pct:.2f}%")
+                            st.error(f"❌ Đóng {selected_pos.ticker} {pnl_pct:.2f}%")
     else:
         st.info("Chưa có vị thế mở.")
 

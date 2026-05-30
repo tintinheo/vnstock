@@ -21,7 +21,7 @@ import pandas as pd
 
 from config import (
     BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL,
-    TIMEFRAME_CONFIG, VN_SESSIONS_YEAR, LOT_SIZE,
+    TIMEFRAME_CONFIG, VN_SESSIONS_YEAR, LOT_SIZE, TICKER_EXCHANGE,
 )
 from core.indicators import compute_all, atr as _atr
 from core.scoring import compute_score
@@ -95,10 +95,11 @@ def run_backtest(
         )
 
     pos_pct  = position_pct or cfg["position_pct"]
+    exchange = TICKER_EXCHANGE.get(ticker.upper(), "HOSE")
     # Precompute indicators once — tránh O(n²) khi gọi compute_score trong vòng lặp.
     # Tất cả rolling indicators có tính causal: giá trị tại bar i hoàn toàn
     # được xác định bởi dữ liệu <= bar i → an toàn khi dùng df toàn bộ.
-    df       = compute_all(df.copy(), cfg)
+    df       = compute_all(df.copy(), cfg, exchange=exchange)
     df       = df.dropna(subset=["SMA_slow", "ATR"])
 
     capital      = initial_capital
@@ -129,6 +130,7 @@ def run_backtest(
                 regime=regime,
                 macro_score=macro_score,
                 ticker=ticker,
+                exchange=exchange,
                 _precomputed=True,
             )
 
@@ -178,6 +180,7 @@ def run_backtest(
                     regime=regime,
                     macro_score=macro_score,
                     ticker=ticker,
+                    exchange=exchange,
                     _precomputed=True,
                 )
                 if sig_exit.action == "SELL":

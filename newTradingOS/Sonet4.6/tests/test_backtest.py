@@ -126,6 +126,35 @@ class TestMultiTFBacktest:
             assert isinstance(r, BacktestResult)
 
 
+class TestBacktestExchangePropagation:
+    def test_hnx_ticker_exchange_passed_to_compute_all_and_score(self, ohlcv, monkeypatch):
+        import backtest.engine as engine
+        from core.indicators import compute_all as real_compute_all
+        from core.scoring import compute_score as real_compute_score
+
+        seen_compute_all: list[str] = []
+        seen_compute_score: list[str] = []
+
+        def capture_compute_all(df, cfg, exchange="HOSE"):
+            seen_compute_all.append(exchange)
+            return real_compute_all(df, cfg, exchange=exchange)
+
+        def capture_compute_score(df, tf, **kwargs):
+            seen_compute_score.append(kwargs.get("exchange"))
+            return real_compute_score(df, tf, **kwargs)
+
+        monkeypatch.setattr(engine, "compute_all", capture_compute_all)
+        monkeypatch.setattr(engine, "compute_score", capture_compute_score)
+
+        result = engine.run_backtest(ohlcv, "1M", ticker="PVS")
+
+        assert isinstance(result, BacktestResult)
+        assert seen_compute_all, "compute_all was not called"
+        assert seen_compute_score, "compute_score was not called"
+        assert set(seen_compute_all) == {"HNX"}
+        assert set(seen_compute_score) == {"HNX"}
+
+
 # ─────────────────────────────────────────────────────────────
 # summarise_results
 # ─────────────────────────────────────────────────────────────
