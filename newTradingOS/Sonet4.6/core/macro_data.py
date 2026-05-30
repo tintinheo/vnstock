@@ -96,26 +96,71 @@ def fetch_vni_data(days: int = 365) -> pd.DataFrame:
     return df
 
 
+# ─────────────────────────────────────────────────────────────
+# KBS IIS API — single endpoint for breadth + foreign flow
+# Replaces deprecated SSI iboard-query v2 (gone 2025) and TCBS analysis
+# API (deprecated Dec 2024). KBS endpoint covers HOSE/HNX/UPCOM ~370 stocks.
+# ─────────────────────────────────────────────────────────────
+_KBS_FF_URL  = "https://kbbuddywts.kbsec.com.vn/iis-server/investment/rtranking/foreignTotal"
+_KBS_HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
+# Simple TTL cache: (_data, _timestamp)
+_kbs_snapshot_cache: tuple[list, datetime | None] = ([], None)
+_KBS_CACHE_TTL = timedelta(minutes=5)
+
+
+def _fetch_kbs_market_snapshot() -> list:
+    """
+    Fetch real-time market snapshot from KBS IIS API.
+    Returns list of dicts: SB=ticker, EX=exchange,
+    RE=reference_price, CP=current_price,
+    FB=foreign_buy_vol, FS=foreign_sell_vol (in shares).
+    Result is cached for 5 minutes to avoid duplicate calls.
+    """
+    global _kbs_snapshot_cache
+    data, ts = _kbs_snapshot_cache
+    if ts and (datetime.now() - ts) < _KBS_CACHE_TTL and data:
+        return data
+    try:
+        r = requests.get(
+            _KBS_FF_URL,
+            params={"top": 500},
+            headers=_KBS_HEADERS,
+            timeout=API_TIMEOUT,
+        )
+        r.raise_for_status()
+        fresh = r.json()
+        if isinstance(fresh, list) and fresh:
+            _kbs_snapshot_cache = (fresh, datetime.now())
+            return fresh
+    except Exception as exc:
+        logger.debug("KBS snapshot: %s", exc)
+    return []
+
+
 def fetch_market_breadth() -> dict:
     """
-    Fetch advance/decline data from SSI iBoard.
-    Returns dict with advance, decline, unchanged counts.
+    Compute advance/decline from KBS IIS real-time snapshot.
+    Counts stocks with CP > RE (advance), CP < RE (decline), CP == RE (unchanged).
     """
-    url = "https://iboard-query.ssi.com.vn/v2/market/advance-decline"
-    try:
-        from core.data_fetcher import _SSI_SESSION
-        r = _SSI_SESSION.get(url, timeout=API_TIMEOUT)
-        r.raise_for_status()
-        data = r.json()
-        return {
-            "advance":   int(data.get("advance",   data.get("up",   0))),
-            "decline":   int(data.get("decline",   data.get("down", 0))),
-            "unchanged": int(data.get("unchanged", data.get("noChange", 0))),
-            "fetch_ok":  True,
-        }
-    except Exception as exc:
-        logger.debug("Breadth: %s", exc)
+    data = _fetch_kbs_market_snapshot()
+    if not data:
         return {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": False}
+    advance = decline = unchanged = 0
+    for item in data:
+        cp = item.get("CP", 0) or 0
+        re = item.get("RE", 0) or 0
+        if cp > re:
+            advance += 1
+        elif cp < re:
+            decline += 1
+        else:
+            unchanged += 1
+    return {
+        "advance":   advance,
+        "decline":   decline,
+        "unchanged": unchanged,
+        "fetch_ok":  True,
+    }
 
 
 # ─────────────────────────────────────────────────────────────
@@ -123,86 +168,68 @@ def fetch_market_breadth() -> dict:
 # ─────────────────────────────────────────────────────────────
 def fetch_foreign_flow_ticker(symbol: str) -> dict:
     """
-    Fetch foreign buy/sell for a specific ticker via TCBS API.
+    Fetch foreign buy/sell for a specific ticker from KBS IIS snapshot.
 
     Returns
     -------
-    dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d
-    All values in VND.
-    net_20d is the cumulative net foreign buy over the most-recent 20 sessions
-    (or however many are available). trend_20d is one of: 'accumulate', 'distribute',
-    'neutral'.
+    dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d.
+    All monetary values in VND (shares × price).
+    net_20d is not available from the intraday snapshot; callers should use
+    net_buy_value (today's session) as the signal.
     """
-    url = f"https://analysis.tcbs.com.vn/api/v1/stock/{symbol}/investors"
-    try:
-        r = requests.get(url, timeout=API_TIMEOUT,
-                         headers={"User-Agent": "Mozilla/5.0"})
-        r.raise_for_status()
-        data = r.json()
-        items = data.get("data", [])
-        if not items:
-            return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
-                    "net_20d": 0, "trend_20d": "neutral"}
-
-        latest = items[0]
-        net_today = (
-            float(latest.get("foreignBuyValue", 0) or 0)
-            - float(latest.get("foreignSellValue", 0) or 0)
-        )
-
-        # 20-day cumulative net  — previously unimplemented
-        window = items[:20]  # API returns newest-first
-        net_20d = sum(
-            float(d.get("foreignBuyValue", 0) or 0)
-            - float(d.get("foreignSellValue", 0) or 0)
-            for d in window
-        )
-        if net_20d > 5e10:      # >50B VND net buy over 20 days
-            trend_20d = "accumulate"
-        elif net_20d < -5e10:
-            trend_20d = "distribute"
-        else:
-            trend_20d = "neutral"
-
-        return {
-            "net_buy_value": net_today,
-            "buy_value":     float(latest.get("foreignBuyValue",  0) or 0),
-            "sell_value":    float(latest.get("foreignSellValue", 0) or 0),
-            "net_20d":       net_20d,
-            "trend_20d":     trend_20d,
-        }
-    except Exception as exc:
-        logger.debug("ForeignFlow %s: %s", symbol, exc)
-        return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
-                "net_20d": 0, "trend_20d": "neutral"}
+    data = _fetch_kbs_market_snapshot()
+    sym_upper = symbol.upper()
+    for item in data:
+        if (item.get("SB", "") or "").upper() == sym_upper:
+            cp  = float(item.get("CP", 0) or 0)
+            fb  = float(item.get("FB", 0) or 0)
+            fs  = float(item.get("FS", 0) or 0)
+            net = (fb - fs) * cp
+            buy = fb * cp
+            sel = fs * cp
+            if net > 5e10:
+                trend_20d = "accumulate"
+            elif net < -5e10:
+                trend_20d = "distribute"
+            else:
+                trend_20d = "neutral"
+            return {
+                "net_buy_value": net,
+                "buy_value":     buy,
+                "sell_value":    sel,
+                # Single-session snapshot: use today's net as 20d proxy
+                # (conservative: callers see today's signal, not cumulative)
+                "net_20d":   net,
+                "trend_20d": trend_20d,
+            }
+    # Ticker not found in snapshot (may be halted or not in top 500)
+    return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
+            "net_20d": 0, "trend_20d": "neutral"}
 
 
 def fetch_market_foreign_flow(days: int = 20) -> dict:
     """
-    Fetch aggregate market foreign flow from SSI iBoard.
-
-    Returns
-    -------
-    dict with net_buy (VND), buy, sell, trend label.
+    Compute aggregate market foreign flow from KBS IIS snapshot.
+    Sums (FB-FS)*CP across all stocks to get net VND flow for the session.
     """
-    url = "https://iboard-query.ssi.com.vn/v2/market/foreign-trading"
-    try:
-        from core.data_fetcher import _SSI_SESSION
-        r = _SSI_SESSION.get(url, timeout=API_TIMEOUT)
-        r.raise_for_status()
-        data = r.json()
-        net = float(data.get("foreignBuyValue", 0) or 0) \
-            - float(data.get("foreignSellValue", 0) or 0)
-        return {
-            "net_buy":   net,
-            "buy":       float(data.get("foreignBuyValue",  0) or 0),
-            "sell":      float(data.get("foreignSellValue", 0) or 0),
-            "trend":     "Mua ròng" if net > 0 else "Bán ròng",
-            "fetch_ok":  True,
-        }
-    except Exception as exc:
-        logger.debug("MarketForeignFlow: %s", exc)
+    data = _fetch_kbs_market_snapshot()
+    if not data:
         return {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A", "fetch_ok": False}
+    net_buy = buy = sell = 0.0
+    for item in data:
+        cp = float(item.get("CP", 0) or 0)
+        fb = float(item.get("FB", 0) or 0)
+        fs = float(item.get("FS", 0) or 0)
+        net_buy += (fb - fs) * cp
+        buy     += fb * cp
+        sell    += fs * cp
+    return {
+        "net_buy":  net_buy,
+        "buy":      buy,
+        "sell":     sell,
+        "trend":    "Mua r\u00f2ng" if net_buy > 0 else "B\u00e1n r\u00f2ng",
+        "fetch_ok": True,
+    }
 
 
 # ─────────────────────────────────────────────────────────────

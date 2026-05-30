@@ -267,76 +267,66 @@ class TestFetchMacroStaleDetection:
 # FIX #4 — fetch_foreign_flow_ticker 20d trend
 # ─────────────────────────────────────────────────────────────
 class TestFetchForeignFlowTicker20d:
-    @patch("requests.get")
-    def test_net_20d_accumulate(self, mock_get):
-        """20-session heavy net buy > 50B → trend_20d = 'accumulate'."""
-        days = [
-            {"foreignBuyValue": 4e9, "foreignSellValue": 1e9}  # 3B net each day
-        ] * 20
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"data": days}
-        mock_get.return_value = mock_resp
+    """
+    Tests now use KBS IIS snapshot format:
+    [{"SB": "VCB", "EX": "HOSE", "RE": ..., "CP": price, "FB": buy_vol, "FS": sell_vol, ...}]
+    net_20d is set to today's net (CP*(FB-FS)) since KBS gives single-session snapshot.
+    """
 
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_net_20d_accumulate(self, mock_snap):
+        """net today > 50B VND → trend_20d = 'accumulate' and net_20d equals today's net."""
+        # net = (7e6 - 1e6) * 10000 = 6e6 * 10000 = 6e10 (60B VND)
+        mock_snap.return_value = [
+            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
+             "FB": 7_000_000, "FS": 1_000_000, "FT": 8_000_000},
+        ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        # 3B × 20 = 60B > 50B → accumulate
         assert result["net_20d"] == pytest.approx(6e10)
         assert result["trend_20d"] == "accumulate"
 
-    @patch("requests.get")
-    def test_net_20d_distribute(self, mock_get):
-        """Heavy net sell over 20 sessions → trend_20d = 'distribute'."""
-        days = [
-            {"foreignBuyValue": 1e9, "foreignSellValue": 4e9}  # -3B net each day
-        ] * 20
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"data": days}
-        mock_get.return_value = mock_resp
-
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_net_20d_distribute(self, mock_snap):
+        """net today < -50B VND → trend_20d = 'distribute'."""
+        # net = (1e6 - 7e6) * 10000 = -6e6 * 10000 = -6e10
+        mock_snap.return_value = [
+            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
+             "FB": 1_000_000, "FS": 7_000_000, "FT": 8_000_000},
+        ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
         assert result["net_20d"] == pytest.approx(-6e10)
         assert result["trend_20d"] == "distribute"
 
-    @patch("requests.get")
-    def test_net_20d_neutral(self, mock_get):
-        """Mixed buy/sell under 50B → trend_20d = 'neutral'."""
-        days = [
-            {"foreignBuyValue": 1e9, "foreignSellValue": 1.1e9}  # tiny sell
-        ] * 20
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"data": days}
-        mock_get.return_value = mock_resp
-
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_net_20d_neutral(self, mock_snap):
+        """Small net → trend_20d = 'neutral'."""
+        # net = (1.1e6 - 1e6) * 10000 = 1e9 (< 50B threshold)
+        mock_snap.return_value = [
+            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
+             "FB": 1_100_000, "FS": 1_000_000, "FT": 2_100_000},
+        ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
         assert result["trend_20d"] == "neutral"
 
-    @patch("requests.get")
-    def test_returns_all_expected_keys(self, mock_get):
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_returns_all_expected_keys(self, mock_snap):
         """Result must always include net_buy_value, buy_value, sell_value, net_20d, trend_20d."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"data": [
-            {"foreignBuyValue": 1e9, "foreignSellValue": 0.5e9}
-        ]}
-        mock_get.return_value = mock_resp
-
+        mock_snap.return_value = [
+            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
+             "FB": 1_000_000, "FS": 500_000, "FT": 1_500_000},
+        ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
         for key in ("net_buy_value", "buy_value", "sell_value", "net_20d", "trend_20d"):
             assert key in result, f"Missing key: {key}"
 
-    @patch("requests.get")
-    def test_empty_data_returns_safe_defaults(self, mock_get):
-        """Empty API data must return zeros without crashing."""
-        mock_resp = MagicMock()
-        mock_resp.status_code = 200
-        mock_resp.json.return_value = {"data": []}
-        mock_get.return_value = mock_resp
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_empty_data_returns_safe_defaults(self, mock_snap):
+        """Empty snapshot must return zeros without crashing."""
+        mock_snap.return_value = []
 
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
@@ -344,9 +334,10 @@ class TestFetchForeignFlowTicker20d:
         assert result["net_20d"] == 0
         assert result["trend_20d"] == "neutral"
 
-    @patch("requests.get", side_effect=Exception("Network error"))
-    def test_network_error_returns_safe_defaults(self, _mock_get):
-        """Network failures must return safe defaults, not raise."""
+    @patch("core.macro_data._fetch_kbs_market_snapshot", return_value=[])
+    def test_network_error_returns_safe_defaults(self, _mock_snap):
+        """When snapshot returns empty (network failure), fetch_foreign_flow_ticker
+        must return safe zero defaults without crashing."""
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
         assert result["net_buy_value"] == 0
