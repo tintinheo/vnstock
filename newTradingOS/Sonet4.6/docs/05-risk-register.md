@@ -1,0 +1,113 @@
+# Risk Register
+## NewTradingOS v14.0
+
+**PMBOK Knowledge Area:** Risk Management  
+**Process Group:** Planning → Monitoring & Controlling  
+**Document Version:** 2.0  
+**Date:** 2026-05-30
+
+---
+
+## 1. Risk Rating Scale
+
+| Probability | Score |
+|---|---|
+| High (> 60% likely) | 3 |
+| Medium (30–60%) | 2 |
+| Low (< 30%) | 1 |
+
+| Impact | Score |
+|---|---|
+| High (blocks core function) | 3 |
+| Medium (degrades quality/performance) | 2 |
+| Low (minor inconvenience) | 1 |
+
+**Risk Score = Probability × Impact. Threshold: ≥ 6 = Critical, 4–5 = High, 2–3 = Medium, 1 = Low**
+
+---
+
+## 2. Risk Register
+
+### 2.1 Technical Risks
+
+| ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| RT-001 | DNSE API URL changes or adds authentication, breaking primary data fetch | Technical / API | 2 | 3 | 6 | Critical | Maintain 3-level fallback chain (DNSE → SSI → CafeF); monitor API responses for HTTP 401/403; add automated health check test | Dev | Open |
+| RT-002 | CafeF HTML structure changes break HTML scraper (tertiary fallback) | Technical / API | 3 | 2 | 6 | Critical | Add HTML parsing tests with snapshot fixtures; consider adding a 4th fallback (manual CSV upload) | Dev | Open |
+| RT-003 | Yahoo Finance API rate-limiting causes world market data failure | Technical / API | 2 | 2 | 4 | High | Cache last-successful world market result for ≤ 30 min; show stale-data warning in UI | Dev | Open |
+| RT-004 | ThreadPoolExecutor thread leaks under abnormal process termination | Technical | 1 | 2 | 2 | Medium | Use `with ThreadPoolExecutor() as ex:` pattern throughout; validated in current codebase | Dev | Mitigated |
+| RT-005 | SuperTrend iterative ratchet introduces subtle off-by-one across different pandas versions | Technical | 2 | 2 | 4 | High | Pinned unit test with known dataset; runs in CI | Dev | Open |
+| RT-006 | ML model returns NaN forecast for tickers with insufficient history | Technical / ML | 2 | 2 | 4 | High | All models guard against < 30 rows; fallback to heuristic forecast; unit tested | Dev | Mitigated |
+| RT-007 | TensorFlow version conflict with Python 3.13 on Windows | Technical / ML | 3 | 1 | 3 | Medium | LSTM already has Holt's fallback; TF optional; documented in requirements | Dev | Mitigated |
+| RT-008 | Streamlit version upgrade breaks session_state API or tab API | Technical / UI | 2 | 2 | 4 | High | Pin Streamlit version in requirements.txt (1.55.0); test before upgrading | Dev | Open |
+| RT-009 | Concurrent Streamlit sessions cause portfolio.json race condition | Technical | 1 | 3 | 3 | Medium | Single-user deployment mitigates; add atomic file write (temp → rename) as hardening | Dev | Open |
+| RT-010 | Large HOSE_LIST scan (110 tickers) exceeds browser timeout with slow internet | Technical / Performance | 2 | 2 | 4 | High | Batch download has 6s timeout per ticker; UI shows progress; reduce MARKET_SCAN_LIST if needed | Dev | Open |
+
+---
+
+### 2.2 Market / Data Risks
+
+| ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| RM-001 | SSC moves HoSE to T+1 settlement, making T+2.5 position logic stale | Market / Regulatory | 3 | 2 | 6 | Critical | Expose `SETTLEMENT_T_PLUS` in `config.py`; update value to 1.0 when rule changes; no code changes required | Dev | Open |
+| RM-002 | HoSE raises daily price limit from ±7% to ±10% (trial announced) | Market / Regulatory | 2 | 2 | 4 | High | All limit references use `HOSE_LIMIT_PCT` constant; Streak counter threshold configurable via `limit_pct` parameter | Dev | Open |
+| RM-003 | Scoring model trained on 2015–2025 data becomes less accurate in structural regime shifts (e.g. post-pandemic) | Market | 2 | 2 | 4 | High | Periodic backtesting review; compare win rate vs benchmark; ML ensemble provides model-diverse forecasts | Dev | Open |
+| RM-004 | Thin liquidity tickers (HNX small-cap) produce misleading signals due to low volume | Market | 3 | 2 | 6 | Critical | Minimum volume filter applied before scoring; flagged in UI; review thresholds quarterly | Dev | Open |
+| RM-005 | Foreign flow data from CafeF delayed or inaccurate, skewing score component 5 | Market / Data | 2 | 1 | 2 | Medium | Foreign flow component contributes only 5/100 pts; limited blast radius; show data timestamp in UI | Dev | Open |
+
+---
+
+### 2.3 ML / Model Risks
+
+| ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| RML-001 | ML models overfit to 2020–2022 bull run patterns | ML | 2 | 3 | 6 | Critical | Use out-of-sample holdout test (20% test set); ensemble diversity reduces single-model overfit | Dev | Open |
+| RML-002 | Prophet model fails on tickers with public holidays creating gaps | ML | 2 | 1 | 2 | Medium | Prophet handles missing dates natively; `fill_holes=True` set in training config | Dev | Mitigated |
+| RML-003 | Monte Carlo simulation uses Gaussian returns (fat tails underestimated in VN market) | ML | 3 | 2 | 6 | Critical | Confidence intervals are advisory only, not position sizing input; document this limitation in Guide | Dev | Open |
+| RML-004 | XGBoost feature set grows stale as new indicators added but retraining not triggered | ML | 2 | 2 | 4 | High | Document retraining procedure; version model artifacts; alert when indicator set changes | Dev | Open |
+
+---
+
+### 2.4 Security Risks
+
+| ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| RS-001 | User-supplied ticker input used unsanitised in API URL construction | Security (OWASP A03) | 1 | 3 | 3 | Medium | Validate ticker against known universe whitelist before constructing API URL | Dev | Open |
+| RS-002 | `audit.jsonl` contains business-sensitive position data (entry prices, capital) | Security | 1 | 2 | 2 | Medium | File stored locally; application is single-user; document that data/ folder should not be committed to public git | Dev | Open |
+| RS-003 | `portfolio.json` persists to disk; risk of sensitive data exposure in shared environments | Security | 1 | 2 | 2 | Medium | Add `data/` to `.gitignore`; document data privacy in Guide | Dev | Mitigated |
+
+---
+
+### 2.5 Performance Risks
+
+| ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
+|---|---|---|---|---|---|---|---|---|---|
+| RP-001 | Streamlit re-runs entire script on every widget interaction, causing redundant recalculations | Performance | 3 | 2 | 6 | Critical | Session-state scan cache keyed on (tf, regime, macro_score, data_version); data loaded once per session | Dev | Mitigated |
+| RP-002 | Adding new tickers to MARKET_SCAN_LIST increases scan time linearly | Performance | 2 | 2 | 4 | High | Monitor scan time benchmark; maintain ThreadPoolExecutor(6); cap MARKET_SCAN_LIST at 150 | Dev | Open |
+
+---
+
+## 3. Risk Summary
+
+| Level | Count | IDs |
+|---|---|---|
+| Critical (≥ 6) | 8 | RT-001, RT-002, RM-001, RM-004, RML-001, RML-003, RP-001, RM-002* |
+| High (4–5) | 8 | RT-003, RT-005, RT-006, RT-008, RT-010, RM-003, RML-004, RP-002 |
+| Medium (2–3) | 8 | RT-004, RT-007, RT-009, RM-005, RML-002, RS-001, RS-002, RS-003 |
+| Mitigated | 6 | RT-004, RT-006, RT-007, RML-002, RS-003, RP-001 |
+
+*RM-002 rated Critical because limit_pct is a parameter default, not an environment config — requires code update.
+
+---
+
+## 4. Risk Response Actions (Open Critical Risks)
+
+| Risk | Action | Due |
+|---|---|---|
+| RT-001 | Add nightly API health check script | Next release |
+| RT-002 | Create HTML snapshot fixtures for CafeF parser tests | Next release |
+| RM-001 | Verify T+1 SSC announcement dates; update `SETTLEMENT_T_PLUS = 1.0` when live | Q3 2026 |
+| RM-004 | Add minimum volume filter (e.g. 3-day avg > 100K shares) to scanner | Next release |
+| RML-001 | Run backtesting comparison report quarterly | Quarterly |
+| RML-003 | Add disclaimer banner to ML Forecast tab | Next release |
+| RS-001 | Add ticker whitelist validation in `data_fetcher.py` | Next release |

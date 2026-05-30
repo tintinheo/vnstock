@@ -87,12 +87,15 @@ def compute_score(
 
     # ── 1. TREND  (25 pts) ────────────────────────────────────
     trend = 0.0
-    if price > last["SMA_fast"]:      trend += 6
-    if price > last["SMA_slow"]:      trend += 7
-    if last["SMA_fast"] > last["SMA_slow"]: trend += 6   # golden zone
-    if last["EMA_fast"] > last["EMA_slow"]: trend += 6
+    if price > last["SMA_fast"]:      trend += 5   # -1: room for SuperTrend
+    if price > last["SMA_slow"]:      trend += 6   # -1
+    if last["SMA_fast"] > last["SMA_slow"]: trend += 5   # -1: golden zone
+    if last["EMA_fast"] > last["EMA_slow"]: trend += 5   # -1
     # Uptrend slope: SMA_fast increasing
-    if last["SMA_fast"] > df["SMA_fast"].iloc[-3]:  trend += 5  # bonus: accelerating
+    if last["SMA_fast"] > df["SMA_fast"].iloc[-3]:  trend += 4  # -1: accelerating
+    # SuperTrend: ATR-based dynamic support — popular & reliable in VN trending market
+    st_dir = float(last["ST_dir"]) if "ST_dir" in df.columns and not pd.isna(last["ST_dir"]) else 0.0
+    if st_dir == 1.0:  trend += 4   # price above SuperTrend line = bullish
     trend = min(trend, 25.0)
 
     # ── 2. MOMENTUM  (20 pts) ─────────────────────────────────
@@ -107,31 +110,48 @@ def compute_score(
     if last["ROC"] > 0:                        mom += 3
     mom = min(mom, 20.0)
 
-    # ── 3. RSI  (15 pts) ──────────────────────────────────────
+    # ── 3. RSI  (15 pts) — VN-tuned zones ─────────────────────
+    # VN stocks can stay RSI 60-75 for weeks during a trend run.
+    # Penalising RSI>65 too harshly causes the scanner to miss the bulk
+    # of the trending phase. Deep oversold (<30) is dangerous in VN
+    # because margin-call cascades can persist for weeks.
     rsi_v   = float(last["RSI"]) if not pd.isna(last["RSI"]) else 50.0
     rsi_pts = 0.0
-    if 30 <= rsi_v < 40:     rsi_pts = 15   # oversold recovery — best
-    elif 40 <= rsi_v <= 55:  rsi_pts = 12   # sweet spot
-    elif 55 < rsi_v <= 65:   rsi_pts = 8    # momentum
-    elif rsi_v < 30:         rsi_pts = 10   # deep oversold (contrarian)
-    elif 65 < rsi_v <= 75:   rsi_pts = 4    # elevated, caution
-    # RSI divergence bonus: price new high but RSI not → skip for simplicity
+    if 45 <= rsi_v < 65:     rsi_pts = 15   # VN sweet spot — trending zone
+    elif 30 <= rsi_v < 45:   rsi_pts = 12   # oversold recovery
+    elif 65 <= rsi_v <= 75:  rsi_pts = 10   # momentum continuation (VN stocks stay here)
+    elif rsi_v < 30:         rsi_pts = 7    # deep oversold — risky (margin cascades)
+    elif 75 < rsi_v <= 85:   rsi_pts = 5   # elevated, approaching ceiling risk
+    else:                    rsi_pts = 2    # RSI > 85: extreme, near-term cap likely
     rsi_score = rsi_pts
 
-    # ── 4. VOLUME  (20 pts) ───────────────────────────────────
+    # ── 4. VOLUME / FLOW  (20 pts) — VN-enhanced ───────────────
+    # CMF and Streak are VN-specific additions:
+    #   CMF: gap-adjusted smart-money inflow (better than OBV for VN gaps)
+    #   Streak: consecutive price-limit hits (unique to VN ±7% rule)
     vol_r  = float(last["Vol_ratio"]) if not pd.isna(last["Vol_ratio"]) else 1.0
     mfi_v  = float(last["MFI"])       if not pd.isna(last["MFI"])       else 50.0
+    cmf_v  = float(last["CMF"])       if "CMF"    in df.columns and not pd.isna(last["CMF"])    else 0.0
+    streak_v = int(last["Streak"])    if "Streak" in df.columns and not pd.isna(last["Streak"]) else 0
     vol    = 0.0
-    if vol_r > 1.5:   vol += 7
-    if vol_r > 2.5:   vol += 5   # extra for very strong spike
-    if vol_r > 2.0 and price > last["SMA_fast"]: vol += 3  # breakout volume
+    if vol_r > 1.5:   vol += 5   # volume spike
+    if vol_r > 2.5:   vol += 3   # extra for very strong spike
+    if vol_r > 2.0 and price > last["SMA_fast"]: vol += 2  # breakout volume
     # Accumulation (3-day avg > 1.2× SMA) — use pre-computed Vol_MA column
     recent_vol_avg = df["Volume"].iloc[-3:].mean()
     vol_ma_last    = float(df["Vol_MA"].iloc[-1]) if "Vol_MA" in df.columns and not pd.isna(df["Vol_MA"].iloc[-1]) else 0.0
     if vol_ma_last > 0 and recent_vol_avg > vol_ma_last * 1.2:
-        vol += 3
+        vol += 2
     if mfi_v > 50: vol += 2
+    # Chaikin Money Flow: positive CMF = smart money buying into the stock
+    if cmf_v > 0.05:  vol += 3   # net inflow
+    if cmf_v > 0.15:  vol += 1   # strong institutional inflow (bonus)
+    # Ceiling streak: 2+ consecutive trần = persistent buyer conviction (VN-specific)
+    if streak_v >= 2:  vol += 2
+    # Floor streak penalty: 2+ consecutive sàn = distribution / forced selling
+    if streak_v <= -2: vol -= 3
     vol = min(vol, 20.0)
+    vol = max(vol, -5.0)
 
     # ── 5. FOREIGN FLOW  (5 pts, meaningful for 1M+) ─────────
     ff_pts = 0.0
@@ -173,6 +193,10 @@ def compute_score(
     manip_v    = float(last["Manip_score"]) if not pd.isna(last["Manip_score"]) else 0.0
     manip_flag = manip_v > 65
 
+    # Persistent floor streak also flags potential forced-sell / distribution
+    if streak_v <= -3:
+        manip_flag = True
+
     # Downgrade if manipulation suspected
     if manip_flag and action == "STRONG BUY":
         action = "BUY"
@@ -199,6 +223,9 @@ def compute_score(
         "SMA_fast":   round(float(last["SMA_fast"]), 0)   if not pd.isna(last["SMA_fast"]) else None,
         "SMA_slow":   round(float(last["SMA_slow"]), 0)   if not pd.isna(last["SMA_slow"]) else None,
         "Manip_score":round(manip_v, 1),
+        "CMF":        round(cmf_v, 3),
+        "ST_dir":     int(st_dir),
+        "Streak":     streak_v,
     }
 
     return SignalResult(

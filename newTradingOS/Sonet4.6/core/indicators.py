@@ -173,6 +173,114 @@ def money_flow_index(high: pd.Series, low: pd.Series, close: pd.Series,
     return 100 - (100 / (1 + mfr))
 
 
+def chaikin_money_flow(high: pd.Series, low: pd.Series, close: pd.Series,
+                       volume: pd.Series, period: int = 14) -> pd.Series:
+    """
+    Chaikin Money Flow (-1 to +1).
+
+    Uses close position within the day's H-L range, then smooths by volume.
+    Superior to OBV for VN market because it handles overnight gaps correctly —
+    a stock that gaps up but closes near its low scores negatively (distribution),
+    while OBV would score it positively (just price direction).
+    """
+    hl_range        = (high - low).replace(0, np.nan)
+    money_flow_mult = ((close - low) - (high - close)) / hl_range
+    money_flow_vol  = money_flow_mult * volume
+    cmf = (money_flow_vol.rolling(period, min_periods=1).sum() /
+           volume.rolling(period, min_periods=1).sum().replace(0, np.nan))
+    return cmf
+
+
+def supertrend(high: pd.Series, low: pd.Series, close: pd.Series,
+               atr_period: int = 10, multiplier: float = 3.0,
+               ) -> tuple[pd.Series, pd.Series]:
+    """
+    SuperTrend indicator. Returns (line, direction).
+
+    direction: +1 = bullish (price above line), -1 = bearish (price below line).
+    Very popular in Southeast Asian markets. The line acts as a dynamic ATR-based
+    support (bullish) or resistance (bearish) that adapts to current volatility.
+    """
+    atr_v = atr(high, low, close, atr_period)
+    hl2   = (high + low) / 2.0
+    upper = hl2 + multiplier * atr_v
+    lower = hl2 - multiplier * atr_v
+
+    n    = len(close)
+    st   = np.full(n, np.nan)
+    dire = np.zeros(n, dtype=float)
+
+    for i in range(n):
+        if i == 0:
+            st[i]   = upper.iloc[0]
+            dire[i] = -1.0
+            continue
+
+        ub        = upper.iloc[i]
+        lb        = lower.iloc[i]
+        prev_ub   = upper.iloc[i - 1]
+        prev_lb   = lower.iloc[i - 1]
+        prev_cl   = close.iloc[i - 1]
+        curr_cl   = close.iloc[i]
+
+        # Ratchet bands — never widen against the trend
+        final_ub = ub if (ub < prev_ub or prev_cl > prev_ub) else prev_ub
+        final_lb = lb if (lb > prev_lb or prev_cl < prev_lb) else prev_lb
+
+        if dire[i - 1] == -1.0:          # previous bar was bearish
+            if curr_cl > st[i - 1]:
+                dire[i] = 1.0
+                st[i]   = final_lb
+            else:
+                dire[i] = -1.0
+                st[i]   = final_ub
+        else:                             # previous bar was bullish
+            if curr_cl < st[i - 1]:
+                dire[i] = -1.0
+                st[i]   = final_ub
+            else:
+                dire[i] = 1.0
+                st[i]   = final_lb
+
+    idx = close.index
+    return pd.Series(st, index=idx), pd.Series(dire, index=idx)
+
+
+def ceiling_floor_streak(close: pd.Series,
+                         limit_pct: float = 0.07) -> pd.Series:
+    """
+    Consecutive ceiling / floor hit counter (VN-specific).
+
+    Returns:
+      +N  — N consecutive days the stock hit the upper price limit (trần)
+      -N  — N consecutive days the stock hit the lower price limit (sàn)
+       0  — no streak
+
+    Uses 97% of limit_pct as threshold to account for small rounding differences
+    in displayed vs calculated percentage.
+
+    VN limits: HoSE ±7%, HNX ±10%, UPCoM ±15%.
+    Default 7% covers HoSE (the primary market for VN30/VN100).
+    """
+    pct_chg   = close.pct_change()
+    threshold = limit_pct * 0.97
+    n         = len(close)
+    streak    = np.zeros(n, dtype=float)
+
+    for i in range(1, n):
+        ch = pct_chg.iloc[i]
+        if pd.isna(ch):
+            streak[i] = 0.0
+        elif ch >= threshold:
+            streak[i] = max(streak[i - 1] + 1.0, 1.0)
+        elif ch <= -threshold:
+            streak[i] = min(streak[i - 1] - 1.0, -1.0)
+        else:
+            streak[i] = 0.0
+
+    return pd.Series(streak, index=close.index)
+
+
 # ─────────────────────────────────────────────────────────────
 # MARKET MANIPULATION DETECTION
 # ─────────────────────────────────────────────────────────────
@@ -247,5 +355,15 @@ def compute_all(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     # BB %B — inline using already-stored BB columns (avoids double bollinger_bands call)
     _bb_denom     = (df["BB_upper"] - df["BB_lower"]).replace(0, np.nan)
     df["BB_pctB"] = (close - df["BB_lower"]) / _bb_denom
+
+    # ── VN-SPECIFIC INDICATORS ──────────────────────────────
+    # Chaikin Money Flow: gap-adjusted smart-money inflow indicator
+    df["CMF"] = chaikin_money_flow(high, low, close, volume, cfg["volume_ma"])
+
+    # SuperTrend: ATR-based dynamic support/resistance, popular in SEA markets
+    df["ST"], df["ST_dir"] = supertrend(high, low, close, cfg["atr_period"])
+
+    # Ceiling/Floor streak: consecutive price-limit hits (VN ±7% HoSE rule)
+    df["Streak"] = ceiling_floor_streak(close)
 
     return df
