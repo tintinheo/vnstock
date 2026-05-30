@@ -103,6 +103,20 @@ DEFAULT_WATCHLIST: list[str] = [
 ]
 
 # ─────────────────────────────────────────────────────────────
+# EXCHANGE PRICE LIMITS (VN-specific daily price bands)
+# ─────────────────────────────────────────────────────────────
+EXCHANGE_PRICE_LIMIT: dict[str, float] = {
+    "HOSE":  0.07,   # ±7%
+    "HNX":   0.10,   # ±10%
+    "UPCOM": 0.15,   # ±15%
+}
+
+def get_price_limit(ticker: str) -> float:
+    """Return the daily price limit for a given ticker's exchange."""
+    exchange = TICKER_EXCHANGE.get(ticker, "HOSE")
+    return EXCHANGE_PRICE_LIMIT.get(exchange, 0.07)
+
+# ─────────────────────────────────────────────────────────────
 # EXCHANGE-BASED UNIVERSE LISTS
 # ─────────────────────────────────────────────────────────────
 # HOSE = all SECTOR_MAP tickers NOT in HNX / UPCOM

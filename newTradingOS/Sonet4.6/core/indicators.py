@@ -117,23 +117,54 @@ def keltner_channels(high: pd.Series, low: pd.Series, close: pd.Series,
 # ─────────────────────────────────────────────────────────────
 # TREND STRENGTH
 # ─────────────────────────────────────────────────────────────
+def _wilder_smooth(series: pd.Series, period: int) -> pd.Series:
+    """Wilder's smoothing method — EWM with alpha = 1/period (not SMA).
+
+    Used by ADX to replicate J. Welles Wilder's original specification.
+    Produces a more responsive indicator than plain SMA rolling.
+    """
+    return series.ewm(alpha=1.0 / period, adjust=False, min_periods=1).mean()
+
+
 def adx(high: pd.Series, low: pd.Series, close: pd.Series,
         period: int = 14) -> pd.Series:
-    """Average Directional Index — trend strength (0–100)."""
+    """Average Directional Index using proper Wilder smoothing (0–100).
+
+    Fixed from original SMA implementation to use Wilder EWM smoothing
+    (alpha = 1/period) on True Range, +DM, and -DM independently, and
+    a final Wilder smooth of DX — matching the original Wilder (1978) spec.
+    This produces a more responsive signal especially on VN breakout stocks.
+    """
+    # Raw True Range (computed fresh — not the pre-averaged ATR)
+    tr_raw = pd.concat([
+        high - low,
+        (high - close.shift()).abs(),
+        (low  - close.shift()).abs(),
+    ], axis=1).max(axis=1)
+
     up_move   = high.diff()
     down_move = -low.diff()
-    plus_dm   = np.where((up_move > down_move) & (up_move > 0), up_move, 0.0)
-    minus_dm  = np.where((down_move > up_move) & (down_move > 0), down_move, 0.0)
+    plus_dm   = pd.Series(
+        np.where((up_move > down_move) & (up_move > 0), up_move, 0.0),
+        index=close.index,
+    )
+    minus_dm  = pd.Series(
+        np.where((down_move > up_move) & (down_move > 0), down_move, 0.0),
+        index=close.index,
+    )
 
-    tr_v      = atr(high, low, close, period)
-    tr_v_rep  = tr_v.replace(0, np.nan)
+    # Wilder-smooth TR, +DM, -DM independently
+    atr_w    = _wilder_smooth(tr_raw, period)
+    plus_w   = _wilder_smooth(plus_dm, period)
+    minus_w  = _wilder_smooth(minus_dm, period)
 
-    plus_di   = 100 * pd.Series(plus_dm,  index=close.index).rolling(period).mean() / tr_v_rep
-    minus_di  = 100 * pd.Series(minus_dm, index=close.index).rolling(period).mean() / tr_v_rep
+    safe_atr = atr_w.replace(0, np.nan)
+    plus_di  = 100 * plus_w  / safe_atr
+    minus_di = 100 * minus_w / safe_atr
 
-    dx_denom  = (plus_di + minus_di).replace(0, np.nan)
-    dx        = 100 * (plus_di - minus_di).abs() / dx_denom
-    return dx.rolling(period, min_periods=1).mean()
+    dx_denom = (plus_di + minus_di).replace(0, np.nan)
+    dx       = 100 * (plus_di - minus_di).abs() / dx_denom
+    return _wilder_smooth(dx.fillna(0), period)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -291,31 +322,58 @@ def manipulation_score(
     price_move_days: int = 5,
     pump_vol_threshold: float = 3.0,
     pump_price_threshold: float = 0.15,
+    atc_vol_ratio: Optional[pd.Series] = None,
 ) -> pd.Series:
     """
     Score 0–100: higher = more likely manipulated.
 
     Components:
-    - Volume spike (vs SMA20)
-    - Price move (5-day %)
-    - Small market cap proxy (high volatility)
+    - Volume spike vs SMA20 (0–50 pts)
+    - 5-day price move (0–50 pts)
+    - ATC volume concentration (optional bonus up to +25 pts, capped at 100)
+
+    Parameters
+    ----------
+    atc_vol_ratio : optional pd.Series
+        Ratio of ATC (closing auction) volume to total day volume, range [0, 1].
+        Requires intraday data. When provided, high ATC concentration (>40%)
+        adds up to 25 bonus points to the manipulation score.
+        See config.ATC_RATIO_THRESH. Pass None (default) when only daily OHLCV
+        is available — existing behaviour is fully preserved.
     """
+    from config import ATC_RATIO_THRESH  # 0.40
+
     vol_ma     = volume.rolling(vol_ma_period, min_periods=1).mean()
     v_ratio    = volume / vol_ma.replace(0, np.nan)
     price_move = close.pct_change(price_move_days).abs()
 
     v_score = (v_ratio / pump_vol_threshold).clip(0, 1) * 50
     p_score = (price_move / pump_price_threshold).clip(0, 1) * 50
-    return (v_score + p_score).clip(0, 100)
+    base    = (v_score + p_score).clip(0, 100)
+
+    if atc_vol_ratio is not None:
+        # Align to close index in case caller passes a raw Series
+        atc_s     = atc_vol_ratio.reindex(close.index).fillna(0.0)
+        atc_bonus = (atc_s / ATC_RATIO_THRESH).clip(0, 1) * 25
+        return (base + atc_bonus).clip(0, 100)
+
+    return base
 
 
 # ─────────────────────────────────────────────────────────────
 # HELPER — COMPUTE ALL INDICATORS AT ONCE
 # ─────────────────────────────────────────────────────────────
-def compute_all(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
+def compute_all(df: pd.DataFrame, cfg: dict, exchange: str = "HOSE") -> pd.DataFrame:
     """
     Compute all indicators specified in a TIMEFRAME_CONFIG entry.
     Mutates df in-place, returns it.
+
+    Parameters
+    ----------
+    exchange : str
+        The exchange the ticker belongs to: 'HOSE' (±7%), 'HNX' (±10%), or
+        'UPCOM' (±15%). Used to set the correct price-limit threshold for the
+        ceiling/floor streak indicator. Defaults to 'HOSE'.
     """
     close  = df["Close"]
     high   = df.get("High",   close)
@@ -363,7 +421,10 @@ def compute_all(df: pd.DataFrame, cfg: dict) -> pd.DataFrame:
     # SuperTrend: ATR-based dynamic support/resistance, popular in SEA markets
     df["ST"], df["ST_dir"] = supertrend(high, low, close, cfg["atr_period"])
 
-    # Ceiling/Floor streak: consecutive price-limit hits (VN ±7% HoSE rule)
-    df["Streak"] = ceiling_floor_streak(close)
+    # Ceiling/Floor streak: exchange-specific price limits
+    #   HOSE ±7%, HNX ±10%, UPCoM ±15%  (fixed: was always 7% before)
+    from config import EXCHANGE_PRICE_LIMIT
+    limit_pct = EXCHANGE_PRICE_LIMIT.get(exchange.upper(), 0.07)
+    df["Streak"] = ceiling_floor_streak(close, limit_pct=limit_pct)
 
     return df

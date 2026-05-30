@@ -42,8 +42,10 @@ def compute_score(
     tf: str,
     regime: str = "bull",
     foreign_flow_net: float = 0.0,
+    foreign_flow_net_20d: float = 0.0,
     macro_score: float = 5.0,
     ticker: str = "UNKNOWN",
+    exchange: str = "HOSE",
 ) -> SignalResult:
     """
     Compute multi-component signal score for one ticker + timeframe.
@@ -54,19 +56,25 @@ def compute_score(
       Momentum   20 pts  — MACD histogram, MACD vs zero, ROC
       RSI        15 pts  — zone quality (oversold recovery = best)
       Volume     20 pts  — spike, accumulation, MFI
-      Foreign     5 pts  — net flow direction (1M+ only)
+      Foreign     5 pts  — net flow direction (1M+ only, uses 20d trend)
       Macro      10 pts  — regime + macro_score
       ADX         5 pts  — trend strength confirmation
     ─────────────────────────────────
 
     Parameters
     ----------
-    df             : OHLCV DataFrame (at least cfg['sma_slow'] + 20 rows)
-    tf             : one of '1W','2W','1M','3M','5M'
-    regime         : current market regime ('bull'|'sideways'|'bear')
-    foreign_flow_net: net foreign buy value in VND (positive = buy)
-    macro_score    : 0-10 from macro_data.get_macro_score()
-    ticker         : symbol for labelling
+    df                 : OHLCV DataFrame (at least cfg['sma_slow'] + 20 rows)
+    tf                 : one of '1W','2W','1M','3M','5M'
+    regime             : current market regime ('bull'|'sideways'|'bear')
+    foreign_flow_net   : net foreign buy value today in VND (positive = buy)
+    foreign_flow_net_20d: cumulative net foreign buy over 20 sessions in VND.
+                         When available (from fetch_foreign_flow_ticker), uses
+                         the 20-day trend instead of a single day for a more
+                         stable foreign flow signal. Falls back to foreign_flow_net.
+    macro_score        : 0-10 from macro_data.get_macro_score()
+    ticker             : symbol for labelling
+    exchange           : 'HOSE' |’HNX' | 'UPCOM' — controls price-limit threshold
+                         for Streak indicator (fixed: was always HOSE before).
     """
     cfg  = TIMEFRAME_CONFIG[tf]
     min_rows = cfg["sma_slow"] + 20
@@ -78,8 +86,8 @@ def compute_score(
             message=f"Insufficient data (need {min_rows} rows, got {len(df) if df is not None else 0})",
         )
 
-    # Compute all indicators
-    df = compute_all(df.copy(), cfg)
+    # Compute all indicators (pass exchange so streak uses correct price limit)
+    df = compute_all(df.copy(), cfg, exchange=exchange)
     last = df.iloc[-1]
     prev = df.iloc[-2] if len(df) >= 2 else last
 
@@ -154,12 +162,15 @@ def compute_score(
     vol = max(vol, -5.0)
 
     # ── 5. FOREIGN FLOW  (5 pts, meaningful for 1M+) ─────────
+    # Use 20d trend if available — more robust than single-day signal.
+    # Falls back to today's net flow when net_20d is zero (not provided).
     ff_pts = 0.0
     if tf in ("1M", "3M", "5M"):
-        if foreign_flow_net > 1e10:    ff_pts = 5
-        elif foreign_flow_net > 0:     ff_pts = 3
-        elif foreign_flow_net < -1e10: ff_pts = 0
-        else:                          ff_pts = 1
+        ff_ref = foreign_flow_net_20d if foreign_flow_net_20d != 0.0 else foreign_flow_net
+        if ff_ref > 1e10:    ff_pts = 5
+        elif ff_ref > 0:     ff_pts = 3
+        elif ff_ref < -1e10: ff_pts = 0
+        else:                ff_pts = 1
 
     # ── 6. MACRO REGIME  (10 pts) ─────────────────────────────
     macro_pts = (macro_score / 10.0) * 10
@@ -252,25 +263,37 @@ def batch_score(
     macro_score: float = 5.0,
     foreign_flows: Optional[dict] = None,
     min_score: Optional[float] = None,
+    exchange_map: Optional[dict] = None,
 ) -> list[SignalResult]:
     """
     Score a dictionary of {ticker: (df, source)} for a given timeframe.
     Returns list sorted by score descending.
-    Workers run in a thread pool; numpy releases the GIL for C-level ops.
+
+    Parameters
+    ----------
+    exchange_map : optional dict of {ticker: exchange_str}
+        When provided, each ticker uses the correct price-limit for its
+        exchange (HOSE ±7%, HNX ±10%, UPCoM ±15%) in the Streak indicator.
+        Defaults to HOSE for all tickers when not provided.
     """
     ff = foreign_flows or {}
+    ex = exchange_map or {}
 
     def _score_one(item: tuple) -> Optional[SignalResult]:
         ticker, (df, _src) = item
         if df is None or df.empty:
             return None
+        ff_ticker  = ff.get(ticker, {})
+        exchange   = ex.get(ticker, "HOSE")
         try:
             return compute_score(
                 df, tf,
                 regime=regime,
-                foreign_flow_net=ff.get(ticker, {}).get("net_buy_value", 0.0),
+                foreign_flow_net=ff_ticker.get("net_buy_value", 0.0),
+                foreign_flow_net_20d=ff_ticker.get("net_20d", 0.0),
                 macro_score=macro_score,
                 ticker=ticker,
+                exchange=exchange,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("batch_score: %s skipped — %s", ticker, exc)

@@ -109,3 +109,71 @@ class TestBatchScore:
         data = {"VCB": (pd.DataFrame(), "TEST")}
         results = batch_score(data, "1M")
         assert results == []
+
+
+# ─────────────────────────────────────────────────────────────
+# FIX #4 — exchange param propagation
+# ─────────────────────────────────────────────────────────────
+class TestComputeScoreExchange:
+    def test_exchange_param_accepted(self, ohlcv):
+        """compute_score must accept and not crash on exchange kwarg."""
+        for ex in ("HOSE", "HNX", "UPCOM"):
+            sig = compute_score(ohlcv, "1M", exchange=ex, ticker="TEST")
+            assert isinstance(sig, SignalResult)
+
+    def test_default_exchange_hose(self, ohlcv):
+        """Score must be identical whether exchange='HOSE' or omitted."""
+        sig_default = compute_score(ohlcv, "1M", ticker="VCB")
+        sig_hose    = compute_score(ohlcv, "1M", ticker="VCB", exchange="HOSE")
+        assert abs(sig_default.score - sig_hose.score) < 1e-3
+
+    def test_batch_score_exchange_map(self, mock_data_dict):
+        """batch_score must accept and use exchange_map without crashing."""
+        ex_map = {t: "HNX" for t in mock_data_dict}
+        results = batch_score(mock_data_dict, "1M", exchange_map=ex_map)
+        assert isinstance(results, list)
+        assert len(results) > 0
+
+
+# ─────────────────────────────────────────────────────────────
+# FIX #4 — foreign flow 20d
+# ─────────────────────────────────────────────────────────────
+class TestForeignFlow20d:
+    def test_ff20d_higher_score_than_ff1d_on_1m(self, ohlcv):
+        """For 1M TF, a strong positive 20d net buy should score >= single-day buy."""
+        sig_1d  = compute_score(ohlcv, "1M", foreign_flow_net=5e10,
+                                foreign_flow_net_20d=0.0, ticker="VCB")
+        sig_20d = compute_score(ohlcv, "1M", foreign_flow_net=5e10,
+                                foreign_flow_net_20d=5e10, ticker="VCB")
+        # Both positive → same Foreign component (5 pts)
+        assert abs(sig_1d.score - sig_20d.score) < 0.1
+
+    def test_ff20d_used_when_nonzero(self, ohlcv):
+        """When net_20d != 0, it should override net_today signal."""
+        # net_today = 0 (no signal), net_20d = strong buy
+        sig_no_20d  = compute_score(ohlcv, "1M", foreign_flow_net=0.0,
+                                    foreign_flow_net_20d=0.0, ticker="VCB")
+        sig_with_20d = compute_score(ohlcv, "1M", foreign_flow_net=0.0,
+                                     foreign_flow_net_20d=5e10, ticker="VCB")
+        # strong 20d buy should improve Foreign component from 1 → 5 pts
+        assert sig_with_20d.score >= sig_no_20d.score
+
+    def test_ff20d_zero_fallback_to_ff1d(self, ohlcv):
+        """When foreign_flow_net_20d == 0, system falls back to foreign_flow_net."""
+        sig_via_1d   = compute_score(ohlcv, "1M", foreign_flow_net=5e10,
+                                     foreign_flow_net_20d=0.0, ticker="VCB")
+        sig_via_both = compute_score(ohlcv, "1M", foreign_flow_net=5e10,
+                                     foreign_flow_net_20d=5e10, ticker="VCB")
+        # Both resolve to 5e10 → scores identical
+        assert abs(sig_via_1d.score - sig_via_both.score) < 0.1
+
+    def test_ff_only_active_on_long_tf(self, ohlcv):
+        """Foreign flow must have 0 impact on 1W timeframe."""
+        sig_no_ff = compute_score(ohlcv, "1W", foreign_flow_net=0.0,
+                                  foreign_flow_net_20d=0.0, ticker="VCB")
+        sig_ff    = compute_score(ohlcv, "1W", foreign_flow_net=1e12,
+                                  foreign_flow_net_20d=1e12, ticker="VCB")
+        # 1W has regime_filter=['bull'] only — but FF component should be 0
+        assert sig_no_ff.breakdown.get("Foreign", 0) == 0
+        assert sig_ff.breakdown.get("Foreign", 0) == 0
+

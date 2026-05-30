@@ -61,6 +61,45 @@ def _predict_price(last_price: float, cumret: float) -> float:
     return last_price * (1 + cumret)
 
 
+def _walk_forward_mape(close: pd.Series, lookback: int, horizon: int,
+                       min_train: int = 120) -> float:
+    """
+    Walk-forward out-of-sample MAPE for RandomForest on VN data.
+
+    Rolls forward with a minimal training window of `min_train` samples,
+    testing on each subsequent out-of-sample point. Returns MAPE in [0, inf).
+    A score close to 0 means the model tracks the direction well; high MAPE
+    indicates the feature set has little predictive power on this ticker.
+
+    Used only for logging / model confidence display, not for prediction.
+    Returns np.nan if there are insufficient rows.
+    """
+    rets = close.pct_change().dropna().values
+    n    = len(rets)
+    if n < min_train + lookback + horizon + 5:
+        return float("nan")
+
+    errors = []
+    for start in range(min_train, n - lookback - horizon, horizon):
+        X_tr, y_tr = [], []
+        for i in range(lookback, start):
+            if i + horizon > n:
+                break
+            X_tr.append(rets[i - lookback: i])
+            y_tr.append(rets[i: i + horizon].sum())
+        if len(X_tr) < 20:
+            continue
+        m = RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1, max_depth=6)
+        m.fit(X_tr, y_tr)
+        window  = rets[start: start + lookback]
+        true_cr = rets[start + lookback: start + lookback + horizon].sum()
+        pred_cr = float(m.predict([window])[0])
+        if abs(true_cr) > 1e-6:
+            errors.append(abs((pred_cr - true_cr) / true_cr))
+
+    return float(np.mean(errors)) if errors else float("nan")
+
+
 # ─────────────────────────────────────────────────────────────
 # RANDOM FOREST
 # ─────────────────────────────────────────────────────────────
@@ -76,9 +115,17 @@ def rf_predict(
     X, y  = _make_xy(close, lookback, n_days)
     if len(X) < 20:
         return []
+
+    # Strict train/test split — use only the most recent 80% as training data
+    # to preserve an out-of-sample test set and avoid look-ahead bias.
+    # For VN stocks (~240 sessions/year) this leaves at least 48 test points
+    # when lookback_days=365 (minimal 240-row series).
+    split = max(int(len(X) * 0.8), 20)
+    X_tr, y_tr = X[:split], y[:split]
+
     model = RandomForestRegressor(n_estimators=n_estimators, random_state=42,
                                    n_jobs=-1, max_depth=8)
-    model.fit(X, y)
+    model.fit(X_tr, y_tr)
     last_window = close.pct_change().dropna().values[-lookback:]
     pred_cumret = float(model.predict([last_window])[0])
     last_price  = float(close.iloc[-1])

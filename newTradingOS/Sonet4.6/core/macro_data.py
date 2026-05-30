@@ -126,8 +126,11 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
 
     Returns
     -------
-    dict with keys: net_buy_value, buy_value, sell_value, net_20d
+    dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d
     All values in VND.
+    net_20d is the cumulative net foreign buy over the most-recent 20 sessions
+    (or however many are available). trend_20d is one of: 'accumulate', 'distribute',
+    'neutral'.
     """
     url = f"https://analysis.tcbs.com.vn/api/v1/stock/{symbol}/investors"
     try:
@@ -137,17 +140,40 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
         data = r.json()
         items = data.get("data", [])
         if not items:
-            return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0}
-        latest = items[0] if items else {}
+            return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
+                    "net_20d": 0, "trend_20d": "neutral"}
+
+        latest = items[0]
+        net_today = (
+            float(latest.get("foreignBuyValue", 0) or 0)
+            - float(latest.get("foreignSellValue", 0) or 0)
+        )
+
+        # 20-day cumulative net  — previously unimplemented
+        window = items[:20]  # API returns newest-first
+        net_20d = sum(
+            float(d.get("foreignBuyValue", 0) or 0)
+            - float(d.get("foreignSellValue", 0) or 0)
+            for d in window
+        )
+        if net_20d > 5e10:      # >50B VND net buy over 20 days
+            trend_20d = "accumulate"
+        elif net_20d < -5e10:
+            trend_20d = "distribute"
+        else:
+            trend_20d = "neutral"
+
         return {
-            "net_buy_value": float(latest.get("foreignBuyValue", 0) or 0)
-                             - float(latest.get("foreignSellValue", 0) or 0),
-            "buy_value":  float(latest.get("foreignBuyValue",  0) or 0),
-            "sell_value": float(latest.get("foreignSellValue", 0) or 0),
+            "net_buy_value": net_today,
+            "buy_value":     float(latest.get("foreignBuyValue",  0) or 0),
+            "sell_value":    float(latest.get("foreignSellValue", 0) or 0),
+            "net_20d":       net_20d,
+            "trend_20d":     trend_20d,
         }
     except Exception as exc:
         logger.debug("ForeignFlow %s: %s", symbol, exc)
-        return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0}
+        return {"net_buy_value": 0, "buy_value": 0, "sell_value": 0,
+                "net_20d": 0, "trend_20d": "neutral"}
 
 
 def fetch_market_foreign_flow(days: int = 20) -> dict:
@@ -186,13 +212,24 @@ def fetch_macro_indicators() -> dict:
 
     Returns
     -------
-    dict with world_markets, breadth, foreign_flow, vni_info
+    dict with world_markets, breadth, foreign_flow, vni_info, stale_fields.
+    stale_fields: list[str] of data names that could not be fetched —
+    callers should warn the user when this list is non-empty so they know
+    macro_score is degraded (e.g. defaulting to neutral for missing components).
     """
     world   = fetch_world_markets()
     breadth = fetch_market_breadth()
     ff      = fetch_market_foreign_flow()
-
-    # Derive DXY trend signal
+    # ── Detect stale/missing data fields ─────────────────────────────────
+    stale_fields: list[str] = []
+    critical_symbols = ["DXY (USD Index)", "VIX", "S&P 500"]
+    for sym in critical_symbols:
+        if not world.get(sym):
+            stale_fields.append(sym)
+    if breadth["advance"] == 0 and breadth["decline"] == 0:
+        stale_fields.append("market_breadth")
+    if ff.get("net_buy", 0) == 0 and ff.get("buy", 0) == 0:
+        stale_fields.append("foreign_flow")
     dxy_info   = world.get("DXY (USD Index)")
     dxy_trend  = "neutral"
     if dxy_info:
@@ -225,16 +262,25 @@ def fetch_macro_indicators() -> dict:
         "foreign_flow": ff,
         "dxy_trend":    dxy_trend,
         "vix_level":    vix_level,
+        "stale_fields": stale_fields,
         "fetched_at":   datetime.now().isoformat(),
     }
 
 
-def get_macro_score(macro: dict) -> tuple[float, str]:
+def get_macro_score(macro: dict) -> tuple[float, str, list[str]]:
     """
-    Convert macro dict to a 0-10 score and label.
-    Used by signal scoring engine.
+    Convert macro dict to a 0-10 score, label, and list of stale fields.
+
+    Returns
+    -------
+    (score, label, stale_fields)
+      score       : float 0-10
+      label       : 'bull' | 'neutral' | 'bear'
+      stale_fields: list of data names that were missing/default —
+                    pass these to the UI to show a warning.
     """
     score = 5.0  # neutral baseline
+    stale_fields: list[str] = list(macro.get("stale_fields", []))
 
     # DXY: down = good for EM
     dxy_trend = macro.get("dxy_trend", "neutral")
@@ -266,4 +312,4 @@ def get_macro_score(macro: dict) -> tuple[float, str]:
     elif score >= 4.5:  label = "neutral"
     else:               label = "bear"
 
-    return round(score, 2), label
+    return round(score, 2), label, stale_fields

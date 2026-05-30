@@ -92,6 +92,8 @@ def _init_session():
         st.session_state.macro_score   = 5.0
     if "macro_regime" not in st.session_state:
         st.session_state.macro_regime  = "sideways"
+    if "macro_stale" not in st.session_state:
+        st.session_state.macro_stale   = []
     if "portfolio" not in st.session_state:
         st.session_state.portfolio     = Portfolio.load()
     if "lang" not in st.session_state:
@@ -196,9 +198,10 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
     with st.spinner("Đang tải dữ liệu vĩ mô…"):
         macro = fetch_macro_indicators()
         st.session_state.macro_data  = macro
-        ms, ml = get_macro_score(macro)
+        ms, ml, stale = get_macro_score(macro)
         st.session_state.macro_score  = ms
         st.session_state.macro_regime = ml
+        st.session_state.macro_stale  = stale
 
         # Detect regime from VNI
         from core.data_fetcher import download_data as _dl
@@ -206,7 +209,13 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         if not vni_df.empty:
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
-    st.success("✅ Macro updated")
+    if stale:
+        st.warning(
+            f"⚠️ Macro data incomplete — could not fetch: {', '.join(stale)}. "
+            "Score defaulted to neutral for missing components."
+        )
+    else:
+        st.success("✅ Macro updated")
     log_event(
         ACTION_MACRO,
         detail={
@@ -263,6 +272,14 @@ else:
     c2.metric("VNI Regime", "—")
 c3.metric("Macro Score", f"{macro_score:.1f}/10")
 c4.metric("Portfolio Value", f"{portfolio.total_value:,.0f} VND")
+
+# Persistent stale-data banner (shown below metrics, cleared on next successful macro update)
+_stale = st.session_state.get("macro_stale", [])
+if _stale:
+    st.warning(
+        f"⚠️ **Macro data partial** — thiếu: {', '.join(_stale)}. "
+        "Nhấn **Cập nhật Macro** để thử lại. Kết quả hiện tại dùng giá trị mặc định (neutral)."
+    )
 
 st.divider()
 
