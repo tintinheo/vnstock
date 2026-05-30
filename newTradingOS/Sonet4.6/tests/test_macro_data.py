@@ -168,9 +168,9 @@ class TestFetchMacroStaleDetection:
     ):
         """All world markets return None → all critical symbols should be stale."""
         from config import WORLD_SYMBOLS
-        mock_world.return_value  = {k: None for k in WORLD_SYMBOLS}
-        mock_breadth.return_value = {"advance": 0, "decline": 0, "unchanged": 0}
-        mock_ff.return_value     = {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A"}
+        mock_world.return_value   = {k: None for k in WORLD_SYMBOLS}
+        mock_breadth.return_value = {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": True}
+        mock_ff.return_value      = {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A", "fetch_ok": True}
 
         from core.macro_data import fetch_macro_indicators
         result = fetch_macro_indicators()
@@ -190,8 +190,8 @@ class TestFetchMacroStaleDetection:
                 "pct_20d": 2.0, "prices": [100.0], "timestamps": []}
             for k in WORLD_SYMBOLS
         }
-        mock_breadth.return_value = {"advance": 200, "decline": 100, "unchanged": 50}
-        mock_ff.return_value      = {"net_buy": 1e10, "buy": 2e10, "sell": 1e10, "trend": "Mua ròng"}
+        mock_breadth.return_value = {"advance": 200, "decline": 100, "unchanged": 50, "fetch_ok": True}
+        mock_ff.return_value      = {"net_buy": 1e10, "buy": 2e10, "sell": 1e10, "trend": "Mua ròng", "fetch_ok": True}
 
         from core.macro_data import fetch_macro_indicators
         result = fetch_macro_indicators()
@@ -200,21 +200,67 @@ class TestFetchMacroStaleDetection:
     @patch("core.macro_data.fetch_world_markets")
     @patch("core.macro_data.fetch_market_breadth")
     @patch("core.macro_data.fetch_market_foreign_flow")
-    def test_breadth_stale_when_all_zeros(
+    def test_breadth_stale_when_api_fails(
         self, mock_ff, mock_breadth, mock_world
     ):
+        """fetch_ok=False on breadth (API exception) → market_breadth in stale_fields."""
         from config import WORLD_SYMBOLS
         mock_world.return_value = {
             k: {"current": 100.0, "pct_1d": 0.5, "pct_5d": 1.0,
                 "pct_20d": 2.0, "prices": [100.0], "timestamps": []}
             for k in WORLD_SYMBOLS
         }
-        mock_breadth.return_value = {"advance": 0, "decline": 0, "unchanged": 0}
-        mock_ff.return_value      = {"net_buy": 1e10, "buy": 2e10, "sell": 1e10, "trend": "Mua ròng"}
+        mock_breadth.return_value = {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": False}
+        mock_ff.return_value      = {"net_buy": 1e10, "buy": 2e10, "sell": 1e10, "trend": "Mua ròng", "fetch_ok": True}
 
         from core.macro_data import fetch_macro_indicators
         result = fetch_macro_indicators()
         assert "market_breadth" in result.get("stale_fields", [])
+
+    @patch("core.macro_data.fetch_world_markets")
+    @patch("core.macro_data.fetch_market_breadth")
+    @patch("core.macro_data.fetch_market_foreign_flow")
+    def test_no_stale_when_zeros_but_api_ok(
+        self, mock_ff, mock_breadth, mock_world
+    ):
+        """advance=0, decline=0 with fetch_ok=True (non-trading day) is NOT stale."""
+        from config import WORLD_SYMBOLS
+        mock_world.return_value = {
+            k: {"current": 100.0, "pct_1d": 0.5, "pct_5d": 1.0,
+                "pct_20d": 2.0, "prices": [100.0], "timestamps": []}
+            for k in WORLD_SYMBOLS
+        }
+        # Valid non-trading day: API returned zeros but connection succeeded
+        mock_breadth.return_value = {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": True}
+        mock_ff.return_value      = {"net_buy": 0, "buy": 0, "sell": 0, "trend": "Bán ròng", "fetch_ok": True}
+
+        from core.macro_data import fetch_macro_indicators
+        result = fetch_macro_indicators()
+        assert "market_breadth" not in result.get("stale_fields", []), (
+            "Zero advance/decline with fetch_ok=True (non-trading day) must NOT be flagged stale. "
+            "Only API failures (fetch_ok=False) should trigger stale."
+        )
+        assert "foreign_flow" not in result.get("stale_fields", [])
+
+    @patch("core.macro_data.fetch_world_markets")
+    @patch("core.macro_data.fetch_market_breadth")
+    @patch("core.macro_data.fetch_market_foreign_flow")
+    def test_ff_stale_when_api_fails(
+        self, mock_ff, mock_breadth, mock_world
+    ):
+        """fetch_ok=False on foreign_flow → foreign_flow in stale_fields."""
+        from config import WORLD_SYMBOLS
+        mock_world.return_value = {
+            k: {"current": 100.0, "pct_1d": 0.5, "pct_5d": 1.0,
+                "pct_20d": 2.0, "prices": [100.0], "timestamps": []}
+            for k in WORLD_SYMBOLS
+        }
+        mock_breadth.return_value = {"advance": 200, "decline": 100, "unchanged": 50, "fetch_ok": True}
+        mock_ff.return_value      = {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A", "fetch_ok": False}
+
+        from core.macro_data import fetch_macro_indicators
+        result = fetch_macro_indicators()
+        assert "foreign_flow" in result.get("stale_fields", [])
 
 
 # ─────────────────────────────────────────────────────────────

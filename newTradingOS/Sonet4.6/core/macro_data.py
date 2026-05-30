@@ -111,10 +111,11 @@ def fetch_market_breadth() -> dict:
             "advance":   int(data.get("advance",   data.get("up",   0))),
             "decline":   int(data.get("decline",   data.get("down", 0))),
             "unchanged": int(data.get("unchanged", data.get("noChange", 0))),
+            "fetch_ok":  True,
         }
     except Exception as exc:
         logger.debug("Breadth: %s", exc)
-        return {"advance": 0, "decline": 0, "unchanged": 0}
+        return {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": False}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -197,10 +198,11 @@ def fetch_market_foreign_flow(days: int = 20) -> dict:
             "buy":       float(data.get("foreignBuyValue",  0) or 0),
             "sell":      float(data.get("foreignSellValue", 0) or 0),
             "trend":     "Mua ròng" if net > 0 else "Bán ròng",
+            "fetch_ok":  True,
         }
     except Exception as exc:
         logger.debug("MarketForeignFlow: %s", exc)
-        return {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A"}
+        return {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A", "fetch_ok": False}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -221,14 +223,16 @@ def fetch_macro_indicators() -> dict:
     breadth = fetch_market_breadth()
     ff      = fetch_market_foreign_flow()
     # ── Detect stale/missing data fields ─────────────────────────────────
+    # Use fetch_ok sentinel to distinguish API failure from valid zero values
+    # (e.g. non-trading day breadth of 0/0 is not a stale condition).
     stale_fields: list[str] = []
     critical_symbols = ["DXY (USD Index)", "VIX", "S&P 500"]
     for sym in critical_symbols:
         if not world.get(sym):
             stale_fields.append(sym)
-    if breadth["advance"] == 0 and breadth["decline"] == 0:
+    if not breadth.get("fetch_ok", True):
         stale_fields.append("market_breadth")
-    if ff.get("net_buy", 0) == 0 and ff.get("buy", 0) == 0:
+    if not ff.get("fetch_ok", True):
         stale_fields.append("foreign_flow")
     dxy_info   = world.get("DXY (USD Index)")
     dxy_trend  = "neutral"
