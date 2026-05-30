@@ -247,11 +247,26 @@ def monte_carlo_predict(
     n_days: int,
     n_simulations: int = 2000,
     percentile_central: float = 50,
+    exchange: str = "HOSE",
 ) -> list[float]:
     """
-    GBM Monte Carlo simulation.
+    GBM Monte Carlo simulation with VN daily price-limit enforcement.
+
+    VN exchanges cap intraday moves at exchange-specific limits:
+      HOSE: ±7%  |  HNX: ±10%  |  UPCOM: ±15%
+    Without clipping, GBM can generate physically impossible paths
+    (e.g. +15% in one session on HOSE), inflating short-term variance
+    and producing over-aggressive price targets.
+
+    Parameters
+    ----------
+    exchange : 'HOSE' | 'HNX' | 'UPCOM' — determines daily move cap.
+               Defaults to 'HOSE' (most restrictive). Existing callers
+               without this parameter are unaffected by the default.
+
     Returns median path over n_days.
     """
+    from config import EXCHANGE_PRICE_LIMIT
     close = df["Close"].dropna()
     if len(close) < 30:
         return []
@@ -260,6 +275,10 @@ def monte_carlo_predict(
     sigma      = float(log_rets.std())
     last_price = float(close.iloc[-1])
 
+    # VN daily price limit as log-return cap
+    limit_pct = EXCHANGE_PRICE_LIMIT.get(exchange.upper(), 0.07)
+    log_limit = float(np.log(1.0 + limit_pct))
+
     dt      = 1.0
     rng     = np.random.default_rng(seed=42)
     shocks  = rng.normal(
@@ -267,6 +286,8 @@ def monte_carlo_predict(
         scale=sigma * np.sqrt(dt),
         size=(n_simulations, n_days),
     )
+    # Enforce VN exchange daily move cap on every simulated step
+    shocks  = np.clip(shocks, -log_limit, log_limit)
     paths   = last_price * np.exp(np.cumsum(shocks, axis=1))
     median  = np.percentile(paths, percentile_central, axis=0)
     return list(median)

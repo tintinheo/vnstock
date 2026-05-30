@@ -385,10 +385,24 @@ SCORE_TO_ACTION = {
 }
 
 def score_to_action(score: float) -> str:
-    for (lo, hi), action in SCORE_TO_ACTION.items():
-        if lo <= score <= hi:
-            return action
-    return "HOLD"
+    """Convert numeric score (0-100) to trading action label.
+
+    Thresholds (each tier uses a single >= boundary -- no overlap):
+      score >= 80  -> STRONG BUY
+      score >= 65  -> BUY
+      score >= 45  -> HOLD
+      score >= 30  -> WATCH
+      score  < 30  -> SELL
+
+    Previously used a dict with inclusive-both-ends ranges causing
+    silent ambiguity at boundaries (e.g. score=80 matched both
+    (80,100) and (65,80)). Replaced with explicit if/elif chain.
+    """
+    if score >= 80:  return "STRONG BUY"
+    if score >= 65:  return "BUY"
+    if score >= 45:  return "HOLD"
+    if score >= 30:  return "WATCH"
+    return "SELL"
 
 # ─────────────────────────────────────────────────────────────
 # MANIPULATION DETECTION THRESHOLDS

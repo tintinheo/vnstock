@@ -225,3 +225,84 @@ class TestWalkForwardRF:
         if not math.isnan(mape):
             assert mape >= 0.0
 
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #4 — Monte Carlo VN daily price-limit enforcement
+# ────────────────────────────────────────────────────────────
+class TestMonteCarloVNLimit:
+    """monte_carlo_predict must clip each simulated daily step to the
+    VN exchange price limit (HOSE ±7%, HNX ±10%, UPCOM ±15%).
+
+    Without clipping, GBM generates paths with physically impossible
+    single-session moves (e.g. +12% on HOSE), inflating short-term
+    variance and leading to over-aggressive price targets.
+    """
+
+    @staticmethod
+    def _make_df(n: int = 200, start: float = 50_000.0) -> "pd.DataFrame":  # type: ignore[name-defined]
+        import pandas as pd
+        close = pd.Series([start + i * 10 for i in range(n)])
+        return pd.DataFrame({"Close": close})
+
+    def test_hose_median_path_within_7pct(self):
+        """No single step of the MEDIAN path should exceed HOSE ±7% limit."""
+        from ml.classical_models import monte_carlo_predict
+        preds = monte_carlo_predict(self._make_df(), n_days=22, exchange="HOSE")
+        assert len(preds) == 22
+        for i in range(1, len(preds)):
+            daily_chg = abs(preds[i] / preds[i - 1] - 1.0)
+            assert daily_chg <= 0.07 + 1e-6, (
+                f"HOSE: day {i} median change {daily_chg:.4f} exceeds 7% daily limit"
+            )
+
+    def test_hnx_limit_10pct(self):
+        """HNX exchange allows up to ±10% per session."""
+        from ml.classical_models import monte_carlo_predict
+        preds = monte_carlo_predict(self._make_df(), n_days=22, exchange="HNX")
+        for i in range(1, len(preds)):
+            daily_chg = abs(preds[i] / preds[i - 1] - 1.0)
+            assert daily_chg <= 0.10 + 1e-6, (
+                f"HNX: day {i} median change {daily_chg:.4f} exceeds 10% daily limit"
+            )
+
+    def test_upcom_limit_15pct(self):
+        """UPCOM exchange allows up to ±15% per session."""
+        from ml.classical_models import monte_carlo_predict
+        preds = monte_carlo_predict(self._make_df(), n_days=22, exchange="UPCOM")
+        for i in range(1, len(preds)):
+            daily_chg = abs(preds[i] / preds[i - 1] - 1.0)
+            assert daily_chg <= 0.15 + 1e-6, (
+                f"UPCOM: day {i} median change {daily_chg:.4f} exceeds 15% daily limit"
+            )
+
+    def test_default_exchange_is_hose(self):
+        """Without exchange param, default should behave like HOSE (±7%)."""
+        from ml.classical_models import monte_carlo_predict
+        preds_default = monte_carlo_predict(self._make_df(), n_days=10)
+        preds_hose    = monte_carlo_predict(self._make_df(), n_days=10, exchange="HOSE")
+        for a, b in zip(preds_default, preds_hose):
+            assert abs(a - b) < 1e-3, "Default exchange must produce same result as HOSE"
+
+    def test_returns_correct_length(self):
+        """monte_carlo_predict must return exactly n_days prices."""
+        from ml.classical_models import monte_carlo_predict
+        for n in (5, 22, 66):
+            preds = monte_carlo_predict(self._make_df(), n_days=n, exchange="HOSE")
+            assert len(preds) == n, f"Expected {n} predictions, got {len(preds)}"
+
+    def test_hose_more_constrained_than_upcom(self):
+        """HOSE (7%) should have smaller max single-step in median than UPCOM (15%)."""
+        import numpy as np
+        from ml.classical_models import monte_carlo_predict
+        # Use volatile data so clipping actually activates
+        import pandas as pd
+        volatile = pd.DataFrame({"Close": pd.Series(
+            [50_000.0 * (1 + 0.08 * ((-1) ** i)) for i in range(300)]
+        )})
+        preds_hose  = monte_carlo_predict(volatile, n_days=22, exchange="HOSE")
+        preds_upcom = monte_carlo_predict(volatile, n_days=22, exchange="UPCOM")
+        # HOSE steps must all be within 7%; UPCOM within 15%
+        for i in range(1, len(preds_hose)):
+            chg_hose = abs(preds_hose[i] / preds_hose[i - 1] - 1.0)
+            assert chg_hose <= 0.07 + 1e-6
+

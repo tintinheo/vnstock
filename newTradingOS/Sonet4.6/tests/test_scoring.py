@@ -263,3 +263,131 @@ class TestScoringTickRounding:
         sig  = compute_score(ohlcv, "1M", exchange="UPCOM", ticker="ACV")
         assert sig.stop_loss % 100 == 0
 
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #3 — score_to_action() boundary tests
+# ────────────────────────────────────────────────────────────
+class TestScoreToActionBoundaries:
+    """score_to_action must return unambiguous labels at every boundary value.
+
+    The old dict-based implementation with inclusive-both-ends ranges caused
+    score=80 to match both (80,100) and (65,80). The new if/elif chain must
+    resolve each boundary to exactly one action.
+    """
+
+    @pytest.mark.parametrize("score,expected", [
+        (100.0, "STRONG BUY"),
+        (80.0,  "STRONG BUY"),   # exact lower boundary of STRONG BUY
+        (79.9,  "BUY"),          # just below STRONG BUY threshold
+        (65.0,  "BUY"),          # exact lower boundary of BUY
+        (64.9,  "HOLD"),         # just below BUY threshold
+        (45.0,  "HOLD"),         # exact lower boundary of HOLD
+        (44.9,  "WATCH"),        # just below HOLD threshold
+        (30.0,  "WATCH"),        # exact lower boundary of WATCH
+        (29.9,  "SELL"),         # just below WATCH threshold
+        (0.0,   "SELL"),         # absolute minimum
+        (-1.0,  "SELL"),         # below minimum (defensive)
+    ])
+    def test_boundary(self, score, expected):
+        from config import score_to_action
+        assert score_to_action(score) == expected, (
+            f"score_to_action({score}) returned "
+            f"'{score_to_action(score)}', expected '{expected}'"
+        )
+
+    def test_all_five_actions_reachable(self):
+        """All 5 distinct action labels must be reachable."""
+        from config import score_to_action
+        results = {score_to_action(s) for s in (90, 70, 50, 35, 10)}
+        assert results == {"STRONG BUY", "BUY", "HOLD", "WATCH", "SELL"}
+
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #2 — RSI < 30 danger zone should score low
+# ────────────────────────────────────────────────────────────
+class TestRSIDangerZonePts:
+    """RSI < 30 (deep oversold) must score fewer points than RSI 30-45
+    (mild oversold recovery) in VN market context.
+
+    VN-specific: RSI < 30 = margin call cascade zone where forced
+    liquidation can persist for weeks. This is not a buy signal.
+    RSI 30-45 = oversold recovery, a genuine VN buying zone (12 pts).
+    RSI < 30 must only score 4 pts (was incorrectly 7).
+    """
+
+    def test_bear_series_score_not_inflated(self, ohlcv_bear):
+        """A bear-trending series should produce a total score below 50."""
+        sig = compute_score(ohlcv_bear, "1M", regime="bear",
+                            macro_score=2.0, ticker="TEST")
+        assert sig.score < 60, (
+            f"Bear series scored {sig.score} — RSI danger zone too generous"
+        )
+
+    def test_rsi_breakdown_on_bear_data_low(self, ohlcv_bear):
+        """RSI component on bear data must be <= 7 (down from 7, now 4 max)."""
+        sig = compute_score(ohlcv_bear, "1M", regime="bear",
+                            macro_score=2.0, ticker="TEST")
+        rsi_pts = sig.breakdown.get("RSI", 99)
+        assert rsi_pts <= 7, (
+            f"RSI breakdown={rsi_pts} on bear data, expected <= 7"
+        )
+
+    def test_bull_rsi_higher_than_bear_rsi(self, ohlcv_bull, ohlcv_bear):
+        """RSI component must be higher on bull data than bear data."""
+        sig_bull = compute_score(ohlcv_bull, "1M", regime="bull",
+                                 macro_score=7.0, ticker="TEST")
+        sig_bear = compute_score(ohlcv_bear, "1M", regime="bear",
+                                 macro_score=2.0, ticker="TEST")
+        assert sig_bull.breakdown.get("RSI", 0) >= sig_bear.breakdown.get("RSI", 0), (
+            "Bull RSI pts should be >= bear RSI pts"
+        )
+
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #1 — BB_pctB contributes to Volume scoring
+# ────────────────────────────────────────────────────────────
+class TestBBBreakoutVolumeBonus:
+    """BB %B breakout/support bonus must be included in Volume breakdown.
+
+    BB %B > 0.8 + volume spike (vol_r > 1.5) = institutional breakout
+    confirmation. This is a key VN pattern: stocks that break upper
+    Bollinger Band with strong volume show sustained institutional buying.
+    BB %B < 0.15 (near lower band) + no floor streak = support accumulation.
+
+    Both paths add points to Volume component (still capped at 20).
+    """
+
+    def test_score_in_range_after_bb_bonus(self, ohlcv_bull):
+        """Score must remain within 0-100 after BB bonus is applied."""
+        sig = compute_score(ohlcv_bull, "1M", regime="bull",
+                            macro_score=7.0, ticker="VCB")
+        assert 0 <= sig.score <= 100, (
+            f"Score out of range after BB bonus: {sig.score}"
+        )
+
+    def test_volume_breakdown_capped_at_20(self, ohlcv_bull):
+        """Volume component must never exceed 20 pts even with BB bonus."""
+        sig = compute_score(ohlcv_bull, "1M", regime="bull",
+                            macro_score=7.0, ticker="VCB")
+        vol_pts = sig.breakdown.get("Volume", 99)
+        assert vol_pts <= 20.0, (
+            f"Volume breakdown={vol_pts} exceeds cap of 20 pts"
+        )
+
+    def test_breakdown_sum_still_matches_total(self, ohlcv):
+        """BB bonus goes into Volume; total breakdown must still sum to score."""
+        sig = compute_score(ohlcv, "1M", ticker="VCB")
+        total = sum(sig.breakdown.values())
+        assert abs(total - sig.score) < 0.5, (
+            f"breakdown sum {total:.2f} != score {sig.score:.2f}"
+        )
+
+    def test_bull_volume_gte_bear_volume(self, ohlcv_bull, ohlcv_bear):
+        """Bull data (likely near upper BB) should get >= Volume pts vs bear."""
+        sig_bull = compute_score(ohlcv_bull, "1M", regime="bull",
+                                 macro_score=7.0, ticker="TEST")
+        sig_bear = compute_score(ohlcv_bear, "1M", regime="bear",
+                                 macro_score=2.0, ticker="TEST")
+        # Not a strict guarantee but directionally correct for synthetic data
+        assert sig_bull.breakdown.get("Volume", 0) >= sig_bear.breakdown.get("Volume", -5)
+

@@ -137,6 +137,8 @@ def run_backtest(
                 _n_shares, _vnd_committed = position_size_vnd(
                     capital, pos_pct, price, lot_size=LOT_SIZE
                 )
+                if _n_shares == 0:
+                    continue   # Cannot afford minimum 1 VN lot — skip signal
                 in_trade    = True
 
         else:

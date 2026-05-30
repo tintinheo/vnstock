@@ -128,7 +128,7 @@ def compute_score(
     if 45 <= rsi_v < 65:     rsi_pts = 15   # VN sweet spot — trending zone
     elif 30 <= rsi_v < 45:   rsi_pts = 12   # oversold recovery
     elif 65 <= rsi_v <= 75:  rsi_pts = 10   # momentum continuation (VN stocks stay here)
-    elif rsi_v < 30:         rsi_pts = 7    # deep oversold — risky (margin cascades)
+    elif rsi_v < 30:         rsi_pts = 4    # deep oversold — VN margin cascade danger zone
     elif 75 < rsi_v <= 85:   rsi_pts = 5   # elevated, approaching ceiling risk
     else:                    rsi_pts = 2    # RSI > 85: extreme, near-term cap likely
     rsi_score = rsi_pts
@@ -158,6 +158,12 @@ def compute_score(
     if streak_v >= 2:  vol += 2
     # Floor streak penalty: 2+ consecutive sàn = distribution / forced selling
     if streak_v <= -2: vol -= 3
+    # Bollinger Band breakout / support signal (VN-specific):
+    #   Near upper band + volume spike = institutional breakout confirmation
+    #   Near lower band + no floor streak = support zone accumulation
+    bb_pctb = float(last["BB_pctB"]) if "BB_pctB" in df.columns and not pd.isna(last["BB_pctB"]) else 0.5
+    if bb_pctb > 0.8 and vol_r > 1.5:       vol += 2   # breakout confirmed by volume
+    elif bb_pctb < 0.15 and streak_v >= 0:  vol += 1   # near lower band support, no floor streak
     vol = min(vol, 20.0)
     vol = max(vol, -5.0)
 

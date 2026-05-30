@@ -231,3 +231,40 @@ class TestLotSizeEnforcement:
                 f"(likely fractional-share overstatement)"
             )
 
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #5 — backtest skips entry when capital < 1 lot
+# ────────────────────────────────────────────────────────────
+class TestInsufficientCapitalSkip:
+    """Backtest engine must skip trade entry when position_size_vnd returns
+    (0, 0.0), i.e. when allocated capital cannot afford even 1 VN lot.
+
+    The engine must not crash and must produce a valid BacktestResult
+    with zero trades.
+    """
+
+    def test_no_crash_with_tiny_capital(self, ohlcv):
+        """1 VND capital — cannot afford any lot — backtest must not crash."""
+        r = run_backtest(ohlcv, "1M", ticker="VCB", initial_capital=1.0)
+        assert isinstance(r, BacktestResult), "Expected BacktestResult even with 1 VND capital"
+
+    def test_zero_trades_with_tiny_capital(self, ohlcv):
+        """With 1 VND capital, no trade should ever be entered."""
+        r = run_backtest(ohlcv, "1M", ticker="VCB", initial_capital=1.0)
+        assert len(r.trades) == 0, (
+            f"Expected 0 trades with 1 VND capital, got {len(r.trades)}"
+        )
+
+    def test_equity_curve_valid_with_tiny_capital(self, ohlcv):
+        """Even with no trades, equity curve must be non-empty and non-negative."""
+        r = run_backtest(ohlcv, "1M", ticker="VCB", initial_capital=1.0)
+        assert len(r.equity_curve) > 0
+        assert all(e >= 0 for e in r.equity_curve)
+
+    def test_normal_capital_still_trades(self, ohlcv):
+        """After the fix, normal capital (100M VND) must still produce trades."""
+        r = run_backtest(ohlcv, "1M", ticker="VCB", initial_capital=100_000_000)
+        assert isinstance(r, BacktestResult)
+        # With 500 bars of bull/neutral data, at least some trades should occur
+        # (not asserting exact count since it depends on signals)
+

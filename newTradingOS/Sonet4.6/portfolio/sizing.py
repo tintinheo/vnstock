@@ -65,8 +65,12 @@ def position_size_vnd(
     """
     target_vnd = capital * fraction
     raw_shares = target_vnd / price
-    # Round down to nearest lot
-    n_lots   = max(1, int(raw_shares // lot_size))
+    # VN minimum order = 1 lot (100 shares). If the capital allocation
+    # cannot afford even 1 lot, return (0, 0.0) so the caller can skip
+    # the trade rather than silently overcapitalising the account.
+    if raw_shares < lot_size:
+        return 0, 0.0
+    n_lots   = int(raw_shares // lot_size)
     n_shares = n_lots * lot_size
     vnd_amt  = n_shares * price * (1 + BUY_TOTAL)
     return n_shares, round(vnd_amt, 0)

@@ -228,3 +228,53 @@ class TestPortfolioMetrics:
     def test_empty_curve(self):
         m = compute_portfolio_metrics([100], [])
         assert m == {}
+
+
+# ────────────────────────────────────────────────────────────
+# Round 3 Fix #5 — position_size_vnd insufficient-capital guard
+# ────────────────────────────────────────────────────────────
+class TestPositionSizeInsufficientCapital:
+    """position_size_vnd must return (0, 0.0) when capital cannot
+    afford even a single VN lot (100 shares).
+
+    Previous behaviour (max(1, n_lots)) forced 1 lot regardless,
+    silently investing 4× the intended allocation on small accounts.
+    Example: capital=50M, fraction=5%, price=100,000 VND:
+      budget = 2.5M  <  1 lot = 10M  → must return (0, 0.0)
+    """
+
+    def test_returns_zero_when_budget_below_one_lot(self):
+        """50M × 5% = 2.5M; 1 lot at 100,000 VND = 10M — insufficient."""
+        n, vnd = position_size_vnd(50_000_000, 0.05, 100_000, lot_size=100)
+        assert n == 0, f"Expected n_shares=0 when capital insufficient, got {n}"
+        assert vnd == 0.0, f"Expected vnd=0.0 when capital insufficient, got {vnd}"
+
+    def test_returns_zero_on_tiny_capital(self):
+        """1,000 VND capital at any price/fraction can't buy 1 lot."""
+        n, vnd = position_size_vnd(1_000, 0.99, 1_000, lot_size=100)
+        assert n == 0
+        assert vnd == 0.0
+
+    def test_returns_positive_when_sufficient(self):
+        """100M × 10% = 10M; 1 lot at 50,000 VND = 5M — can buy 2 lots."""
+        n, vnd = position_size_vnd(100_000_000, 0.10, 50_000, lot_size=100)
+        assert n > 0, f"Expected positive n_shares, got {n}"
+        assert n % 100 == 0, "n_shares must be a multiple of lot_size=100"
+        assert vnd > 0.0
+
+    def test_exact_boundary_one_lot(self):
+        """When budget exactly equals 1 lot cost, must return exactly 1 lot."""
+        # budget = capital * fraction = lot_size * price
+        # e.g. lot_size=100, price=10,000 → 1 lot = 1,000,000 VND
+        # Need capital * fraction = 1,000,000 exactly (before BUY_TOTAL fee)
+        # Use big capital with small fraction to avoid fee confusion
+        # capital=10M, fraction=0.1 → budget=1M = exactly 1 lot
+        n, vnd = position_size_vnd(10_000_000, 0.10, 10_000, lot_size=100)
+        assert n >= 100, f"Should be able to afford at least 1 lot, got {n}"
+
+    def test_existing_positive_case_unchanged(self):
+        """Original test case: 100M × 10% at 50,000 VND — still works."""
+        n, vnd = position_size_vnd(100_000_000, 0.10, 50_000)
+        assert n > 0
+        assert vnd > 0
+        assert n % LOT_SIZE == 0
