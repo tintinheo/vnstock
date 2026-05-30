@@ -31,7 +31,7 @@
 | Framework | `pytest` 9.0.2 |
 | Config file | `pytest.ini` at project root |
 | Command | `python -m pytest` or `python -m pytest -v` |
-| Total tests | **237** |
+| Total tests | **299** |
 | Typical run time | ~550 seconds (9m 10s) |
 | Test data | Synthetic DataFrames generated in fixtures; no live API calls in tests |
 
@@ -128,7 +128,7 @@ Following OWASP Top 10 mitigations:
 
 ### 5.2 Release Checklist
 
-- [ ] All 159 tests pass on clean environment
+- [ ] All 299 tests pass on clean environment
 - [ ] Backtesting regression report compared against v13.0 baseline
 - [ ] Scan performance benchmark run (60 tickers < 2s)
 - [ ] PMBOK docs updated for any scope changes

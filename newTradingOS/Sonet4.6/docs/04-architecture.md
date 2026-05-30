@@ -93,13 +93,13 @@
 | `SMA_slow` | SMA(close, cfg["sma_slow"]) | per timeframe |
 | `EMA_fast` | EMA(close, cfg["ema_fast"]) | per timeframe |
 | `EMA_slow` | EMA(close, cfg["ema_slow"]) | per timeframe |
-| `RSI` | Wilder RSI(close, cfg["rsi_period"]) | per timeframe |
+| `RSI` | **Wilder EWM RSI** (alpha=1/period, gain/loss smoothed with `_wilder_smooth`); returns 100.0 when avg_loss=0 | per timeframe |
 | `MACD` | EMA(12) − EMA(26) | 26 bars |
 | `MACD_signal` | EMA(MACD, 9) | 9 bars |
 | `MACD_hist` | MACD − MACD_signal | — |
 | `BB_upper/mid/lower` | Bollinger(close, 20, 2) | 20 bars |
 | `BB_pctB` | (close − lower) / (upper − lower) | 20 bars |
-| `ATR` | Average True Range(H, L, C, cfg["atr_period"]) | per timeframe |
+| `ATR` | **Wilder EWM ATR** — True Range smoothed with `_wilder_smooth(tr, period)` (alpha=1/period); more responsive to volatility expansion than SMA-ATR | per timeframe |
 | `ADX` | Average Directional Index — **Wilder-smoothed EWM (alpha=1/period)** | 14 bars |
 | `OBV` | On-Balance Volume ∑ | cumulative |
 | `Vol_MA` | SMA(volume, cfg["volume_ma"]) | per timeframe |
@@ -136,8 +136,15 @@ def manipulation_score(close, volume, atc_vol_ratio=None) -> pd.Series:
     # Uses config.ATC_RATIO_THRESH = 0.40 as scaling denominator
 
 def _wilder_smooth(series, period) -> pd.Series:
-    # EWM with alpha=1/period (authentic Wilder smoothing for ADX/ATR)
+    # EWM with alpha=1/period (authentic Wilder smoothing for RSI/ATR/ADX)
     # Different from SMA: faster response to recent price action
+    # Used by: rsi(), atr(), adx_components()
+
+def get_tick_size(price: float, exchange: str = "HOSE") -> int:
+    # Returns minimum tick in VND: HOSE <10k→10, 10k-50k→50, ≥50k→100; HNX/UPCOM→100
+
+def round_to_tick(price: float, exchange: str = "HOSE") -> float:
+    # Rounds price to nearest valid tick for exchange — prevents broker order rejection
 ```
 
 ---
@@ -154,7 +161,7 @@ def _wilder_smooth(series, period) -> pd.Series:
 | Momentum | 20 | MACD cross, histogram, ROC | Cross = 8pts, histogram positive = 6pts, ROC > 5% = 6pts |
 | RSI | 15 | Zone scoring | 45-65 = 15pts (VN sweet spot); 65-75 = 10pts (momentum continuation) |
 | Volume/Flow | 20 | Vol ratio, MFI, CMF, Streak | CMF > 0.05 = +3pts; consecutive ceiling ≥ 2 = +2pts; floor ≤ -2 = -3pts; Streak uses exchange-specific limit |
-| Foreign Flow | 5 | Net foreign buy (20-session trend) | 1M/3M/5M timeframes only; uses `net_20d` from `fetch_foreign_flow_ticker()` when available |
+| Foreign Flow | 5 | Net foreign buy (20-session trend) | **2W/1M/3M/5M** timeframes; uses `net_20d` from `fetch_foreign_flow_ticker()` when available |
 | Macro Regime | 10 | Composite macro score | macro_score / 10 |
 | ADX Strength | 5 | ADX trend quality gate | ADX > 25 = 5pts |
 
@@ -179,9 +186,23 @@ def _wilder_smooth(series, period) -> pd.Series:
 | 5M | 2.5× | 4.0 |
 
 ```
-stop  = entry_price − (ATR × stop_atr_mult)
-target = entry_price + (entry_price − stop) × target_rr
+stop_raw  = entry_price − (ATR × stop_atr_mult)
+target_raw = entry_price + (entry_price − stop_raw) × target_rr
+stop_loss   = round_to_tick(stop_raw,   exchange)  # VN tick-aligned
+take_profit = round_to_tick(target_raw, exchange)  # VN tick-aligned
+# Safety guards: if stop_loss >= price, set stop_loss = price − 1 tick
+#                if take_profit <= price, set take_profit = price + 1 tick
 ```
+
+**VN Tick Rounding (`config.py`):**
+
+| Exchange | Band | Tick Size |
+|---|---|---|
+| HOSE | < 10,000 VND | 10 VND |
+| HOSE | 10,000 – 49,999 VND | 50 VND |
+| HOSE | ≥ 50,000 VND | 100 VND |
+| HNX | all | 100 VND |
+| UPCOM | all | 100 VND |
 
 ---
 
@@ -205,10 +226,12 @@ target = entry_price + (entry_price − stop) × target_rr
 **Fetch:** `ThreadPoolExecutor(max_workers=8)` — all 8 symbols fetched simultaneously.
 
 **Scoring logic:**
-- Each market contributes 0–1 pts based on recent performance direction
+- DXY trend and VIX level contribute directional pts
 - VN-Index advance/decline ratio adds breadth signal
 - Foreign net buy/sell modifies final score ±1
-- Final `macro_score` ∈ [0, 10]
+- **S&P 500 5-day return**: +0.50 pts (>+2%), +0.25 pts (>+0.5%), −0.25 pts (<−0.5%), −0.75 pts (<−2%) — asymmetric to reflect EM risk-off speed
+- **CSI 300 5-day return**: +0.50 pts (>+2%), +0.25 pts (>+0.5%), −0.25 pts (<−0.5%), −0.50 pts (<−2%) — highest regional correlation with VN-Index (~0.55–0.70)
+- Final `macro_score` ∈ [0, 10] (capped and floored)
 
 ---
 

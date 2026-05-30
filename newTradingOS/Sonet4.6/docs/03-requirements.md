@@ -47,6 +47,11 @@
 | FR-033 | ADX shall use Wilder smoothing (EWM alpha = 1/period) rather than SMA for authentic directional index calculation | Must | 1.2.6 | `core/indicators.py` | `test_indicators::TestWilderSmooth` |
 | FR-034 | ML Random Forest shall use 80/20 train/test walk-forward split; `_walk_forward_mape()` shall report out-of-sample MAPE | Must | 1.5.3 | `ml/classical_models.py` | `test_ensemble::TestWalkForwardRF` |
 | FR-035 | ATC (end-of-session) volume concentration shall be accepted as optional input to `manipulation_score()` and contribute up to 25 bonus points | Should | 1.2.7 | `core/indicators.py` | `test_indicators::TestManipulationScoreATC` |
+| FR-036 | RSI and ATR shall use Wilder EWM smoothing (alpha=1/period) as per Wilder (1978), not SMA; RSI shall return 100.0 (not NaN) when average loss is zero | Must | 1.2.6 | `core/indicators.py` | `test_indicators::TestRSIWilderSmoothing`, `test_indicators::TestATRWilderSmoothing` |
+| FR-037 | Stop-loss and take-profit prices shall be rounded to the nearest valid VN exchange tick (HOSE: 10/50/100 VND bands; HNX/UPCOM: 100 VND uniform); after rounding, stop < entry price and target > entry price must always hold | Must | 1.3.8 | `config.py`, `core/scoring.py` | `test_indicators::TestVNTickSize`, `test_scoring::TestScoringTickRounding` |
+| FR-038 | `get_macro_score()` shall incorporate S&P 500 5-day return (±0.50/±0.75 pts) and CSI 300 5-day return (±0.25/±0.50 pts) to reflect global risk-on/off and China market influence on VN-Index | Must | 1.4.4 | `core/macro_data.py` | `test_macro_data::TestMacroScoreWorldIndices` |
+| FR-039 | 2W timeframe shall include the Foreign Flow component (5 pts) in scoring, consistent with 1M/3M/5M timeframes; foreign institutional flow over 10-session holds is meaningful | Must | 1.3 | `core/scoring.py` | `test_scoring::TestForeignFlow2W` |
+| FR-040 | Backtest engine shall enforce VN minimum lot size (LOT_SIZE=100 shares) for all position entries; `BacktestTrade` shall expose `n_shares` (lot-aligned); P&L shall be calculated from actual VND committed, not fractional capital | Must | 1.6.2 | `backtest/engine.py` | `test_backtest::TestLotSizeEnforcement` |
 
 ---
 
@@ -79,11 +84,12 @@
 | Data layer (FR-001 to FR-003) | 3 | `test_data_fetcher.py` |
 | Indicators (FR-004 to FR-008) | 5 | `test_indicators.py` |
 | Scoring engine (FR-009 to FR-015) | 7 | `test_scoring.py` |
-| Macro / Regime (FR-016 to FR-017, FR-030, FR-032) | 4 | `test_macro_data.py`, `test_regime.py` |
+| Macro / Regime (FR-016 to FR-017, FR-030, FR-032, FR-038) | 5 | `test_macro_data.py`, `test_regime.py` |
 | ML Ensemble (FR-018 to FR-019, FR-034) | 3 | `test_ensemble.py` |
 | Scanner wiring (FR-031, FR-032) | 2 | `test_scanner_wiring.py` |
-| Backtesting (FR-020 to FR-021) | 2 | `test_backtest.py` |
+| Backtesting (FR-020 to FR-021, FR-040) | 3 | `test_backtest.py` |
 | Portfolio (FR-022 to FR-026) | 5 | `test_portfolio.py` |
 | UI / Application (FR-027 to FR-029) | 3 | Manual |
+| VN Market Fit (FR-036 to FR-039) | 4 | `test_indicators.py`, `test_scoring.py` |
 | Non-Functional (NFR-001 to NFR-015) | 15 | Various |
-| **Total** | **44** | **159 automated tests** |
+| **Total** | **50** | **299 automated tests** |
