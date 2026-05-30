@@ -94,6 +94,8 @@ def _init_session():
         st.session_state.macro_regime  = "sideways"
     if "macro_stale" not in st.session_state:
         st.session_state.macro_stale   = []
+    if "foreign_flows_cache" not in st.session_state:
+        st.session_state.foreign_flows_cache = {}
     if "portfolio" not in st.session_state:
         st.session_state.portfolio     = Portfolio.load()
     if "lang" not in st.session_state:
@@ -203,12 +205,33 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         st.session_state.macro_regime = ml
         st.session_state.macro_stale  = stale
 
-        # Detect regime from VNI
+        # Detect regime from VNI (market-level — never use individual stock data)
         from core.data_fetcher import download_data as _dl
         vni_df, _ = _dl("VNINDEX", days=365)
         if not vni_df.empty:
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
+
+        # Fetch per-ticker foreign flow with 20d trend for all loaded tickers.
+        # Only meaningful for 1M/3M/5M timeframes; short TFs ignore it.
+        # Runs in background after world market fetch to minimise UI wait time.
+        _loaded_tickers = list(st.session_state.get("data_dict", {}).keys())
+        if _loaded_tickers:
+            from core.macro_data import fetch_foreign_flow_ticker
+            from concurrent.futures import ThreadPoolExecutor
+            _ff_cache: dict[str, dict] = {}
+            with ThreadPoolExecutor(max_workers=min(8, len(_loaded_tickers))) as _pool:
+                _futures = {
+                    _pool.submit(fetch_foreign_flow_ticker, t): t
+                    for t in _loaded_tickers
+                }
+                for _fut, _t in _futures.items():
+                    try:
+                        _ff_cache[_t] = _fut.result()
+                    except Exception:
+                        _ff_cache[_t] = {"net_buy_value": 0, "net_20d": 0, "trend_20d": "neutral"}
+            st.session_state.foreign_flows_cache = _ff_cache
+
     if stale:
         st.warning(
             f"⚠️ Macro data incomplete — could not fetch: {', '.join(stale)}. "
@@ -313,6 +336,17 @@ with tabs[0]:
 
 # ── Tabs 1-5: Scanners ────────────────────────────────────────
 from ui.scanner_tab import render_scanner_tab
+from config import TICKER_EXCHANGE as _TICKER_EXCHANGE
+
+# Build exchange map once for all scanner tabs.
+# Tickers not in TICKER_EXCHANGE default to HOSE (±7%).
+_exchange_map: dict[str, str] = {
+    t: _TICKER_EXCHANGE.get(t, "HOSE") for t in data_dict
+}
+
+# Use cached foreign flows from session_state (populated during Macro update
+# via fetch_foreign_flow_ticker per symbol). Falls back to {} if not loaded.
+_foreign_flows: dict = st.session_state.get("foreign_flows_cache", {})
 
 _TF_MAP = {"⚡ 1W": "1W", "📅 2W": "2W", "📆 1M": "1M", "📊 3M": "3M", "🎯 5M": "5M"}
 for i, tf in enumerate(["1W", "2W", "1M", "3M", "5M"], start=1):
@@ -325,8 +359,9 @@ for i, tf in enumerate(["1W", "2W", "1M", "3M", "5M"], start=1):
                 data_dict=data_dict,
                 regime=regime_label,
                 macro_score=macro_score,
-                foreign_flows={},   # extend: fetch_foreign_flow_ticker per symbol
+                foreign_flows=_foreign_flows,
                 lang=lang,
+                exchange_map=_exchange_map,
             )
 
 # ── Tab 6: ML Forecast ────────────────────────────────────────

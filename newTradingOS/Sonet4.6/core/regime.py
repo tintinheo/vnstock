@@ -160,12 +160,21 @@ def _detect_rule(prices: pd.Series) -> RegimeResult:
 # ─────────────────────────────────────────────────────────────
 def detect_regime(prices: pd.Series, use_hmm: bool = True) -> RegimeResult:
     """
-    Detect current market regime from a price series.
+    Detect current **market-wide** regime from a **VN-Index** price series.
+
+    IMPORTANT — call this function ONLY with VN-Index (VNINDEX) closing prices,
+    never with individual stock prices. Regime is a market-level property:
+    - Fitting HMM on individual stocks produces noisy, ticker-specific state
+      sequences that do not represent the overall market environment.
+    - The correct flow is: fetch VNINDEX daily data once → call detect_regime
+      → store result in session_state → pass to all scoring functions.
+    This constraint is enforced by naming and documentation; callers that pass
+    individual-stock data will silently get wrong regime labels.
 
     Parameters
     ----------
     prices : pd.Series
-        Daily closing prices (VN-Index or individual stock).
+        Daily closing prices of VN-Index (VNINDEX), not individual stocks.
     use_hmm : bool
         Use HMM if hmmlearn is available; else fall back to rule-based.
 
@@ -180,6 +189,10 @@ def detect_regime(prices: pd.Series, use_hmm: bool = True) -> RegimeResult:
     if use_hmm and HMMLEARN_AVAILABLE:
         return _detect_hmm(prices)
     return _detect_rule(prices)
+
+
+# Alias kept for clarity — prefer calling detect_regime explicitly with VNI data.
+detect_market_regime = detect_regime
 
 
 def regime_color(regime: str) -> str:

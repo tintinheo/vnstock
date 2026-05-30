@@ -1,6 +1,7 @@
+# -*- coding: utf-8 -*-
 """
-tests/test_regime.py — NewTradingOS v14.0
-Tests for core/regime.py — HMM and rule-based regime detection.
+tests/test_regime.py â€” NewTradingOS v14.0
+Tests for core/regime.py â€” HMM and rule-based regime detection.
 """
 from __future__ import annotations
 
@@ -9,14 +10,14 @@ import pandas as pd
 import pytest
 
 from core.regime import (
-    detect_regime, _detect_rule, regime_color, regime_emoji,
-    regime_label_vi, RegimeResult,
+    detect_regime, detect_market_regime, _detect_rule,
+    regime_color, regime_emoji, regime_label_vi, RegimeResult,
 )
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # RegimeResult namedtuple
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class TestRegimeResult:
     def test_fields(self):
         r = RegimeResult("bull", 0.8, ["bull"], "hmm", {"bull": 0.001})
@@ -29,9 +30,9 @@ class TestRegimeResult:
             assert r.regime in ("bull", "bear", "sideways")
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Rule-based detection
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class TestRuleDetection:
     def test_bull_trending_up(self):
         n = 200
@@ -63,9 +64,9 @@ class TestRuleDetection:
         assert r.method == "rule"
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # detect_regime public API
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class TestDetectRegime:
     def test_empty_series(self):
         r = detect_regime(pd.Series([], dtype=float))
@@ -87,9 +88,9 @@ class TestDetectRegime:
         assert r.method == "rule"
 
 
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 # Helper functions
-# ─────────────────────────────────────────────────────────────
+# â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 class TestHelpers:
     def test_regime_color(self):
         assert regime_color("bull")     == "#00cc66"
@@ -105,3 +106,45 @@ class TestHelpers:
         assert regime_label_vi("bull")     == "Tăng"
         assert regime_label_vi("bear")     == "Giảm"
         assert regime_label_vi("sideways") == "Đi ngang"
+
+# ─────────────────────────────────────────────────────────────
+# FIX #1 — detect_regime enforced for VN-Index use only
+# ─────────────────────────────────────────────────────────────
+class TestDetectRegimeVNIndex:
+    def test_detect_market_regime_is_alias(self, ohlcv_prices):
+        """detect_market_regime must be an alias for detect_regime."""
+        r1 = detect_regime(ohlcv_prices, use_hmm=False)
+        r2 = detect_market_regime(ohlcv_prices, use_hmm=False)
+        assert r1.regime == r2.regime
+        assert r1.method == r2.method
+        assert r1.probability == r2.probability
+
+    def test_vni_uptrend_gives_bull(self):
+        """Synthetic VNI-style 500-day uptrend must produce bull regime."""
+        n      = 300
+        prices = pd.Series([1000.0 * (1.0015 ** i) for i in range(n)])
+        r = detect_regime(prices, use_hmm=False)
+        assert r.regime == "bull", f"Expected bull, got {r.regime}"
+
+    def test_vni_downtrend_gives_bear(self):
+        """Synthetic VNI-style downtrend must produce bear regime."""
+        n      = 300
+        prices = pd.Series([1400.0 * (0.9985 ** i) for i in range(n)])
+        r = detect_regime(prices, use_hmm=False)
+        assert r.regime == "bear", f"Expected bear, got {r.regime}"
+
+    def test_result_has_history_same_length_as_prices(self, ohlcv_prices):
+        r = detect_regime(ohlcv_prices, use_hmm=False)
+        assert len(r.history) == len(ohlcv_prices)
+
+    def test_history_only_valid_labels(self, ohlcv_prices):
+        r = detect_regime(ohlcv_prices, use_hmm=False)
+        assert all(h in ("bull", "bear", "sideways") for h in r.history)
+
+    def test_probability_reflects_consistency(self):
+        """Strongly trending price should yield high probability."""
+        n = 200
+        prices = pd.Series([1000.0 * (1.002 ** i) for i in range(n)])
+        r = detect_regime(prices, use_hmm=False)
+        # Consistent uptrend → last 20 sessions should mostly be 'bull'
+        assert r.probability >= 0.7, f"Expected prob>=0.7 for consistent trend, got {r.probability}"

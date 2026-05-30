@@ -60,11 +60,19 @@ def render_scanner_tab(
     macro_score: float,
     foreign_flows: dict,
     lang: str = "VI",
+    exchange_map: dict | None = None,
 ) -> None:
     """
     Compute ALL tickers unconditionally, write audit log, and display the
     complete result table. Scan results are cached in session_state; re-scoring
     is skipped unless data version, regime, or macro_score changes.
+
+    Parameters
+    ----------
+    exchange_map : optional dict {ticker: exchange_str}
+        When provided, each ticker uses its correct exchange price limit
+        (HOSE ±7%, HNX ±10%, UPCoM ±15%) in the Streak indicator and scoring.
+        Build from config.TICKER_EXCHANGE in the caller. Defaults to HOSE if None.
     """
     cfg   = TIMEFRAME_CONFIG[tf]
     label = cfg["label"] if lang == "VI" else cfg["label_en"]
@@ -90,6 +98,7 @@ def render_scanner_tab(
                 macro_score=macro_score,
                 foreign_flows=foreign_flows,
                 min_score=None,
+                exchange_map=exchange_map,
             )
         scan_cache[cache_key] = all_results
         # Write audit only on fresh scan runs
