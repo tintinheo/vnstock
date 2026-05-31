@@ -27,9 +27,9 @@ Documentation follows **PMBOK® Guide 7th Edition** process groups and knowledge
 | Version | 14.0 |
 | Platform | Vietnam Stock Market (HOSE / HNX / UPCoM) |
 | Technology | Python 3.13 · Streamlit 1.55 |
-| Test Coverage | 159 / 159 tests passing |
+| Automated Tests | 407 passed (`pytest tests/ -q --tb=short`, 2026-05-31) |
 | Project Start | 2025-Q1 |
-| Last Updated | 2026-05-30 |
+| Last Updated | 2026-05-31 |
 
 ---
 

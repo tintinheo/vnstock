@@ -4,7 +4,7 @@
 **PMBOK Knowledge Area:** Integration Management  
 **Process Group:** Initiating  
 **Document Version:** 2.0  
-**Date:** 2026-05-30  
+**Date:** 2026-05-31  
 **Status:** Approved
 
 ---
@@ -12,7 +12,7 @@
 ## 1. Project Purpose and Justification
 
 Vietnamese retail investors lack institutional-grade, locally-adapted analytical tooling. The overwhelming majority of trading platforms available to Vietnamese investors either:
-- Rely on generic international indicators not calibrated for VN market constraints (±7% daily price limits, T+2.5 settlement, ~90% retail composition), or
+- Rely on generic international indicators not calibrated for VN market constraints (±7% daily price limits, T+2 settlement, ~90% retail composition), or
 - Lack integration of multi-timeframe signal scoring, ML forecasting, and portfolio tracking in a single, self-hosted interface.
 
 **NewTradingOS** was initiated to close this gap by delivering a fully integrated, research-backed trading decision support platform purpose-built for the Vietnam Stock Exchange (HOSE / HNX / UPCoM).
@@ -24,9 +24,9 @@ Vietnamese retail investors lack institutional-grade, locally-adapted analytical
 | # | Objective | Measurable Success Criterion |
 |---|---|---|
 | O1 | Provide multi-timeframe scanning (1W / 2W / 1M / 3M / 5M) for entire HOSE+HNX universe | All 5 timeframe scanners operational; scan 130+ tickers in < 5s |
-| O2 | Implement VN-specific scoring model calibrated against 10-year market data | Score model incorporates CMF, SuperTrend, Ceiling/Floor streak; 159/159 unit tests pass |
+| O2 | Implement VN-specific scoring model calibrated against 10-year market data | Score model incorporates CMF, SuperTrend, Ceiling/Floor streak; 407 automated tests pass |
 | O3 | Integrate ML ensemble forecasting | 6-model ensemble (LSTM, XGBoost, RF, Prophet, ARIMA, Monte Carlo) operational per timeframe |
-| O4 | Deliver in-app portfolio tracking with T+2.5 settlement awareness | Open/close positions, P&L, stop/target management; audit log persisted |
+| O4 | Deliver in-app portfolio tracking with T+2 settlement awareness | Open/close positions, P&L, stop/target management; audit log persisted |
 | O5 | Provide macro regime detection linked to scanner filtering | VN-Index breadth + foreign flow + world market correlations feeding regime labels |
 | O6 | Maintain software quality through automated testing | ≥ 95% test pass rate; all core modules covered |
 
@@ -37,7 +37,7 @@ Vietnamese retail investors lack institutional-grade, locally-adapted analytical
 ### 3.1 In Scope
 
 - Streamlit-based single-page web application, self-hosted
-- Market data ingestion from DNSE, SSI, and CafeF APIs (no paid data subscriptions)
+- Market data ingestion from DNSE and SSI for OHLCV, plus Yahoo chart API and KBS snapshot API for macro context (no paid data subscriptions)
 - Technical indicator computation (21 indicators including VN-specific additions)
 - Multi-component signal scoring engine (7 components, 100-point scale)
 - Five-timeframe parallel scanner with session-state caching
@@ -69,7 +69,7 @@ Vietnamese retail investors lack institutional-grade, locally-adapted analytical
 | D4 | `backtest/` — Backtesting engine | Complete |
 | D5 | `portfolio/tracker.py` — Portfolio state manager | Complete |
 | D6 | `ui/` — All tab UI components (8 tabs + audit + guide) | Complete |
-| D7 | `tests/` — Automated test suite (159 tests) | Complete |
+| D7 | `tests/` — Automated test suite (407 tests) | Complete |
 | D8 | `docs/` — PMBOK project documentation | Complete |
 | D9 | `GUIDE.md` — End-user installation and usage guide | Complete |
 
@@ -95,7 +95,7 @@ Vietnamese retail investors lack institutional-grade, locally-adapted analytical
 |---|---|
 | Development | 1 developer (Captain Seventh) + Claude Sonnet 4.6 AI pair |
 | Infrastructure | Local workstation; no cloud costs |
-| Data | Free public APIs (DNSE, SSI, CafeF, Yahoo Finance) |
+| Data | Free public APIs (DNSE, SSI, Yahoo chart API, KBS snapshot API) |
 | Libraries | Open-source Python ecosystem (see `requirements.txt`) |
 | Estimated compute cost | ~0 VND recurring (self-hosted) |
 
@@ -106,7 +106,7 @@ Vietnamese retail investors lack institutional-grade, locally-adapted analytical
 | ID | Constraint |
 |---|---|
 | C1 | Data source limited to publicly available APIs; no proprietary data feeds |
-| C2 | T+2.5 settlement rule (transitioning to T+1 per SSC roadmap) — affects portfolio close timing |
+| C2 | T+2 settlement rule (transitioning to T+1 per SSC roadmap) — affects portfolio close timing |
 | C3 | HoSE ±7% daily price limit — affects stop-loss placement and indicator behaviour |
 | C4 | Python GIL — parallelism implemented via ThreadPoolExecutor with numpy's C-level GIL release |
 | C5 | Streamlit session model — all state must be managed via `st.session_state` |

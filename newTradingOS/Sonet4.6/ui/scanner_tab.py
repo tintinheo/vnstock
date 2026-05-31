@@ -12,6 +12,7 @@ import streamlit as st
 import pandas as pd
 
 from config import TIMEFRAME_CONFIG, score_to_action
+from core.audit import log_events, ACTION_SCAN
 from core.scoring import SignalResult, batch_score
 from ui.components import score_badge, source_badge, candlestick_chart, score_radar
 from core.indicators import compute_all
@@ -20,12 +21,198 @@ from core.indicators import compute_all
 _AUDIT_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "audit")
 
 
-def _write_audit(tf: str, results: list[SignalResult], regime: str, macro_score: float) -> str:
+def _format_bar_date(df: pd.DataFrame | None) -> str:
+    if df is None or df.empty:
+        return "—"
+    idx = df.index[-1]
+    try:
+        idx = idx.date()
+    except AttributeError:
+        pass
+    return str(idx)
+
+
+def _source_mix(data_dict: dict) -> str:
+    counts: dict[str, int] = {}
+    for _, (_, source) in data_dict.items():
+        src = source or "UNKNOWN"
+        counts[src] = counts.get(src, 0) + 1
+    if not counts:
+        return "—"
+    return ", ".join(f"{src}:{counts[src]}" for src in sorted(counts))
+
+
+def _latest_bar_date(data_dict: dict) -> str:
+    latest = None
+    for df, _ in data_dict.values():
+        if df is None or df.empty:
+            continue
+        idx = df.index[-1]
+        try:
+            idx = idx.date()
+        except AttributeError:
+            pass
+        latest = idx if latest is None or idx > latest else latest
+    return str(latest) if latest is not None else "—"
+
+
+def _foreign_flow_basis(tf: str, foreign_flows: dict) -> str:
+    if tf in ("2W", "1M", "3M", "5M"):
+        return "KBS snapshot | session net only" if foreign_flows else "not loaded"
+    return "not used"
+
+
+def _scan_result_records(
+    results: list[SignalResult],
+    data_dict: dict,
+    exchange_map: dict | None = None,
+) -> list[dict]:
+    rows = []
+    for r in results:
+        df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+        rows.append({
+            "ticker": r.ticker,
+            "score": round(r.score, 1),
+            "action": r.action,
+            "price": r.price,
+            "stop_loss": r.stop_loss,
+            "take_profit": r.take_profit,
+            "rr_ratio": r.rr_ratio,
+            "manip_flag": r.manip_flag,
+            "regime_ok": r.regime_ok,
+            "exchange": exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE",
+            "source": src,
+            "bar_date": _format_bar_date(df_raw),
+            "message": r.message,
+            "adv20_bn": round(float(r.indicators.get("ADV20_bn", 0.0) or 0.0), 2),
+        })
+    return rows
+
+
+def _scan_summary_detail(
+    tf: str,
+    result_rows: list[dict],
+    regime: str,
+    macro_score: float,
+    audit_path: str,
+    source_mix: str,
+    latest_bar_date: str,
+    foreign_flow_basis: str,
+    macro_stale: list[str] | None = None,
+) -> dict:
+    buy_count = sum(1 for row in result_rows if row["action"] in ("BUY", "STRONG BUY"))
+    watch_count = sum(1 for row in result_rows if row["action"] == "WATCH")
+    avg_score = round(
+        sum(float(row["score"]) for row in result_rows) / len(result_rows),
+        1,
+    ) if result_rows else 0.0
+    top_signals = [
+        {
+            "ticker": row["ticker"],
+            "action": row["action"],
+            "score": row["score"],
+            "source": row["source"],
+            "bar_date": row["bar_date"],
+        }
+        for row in sorted(
+            result_rows,
+            key=lambda item: (-float(item["score"]), item["ticker"]),
+        )[:5]
+    ]
+    return {
+        "kind": "summary",
+        "n_tickers": len(result_rows),
+        "buy_count": buy_count,
+        "watch_count": watch_count,
+        "avg_score": avg_score,
+        "regime": regime,
+        "macro_score": macro_score,
+        "audit_file": audit_path,
+        "source_mix": source_mix,
+        "latest_bar_date": latest_bar_date,
+        "foreign_flow_basis": foreign_flow_basis,
+        "macro_stale": list(macro_stale or []),
+        "top_signals": top_signals,
+    }
+
+
+def _build_scan_audit_events(
+    tf: str,
+    results: list[SignalResult],
+    regime: str,
+    macro_score: float,
+    data_dict: dict,
+    foreign_flows: dict,
+    audit_path: str,
+    exchange_map: dict | None = None,
+    macro_stale: list[str] | None = None,
+) -> list[dict]:
+    result_rows = _scan_result_records(results, data_dict, exchange_map=exchange_map)
+    source_mix = _source_mix(data_dict)
+    latest_bar_date = _latest_bar_date(data_dict)
+    foreign_flow_basis = _foreign_flow_basis(tf, foreign_flows)
+
+    events = [{
+        "action": ACTION_SCAN,
+        "ticker": "",
+        "timeframe": tf,
+        "detail": _scan_summary_detail(
+            tf,
+            result_rows,
+            regime,
+            macro_score,
+            audit_path,
+            source_mix,
+            latest_bar_date,
+            foreign_flow_basis,
+            macro_stale=macro_stale,
+        ),
+        "result": "ok",
+    }]
+
+    for row in result_rows:
+        events.append({
+            "action": ACTION_SCAN,
+            "ticker": row["ticker"],
+            "timeframe": tf,
+            "detail": {
+                "kind": "result",
+                "signal_action": row["action"],
+                "score": row["score"],
+                "price": row["price"],
+                "stop_loss": row["stop_loss"],
+                "take_profit": row["take_profit"],
+                "rr_ratio": row["rr_ratio"],
+                "manip_flag": row["manip_flag"],
+                "regime_ok": row["regime_ok"],
+                "exchange": row["exchange"],
+                "source": row["source"],
+                "bar_date": row["bar_date"],
+                "message": row["message"],
+                "adv20_bn": row["adv20_bn"],
+                "audit_file": audit_path,
+            },
+            "result": "ok",
+        })
+    return events
+
+
+def _write_audit(
+    tf: str,
+    results: list[SignalResult],
+    regime: str,
+    macro_score: float,
+    data_dict: dict,
+    foreign_flows: dict,
+    exchange_map: dict | None = None,
+    macro_stale: list[str] | None = None,
+) -> str:
     """Append one scan run to data/audit/YYYY-MM-DD.jsonl. Returns file path."""
     os.makedirs(_AUDIT_DIR, exist_ok=True)
     date_str  = datetime.now().strftime("%Y-%m-%d")
     filepath  = os.path.join(_AUDIT_DIR, f"{date_str}.jsonl")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    result_rows = _scan_result_records(results, data_dict, exchange_map=exchange_map)
 
     record = {
         "ts":          timestamp,
@@ -33,20 +220,11 @@ def _write_audit(tf: str, results: list[SignalResult], regime: str, macro_score:
         "regime":      regime,
         "macro_score": macro_score,
         "n_tickers":   len(results),
-        "results": [
-            {
-                "ticker":     r.ticker,
-                "score":      round(r.score, 1),
-                "action":     r.action,
-                "price":      r.price,
-                "stop_loss":  r.stop_loss,
-                "take_profit":r.take_profit,
-                "rr_ratio":   r.rr_ratio,
-                "manip_flag": r.manip_flag,
-                "regime_ok":  r.regime_ok,
-            }
-            for r in results
-        ],
+        "source_mix":  _source_mix(data_dict),
+        "latest_bar_date": _latest_bar_date(data_dict),
+        "foreign_flow_basis": _foreign_flow_basis(tf, foreign_flows),
+        "macro_stale": list(macro_stale or []),
+        "results": result_rows,
     }
     with open(filepath, "a", encoding="utf-8") as f:
         f.write(json.dumps(record, ensure_ascii=False) + "\n")
@@ -83,6 +261,7 @@ def render_scanner_tab(
     data_version = st.session_state.get("data_version", 0)
     cache_key    = f"{tf}|{regime}|{macro_score:.2f}|{data_version}"
     scan_cache   = st.session_state.setdefault("_scan_cache", {})
+    macro_stale = st.session_state.get("macro_stale", [])
 
     if cache_key in scan_cache:
         all_results: list[SignalResult] = scan_cache[cache_key]
@@ -102,7 +281,29 @@ def render_scanner_tab(
             )
         scan_cache[cache_key] = all_results
         # Write audit only on fresh scan runs
-        audit_path = _write_audit(tf, all_results, regime, macro_score)
+        audit_path = _write_audit(
+            tf,
+            all_results,
+            regime,
+            macro_score,
+            data_dict,
+            foreign_flows,
+            exchange_map=exchange_map,
+            macro_stale=macro_stale,
+        )
+        log_events(
+            _build_scan_audit_events(
+                tf,
+                all_results,
+                regime,
+                macro_score,
+                data_dict,
+                foreign_flows,
+                audit_path,
+                exchange_map=exchange_map,
+                macro_stale=macro_stale,
+            )
+        )
         st.caption(
             f"🗂️ Audit → `{audit_path}`  |  {len(all_results)} mã  |  "
             f"{datetime.now().strftime('%H:%M:%S')}"
@@ -122,14 +323,35 @@ def render_scanner_tab(
     m3.metric("WATCH", watch_count)
     m4.metric("Score trung bình", f"{avg_score:.1f}")
 
+    trust1, trust2, trust3, trust4 = st.columns(4)
+    trust1.caption(f"Latest bar: {_latest_bar_date(data_dict)}")
+    trust2.caption(f"Source mix: {_source_mix(data_dict)}")
+    trust3.caption(f"Macro as-of: {st.session_state.get('macro_updated_at') or '—'}")
+    if tf in ("2W", "1M", "3M", "5M"):
+        trust4.caption(
+            f"Foreign flow basis: {_foreign_flow_basis(tf, foreign_flows)}"
+        )
+    else:
+        trust4.caption(f"Foreign flow basis: {_foreign_flow_basis(tf, foreign_flows)} on this timeframe")
+
+    _macro_stale = macro_stale
+    if _macro_stale:
+        st.warning(
+            "Scanner trust warning: macro data is partial. "
+            f"Missing components: {', '.join(_macro_stale)}."
+        )
+
     # ── Full result table — all rows, color-coded by Action ──
     rows = []
     for r in all_results:
-        src = data_dict.get(r.ticker, (None, "NONE"))[1]
+        df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+        exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
         rows.append({
             "Mã":        r.ticker,
             "Score":     round(r.score, 1),
             "Action":    r.action,
+            "Sàn":       exchange,
+            "Bar Date":  _format_bar_date(df_raw),
             "Giá":       round(r.price, 0),
             "Stop":      round(r.stop_loss, 0),
             "Target":    round(r.take_profit, 0),
@@ -303,6 +525,17 @@ def render_scanner_tab(
                                        else "giữa dải BB")
                             st.caption(f"BB %B {bb_val:.2f} — {bb_note}")
 
+                        df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+                        exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
+                        st.markdown("**Trust & Provenance:**")
+                        st.markdown(source_badge(src), unsafe_allow_html=True)
+                        st.caption(f"Exchange: {exchange}")
+                        st.caption(f"Latest bar date: {_format_bar_date(df_raw)}")
+                        if tf in ("2W", "1M", "3M", "5M"):
+                            st.caption("Foreign flow basis: KBS snapshot | session net only")
+                        if r.message:
+                            st.warning(r.message)
+
                         st.markdown("**Quản lý rủi ro:**")
                         if r.price > 0 and r.stop_loss > 0:
                             risk_pct = abs(r.price - r.stop_loss) / r.price * 100
@@ -322,9 +555,8 @@ def render_scanner_tab(
                             st.caption(f"{k}: {bar} {v:.1f}")
 
                     with c_chart:
-                        df_raw, _ = data_dict.get(r.ticker, (None, None))
                         if df_raw is not None and not df_raw.empty:
-                            df_ind = compute_all(df_raw.copy(), TIMEFRAME_CONFIG[tf])
+                            df_ind = compute_all(df_raw.copy(), TIMEFRAME_CONFIG[tf], exchange=exchange)
                             lookback_bars = {"1W": 60, "2W": 90, "1M": 120,
                                              "3M": 200, "5M": 300}.get(tf, 120)
                             fig = candlestick_chart(
@@ -375,17 +607,34 @@ def _render_audit_viewer(tf: str) -> None:
                                key=f"audit_run_{tf}")
     run = runs[sel_idx]
 
+    trust_bits = [
+        f"Latest bar: {run.get('latest_bar_date', '—')}",
+        f"Source mix: {run.get('source_mix', '—')}",
+        f"Foreign flow basis: {run.get('foreign_flow_basis', '—')}",
+    ]
+    st.caption(" | ".join(trust_bits))
+    if run.get("macro_stale"):
+        st.warning(
+            "Macro at scan time was partial. Missing components: "
+            f"{', '.join(run.get('macro_stale', []))}."
+        )
+
     rows = [
         {
             "Mã":       res["ticker"],
             "Score":    res["score"],
             "Action":   res["action"],
+            "Sàn":      res.get("exchange", "—"),
+            "Nguồn":    res.get("source", "—"),
+            "Bar Date": res.get("bar_date", "—"),
             "Giá":      f"{res['price']:,.0f}",
             "Stop":     f"{res['stop_loss']:,.0f}",
             "Target":   f"{res['take_profit']:,.0f}",
             "R/R":      f"1:{res['rr_ratio']}",
             "Regime OK":"✅" if res["regime_ok"] else "❌",
             "Manip":    "⚠️" if res["manip_flag"] else "✅",
+            "ADV20 bn": res.get("adv20_bn", "—"),
+            "Note":     res.get("message", ""),
         }
         for res in run["results"]
     ]

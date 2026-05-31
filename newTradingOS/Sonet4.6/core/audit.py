@@ -18,7 +18,7 @@ Actions:
   CLOSE_POSITION  — position closed (includes P&L)
   LOAD_DATA       — batch ticker data loaded
   UPDATE_MACRO    — macro / regime refreshed
-  SCAN_SIGNAL     — scanner emitted a signal (optional, kept light)
+    SCAN_SIGNAL     — scanner run summary or per-ticker scan result
 """
 from __future__ import annotations
 
@@ -41,6 +41,47 @@ ACTION_LOAD    = "LOAD_DATA"
 ACTION_MACRO   = "UPDATE_MACRO"
 ACTION_SCAN    = "SCAN_SIGNAL"
 
+
+def get_event_detail_kind(event: dict[str, Any]) -> str:
+    """Return the event detail subtype, inferring legacy scan events when needed."""
+    detail = event.get("detail") or {}
+    kind = str(detail.get("kind", "") or "")
+    if kind:
+        return kind
+    if event.get("action") == ACTION_SCAN:
+        return "result" if event.get("ticker") else "summary"
+    return ""
+
+
+def _normalise_event(entry: dict[str, Any], default_ts: str) -> dict[str, Any]:
+    return {
+        "ts": entry.get("ts") or default_ts,
+        "action": entry.get("action", ""),
+        "ticker": entry.get("ticker") or "",
+        "timeframe": entry.get("timeframe") or "",
+        "detail": entry.get("detail") or {},
+        "result": entry.get("result") or "ok",
+    }
+
+
+def log_events(entries: list[dict[str, Any]]) -> None:
+    """Append multiple events to the audit log in one file-open operation."""
+    if not entries:
+        return
+
+    default_ts = datetime.now().isoformat(timespec="milliseconds")
+    lines = [
+        json.dumps(_normalise_event(entry, default_ts), ensure_ascii=False)
+        for entry in entries
+    ]
+
+    try:
+        os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
+        with open(AUDIT_FILE, "a", encoding="utf-8") as fh:
+            fh.write("\n".join(lines) + "\n")
+    except Exception as exc:  # noqa: BLE001 — never crash the app for logging
+        logger.warning("Audit write failed: %s", exc)
+
 # ── Write ──────────────────────────────────────────────────────
 def log_event(
     action:    str,
@@ -50,20 +91,15 @@ def log_event(
     result:    str = "ok",
 ) -> None:
     """Append one event to the audit log (non-blocking; silently swallows IO errors)."""
-    event: dict[str, Any] = {
-        "ts":        datetime.now().isoformat(timespec="milliseconds"),
-        "action":    action,
-        "ticker":    ticker or "",
-        "timeframe": timeframe or "",
-        "detail":    detail or {},
-        "result":    result,
-    }
-    try:
-        os.makedirs(os.path.dirname(AUDIT_FILE), exist_ok=True)
-        with open(AUDIT_FILE, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(event, ensure_ascii=False) + "\n")
-    except Exception as exc:  # noqa: BLE001 — never crash the app for logging
-        logger.warning("Audit write failed: %s", exc)
+    log_events([
+        {
+            "action": action,
+            "ticker": ticker,
+            "timeframe": timeframe,
+            "detail": detail,
+            "result": result,
+        }
+    ])
 
 
 # ── Read & filter ──────────────────────────────────────────────
@@ -91,6 +127,7 @@ def filter_events(
     tickers:   list[str] | None = None,
     timeframe: str | None = None,
     result:    str | None = None,
+    detail_kinds: list[str] | None = None,
     date_from: str | None = None,   # ISO date "YYYY-MM-DD"
     date_to:   str | None = None,
 ) -> list[dict]:
@@ -105,6 +142,12 @@ def filter_events(
         out = [e for e in out if e.get("timeframe") == timeframe]
     if result:
         out = [e for e in out if e.get("result") == result]
+    if detail_kinds:
+        expected_kinds = {str(kind).lower() for kind in detail_kinds if kind}
+        out = [
+            e for e in out
+            if get_event_detail_kind(e).lower() in expected_kinds
+        ]
     if date_from:
         out = [e for e in out if e.get("ts", "") >= date_from]
     if date_to:

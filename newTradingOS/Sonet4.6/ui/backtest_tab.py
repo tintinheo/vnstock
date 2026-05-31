@@ -8,8 +8,8 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from config import TIMEFRAME_CONFIG, INITIAL_CAPITAL
-from backtest.engine import run_multi_tf_backtest, summarise_results, trades_to_df
+from config import TIMEFRAME_CONFIG, INITIAL_CAPITAL, TICKER_EXCHANGE
+from backtest.engine import run_backtest, run_multi_tf_backtest, summarise_results, trades_to_df
 from ui.components import equity_chart, GREEN, RED, YELLOW
 
 
@@ -18,6 +18,10 @@ def render_backtest_tab(
     lang: str = "VI",
 ) -> None:
     st.subheader("🧪 Backtest Engine — T+2 Realistic (VN)")
+
+    if not data_dict:
+        st.info("Chưa có dữ liệu giá. Hãy tải dữ liệu trước khi chạy backtest.")
+        return
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -32,6 +36,15 @@ def render_backtest_tab(
                                    key="bt_capital")
     with c3:
         run_all_tf = st.toggle("Chạy tất cả TF", value=True, key="bt_all_tf")
+
+    single_tf = None
+    if not run_all_tf:
+        single_tf = st.selectbox(
+            "Timeframe",
+            list(TIMEFRAME_CONFIG.keys()),
+            format_func=lambda tf: TIMEFRAME_CONFIG[tf]["label"],
+            key="bt_single_tf",
+        )
 
     # ── Regime & Macro controls ──────────────────────────────
     c4, c5 = st.columns(2)
@@ -51,20 +64,51 @@ def render_backtest_tab(
             help="Điểm vĩ mô (0–10) áp dụng cho scoring. 10 = môi trường rất thuận lợi.",
         )
 
+    with st.expander("⚠️ Backtest Trust & Assumptions", expanded=False):
+        st.markdown(
+            "- Regime và macro score đang được giữ cố định cho toàn bộ run backtest hiện tại.\n"
+            "- T+2 exits được enforce theo số phiên nắm giữ, không phải theo dữ liệu order book thực.\n"
+            "- Fill logic hiện dùng heuristic theo giá bar/stop/target, chưa có mô hình queue priority, limit-lock hay halt.\n"
+            "- Routing biên độ giá dùng exchange map của ticker để phân biệt HOSE/HNX/UPCOM.\n"
+            "- Kết quả phù hợp cho decision-support và so sánh tương đối, chưa phải execution-grade simulation."
+        )
+
     if st.button("⚡ Chạy Backtest", type="primary", key="bt_run"):
         df_raw, src = data_dict.get(ticker, (None, "N/A"))
         if df_raw is None or df_raw.empty:
             st.error(f"Không có dữ liệu cho {ticker}")
             return
 
+        exchange = TICKER_EXCHANGE.get(ticker.upper(), "HOSE")
+
         with st.spinner("Đang chạy backtest…"):
-            results = run_multi_tf_backtest(df_raw, ticker=ticker,
-                                             initial_capital=capital,
-                                             regime=regime_bt,
-                                             macro_score=macro_bt)
+            if run_all_tf:
+                results = run_multi_tf_backtest(
+                    df_raw,
+                    ticker=ticker,
+                    initial_capital=capital,
+                    regime=regime_bt,
+                    macro_score=macro_bt,
+                )
+            else:
+                assert single_tf is not None
+                results = {
+                    single_tf: run_backtest(
+                        df_raw,
+                        single_tf,
+                        ticker=ticker,
+                        initial_capital=capital,
+                        regime=regime_bt,
+                        macro_score=macro_bt,
+                    )
+                }
 
         # ── Summary table ─────────────────────────────────────
         st.subheader(f"📊 Kết quả — {ticker} | {src}")
+        st.caption(
+            f"Exchange: {exchange} | Source: {src} | "
+            f"Regime input: {regime_bt} | Macro input: {macro_bt:.1f}"
+        )
         summary_df = summarise_results(results)
         st.dataframe(summary_df, width="stretch", hide_index=True)
 

@@ -184,6 +184,30 @@ class TestDownloadData:
         assert isinstance(result, tuple)
         assert len(result) == 2
 
+    def test_min_rows_checked_after_cleaning_before_accepting_source(self):
+        dates = pd.bdate_range("2026-01-01", periods=50)
+        dnse_raw = pd.DataFrame({
+            "Open": [100.0] * 45 + [0.0] * 5,
+            "High": [101.0] * 45 + [0.0] * 5,
+            "Low": [99.0] * 45 + [0.0] * 5,
+            "Close": [100.0] * 45 + [0.0] * 5,
+            "Volume": [1_000_000] * 50,
+        }, index=dates)
+        ssi_clean = pd.DataFrame({
+            "Open": [100.0] * 50,
+            "High": [101.0] * 50,
+            "Low": [99.0] * 50,
+            "Close": [100.0] * 50,
+            "Volume": [1_000_000] * 50,
+        }, index=dates)
+
+        with patch("core.data_fetcher._fetch_dnse", return_value=dnse_raw), \
+             patch("core.data_fetcher._fetch_ssi", return_value=ssi_clean):
+            df, source = download_data("VCB", days=365, min_rows=50)
+
+        assert source == "SSI"
+        assert len(df) == 50
+
 
 # ─────────────────────────────────────────────────────────────
 # get_latest_price — mocked

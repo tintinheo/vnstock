@@ -13,7 +13,13 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 
-from config import TIMEFRAME_CONFIG, score_to_action, round_to_tick, get_tick_size
+from config import (
+    ACTIONABLE_MIN_ADV_VND,
+    TIMEFRAME_CONFIG,
+    score_to_action,
+    round_to_tick,
+    get_tick_size,
+)
 from core.indicators import compute_all
 
 logger = logging.getLogger("TradingOS.scoring")
@@ -257,6 +263,18 @@ def compute_score(
     if manip_flag and action == "STRONG BUY":
         action = "BUY"
 
+    # ── LIQUIDITY GATE ────────────────────────────────────────
+    adv_window = min(20, len(df))
+    adv20_vnd = float((df["Close"].tail(adv_window) * df["Volume"].tail(adv_window)).mean())
+    low_liquidity = adv20_vnd < ACTIONABLE_MIN_ADV_VND
+    message = ""
+    if low_liquidity and action in ("STRONG BUY", "BUY"):
+        action = "WATCH"
+        message = (
+            f"Low liquidity gate: ADV20 {adv20_vnd / 1e9:.2f}B VND "
+            f"< {ACTIONABLE_MIN_ADV_VND / 1e9:.0f}B VND"
+        )
+
     breakdown = {
         "Trend": round(trend, 1),
         "Momentum": round(mom, 1),
@@ -276,6 +294,7 @@ def compute_score(
         "Vol_ratio": round(vol_r, 2),
         "MFI": round(mfi_v, 1),
         "ATR": round(atr_v, 0),
+        "ADV20_bn": round(adv20_vnd / 1e9, 2),
         "SMA_fast": round(float(last["SMA_fast"]), 0) if not pd.isna(last["SMA_fast"]) else None,
         "SMA_slow": round(float(last["SMA_slow"]), 0) if not pd.isna(last["SMA_slow"]) else None,
         "EMA_fast": round(float(last["EMA_fast"]), 0) if not pd.isna(last["EMA_fast"]) else None,
@@ -300,6 +319,7 @@ def compute_score(
         indicators=indicators,
         regime_ok=regime_ok,
         manip_flag=manip_flag,
+        message=message,
     )
 
 
@@ -332,12 +352,17 @@ def batch_score(
             return None
         ff_ticker  = ff.get(ticker, {})
         exchange   = ex.get(ticker, "HOSE")
+        history_sessions = int(ff_ticker.get("history_sessions", 0) or 0)
+        is_20d_proxy = bool(ff_ticker.get("is_20d_proxy", False))
+        ff_net_20d = float(ff_ticker.get("net_20d", 0.0) or 0.0)
+        if is_20d_proxy or history_sessions < 20:
+            ff_net_20d = 0.0
         try:
             return compute_score(
                 df, tf,
                 regime=regime,
                 foreign_flow_net=ff_ticker.get("net_buy_value", 0.0),
-                foreign_flow_net_20d=ff_ticker.get("net_20d", 0.0),
+                foreign_flow_net_20d=ff_net_20d,
                 macro_score=macro_score,
                 ticker=ticker,
                 exchange=exchange,

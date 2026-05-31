@@ -408,6 +408,8 @@ def score_to_action(score: float) -> str:
 # ─────────────────────────────────────────────────────────────
 # MANIPULATION DETECTION THRESHOLDS
 # ─────────────────────────────────────────────────────────────
+ACTIONABLE_MIN_ADV_VND = 20_000_000_000  # 20B VND/day minimum for BUY/STRONG BUY
+
 PUMP_VOLUME_SPIKE   = 3.0   # Volume/SMA20 > 3x
 PUMP_PRICE_MOVE_5D  = 0.15  # >15% in 5 sessions
 ATC_RATIO_THRESH    = 0.40  # ATC volume > 40% of day volume

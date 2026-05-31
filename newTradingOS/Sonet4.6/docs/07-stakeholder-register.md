@@ -4,7 +4,7 @@
 **PMBOK Knowledge Area:** Stakeholder Management  
 **Process Group:** Initiating → Monitoring & Controlling  
 **Document Version:** 2.0  
-**Date:** 2026-05-30
+**Date:** 2026-05-31
 
 ---
 
@@ -20,7 +20,7 @@
 | SH-006 | HNX (Hanoi Stock Exchange) | Market Operator | Exchange | Hanoi, Vietnam |
 | SH-007 | DNSE Securities | Primary Data Provider | FinTech | Vietnam |
 | SH-008 | SSI Securities | Secondary Data Provider (API fallback) | Brokerage | Vietnam |
-| SH-009 | CafeF | Tertiary Data Provider (HTML fallback) | Media / FinTech | Vietnam |
+| SH-009 | KB Securities (KBS IIS Snapshot) | Market Breadth + Foreign Flow Data Provider | Brokerage / FinTech | Vietnam |
 | SH-010 | Yahoo Finance | World Market Data Provider | Yahoo Inc. | USA |
 
 ---
@@ -37,7 +37,7 @@
 | SH-006 | HNX | Medium | Low | **Monitor** | Comply — HNX limit (±10%) correctly applied |
 | SH-007 | DNSE | Medium | Low | **Monitor** | Respect API rate limits; handle HTTP errors gracefully |
 | SH-008 | SSI | Medium | Low | **Monitor** | Use as fallback only; respect TOS |
-| SH-009 | CafeF | Low | Low | **Monitor** | Minimal scraping; tertiary fallback only |
+| SH-009 | KB Securities (KBS IIS Snapshot) | Low | Low | **Monitor** | Session-only snapshot contract; monitor endpoint stability and payload changes |
 | SH-010 | Yahoo Finance | Low | Low | **Monitor** | 8 symbols only; comply with free-tier limits |
 
 **Quadrant Definitions (Power/Interest Grid):**
@@ -104,7 +104,7 @@
 |---|---|---|---|
 | DNSE | REST JSON | Moderate | 6s timeout; fallback chain; retry once |
 | SSI | REST JSON | Low | Fallback only; no high-frequency calls |
-| CafeF | HTML scrape | High (fragile) | Tertiary fallback; minimal calls; snapshot test fixtures |
+| KBS IIS Snapshot | REST JSON | Moderate | Session-only contract; 5-minute TTL cache; stale warnings in UI |
 | Yahoo Finance | yfinance / REST | Low | 8 symbols; once per session; cache result |
 
 ---

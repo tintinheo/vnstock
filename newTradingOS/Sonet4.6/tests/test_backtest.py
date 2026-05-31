@@ -12,7 +12,8 @@ from backtest.engine import (
     run_backtest, run_multi_tf_backtest, summarise_results,
     trades_to_df, BacktestResult, BacktestTrade,
 )
-from config import BUY_FEE, SELL_FEE, SELL_TAX
+from config import BUY_FEE, SELL_FEE, SELL_TAX, TIMEFRAME_CONFIG
+from core.scoring import SignalResult
 
 T2_SESSIONS = 2  # VN T+2 settlement: minimum sessions before sell
 
@@ -82,6 +83,139 @@ class TestFees:
             # Net pnl_pct should be less than gross (fees deducted)
             if gross_pct > 0:
                 assert trade.pnl_pct < gross_pct * 1.0001  # small tolerance
+
+
+class TestSignalExecutionTiming:
+    def _execution_df(self) -> pd.DataFrame:
+        n = 120
+        dates = pd.bdate_range("2026-01-01", periods=n)
+        df = pd.DataFrame({
+            "Open":   np.full(n, 100.0),
+            "High":   np.full(n, 101.0),
+            "Low":    np.full(n, 99.0),
+            "Close":  np.full(n, 100.0),
+            "Volume": np.full(n, 1_000_000.0),
+        }, index=dates)
+        df.index.name = "Date"
+        return df
+
+    def _stub_compute_all(self, df, cfg, exchange="HOSE"):
+        df = df.copy()
+        df["SMA_slow"] = 100.0
+        df["ATR"] = 1.0
+        return df
+
+    def test_signal_uses_completed_bar_and_executes_next_open(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        call_lengths: list[int] = []
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            call_lengths.append(len(signal_df))
+            action = "BUY" if state["calls"] == 1 else "SELL"
+            last_price = float(signal_df["Close"].iloc[-1])
+            return SignalResult(
+                ticker="TIMING",
+                timeframe=tf,
+                score=85.0 if action == "BUY" else 10.0,
+                action=action,
+                price=last_price,
+                stop_loss=1.0,
+                take_profit=1_000_000.0,
+                rr_ratio=2.0,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="TIMING")
+
+        warm_up = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 10
+        assert call_lengths[0] == warm_up
+        assert result.trades, "Expected at least one trade from the stubbed signal flow"
+        trade = result.trades[0]
+        assert trade.entry_price == 100.0
+        assert trade.exit_reason == "signal"
+        assert trade.exit_price == 100.0
+
+    def test_intrabar_target_fill_uses_target_not_close(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        target_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 12
+        df.iloc[target_bar, df.columns.get_loc("Open")] = 105.0
+        df.iloc[target_bar, df.columns.get_loc("High")] = 130.0
+        df.iloc[target_bar, df.columns.get_loc("Low")] = 104.0
+        df.iloc[target_bar, df.columns.get_loc("Close")] = 125.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="TARGET",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=110.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="TARGET")
+
+        assert result.trades, "Expected target exit trade from the stubbed setup"
+        trade = result.trades[0]
+        assert trade.exit_reason == "target"
+        assert trade.exit_price == 110.0
+
+    def test_gap_below_stop_fills_at_open(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        stop_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 12
+        df.iloc[stop_bar, df.columns.get_loc("Open")] = 70.0
+        df.iloc[stop_bar, df.columns.get_loc("High")] = 72.0
+        df.iloc[stop_bar, df.columns.get_loc("Low")] = 60.0
+        df.iloc[stop_bar, df.columns.get_loc("Close")] = 65.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="STOP",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="STOP")
+
+        assert result.trades, "Expected stop exit trade from the stubbed setup"
+        trade = result.trades[0]
+        assert trade.exit_reason == "stop"
+        assert trade.exit_price == 70.0
 
 
 # ─────────────────────────────────────────────────────────────

@@ -84,10 +84,18 @@ if not any(isinstance(f, _SuppressWsNoise) for f in _asyncio_log.filters):
 def _init_session():
     if "data_dict" not in st.session_state:
         st.session_state.data_dict     = {}
+    if "data_loaded_at" not in st.session_state:
+        st.session_state.data_loaded_at = None
     if "macro_data" not in st.session_state:
         st.session_state.macro_data    = {}
+    if "macro_updated_at" not in st.session_state:
+        st.session_state.macro_updated_at = None
     if "regime_result" not in st.session_state:
         st.session_state.regime_result = None
+    if "regime_updated_at" not in st.session_state:
+        st.session_state.regime_updated_at = None
+    if "regime_stale" not in st.session_state:
+        st.session_state.regime_stale = False
     if "macro_score" not in st.session_state:
         st.session_state.macro_score   = 5.0
     if "macro_regime" not in st.session_state:
@@ -107,6 +115,30 @@ def _init_session():
 
 _init_session()
 lang = st.session_state.lang
+
+
+def _source_mix_label(data_dict: dict) -> str:
+    counts: dict[str, int] = {}
+    for _, (_, source) in data_dict.items():
+        src = source or "UNKNOWN"
+        counts[src] = counts.get(src, 0) + 1
+    if not counts:
+        return "—"
+    return ", ".join(f"{src}:{counts[src]}" for src in sorted(counts))
+
+
+def _latest_bar_date_label(data_dict: dict) -> str:
+    latest = None
+    for df, _ in data_dict.values():
+        if df is None or df.empty:
+            continue
+        idx = df.index[-1]
+        try:
+            idx = idx.date()
+        except AttributeError:
+            pass
+        latest = idx if latest is None or idx > latest else latest
+    return str(latest) if latest is not None else "—"
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -177,6 +209,7 @@ if sb.button("🔄 Tải Dữ Liệu", type="primary", key="btn_load"):
     st.session_state.data_dict = batch_download(
         symbols, days=days_back, on_progress=_on_progress
     )
+    st.session_state.data_loaded_at = _t.strftime("%Y-%m-%d %H:%M:%S")
     _prog.empty()
     _stat.empty()
     _loaded = sum(1 for df, _ in st.session_state.data_dict.values() if not df.empty)
@@ -201,9 +234,10 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         macro = fetch_macro_indicators()
         st.session_state.macro_data  = macro
         ms, ml, stale = get_macro_score(macro)
+        stale = list(stale)
         st.session_state.macro_score  = ms
         st.session_state.macro_regime = ml
-        st.session_state.macro_stale  = stale
+        st.session_state.macro_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
         # Detect regime from VNI — use fetch_vni_data() which has a
         # Yahoo Finance fallback when DNSE/SSI cannot serve index data.
@@ -212,10 +246,18 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         if not vni_df.empty and "Close" in vni_df.columns:
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
+            st.session_state.regime_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            st.session_state.regime_stale = False
+        else:
+            st.session_state.regime_stale = True
+            if "VNI regime" not in stale:
+                stale.append("VNI regime")
 
-        # Fetch per-ticker foreign flow with 20d trend for all loaded tickers.
-        # Only meaningful for 1M/3M/5M timeframes; short TFs ignore it.
-        # Runs in background after world market fetch to minimise UI wait time.
+        st.session_state.macro_stale  = stale
+
+        # Fetch per-ticker foreign flow snapshot for all loaded tickers.
+        # KBS currently provides session-level net flow only; true 20-session
+        # continuity is not available from this endpoint.
         _loaded_tickers = list(st.session_state.get("data_dict", {}).keys())
         if _loaded_tickers:
             from core.macro_data import fetch_foreign_flow_tickers
@@ -278,10 +320,13 @@ c1, c2, c3, c4 = st.columns(4)
 c1.metric("Tickers loaded", len(data_dict))
 if regime_result:
     from core.regime import regime_label_vi, regime_emoji
+    regime_delta = f"Prob {regime_result.probability:.0%}"
+    if st.session_state.get("regime_stale"):
+        regime_delta += " | stale"
     c2.metric(
         "VNI Regime",
         f"{regime_emoji(regime_result.regime)} {regime_label_vi(regime_result.regime)}",
-        f"Prob {regime_result.probability:.0%}",
+        regime_delta,
     )
 else:
     c2.metric("VNI Regime", "—")
@@ -293,6 +338,20 @@ _mtm_prices = {
     if df is not None and not df.empty
 }
 c4.metric("Portfolio Value", f"{portfolio.market_value(_mtm_prices):,.0f} VND")
+
+# Global trust ribbon: provenance + freshness for price and macro inputs.
+trust1, trust2, trust3, trust4 = st.columns(4)
+trust1.caption(f"Price bars as-of: {_latest_bar_date_label(data_dict)}")
+trust2.caption(f"Source mix: {_source_mix_label(data_dict)}")
+trust3.caption(
+    f"Macro updated: {st.session_state.get('macro_updated_at') or '—'}"
+)
+_ff_basis = "KBS snapshot | session net only" if st.session_state.get("foreign_flows_cache") else "Not loaded"
+trust4.caption(f"Foreign flow basis: {_ff_basis}")
+
+st.caption(
+    "Decision-support mode only. Review data freshness, source mix, and proxy labels before acting on any BUY/STRONG BUY signal."
+)
 
 # Persistent stale-data banner (shown below metrics, cleared on next successful macro update)
 _stale = st.session_state.get("macro_stale", [])
@@ -317,8 +376,8 @@ tabs = st.tabs([
     "🧠 ML Forecast",
     "🧪 Backtest",
     "💼 Portfolio",
-    "� Audit Log",
-    "�📖 Hướng Dẫn",
+    "📜 Audit Log",
+    "📖 Hướng Dẫn",
 ])
 
 # ── Tab 0: Macro Pulse ────────────────────────────────────────

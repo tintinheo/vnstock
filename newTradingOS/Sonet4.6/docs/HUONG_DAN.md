@@ -38,7 +38,7 @@ NewTradingOS v14.0 là ứng dụng phân tích cổ phiếu đa khung thời gi
 | **VN-specific indicators** | CMF, SuperTrend, Ceiling/Floor Streak - được hiệu chỉnh riêng cho VN |
 | **ML Ensemble 6 models** | LSTM, XGBoost, RF, Prophet, ARIMA, Monte Carlo |
 | **Macro regime detection** | HMM + world markets + foreign flow → regime label |
-| **Portfolio tracker** | Mở/đóng vị thế, P&L, T+2.5 awareness |
+| **Portfolio tracker** | Mở/đóng vị thế, P&L, T+2 readiness |
 | **Audit log bất biến** | Ghi lại mọi sự kiện kinh doanh |
 
 ### Vũ trụ cổ phiếu
@@ -151,8 +151,8 @@ python -m streamlit run app.py
 |---|---|---|
 | S&P 500 | `^GSPC` | Xu hướng thị trường Mỹ |
 | Nikkei 225 | `^N225` | Thị trường Nhật, vốn châu Á |
-| Hang Seng | `^HSI` | Thị trường Hồng Kông |
-| Shanghai | `000001.SS` | Thị trường Trung Quốc |
+| CSI 300 | `000300.SS` | Thị trường Trung Quốc, tương quan khu vực với VN |
+| Natural Gas | `NG=F` | Nhạy cảm với nhóm năng lượng / hàng hoá |
 | Gold | `GC=F` | Risk-off indicator |
 | Crude Oil | `CL=F` | Ảnh hưởng cổ phiếu dầu khí VN |
 | USD Index | `DX-Y.NYB` | Ảnh hưởng VNĐ và dòng tiền ngoại |
@@ -167,9 +167,9 @@ python -m streamlit run app.py
 
 | MacroScore | Regime Label | Ý nghĩa |
 |---|---|---|
-| 7–10 | **BULL** | Điều kiện tốt, risk-on |
-| 4–6 | **SIDEWAYS** | Trung tính, chọn lọc |
-| 0–3 | **BEAR** | Cẩn thận, giảm exposure |
+| 7.5–10.0 | **BULL** | Điều kiện tốt, risk-on |
+| 4.5–7.4 | **NEUTRAL** | Trung tính, chọn lọc |
+| 0.0–4.4 | **BEAR** | Cẩn thận, giảm exposure |
 
 ### Ảnh hưởng của Regime đến Scanner
 
@@ -199,16 +199,16 @@ python -m streamlit run app.py
 |---|---|
 | **Mã** | Mã cổ phiếu |
 | **Score** | Điểm tổng hợp (0–100) |
-| **Action** | Tín hiệu: STRONG BUY / BUY / WATCH / NEUTRAL / AVOID |
-| **Entry** | Giá vào lệnh đề xuất (thường = giá đóng cửa) |
+| **Action** | Tín hiệu: STRONG BUY / BUY / HOLD / WATCH / SELL |
+| **Giá** | Giá đóng cửa / giá tham chiếu dùng cho score hiện tại |
 | **Stop** | Giá cắt lỗ ATR-based |
 | **Target** | Giá mục tiêu |
 | **R:R** | Tỷ lệ Risk:Reward |
-| **ATR** | Biên độ dao động bình quân |
+| **Nguồn** | Nguồn dữ liệu bar hiện tại (DNSE / SSI) |
 
 ### Thứ tự ưu tiên khi lọc
 
-1. **Action = STRONG BUY hoặc BUY** (không mua WATCH hoặc NEUTRAL)
+1. **Action = STRONG BUY hoặc BUY** (không mua HOLD / WATCH / SELL)
 2. **Regime phù hợp** (tham khảo bảng trên)
 3. **R:R ≥ 2.0** (đặt cược tối thiểu 1 được 2)
 4. **Score ≥ 70** (càng cao càng tốt)
@@ -278,11 +278,11 @@ Total    [max 100]
 | **Tổng bán** | **0.30%** |
 | **Round-trip** | **0.50%** |
 
-### T+2.5 trong Backtest
+### T+2 trong Backtest
 
 Backtest mô phỏng đúng quy tắc thanh toán:
-- Mua ngày T → chỉ được bán từ ngày T+3 (T+2.5 làm tròn)
-- Tức là giữ tối thiểu 3 phiên giao dịch
+- Mua ngày T → chỉ được bán khi đã giữ đủ tối thiểu 2 phiên giao dịch
+- Lệnh signal/time-exit được thực hiện ở open của bar kế tiếp khi vị thế đã T+2 ready
 
 ### Chỉ số hiệu suất
 
@@ -320,13 +320,12 @@ Nhập giá bán thực tế. P&L được tính:
 P&L = Lot × (Exit − Entry) − Lot × Exit × 0.0030
 ```
 
-### Trạng thái vị thế T+2.5
+### Trạng thái vị thế T+2
 
-| Trạng thái | Ý nghĩa |
+| Chỉ báo | Ý nghĩa |
 |---|---|
-| `open` | Đang giữ, chưa đến hạn bán |
-| `t2_pending` | Đã đến ngày T+2, có thể bán hôm nay |
-| `closed` | Đã đóng |
+| `⏳ T+2 Ready = No` | Đang giữ, chưa đủ số phiên để đóng |
+| `✅ T+2 Ready = Yes` | Đã đủ điều kiện T+2 để đóng vị thế |
 
 ### Vốn ban đầu
 
@@ -342,11 +341,11 @@ Mọi sự kiện kinh doanh được ghi lại tự động vào `data/audit.js
 
 | Action | Trigger |
 |---|---|
-| `LOAD` | Tải dữ liệu |
-| `MACRO` | Cập nhật macro |
-| `SCAN` | Chạy scanner |
-| `OPEN` | Mở vị thế |
-| `CLOSE` | Đóng vị thế |
+| `LOAD_DATA` | Tải dữ liệu |
+| `UPDATE_MACRO` | Cập nhật macro |
+| `SCAN_SIGNAL` | Chạy scanner hoặc ghi nhận tín hiệu từng mã |
+| `OPEN_POSITION` | Mở vị thế |
+| `CLOSE_POSITION` | Đóng vị thế |
 
 ### Bộ lọc
 
@@ -420,9 +419,9 @@ Mọi sự kiện kinh doanh được ghi lại tự động vào `data/audit.js
 
 ### Thành phần 5: Foreign Flow (max 5 điểm)
 
-Chỉ tính cho khung 1M, 3M, 5M. Dựa trên dữ liệu dòng tiền ngoại từ CafeF:
-- Net foreign buy dương → +5
-- Net foreign buy âm → 0
+Tính cho khung 2W, 1M, 3M, 5M. Hiện tại dữ liệu dùng KBS session snapshot:
+- Nếu có verified multi-session history trong tương lai, scoring sẽ ưu tiên `net_20d`
+- Với contract hiện tại, `net_20d` giữ neutral và scoring fallback sang net foreign flow của phiên hiện tại
 
 ### Thành phần 6: Macro Regime (max 10 điểm)
 
@@ -443,10 +442,10 @@ Macro điểm = macro_score (0–10) / 10 × 10 điểm = macro_score
 | Score | Action |
 |---|---|
 | ≥ 80 | 🟢 **STRONG BUY** |
-| ≥ 65 | 🟢 **BUY** |
-| ≥ 50 | 🟡 **WATCH** |
-| ≥ 35 | ⚪ **NEUTRAL** |
-| < 35 | 🔴 **AVOID** |
+| 65–79 | 🟢 **BUY** |
+| 45–64 | 🟡 **HOLD** |
+| 30–44 | 🔵 **WATCH** |
+| < 30 | 🔴 **SELL** |
 
 ### Điều chỉnh tự động
 
@@ -633,15 +632,15 @@ Biên độ này ảnh hưởng trực tiếp đến:
 - Ceiling/Floor Streak counter (đặc thù chỉ có ở VN)
 - Stop-loss không được đặt quá gần (biến động 7% mỗi ngày)
 
-### T+2.5 Settlement
+### T+2 Settlement
 
 Hiện tại (chuyển sang T+1 theo lộ trình SSC):
 ```
 T = Ngày mua
-T+2.5 = Ngày có thể bán (thực tế = T+3 ngày giao dịch làm tròn)
+T+2 = Ngày đủ điều kiện đóng vị thế theo số phiên giao dịch
 ```
 
-Ảnh hưởng đến portfolio: Vị thế `t2_pending` không được phép bán sớm hơn.
+Ảnh hưởng đến portfolio: ứng dụng chặn đóng vị thế cho đến khi cột `T+2 Ready` đạt trạng thái sẵn sàng.
 
 ### ~90% nhà đầu tư cá nhân
 
@@ -674,7 +673,7 @@ A: CMF là 1 trong 5 điều kiện của thành phần Volume. Có thể các �
 A: Phụ thuộc vào horizon đầu tư của bạn. Ngắn hạn < 2 tuần → 1W/2W. Trung hạn 1–3 tháng → 1M/3M. Dài hạn > 3 tháng → 5M.
 
 **Q: Dữ liệu được lấy từ đâu?**  
-A: OHLCV từ **DNSE API** (primary) → **SSI API** (fallback) → **CafeF HTML scrape** (fallback cuối). World markets từ **Yahoo Finance**. Không cần tài khoản.
+A: OHLCV từ **DNSE API** (primary) → **SSI API** (fallback). World markets từ **Yahoo chart API**. Breadth và foreign flow từ **KBS snapshot API**. Không cần tài khoản.
 
 **Q: Tại sao có mã trong Scanner nhưng khi load lại không thấy?**  
 A: Scanner sử dụng session-state cache. Nếu bạn thay đổi Universe/Macro, nhấn lại Tải Dữ Liệu để invalidate cache cũ.

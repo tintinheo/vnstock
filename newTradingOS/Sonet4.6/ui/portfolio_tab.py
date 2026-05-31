@@ -4,6 +4,8 @@ Portfolio tracker tab UI.
 """
 from __future__ import annotations
 
+from datetime import date
+
 import streamlit as st
 import pandas as pd
 
@@ -11,7 +13,7 @@ from config import INITIAL_CAPITAL
 from portfolio.tracker import Portfolio, Position
 from portfolio.sizing import (
     kelly_fraction, position_size_vnd,
-    allocate_budget, compute_portfolio_metrics,
+    allocate_budget, compute_portfolio_metrics, _position_risk_vnd,
 )
 from ui.components import GREEN, RED, YELLOW, equity_chart
 
@@ -26,6 +28,10 @@ def render_portfolio_tab(
     Returns potentially updated Portfolio.
     """
     st.subheader("💼 Portfolio Tracker")
+    st.caption(
+        "Trust note: live portfolio blocks closes until T+2 readiness and uses business-day sessions "
+        "as the settlement estimate. Intraday execution, slippage, and order-book effects are still not modeled."
+    )
 
     # ── Summary metrics ───────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)
@@ -40,6 +46,7 @@ def render_portfolio_tab(
     # ── Open Positions ────────────────────────────────────────
     st.subheader("📂 Vị Thế Đang Mở")
     if portfolio.open_positions:
+        today_iso = date.today().isoformat()
         # Mark-to-market: lấy giá hiện tại từ data_dict để tính MTM
         _prices = {
             t: float(df["Close"].iloc[-1])
@@ -50,7 +57,23 @@ def render_portfolio_tab(
         _mtm    = portfolio.market_value(_prices)
         _unreal_pct = (_unreal / (_mtm - _unreal) * 100) if (_mtm - _unreal) > 0 else 0.0
 
-        cm1, cm2 = st.columns(2)
+        risk_by_position = []
+        for position in portfolio.open_positions:
+            risk_vnd = _position_risk_vnd({
+                "size_vnd": position.cost_vnd,
+                "entry_price": position.entry_price,
+                "stop_loss": position.stop_loss,
+            })
+            stop_gap_pct = (
+                abs(position.entry_price - position.stop_loss) / position.entry_price * 100
+                if position.entry_price > 0 else 0.0
+            )
+            risk_by_position.append((risk_vnd, stop_gap_pct))
+
+        total_risk_vnd = sum(risk_vnd for risk_vnd, _ in risk_by_position)
+        risk_budget_pct = (total_risk_vnd / portfolio.capital * 100) if portfolio.capital else 0.0
+
+        cm1, cm2, cm3, cm4 = st.columns(4)
         cm1.metric(
             "💰 Giá trị thị trường (MTM)",
             f"{_mtm:,.0f} VND",
@@ -60,6 +83,16 @@ def render_portfolio_tab(
             "📈 Lãi/Lỗ chưa thực hiện",
             f"{_unreal:+,.0f} VND",
             delta=f"{_unreal_pct:+.2f}%",
+        )
+        cm3.metric(
+            "⚠️ Rủi ro tới Stop",
+            f"{total_risk_vnd:,.0f} VND",
+            delta=f"{risk_budget_pct:.2f}% vốn",
+        )
+        cm4.metric(
+            "🛡️ Vị thế có Stop",
+            f"{sum(1 for p in portfolio.open_positions if p.stop_loss > 0)}/{len(portfolio.open_positions)}",
+            delta="Risk uses stop distance",
         )
 
         # Break-even trailing stop tự động khi lãi ≥ 15%
@@ -71,8 +104,17 @@ def render_portfolio_tab(
                 "Stop đã được nâng lên mức hoà vốn để bảo toàn lợi nhuận (lãi ≥ 15%)."
             )
 
-        pos_df = portfolio.positions_df()
+        pos_df = portfolio.positions_df().copy()
+        pos_df["Risk @ Stop"] = [round(risk_vnd, 0) for risk_vnd, _ in risk_by_position]
+        pos_df["Stop Gap %"] = [round(stop_gap_pct, 2) for _, stop_gap_pct in risk_by_position]
+        pos_df["Risk / Vốn %"] = [
+            round((risk_vnd / portfolio.capital * 100), 2) if portfolio.capital else 0.0
+            for risk_vnd, _ in risk_by_position
+        ]
+        pos_df["Sessions Held"] = [p.held_sessions(today_iso) for p in portfolio.open_positions]
+        pos_df["T+2 Ready"] = ["✅" if p.settlement_ready(today_iso) else "⏳" for p in portfolio.open_positions]
         st.dataframe(pos_df, width="stretch", hide_index=True)
+        st.caption("T+2 readiness is estimated from business-day sessions between entry date and today.")
 
         # Quick close
         close_options = {
@@ -98,11 +140,10 @@ def render_portfolio_tab(
                 df_t, _ = data_dict.get(selected_pos.ticker, (None, None))
                 if df_t is not None and not df_t.empty:
                     cur_price = float(df_t["Close"].iloc[-1])
-                    from datetime import date
                     pos = portfolio.close_position(
                         selected_pos.ticker,
                         cur_price,
-                        str(date.today()),
+                        today_iso,
                         close_reason,
                         timeframe=selected_pos.timeframe,
                         entry_date=selected_pos.entry_date,
@@ -114,6 +155,15 @@ def render_portfolio_tab(
                             st.success(f"✅ Đóng {selected_pos.ticker} +{pnl_pct:.2f}%")
                         else:
                             st.error(f"❌ Đóng {selected_pos.ticker} {pnl_pct:.2f}%")
+                    else:
+                        held_sessions = selected_pos.held_sessions(today_iso)
+                        if not selected_pos.settlement_ready(today_iso):
+                            st.warning(
+                                f"{selected_pos.ticker} chưa đủ điều kiện bán T+2: "
+                                f"đã giữ {held_sessions} phiên, cần ít nhất 2 phiên."
+                            )
+                        else:
+                            st.warning(f"Không thể đóng {selected_pos.ticker}. Vị thế có thể đã thay đổi trạng thái.")
     else:
         st.info("Chưa có vị thế mở.")
 

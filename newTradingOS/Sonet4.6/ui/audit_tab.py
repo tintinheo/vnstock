@@ -11,7 +11,7 @@ import pandas as pd
 import streamlit as st
 
 from core.audit import (
-    load_events, filter_events,
+    load_events, filter_events, get_event_detail_kind,
     ACTION_OPEN, ACTION_CLOSE, ACTION_LOAD, ACTION_MACRO, ACTION_SCAN,
     AUDIT_FILE,
 )
@@ -24,12 +24,27 @@ _ACTION_LABELS: dict[str, str] = {
     ACTION_SCAN:  "🔍 Scan tín hiệu",
 }
 _ALL_ACTIONS = list(_ACTION_LABELS.keys())
+_SCAN_KIND_LABELS = {
+    "": "Tất cả scan events",
+    "summary": "Tổng hợp lần quét",
+    "result": "Chi tiết từng mã",
+}
+
+
+def _format_scan_top_signals(top_signals: list[dict]) -> str:
+    if not top_signals:
+        return "—"
+    return "; ".join(
+        f"{row.get('ticker', '—')} {row.get('action', '—')} {float(row.get('score', 0.0)):.1f}"
+        for row in top_signals
+    )
 
 
 def _events_to_df(events: list[dict]) -> pd.DataFrame:
     rows = []
     for e in events:
         detail = e.get("detail", {})
+        detail_kind = get_event_detail_kind(e)
         # Build a human-readable summary from the detail dict
         if e["action"] == ACTION_OPEN:
             summary = (
@@ -61,12 +76,55 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                 f"Macro regime: {detail.get('macro_regime', '')} | "
                 f"VNI regime: {detail.get('regime', '')}"
             )
+        elif e["action"] == ACTION_SCAN:
+            if detail.get("kind") == "result":
+                flags = []
+                if detail.get("manip_flag"):
+                    flags.append("manip")
+                if not detail.get("regime_ok", True):
+                    flags.append("regime-filter")
+                if detail.get("message"):
+                    flags.append(str(detail.get("message")))
+                flag_text = f" | Notes: {'; '.join(flags)}" if flags else ""
+                summary = (
+                    f"Signal: {detail.get('signal_action', '—')} | "
+                    f"Score: {float(detail.get('score', 0.0)):.1f} | "
+                    f"Price: {float(detail.get('price', 0.0)):,.0f} | "
+                    f"SL: {float(detail.get('stop_loss', 0.0)):,.0f} | "
+                    f"TP: {float(detail.get('take_profit', 0.0)):,.0f} | "
+                    f"R/R: 1:{float(detail.get('rr_ratio', 0.0)):.1f} | "
+                    f"Exchange: {detail.get('exchange', '—')} | "
+                    f"Source: {detail.get('source', '—')} | "
+                    f"Bar: {detail.get('bar_date', '—')} | "
+                    f"ADV20: {float(detail.get('adv20_bn', 0.0)):.2f} bn"
+                    f"{flag_text}"
+                )
+            else:
+                summary = (
+                    f"TF: {e.get('timeframe') or '—'} | "
+                    f"{detail.get('n_tickers', 0)} mã | "
+                    f"BUY+: {detail.get('buy_count', 0)} | "
+                    f"WATCH: {detail.get('watch_count', 0)} | "
+                    f"Avg: {float(detail.get('avg_score', 0.0)):.1f} | "
+                    f"Regime: {detail.get('regime', '—')} | "
+                    f"Macro: {float(detail.get('macro_score', 0.0)):.1f}/10 | "
+                    f"Bars: {detail.get('latest_bar_date', '—')} | "
+                    f"Source mix: {detail.get('source_mix', '—')} | "
+                    f"FF basis: {detail.get('foreign_flow_basis', '—')} | "
+                    f"Top: {_format_scan_top_signals(detail.get('top_signals', []))} | "
+                    f"File: {os.path.basename(detail.get('audit_file', '—'))}"
+                )
         else:
             summary = str(detail)
 
         rows.append({
             "Thời gian":   e["ts"][:19].replace("T", " "),
             "Hành động":   _ACTION_LABELS.get(e["action"], e["action"]),
+            "Phân loại":   (
+                "Tổng hợp scan" if e["action"] == ACTION_SCAN and detail_kind == "summary"
+                else "Tín hiệu từng mã" if e["action"] == ACTION_SCAN and detail_kind == "result"
+                else "—"
+            ),
             "Ticker":      e.get("ticker") or "—",
             "Timeframe":   e.get("timeframe") or "—",
             "Kết quả":     e.get("result", "ok").upper(),
@@ -74,7 +132,7 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
         })
     if rows:
         return pd.DataFrame(rows)
-    return pd.DataFrame(columns=["Thời gian", "Hành động", "Ticker",
+    return pd.DataFrame(columns=["Thời gian", "Hành động", "Phân loại", "Ticker",
                                   "Timeframe", "Kết quả", "Chi tiết"])
 
 
@@ -149,6 +207,23 @@ def render_audit_tab(lang: str = "VI") -> None:
             key="audit_range",
         )
 
+    scan_kind_options = [
+        kind for kind in ("summary", "result")
+        if kind in {
+            get_event_detail_kind(e)
+            for e in events
+            if e.get("action") == ACTION_SCAN
+        }
+    ]
+    sel_scan_kind = ""
+    if scan_kind_options:
+        sel_scan_kind = st.selectbox(
+            "Phân loại scan",
+            options=[""] + scan_kind_options,
+            format_func=lambda x: _SCAN_KIND_LABELS.get(x, x),
+            key="audit_scan_kind",
+        )
+
     # Compute date boundaries
     today_str = date.today().isoformat()
     days_ago  = date_range_opts[sel_range]
@@ -164,6 +239,7 @@ def render_audit_tab(lang: str = "VI") -> None:
         tickers=sel_tickers or None,
         timeframe=sel_tf or None,
         result=sel_result or None,
+        detail_kinds=[sel_scan_kind] if sel_scan_kind else None,
         date_from=from_str,
         date_to=today_str if days_ago >= 0 else None,
     )

@@ -13,6 +13,7 @@ import pytest
 from portfolio.sizing import (
     kelly_fraction, position_size_vnd,
     allocate_budget, compute_portfolio_metrics,
+    check_risk_budget,
     TradeStats,
 )
 from portfolio.tracker import Portfolio, Position
@@ -125,11 +126,11 @@ class TestTradeStats:
 # Portfolio tracker
 # ─────────────────────────────────────────────────────────────
 class TestPortfolio:
-    def _make_position(self, ticker="VCB", entry=50_000, shares=500):
+    def _make_position(self, ticker="VCB", entry=50_000, shares=500, entry_date="2026-01-01"):
         cost = entry * shares * 1.002
         return Position(
             ticker=ticker, timeframe="1M",
-            entry_date="2026-01-01", entry_price=entry,
+            entry_date=entry_date, entry_price=entry,
             n_shares=shares, stop_loss=entry * 0.95,
             take_profit=entry * 1.15, cost_vnd=cost,
         )
@@ -156,11 +157,34 @@ class TestPortfolio:
 
     def test_close_position(self):
         pf  = Portfolio(capital=INITIAL_CAPITAL)
-        pos = self._make_position(entry=50_000)
+        pos = self._make_position(entry=50_000, entry_date="2026-01-06")
         pf.open_position(pos)
-        closed = pf.close_position("VCB", 55_000, "2026-02-01", "target")
+        closed = pf.close_position("VCB", 55_000, "2026-01-08", "target")
         assert closed is not None
         assert closed.pnl_pct is not None
+        assert len(pf.open_positions) == 0
+        assert len(pf.trades) == 1
+
+    def test_cannot_close_before_t2(self):
+        pf = Portfolio(capital=INITIAL_CAPITAL)
+        pos = self._make_position(entry=50_000, entry_date="2026-01-06")
+        pf.open_position(pos)
+
+        closed = pf.close_position("VCB", 55_000, "2026-01-07", "manual")
+
+        assert closed is None
+        assert len(pf.open_positions) == 1
+        assert len(pf.trades) == 0
+
+    def test_close_allowed_on_t2(self):
+        pf = Portfolio(capital=INITIAL_CAPITAL)
+        pos = self._make_position(entry=50_000, entry_date="2026-01-06")
+        pf.open_position(pos)
+
+        closed = pf.close_position("VCB", 55_000, "2026-01-08", "manual")
+
+        assert closed is not None
+        assert closed.sessions_held >= 2
         assert len(pf.open_positions) == 0
         assert len(pf.trades) == 1
 
@@ -171,8 +195,8 @@ class TestPortfolio:
 
     def test_realised_pnl_positive_on_profit(self):
         pf = Portfolio(capital=INITIAL_CAPITAL)
-        pf.open_position(self._make_position(entry=50_000))
-        pf.close_position("VCB", 60_000, "2026-02-01", "target")
+        pf.open_position(self._make_position(entry=50_000, entry_date="2026-01-06"))
+        pf.close_position("VCB", 60_000, "2026-01-08", "target")
         assert pf.realised_pnl > 0
 
     def test_save_load(self):
@@ -188,6 +212,29 @@ class TestPortfolio:
         finally:
             os.unlink(tmp_path)
 
+    def test_save_uses_atomic_replace(self, monkeypatch):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            target_path = os.path.join(tmp_dir, "portfolio.json")
+            pf = Portfolio(capital=200_000_000)
+            pf.open_position(self._make_position())
+
+            original_replace = os.replace
+            seen: dict[str, str] = {}
+
+            def spy_replace(src: str, dst: str):
+                seen["src"] = src
+                seen["dst"] = dst
+                return original_replace(src, dst)
+
+            monkeypatch.setattr("portfolio.tracker.os.replace", spy_replace)
+
+            pf.save(target_path)
+
+            assert seen["dst"] == target_path
+            assert seen["src"] != target_path
+            assert os.path.exists(target_path)
+            assert not os.path.exists(seen["src"])
+
     def test_positions_df(self):
         pf = Portfolio(capital=INITIAL_CAPITAL)
         pf.open_position(self._make_position("VCB"))
@@ -197,8 +244,8 @@ class TestPortfolio:
 
     def test_trades_df(self):
         pf = Portfolio(capital=INITIAL_CAPITAL)
-        pf.open_position(self._make_position())
-        pf.close_position("VCB", 55_000)
+        pf.open_position(self._make_position(entry_date="2026-01-06"))
+        pf.close_position("VCB", 55_000, "2026-01-08")
         df = pf.trades_df()
         assert len(df) == 1
 
@@ -337,6 +384,50 @@ class TestMarketValue:
         prices = {"VCB": 105_000, "FPT": 90_000}
         expected = pf.cash + 105_000 * 100 + 90_000 * 100
         assert abs(pf.market_value(prices) - expected) < 1.0
+
+
+# ────────────────────────────────────────────────────────────
+# Round 6 Fix #1 — risk budget uses stop-distance risk
+# ────────────────────────────────────────────────────────────
+class TestRiskBudget:
+    def test_uses_stop_distance_not_position_remainder(self):
+        """A 5% stop on 10M VND should count as 500k risk, not 9.5M."""
+        open_positions = [{"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.05}]
+        new_trade = {"size_vnd": 10_000_000, "stop_loss_pct": 0.05}
+
+        allowed, reason = check_risk_budget(
+            open_positions,
+            new_trade,
+            total_capital=100_000_000,
+            tf="1M",
+            max_portfolio_risk_pct=0.06,
+        )
+
+        assert allowed, reason
+
+    def test_derives_stop_distance_from_entry_and_stop_levels(self):
+        """Risk checks should still work when only price levels are stored."""
+        open_positions = [{
+            "tf": "1M",
+            "size_vnd": 10_000_000,
+            "entry_price": 50_000,
+            "stop_loss": 47_500,
+        }]
+        new_trade = {
+            "size_vnd": 10_000_000,
+            "entry_price": 50_000,
+            "stop_loss": 47_500,
+        }
+
+        allowed, reason = check_risk_budget(
+            open_positions,
+            new_trade,
+            total_capital=100_000_000,
+            tf="1M",
+            max_portfolio_risk_pct=0.06,
+        )
+
+        assert allowed, reason
 
 
 # ─────────────────────────────────────────────────────────────

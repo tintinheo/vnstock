@@ -3,7 +3,7 @@
 
 **PMBOK Baseline:** Technical Baseline  
 **Document Version:** 3.0  
-**Date:** 2026-05-30
+**Date:** 2026-05-31
 
 ---
 
@@ -13,8 +13,8 @@
 ┌─────────────────────────────────────────────────────────────────────┐
 │                         EXTERNAL SYSTEMS                            │
 │                                                                     │
-│  DNSE API          SSI API         CafeF HTML      Yahoo Finance    │
-│  (primary OHLCV)   (fallback 1)    (fallback 2)    (world markets)  │
+│  DNSE API          SSI API        Yahoo Finance    KBS IIS Snapshot │
+│  (primary OHLCV)   (fallback)     (world markets)  (breadth/flow)   │
 └──────────┬─────────────┬──────────────┬───────────────┬─────────────┘
            │             │              │               │
            └─────────────┴──────────────┘               │
@@ -69,11 +69,10 @@
 **Key functions:**
 | Function | Description |
 |---|---|
-| `fetch_ohlcv(ticker, timeframe)` | Try DNSE → SSI → CafeF; return `pd.DataFrame` or `None` |
-| `_fetch_dnse(ticker, tf)` | GET `https://services.entrade.com.vn/chart-api/v2/ohlcs/stock` |
-| `_fetch_ssi(ticker, tf)` | SSI API fallback |
-| `_fetch_cafef(ticker)` | HTML scrape, last resort |
-| `fetch_batch(tickers, tf)` | ThreadPoolExecutor(6) over `fetch_ohlcv` |
+| `download_data(ticker, days)` | Try DNSE → SSI; return cleaned `pd.DataFrame` or empty `DataFrame` |
+| `_fetch_dnse(ticker, days)` | GET `https://services.entrade.com.vn/chart-api/v2/ohlcs/stock` |
+| `_fetch_ssi(ticker, days)` | SSI API fallback |
+| `batch_download(tickers, days)` | ThreadPoolExecutor(6) over `download_data` |
 
 **Data contract (output columns):** `open, high, low, close, volume` — all float64, DatetimeIndex.
 
@@ -161,7 +160,7 @@ def round_to_tick(price: float, exchange: str = "HOSE") -> float:
 | Momentum | 20 | MACD cross, histogram, ROC | Cross = 8pts, histogram positive = 6pts, ROC > 5% = 6pts |
 | RSI | 15 | Zone scoring | 45-65 = 15pts (VN sweet spot); 65-75 = 10pts (momentum continuation) |
 | Volume/Flow | 20 | Vol ratio, MFI, CMF, Streak | CMF > 0.05 = +3pts; consecutive ceiling ≥ 2 = +2pts; floor ≤ -2 = -3pts; Streak uses exchange-specific limit |
-| Foreign Flow | 5 | Net foreign buy (20-session trend) | **2W/1M/3M/5M** timeframes; uses `net_20d` from `fetch_foreign_flow_ticker()` when available |
+| Foreign Flow | 5 | Verified 20-session net buy when available, otherwise current-session net buy | **2W/1M/3M/5M** timeframes; current KBS integration is session-only, so `net_20d` remains neutral and scoring falls back to today's net flow |
 | Macro Regime | 10 | Composite macro score | macro_score / 10 |
 | ADX Strength | 5 | ADX trend quality gate | ADX > 25 = 5pts |
 
@@ -170,10 +169,10 @@ def round_to_tick(price: float, exchange: str = "HOSE") -> float:
 | Score | Action |
 |---|---|
 | ≥ 80 | STRONG BUY |
-| ≥ 65 | BUY |
-| ≥ 50 | WATCH |
-| ≥ 35 | NEUTRAL |
-| < 35 | AVOID |
+| 65-79 | BUY |
+| 45-64 | HOLD |
+| 30-44 | WATCH |
+| < 30 | SELL |
 
 **ATR-based Stop / Target per timeframe:**
 
@@ -387,7 +386,7 @@ SLIPPAGE          = 0.0005
 HOSE_LIMIT_PCT    = 0.07         # ±7% daily price ceiling/floor
 HNX_LIMIT_PCT     = 0.10
 UPCOM_LIMIT_PCT   = 0.15
-SETTLEMENT_T_PLUS = 2.5          # T+2.5 (migrating to T+1)
+SETTLEMENT_T_PLUS = 2.0          # T+2 business-day close readiness (migrating to T+1)
 TRADING_DAYS_YEAR = 240
 ```
 

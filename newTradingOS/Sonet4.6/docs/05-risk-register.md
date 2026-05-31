@@ -32,8 +32,8 @@
 
 | ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| RT-001 | DNSE API URL changes or adds authentication, breaking primary data fetch | Technical / API | 2 | 3 | 6 | Critical | Maintain 3-level fallback chain (DNSE → SSI → CafeF); monitor API responses for HTTP 401/403; add automated health check test | Dev | Open |
-| RT-002 | CafeF HTML structure changes break HTML scraper (tertiary fallback) | Technical / API | 3 | 2 | 6 | Critical | Add HTML parsing tests with snapshot fixtures; consider adding a 4th fallback (manual CSV upload) | Dev | Open |
+| RT-001 | DNSE API URL changes or adds authentication, breaking primary data fetch | Technical / API | 2 | 3 | 6 | Critical | Maintain 2-level fallback chain (DNSE → SSI); monitor API responses for HTTP 401/403; add automated health check test | Dev | Open |
+| RT-002 | KBS IIS snapshot endpoint or payload contract changes, breaking breadth / foreign-flow ingestion | Technical / API | 3 | 2 | 6 | Critical | Keep snapshot-contract tests, surface stale warnings in UI, and isolate KBS parsing in `core/macro_data.py` for fast remediation if the payload changes | Dev | Open |
 | RT-003 | Yahoo Finance API rate-limiting causes world market data failure | Technical / API | 2 | 2 | 4 | High | Cache last-successful world market result for ≤ 30 min; `get_macro_score()` returns `stale_fields` list; UI shows stale-data warning banner when fields are missing | Dev | **Mitigated** |
 | RT-004 | ThreadPoolExecutor thread leaks under abnormal process termination | Technical | 1 | 2 | 2 | Medium | Use `with ThreadPoolExecutor() as ex:` pattern throughout; validated in current codebase | Dev | Mitigated |
 | RT-005 | SuperTrend iterative ratchet introduces subtle off-by-one across different pandas versions | Technical | 2 | 2 | 4 | High | Pinned unit test with known dataset; runs in CI | Dev | Open |
@@ -49,11 +49,11 @@
 
 | ID | Risk Description | Category | Prob | Impact | Score | Level | Response Strategy | Owner | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| RM-001 | SSC moves HoSE to T+1 settlement, making T+2.5 position logic stale | Market / Regulatory | 3 | 2 | 6 | Critical | Expose `SETTLEMENT_T_PLUS` in `config.py`; update value to 1.0 when rule changes; no code changes required | Dev | Open |
+| RM-001 | SSC moves HoSE to T+1 settlement, making current T+2 close-readiness logic stale | Market / Regulatory | 3 | 2 | 6 | Critical | Portfolio and backtest settlement rules currently use business-day session counting for T+2 readiness. Review these helpers and update the settlement threshold when the market rule changes. | Dev | Open |
 | RM-002 | HoSE raises daily price limit from ±7% to ±10% (trial announced) | Market / Regulatory | 2 | 2 | 4 | High | All limit references use per-exchange constants in `config.EXCHANGE_PRICE_LIMIT` (HOSE=0.07, HNX=0.10, UPCoM=0.15); `ceiling_floor_streak()` accepts `limit_pct` param; `compute_all(exchange=)` routes per ticker; `batch_score(exchange_map=)` and `render_scanner_tab(exchange_map=)` wire exchange data end-to-end | Dev | **Mitigated** |
 | RM-003 | Scoring model trained on 2015–2025 data becomes less accurate in structural regime shifts (e.g. post-pandemic) | Market | 2 | 2 | 4 | High | Periodic backtesting review; compare win rate vs benchmark; ML ensemble provides model-diverse forecasts | Dev | Open |
 | RM-004 | Thin liquidity tickers (HNX small-cap) produce misleading signals due to low volume | Market | 3 | 2 | 6 | Critical | Minimum volume filter applied before scoring; flagged in UI; review thresholds quarterly | Dev | Open |
-| RM-005 | Foreign flow data from CafeF delayed or inaccurate, skewing score component 5 | Market / Data | 2 | 1 | 2 | Medium | `fetch_foreign_flow_ticker()` now aggregates 20-session net buy (`net_20d`) and classifies trend (`accumulate`/`distribute`/`neutral`); cached in `session_state.foreign_flows_cache` on Macro update; shows data timestamp in UI | Dev | **Mitigated** |
+| RM-005 | Foreign flow data is currently limited to a KBS intraday session snapshot, so multi-session institutional flow trends are unavailable and score component 5 may be less stable than intended | Market / Data | 2 | 2 | 4 | High | Contract is now explicit: `fetch_foreign_flow_ticker()` exposes session-only flow, UI labels it as `KBS snapshot | session net only`, and `batch_score()` ignores proxy `net_20d` values. A reliable multi-session source is still needed for full mitigation. | Dev | **Partially Mitigated** |
 | RM-006 | Stop-loss / take-profit at invalid VN prices rejected by broker OMS | Market / Operational | 3 | 2 | 6 | Critical | `round_to_tick()` in `config.py` enforces HOSE 10/50/100 VND tick bands and HNX/UPCOM 100 VND; applied to all stop/target calculations in `scoring.py`; safety guard ensures stop < price < target after rounding | Dev | **Mitigated** |
 | RM-007 | Backtest P&L overstated due to fractional-share position sizing (VN requires 100-share lots) | Backtest / Simulation | 3 | 2 | 6 | Critical | `backtest/engine.py` uses `position_size_vnd()` to floor shares to nearest 100-lot; `BacktestTrade.n_shares` exposes lot-aligned count; P&L uses `_vnd_committed` not `capital × pos_pct` | Dev | **Mitigated** |
 | RM-008 | RSI/ATR using SMA instead of Wilder EWM gives less responsive signals, missing VN limit-hit extremes | Model Accuracy | 2 | 2 | 4 | High | RSI and ATR now use `_wilder_smooth(series, period)` — EWM alpha=1/period as per Wilder (1978); consistent with ADX; RSI handles loss=0 edge case by returning 100.0 | Dev | **Mitigated** |
@@ -109,7 +109,7 @@
 | Risk | Action | Due |
 |---|---|---|
 | RT-001 | Add nightly API health check script | Next release |
-| RT-002 | Create HTML snapshot fixtures for CafeF parser tests | Next release |
+| RT-002 | Add payload snapshot fixtures for KBS breadth / foreign-flow contract | Next release |
 | RM-001 | Verify T+1 SSC announcement dates; update `SETTLEMENT_T_PLUS = 1.0` when live | Q3 2026 |
 | RM-004 | Add minimum volume filter (e.g. 3-day avg > 100K shares) to scanner | Next release |
 | RML-001 | Run backtesting comparison report quarterly | Quarterly |

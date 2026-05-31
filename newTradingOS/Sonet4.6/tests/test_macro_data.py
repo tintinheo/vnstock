@@ -143,15 +143,25 @@ class TestForeignFlowBatch:
 
         assert mock_snapshot.call_count == 1
         assert result["VCB"]["net_buy_value"] == 75_000_000_000
-        assert result["VCB"]["trend_20d"] == "accumulate"
+        assert result["VCB"]["net_20d"] == 0
+        assert result["VCB"]["trend_20d"] == "neutral"
+        assert result["VCB"]["session_net_proxy"] == 75_000_000_000
+        assert result["VCB"]["session_trend"] == "accumulate"
+        assert result["VCB"]["history_sessions"] == 1
+        assert result["VCB"]["is_20d_proxy"] is True
         assert result["MBB"]["net_buy_value"] == -12_500_000_000
-        assert result["MBB"]["trend_20d"] == "neutral"
+        assert result["MBB"]["session_trend"] == "neutral"
         assert result["FPT"] == {
             "net_buy_value": 0,
             "buy_value": 0,
             "sell_value": 0,
             "net_20d": 0,
             "trend_20d": "neutral",
+            "session_net_proxy": 0,
+            "session_trend": "neutral",
+            "history_sessions": 0,
+            "is_20d_proxy": False,
+            "basis": "not_available",
         }
 
 
@@ -290,18 +300,19 @@ class TestFetchMacroStaleDetection:
 
 
 # ─────────────────────────────────────────────────────────────
-# FIX #4 — fetch_foreign_flow_ticker 20d trend
+# FIX #4 — fetch_foreign_flow_ticker snapshot contract
 # ─────────────────────────────────────────────────────────────
 class TestFetchForeignFlowTicker20d:
     """
     Tests now use KBS IIS snapshot format:
     [{"SB": "VCB", "EX": "HOSE", "RE": ..., "CP": price, "FB": buy_vol, "FS": sell_vol, ...}]
-    net_20d is set to today's net (CP*(FB-FS)) since KBS gives single-session snapshot.
+    KBS provides a single-session snapshot, so verified 20-session history is unavailable.
+    The function must expose session_net_proxy/session_trend and keep net_20d neutral.
     """
 
     @patch("core.macro_data._fetch_kbs_market_snapshot")
     def test_net_20d_accumulate(self, mock_snap):
-        """net today > 50B VND → trend_20d = 'accumulate' and net_20d equals today's net."""
+        """Large positive session net → session_trend=accumulate, but net_20d stays unavailable."""
         # net = (7e6 - 1e6) * 10000 = 6e6 * 10000 = 6e10 (60B VND)
         mock_snap.return_value = [
             {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
@@ -309,12 +320,16 @@ class TestFetchForeignFlowTicker20d:
         ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        assert result["net_20d"] == pytest.approx(6e10)
-        assert result["trend_20d"] == "accumulate"
+        assert result["net_20d"] == 0
+        assert result["trend_20d"] == "neutral"
+        assert result["session_net_proxy"] == pytest.approx(6e10)
+        assert result["session_trend"] == "accumulate"
+        assert result["history_sessions"] == 1
+        assert result["is_20d_proxy"] is True
 
     @patch("core.macro_data._fetch_kbs_market_snapshot")
     def test_net_20d_distribute(self, mock_snap):
-        """net today < -50B VND → trend_20d = 'distribute'."""
+        """Large negative session net → session_trend=distribute, but net_20d stays unavailable."""
         # net = (1e6 - 7e6) * 10000 = -6e6 * 10000 = -6e10
         mock_snap.return_value = [
             {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
@@ -322,12 +337,14 @@ class TestFetchForeignFlowTicker20d:
         ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        assert result["net_20d"] == pytest.approx(-6e10)
-        assert result["trend_20d"] == "distribute"
+        assert result["net_20d"] == 0
+        assert result["trend_20d"] == "neutral"
+        assert result["session_net_proxy"] == pytest.approx(-6e10)
+        assert result["session_trend"] == "distribute"
 
     @patch("core.macro_data._fetch_kbs_market_snapshot")
     def test_net_20d_neutral(self, mock_snap):
-        """Small net → trend_20d = 'neutral'."""
+        """Small session net remains session_trend neutral and leaves 20d fields unavailable."""
         # net = (1.1e6 - 1e6) * 10000 = 1e9 (< 50B threshold)
         mock_snap.return_value = [
             {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
@@ -335,18 +352,23 @@ class TestFetchForeignFlowTicker20d:
         ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
+        assert result["net_20d"] == 0
         assert result["trend_20d"] == "neutral"
+        assert result["session_trend"] == "neutral"
 
     @patch("core.macro_data._fetch_kbs_market_snapshot")
     def test_returns_all_expected_keys(self, mock_snap):
-        """Result must always include net_buy_value, buy_value, sell_value, net_20d, trend_20d."""
+        """Result must always include both legacy and proxy-disclosure keys."""
         mock_snap.return_value = [
             {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
              "FB": 1_000_000, "FS": 500_000, "FT": 1_500_000},
         ]
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        for key in ("net_buy_value", "buy_value", "sell_value", "net_20d", "trend_20d"):
+        for key in (
+            "net_buy_value", "buy_value", "sell_value", "net_20d", "trend_20d",
+            "session_net_proxy", "session_trend", "history_sessions", "is_20d_proxy", "basis",
+        ):
             assert key in result, f"Missing key: {key}"
 
     @patch("core.macro_data._fetch_kbs_market_snapshot")

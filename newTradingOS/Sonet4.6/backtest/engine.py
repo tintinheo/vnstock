@@ -22,12 +22,36 @@ import pandas as pd
 from config import (
     BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL,
     TIMEFRAME_CONFIG, VN_SESSIONS_YEAR, LOT_SIZE, TICKER_EXCHANGE,
+    round_to_tick, get_tick_size,
 )
 from core.indicators import compute_all, atr as _atr
 from core.scoring import compute_score
 from portfolio.sizing import compute_portfolio_metrics, TradeStats, position_size_vnd
 
 logger = logging.getLogger("TradingOS.backtest")
+
+
+def _execution_price(row: pd.Series) -> float:
+    """Use the next bar's open when available; fall back to close."""
+    open_px = float(row.get("Open", 0) or 0)
+    if open_px > 0:
+        return open_px
+    return float(row["Close"])
+
+
+def _entry_levels_from_signal(entry_price: float, signal, exchange: str) -> tuple[float, float]:
+    """Project signal risk/reward distances onto the actual execution price."""
+    tick = float(get_tick_size(entry_price, exchange))
+    risk_distance = max(float(signal.price) - float(signal.stop_loss), tick)
+    reward_distance = max(float(signal.take_profit) - float(signal.price), tick)
+
+    stop_loss = round_to_tick(entry_price - risk_distance, exchange)
+    take_profit = round_to_tick(entry_price + reward_distance, exchange)
+    if stop_loss >= entry_price:
+        stop_loss = entry_price - tick
+    if take_profit <= entry_price:
+        take_profit = entry_price + tick
+    return float(stop_loss), float(take_profit)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -121,12 +145,13 @@ def run_backtest(
     for i in range(warm_up, len(df)):
         row  = df.iloc[i]
         price = float(row["Close"])
+        exec_price = _execution_price(row)
 
         if not in_trade:
-            # Compute signal trên df[:i+1] với _precomputed=True — bỏ qua compute_all
-            # vì indicators đã được tính từ trước (O(n) thay vì O(n²) mỗi bar).
+            # Compute the signal on the prior completed bar set only; trade on the
+            # next bar so entries do not use same-bar close information.
             sig = compute_score(
-                df.iloc[: i + 1], tf,
+                df.iloc[:i], tf,
                 regime=regime,
                 macro_score=macro_score,
                 ticker=ticker,
@@ -135,14 +160,16 @@ def run_backtest(
             )
 
             if sig.action in ("BUY", "STRONG BUY") and sig.regime_ok:
-                entry_px    = price * (1 + BUY_TOTAL)   # slippage + fee per share
+                if exec_price <= sig.stop_loss or exec_price >= sig.take_profit:
+                    equity.append(capital)
+                    continue
+                entry_px    = exec_price * (1 + BUY_TOTAL)   # slippage + fee per share
                 entry_idx   = i
-                stop_loss   = sig.stop_loss
-                take_profit = sig.take_profit
+                stop_loss, take_profit = _entry_levels_from_signal(exec_price, sig, exchange)
                 # VN LOT_SIZE enforcement: position size rounded down to nearest
                 # 100-share lot so simulated trades match real broker constraints.
                 _n_shares, _vnd_committed = position_size_vnd(
-                    capital, pos_pct, price, lot_size=LOT_SIZE
+                    capital, pos_pct, exec_price, lot_size=LOT_SIZE
                 )
                 if _n_shares == 0:
                     continue   # Cannot afford minimum 1 VN lot — skip signal
@@ -157,26 +184,36 @@ def run_backtest(
                 continue
 
             exit_reason: Optional[str] = None
+            bar_open = exec_price
+            bar_low = float(row["Low"])
+            bar_high = float(row["High"])
 
-            # Stop loss hit (use Low of bar)
-            if float(row["Low"]) <= stop_loss:
+            # Gap-aware stop/target fills for long positions.
+            # If both stop and target are touched in the same bar, stop wins
+            # because the intraday sequence is unknowable from OHLC data.
+            if bar_open <= stop_loss:
                 exit_reason = "stop"
-                exit_px     = min(price, stop_loss)   # realistic fill
+                exit_px     = bar_open
+            elif bar_low <= stop_loss:
+                exit_reason = "stop"
+                exit_px     = stop_loss
 
-            # Take profit hit (use High of bar)
-            elif float(row["High"]) >= take_profit:
+            elif bar_open >= take_profit:
                 exit_reason = "target"
-                exit_px     = max(price, take_profit)
+                exit_px     = bar_open
+            elif bar_high >= take_profit:
+                exit_reason = "target"
+                exit_px     = take_profit
 
             # Time exit: held max hold_sessions
             elif sessions_held >= cfg["hold_sessions"]:
                 exit_reason = "time"
-                exit_px     = price
+                exit_px     = bar_open
 
             # Signal exit: sell signal
             else:
                 sig_exit = compute_score(
-                    df.iloc[: i + 1], tf,
+                    df.iloc[:i], tf,
                     regime=regime,
                     macro_score=macro_score,
                     ticker=ticker,
@@ -185,7 +222,7 @@ def run_backtest(
                 )
                 if sig_exit.action == "SELL":
                     exit_reason = "signal"
-                    exit_px     = price
+                    exit_px     = bar_open
 
             if exit_reason:
                 exit_px_net = exit_px * (1 - SELL_TOTAL)

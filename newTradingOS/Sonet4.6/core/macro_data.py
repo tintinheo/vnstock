@@ -173,6 +173,11 @@ def _empty_foreign_flow() -> dict:
         "sell_value": 0,
         "net_20d": 0,
         "trend_20d": "neutral",
+        "session_net_proxy": 0,
+        "session_trend": "neutral",
+        "history_sessions": 0,
+        "is_20d_proxy": False,
+        "basis": "not_available",
     }
 
 
@@ -187,19 +192,25 @@ def _foreign_flow_from_snapshot_item(item: dict | None) -> dict:
     buy = fb * cp
     sel = fs * cp
     if net > 5e10:
-        trend_20d = "accumulate"
+        session_trend = "accumulate"
     elif net < -5e10:
-        trend_20d = "distribute"
+        session_trend = "distribute"
     else:
-        trend_20d = "neutral"
+        session_trend = "neutral"
     return {
         "net_buy_value": net,
         "buy_value":     buy,
         "sell_value":    sel,
-        # Single-session snapshot: use today's net as 20d proxy
-        # (conservative: callers see today's signal, not cumulative)
-        "net_20d":   net,
-        "trend_20d": trend_20d,
+        # Intraday snapshot has no verified 20-session continuity.
+        # Keep the 20d fields neutral/unavailable and expose the session signal
+        # separately so callers cannot mistake one snapshot for real 20d history.
+        "net_20d":   0,
+        "trend_20d": "neutral",
+        "session_net_proxy": net,
+        "session_trend": session_trend,
+        "history_sessions": 1,
+        "is_20d_proxy": True,
+        "basis": "KBS snapshot | session net only",
     }
 
 
@@ -225,10 +236,11 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
 
     Returns
     -------
-    dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d.
+    dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d,
+    session_net_proxy, session_trend, history_sessions, is_20d_proxy, basis.
     All monetary values in VND (shares × price).
-    net_20d is not available from the intraday snapshot; callers should use
-    net_buy_value (today's session) as the signal.
+    Verified 20-session history is not available from the intraday snapshot;
+    callers should use net_buy_value/session_net_proxy for today's session signal.
     """
     data = _fetch_kbs_market_snapshot()
     sym_upper = symbol.upper()

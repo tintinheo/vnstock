@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import tempfile
 from dataclasses import asdict, dataclass, field
 from datetime import date, datetime
 from typing import Optional
@@ -24,6 +25,22 @@ from core.audit import log_event, ACTION_OPEN, ACTION_CLOSE
 PORTFOLIO_FILE = os.path.join(
     os.path.dirname(__file__), "..", "data", "portfolio.json"
 )
+
+
+def _coerce_iso_date(value: str | date | None) -> date:
+    if value is None:
+        return date.today()
+    if isinstance(value, date):
+        return value
+    return datetime.fromisoformat(str(value)).date()
+
+
+def _trading_sessions_between(entry_date: str, exit_date: str | date | None = None) -> int:
+    start = _coerce_iso_date(entry_date)
+    end = _coerce_iso_date(exit_date)
+    if end <= start:
+        return 0
+    return max(len(pd.bdate_range(start=start, end=end)) - 1, 0)
 
 
 @dataclass
@@ -47,6 +64,12 @@ class Position:
     @property
     def current_value(self) -> float:
         return self.entry_price * self.n_shares
+
+    def held_sessions(self, as_of_date: str | date | None = None) -> int:
+        return _trading_sessions_between(self.entry_date, as_of_date)
+
+    def settlement_ready(self, as_of_date: str | date | None = None, min_sessions: int = 2) -> bool:
+        return self.held_sessions(as_of_date) >= min_sessions
 
     def close(
         self,
@@ -161,6 +184,7 @@ class Portfolio:
         When multiple open legs share the same ticker, callers can disambiguate
         by timeframe and/or entry_date so the intended position is closed.
         """
+        effective_exit_date = exit_date or date.today().isoformat()
         for pos in self.positions:
             if pos.ticker != ticker or pos.status != "open":
                 continue
@@ -168,7 +192,14 @@ class Portfolio:
                 continue
             if entry_date is not None and pos.entry_date != entry_date:
                 continue
-            pos.close(exit_price, exit_date or date.today().isoformat(), reason)
+            pos.sessions_held = pos.held_sessions(effective_exit_date)
+            if not pos.settlement_ready(effective_exit_date):
+                logger.info(
+                    "Close blocked for %s @ %.0f: held %d sessions, requires T+2",
+                    ticker, exit_price, pos.sessions_held,
+                )
+                return None
+            pos.close(exit_price, effective_exit_date, reason)
             self.trades.append(pos)
             self.positions = [p for p in self.positions if p is not pos]
             # Realise cash
@@ -240,9 +271,25 @@ class Portfolio:
 
     # ── Persistence ────────────────────────────────────────────
     def save(self, path: str = PORTFOLIO_FILE) -> None:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as fh:
-            json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2, default=str)
+        directory = os.path.dirname(path) or "."
+        os.makedirs(directory, exist_ok=True)
+        fd, tmp_path = tempfile.mkstemp(
+            prefix=f"{os.path.basename(path)}.",
+            suffix=".tmp",
+            dir=directory,
+        )
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as fh:
+                json.dump(self.to_dict(), fh, ensure_ascii=False, indent=2, default=str)
+                fh.flush()
+                os.fsync(fh.fileno())
+            os.replace(tmp_path, path)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
 
     @classmethod
     def load(cls, path: str = PORTFOLIO_FILE) -> "Portfolio":

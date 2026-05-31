@@ -65,6 +65,26 @@ class TestComputeScore:
         # Allow small floating point divergence
         assert abs(total - sig.score) < 0.5
 
+    def test_low_liquidity_downgrades_actionable_signal(self, ohlcv_bull, monkeypatch):
+        import core.scoring as scoring_module
+
+        df = ohlcv_bull.copy()
+        df["Volume"] = 1_000
+        monkeypatch.setattr(scoring_module, "score_to_action", lambda score: "STRONG BUY")
+
+        sig = scoring_module.compute_score(df, "1M", ticker="ILLQ")
+
+        assert sig.action == "WATCH"
+        assert "liquidity" in sig.message.lower()
+
+    def test_liquid_name_keeps_actionable_signal(self, ohlcv_bull, monkeypatch):
+        import core.scoring as scoring_module
+
+        monkeypatch.setattr(scoring_module, "score_to_action", lambda score: "STRONG BUY")
+        sig = scoring_module.compute_score(ohlcv_bull, "1M", ticker="VCB")
+
+        assert sig.action in ("STRONG BUY", "BUY")
+
 
 # ─────────────────────────────────────────────────────────────
 # Regime filter

@@ -4,7 +4,7 @@
 **PMBOK Knowledge Area:** Scope Management  
 **Process Group:** Planning  
 **Document Version:** 2.0  
-**Date:** 2026-05-30
+**Date:** 2026-05-31
 
 ---
 
@@ -18,14 +18,14 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 2. **Signal Scoring** — A 100-point composite score assembled from 7 weighted components (Trend, Momentum, RSI, Volume/Flow, Foreign Flow, Macro Regime, ADX Strength), calibrated for VN market structure.
 3. **VN-Specific Indicators** — Chaikin Money Flow (gap-adjusted), SuperTrend (ATR-based dynamic support), and Ceiling/Floor Streak counter (unique to VN ±7% daily limit rule).
 4. **ML Forecasting** — Ensemble of 6 models (LSTM, XGBoost, Random Forest, Prophet, ARIMA, Monte Carlo) with per-timeframe weighted voting.
-5. **Backtesting** — Historical simulation with VN-realistic cost model (0.15% broker fee + 0.1% sell tax + 0.05% slippage, T+2.5 settlement).
+5. **Backtesting** — Historical simulation with VN-realistic cost model (0.15% broker fee + 0.1% sell tax + 0.05% slippage, T+2 settlement).
 6. **Portfolio Management** — Position lifecycle (open → T+2 pending → close), P&L calculation, stop/target tracking, persisted to local JSON.
 7. **Audit Logging** — Append-only JSONL event log for all business actions (open/close positions, data loads, macro updates, scan runs) with in-app filtered display.
 8. **Macro Dashboard** — World market prices (8 assets via Yahoo Finance), VN-Index breadth indicators, foreign flow sentiment, composite macro score.
 
 ### 1.2 Acceptance Criteria
 
-- All 159 automated unit tests pass on `python -m pytest`
+- All 407 automated unit tests pass on `python -m pytest`
 - Application launches without errors on `python -m streamlit run app.py`
 - Scanner scores 60 tickers in ≤ 2 seconds (benchmark: 1.04s achieved)
 - Stop/Target values correctly derived from ATR × timeframe multiplier
@@ -48,10 +48,10 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 1.0  NewTradingOS v14.0
 │
 ├── 1.1  Data Layer
-│   ├── 1.1.1  OHLCV Ingestion (DNSE primary, SSI fallback, CafeF fallback)
+│   ├── 1.1.1  OHLCV Ingestion (DNSE primary, SSI fallback)
 │   ├── 1.1.2  Batch Download (parallel ticker fetching, 6-second timeout)
 │   ├── 1.1.3  World Market Data (Yahoo Finance, 8 symbols, parallel)
-│   ├── 1.1.4  CafeF Foreign Flow Parser
+│   ├── 1.1.4  KBS Market Snapshot (breadth + foreign flow, session-only)
 │   └── 1.1.5  Data Caching (5-minute TTL, session-state scan cache)
 │
 ├── 1.2  Technical Indicators (core/indicators.py)
@@ -97,7 +97,7 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 ├── 1.6  Backtesting Engine (backtest/)
 │   ├── 1.6.1  Signal-based entry/exit simulation
 │   ├── 1.6.2  VN Cost Model (BUY_TOTAL = 0.20%, SELL_TOTAL = 0.30%)
-│   ├── 1.6.3  T+2.5 Settlement Simulation
+│   ├── 1.6.3  T+2 Settlement Simulation
 │   ├── 1.6.4  Performance Metrics (CAGR, Sharpe, Max Drawdown, Win Rate)
 │   └── 1.6.5  Equity Curve Export
 │
@@ -105,7 +105,7 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 │   ├── 1.7.1  Position Dataclass (ticker, timeframe, entry, stop, target, cost)
 │   ├── 1.7.2  open_position() — lot-size calculation + audit log
 │   ├── 1.7.3  close_position() — P&L calculation + audit log
-│   ├── 1.7.4  T+2 Pending State Management
+│   ├── 1.7.4  T+2 Close Readiness Management
 │   └── 1.7.5  JSON Persistence (data/portfolio.json)
 │
 ├── 1.8  Audit System (core/audit.py)
@@ -152,7 +152,7 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 | 1.5.8 | Ensemble voting | ML Dev | 6 model predictions + weights | Single price forecast + confidence | Forecast not NaN; weights sum to 1 |
 | 1.7.3 | `close_position()` | Portfolio Dev | ticker, exit_price, reason | Updated Position + audit event | P&L = (exit − entry − fees) × shares |
 | 1.8.1 | `log_event()` | Core Dev | action, detail dict | Appended line in audit.jsonl | File grows; no data loss on crash |
-| 1.11.x | Full test suite | QA | All modules | 159 passing tests | Zero failures on `pytest` |
+| 1.11.x | Full test suite | QA | All modules | 407 passing tests | Zero failures on `pytest` |
 
 ---
 
@@ -160,4 +160,4 @@ NewTradingOS v14.0 is a self-hosted Streamlit web application that provides:
 
 - **Formal change requests** must update this document and the Project Charter before implementation.
 - **Scope creep indicators:** new tabs, new API integrations, or changes to the 100-point scoring scale all require scope change review.
-- **Version gate:** any change that breaks existing 159 tests is blocked until tests are fixed or test suite updated.
+- **Version gate:** any change that breaks existing 407 tests is blocked until tests are fixed or test suite updated.

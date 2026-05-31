@@ -199,6 +199,31 @@ def compute_portfolio_metrics(
 # ─────────────────────────────────────────────────────────────
 # RISK BUDGET CHECK
 # ─────────────────────────────────────────────────────────────
+def _position_risk_vnd(position: dict) -> float:
+    """Estimate VND at risk for one position using stop distance.
+
+    Preferred input is ``stop_loss_pct`` as a decimal fraction. When unavailable,
+    derive the risk from ``entry_price`` and ``stop_loss`` so callers that store
+    price levels still get a correct risk-budget check.
+    """
+    size_vnd = float(position.get("size_vnd", 0.0) or 0.0)
+    stop_loss_pct = position.get("stop_loss_pct")
+
+    if stop_loss_pct is None:
+        entry_price = float(position.get("entry_price", 0.0) or 0.0)
+        stop_loss = position.get("stop_loss")
+        if entry_price > 0 and stop_loss is not None:
+            stop_loss_pct = 1.0 - (float(stop_loss) / entry_price)
+        else:
+            stop_loss_pct = 0.05
+
+    stop_loss_pct = float(stop_loss_pct)
+    if stop_loss_pct > 1.0:
+        stop_loss_pct /= 100.0
+    stop_loss_pct = float(np.clip(stop_loss_pct, 0.0, 1.0))
+    return size_vnd * stop_loss_pct
+
+
 def check_risk_budget(
     open_positions: list[dict],
     new_trade: dict,
@@ -221,11 +246,8 @@ def check_risk_budget(
         return False, f"Max positions for {tf} reached ({cfg['max_positions']})"
 
     # Check total capital at risk
-    total_at_risk = sum(
-        p.get("size_vnd", 0) * (1 - p.get("stop_loss_pct", 0.05))
-        for p in open_positions
-    )
-    new_at_risk   = new_trade.get("size_vnd", 0) * 0.05   # ~5% of trade
+    total_at_risk = sum(_position_risk_vnd(p) for p in open_positions)
+    new_at_risk = _position_risk_vnd(new_trade)
     if (total_at_risk + new_at_risk) / total_capital > max_portfolio_risk_pct:
         return False, "Portfolio risk budget exceeded"
 

@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from core.audit import ACTION_SCAN
 from core.scoring import batch_score, compute_score, SignalResult
 
 
@@ -148,7 +149,15 @@ class TestForeignFlowsNet20dWiring:
         When foreign_flows dict contains net_20d, batch_score must forward
         it as foreign_flow_net_20d= to compute_score.
         """
-        ff = {"VIC": {"net_buy_value": 1_000_000.0, "net_20d": 50_000_000.0, "trend_20d": "accumulate"}}
+        ff = {
+            "VIC": {
+                "net_buy_value": 1_000_000.0,
+                "net_20d": 50_000_000.0,
+                "trend_20d": "accumulate",
+                "history_sessions": 20,
+                "is_20d_proxy": False,
+            }
+        }
 
         with patch("core.scoring.compute_score") as mock_cs:
             stub = MagicMock(spec=SignalResult)
@@ -165,6 +174,29 @@ class TestForeignFlowsNet20dWiring:
                 f"Expected foreign_flow_net_20d=50_000_000.0 but got {net_20d_passed}. "
                 "batch_score must extract net_20d from the ff_ticker dict."
             )
+
+    def test_batch_score_ignores_proxy_net_20d(self, sample_data_dict):
+        ff = {
+            "VIC": {
+                "net_buy_value": 1_000_000.0,
+                "net_20d": 50_000_000.0,
+                "trend_20d": "accumulate",
+                "history_sessions": 1,
+                "is_20d_proxy": True,
+            }
+        }
+
+        with patch("core.scoring.compute_score") as mock_cs:
+            stub = MagicMock(spec=SignalResult)
+            stub.score = 60.0
+            mock_cs.return_value = stub
+
+            from core.scoring import batch_score as _bs
+            _bs({"VIC": sample_data_dict["VIC"]}, "1W", foreign_flows=ff)
+
+            call = mock_cs.call_args_list[0]
+            net_20d_passed = call.kwargs.get("foreign_flow_net_20d", 0.0)
+            assert net_20d_passed == 0.0
 
     def test_batch_score_zero_net_20d_when_not_in_ff(self, sample_data_dict):
         """When ticker not in foreign_flows, net_20d must default to 0."""
@@ -287,3 +319,94 @@ class TestScannerTabPassesExchangeMapToBatchScore:
                 "Check ui/scanner_tab.py — batch_score call must include exchange_map=exchange_map."
             )
             assert captured["exchange_map"] == exchange_map
+
+
+def _make_signal_result(ticker: str, score: float, action: str) -> SignalResult:
+    return SignalResult(
+        ticker=ticker,
+        timeframe="1M",
+        score=score,
+        action=action,
+        price=25_000.0,
+        stop_loss=23_500.0,
+        take_profit=28_000.0,
+        rr_ratio=2.0,
+        atr=500.0,
+        indicators={"ADV20_bn": 1.75},
+        regime_ok=True,
+        manip_flag=False,
+        message="",
+    )
+
+
+class TestScannerAuditEvents:
+    def test_build_scan_audit_events_emits_summary_and_per_ticker_rows(self, sample_data_dict):
+        from ui.scanner_tab import _build_scan_audit_events
+
+        results = [
+            _make_signal_result("VIC", 82.5, "STRONG BUY"),
+            _make_signal_result("PVS", 67.0, "BUY"),
+        ]
+
+        events = _build_scan_audit_events(
+            tf="1M",
+            results=results,
+            regime="bull",
+            macro_score=6.5,
+            data_dict=sample_data_dict,
+            foreign_flows={"VIC": {"net_buy_value": 1.0}},
+            audit_path="data/audit/2026-05-31.jsonl",
+            exchange_map={"VIC": "HOSE", "PVS": "HNX", "ART": "UPCOM"},
+            macro_stale=["foreign_flow"],
+        )
+
+        assert len(events) == 3
+
+        summary_event = events[0]
+        assert summary_event["action"] == ACTION_SCAN
+        assert summary_event["ticker"] == ""
+        assert summary_event["detail"]["kind"] == "summary"
+        assert summary_event["detail"]["buy_count"] == 2
+        assert summary_event["detail"]["top_signals"][0]["ticker"] == "VIC"
+
+        result_event = events[1]
+        assert result_event["ticker"] == "VIC"
+        assert result_event["detail"]["kind"] == "result"
+        assert result_event["detail"]["signal_action"] == "STRONG BUY"
+        assert result_event["detail"]["exchange"] == "HOSE"
+        assert result_event["detail"]["audit_file"].endswith("2026-05-31.jsonl")
+
+    def test_audit_tab_formats_scan_result_event(self):
+        from ui.audit_tab import _events_to_df
+
+        df = _events_to_df([
+            {
+                "ts": "2026-05-31T09:00:00.000",
+                "action": ACTION_SCAN,
+                "ticker": "VCB",
+                "timeframe": "1M",
+                "detail": {
+                    "kind": "result",
+                    "signal_action": "BUY",
+                    "score": 81.2,
+                    "price": 52_000.0,
+                    "stop_loss": 49_500.0,
+                    "take_profit": 57_000.0,
+                    "rr_ratio": 2.0,
+                    "exchange": "HOSE",
+                    "source": "DNSE",
+                    "bar_date": "2026-05-30",
+                    "adv20_bn": 2.15,
+                    "manip_flag": False,
+                    "regime_ok": True,
+                    "message": "",
+                },
+                "result": "ok",
+            }
+        ])
+
+        detail = df.iloc[0]["Chi tiết"]
+        assert "Signal: BUY" in detail
+        assert "Score: 81.2" in detail
+        assert "Exchange: HOSE" in detail
+        assert "Source: DNSE" in detail

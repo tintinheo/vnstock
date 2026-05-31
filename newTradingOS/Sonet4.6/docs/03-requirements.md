@@ -4,7 +4,7 @@
 **PMBOK Knowledge Area:** Scope Management  
 **Process Group:** Planning  
 **Document Version:** 3.0  
-**Date:** 2026-05-30
+**Date:** 2026-05-31
 
 ---
 
@@ -12,8 +12,8 @@
 
 | ID | Requirement | Priority | WBS | Module | Test Case |
 |---|---|---|---|---|---|
-| FR-001 | System shall fetch OHLCV daily data for any HOSE/HNX ticker from DNSE API with automatic SSI fallback | Must | 1.1.1 | `core/data_fetcher.py` | `test_data_fetcher::test_fetch_ohlcv_dnse` |
-| FR-002 | System shall use CafeF HTML as tertiary data fallback when DNSE and SSI both fail | Must | 1.1.1 | `core/data_fetcher.py` | `test_data_fetcher::test_fetch_fallback_chain` |
+| FR-001 | System shall fetch OHLCV daily data for any HOSE/HNX ticker from DNSE API with automatic SSI fallback when DNSE fails or returns insufficient cleaned rows | Must | 1.1.1 | `core/data_fetcher.py` | `test_data_fetcher::test_uses_dnse_on_success` |
+| FR-002 | `download_data()` shall apply `min_rows` after cleaning the source DataFrame; if a source drops below the threshold after cleaning, the pipeline shall continue to the next fallback | Must | 1.1.1 | `core/data_fetcher.py` | `test_data_fetcher::test_min_rows_checked_after_cleaning_before_accepting_source` |
 | FR-003 | System shall fetch data for a batch of tickers in parallel using ThreadPoolExecutor | Must | 1.1.2 | `core/data_fetcher.py` | `test_data_fetcher::test_batch_fetch` |
 | FR-004 | System shall compute all 21 technical indicator columns via `compute_all()` | Must | 1.2.8 | `core/indicators.py` | `test_indicators::test_compute_all_columns` |
 | FR-005 | `compute_all()` shall produce no all-NaN indicator series for sufficient data (≥ 30 rows) | Must | 1.2.8 | `core/indicators.py` | `test_indicators::test_no_all_nan` |
@@ -41,9 +41,9 @@
 | FR-027 | Scanner tab shall cache results per (timeframe, regime, macro_score, data_version) key | Should | 1.9.2 | `ui/scanner_tab.py` | Manual |
 | FR-028 | Application shall render all 11 tabs without exception on valid data | Must | 1.9 | `app.py` | Manual + smoke test |
 | FR-029 | World market data fetch shall complete within 3 seconds via parallel fetching | Should | 1.1.3 | `core/macro_data.py` | `test_regime::test_world_fetch_speed` |
-| FR-030 | `fetch_foreign_flow_ticker()` shall return net foreign flow over 20 trading sessions (`net_20d`) and trend direction (`trend_20d`: accumulate/distribute/neutral) | Must | 1.4.4 | `core/macro_data.py` | `test_macro_data::TestFetchForeignFlowTicker20d` |
+| FR-030 | `fetch_foreign_flow_ticker()` shall expose session-level foreign flow from the KBS snapshot and explicitly mark verified 20-session history as unavailable unless a multi-session source is added | Must | 1.4.4 | `core/macro_data.py` | `test_macro_data::TestFetchForeignFlowTicker20d` |
 | FR-031 | `batch_score()` and `render_scanner_tab()` shall accept an `exchange_map` dict to route each ticker to its correct exchange price limit | Must | 1.3.11 | `core/scoring.py`, `ui/scanner_tab.py` | `test_scanner_wiring::TestBatchScoreExchangeMap` |
-| FR-032 | `app.py` Macro update shall fetch per-ticker foreign flow in parallel (≤ 8 workers) and cache result in `session_state.foreign_flows_cache` | Must | 1.4.4 | `app.py` | `test_scanner_wiring::TestAppForeignFlowsCacheKey` |
+| FR-032 | `app.py` Macro update shall fetch foreign flow for loaded tickers via the batch helper `fetch_foreign_flow_tickers()` and cache the result in `session_state.foreign_flows_cache` | Must | 1.4.4 | `app.py` | `test_scanner_wiring::TestAppForeignFlowsCacheKey` |
 | FR-033 | ADX shall use Wilder smoothing (EWM alpha = 1/period) rather than SMA for authentic directional index calculation | Must | 1.2.6 | `core/indicators.py` | `test_indicators::TestWilderSmooth` |
 | FR-034 | ML Random Forest shall use 80/20 train/test walk-forward split; `_walk_forward_mape()` shall report out-of-sample MAPE | Must | 1.5.3 | `ml/classical_models.py` | `test_ensemble::TestWalkForwardRF` |
 | FR-035 | ATC (end-of-session) volume concentration shall be accepted as optional input to `manipulation_score()` and contribute up to 25 bonus points | Should | 1.2.7 | `core/indicators.py` | `test_indicators::TestManipulationScoreATC` |
@@ -64,14 +64,14 @@
 | NFR-003 | Application shall start without error on Python 3.10+ | Compatibility | Must | — | `streamlit run app.py` exits 0 |
 | NFR-004 | All API calls shall have a 6-second timeout to prevent UI blocking | Reliability | Must | 1.1.1 | Timeout set on all `requests.get()` calls |
 | NFR-005 | Audit log shall be append-only and never truncated | Data Integrity | Must | 1.8.1 | File opened with `mode='a'` exclusively |
-| NFR-006 | Portfolio JSON shall be atomic-write safe (write temp → rename) | Data Integrity | Should | 1.7.5 | No partial-write corruption on crash |
+| NFR-006 | Portfolio JSON shall be atomic-write safe (write temp → rename) | Data Integrity | Should | 1.7.5 | Implemented via temp-file + `os.replace()` in `portfolio.tracker.Portfolio.save()` |
 | NFR-007 | All mathematical computations shall use numpy/pandas vectorised operations | Performance | Must | 1.2 | No Python-level loops in indicator hot paths (except SuperTrend ratchet) |
-| NFR-008 | Test suite shall complete in ≤ 10 minutes | Maintainability | Should | 1.11 | Baseline: 159 tests in 330s |
+| NFR-008 | Test suite shall complete in ≤ 10 minutes | Maintainability | Should | 1.11 | Current passing baseline: 407 tests in 44.72s (2026-05-31); runtime depends on ML-heavy modules |
 | NFR-009 | No hardcoded API credentials in source code | Security | Must | 1.1 | OWASP A07 compliance |
 | NFR-010 | All user inputs (ticker symbols, dates) shall be validated before use in API calls | Security | Must | 1.9 | OWASP A03 — input validation |
 | NFR-011 | Indicator logic shall be deterministic (same inputs → same outputs) | Reliability | Must | 1.2 | Enforced by unit tests with fixed seeds |
 | NFR-012 | Score explanation (breakdown dict) shall always accompany each score | Usability | Must | 1.3 | `breakdown` key present in all ScoreResult |
-| NFR-013 | VN market-specific parameters (7% limit, T+2.5) shall be configurable via `config.py` | Maintainability | Must | 1.10 | Not hardcoded in logic modules |
+| NFR-013 | VN market-specific parameters (7% limit, T+2, tick size, lot size) shall be configurable via `config.py` | Maintainability | Must | 1.10 | Not hardcoded in logic modules |
 | NFR-014 | Application shall handle missing/partial API data without crashing | Reliability | Must | 1.1 | Returns `None` or empty DataFrame with logged warning |
 | NFR-015 | Code coverage shall be maintained for all `core/` modules | Maintainability | Must | 1.11 | All core module functions have at least one test |
 
@@ -92,4 +92,4 @@
 | UI / Application (FR-027 to FR-029) | 3 | Manual |
 | VN Market Fit (FR-036 to FR-039) | 4 | `test_indicators.py`, `test_scoring.py` |
 | Non-Functional (NFR-001 to NFR-015) | 15 | Various |
-| **Total** | **50** | **299 automated tests** |
+| **Total** | **50** | **407 automated tests passed** |

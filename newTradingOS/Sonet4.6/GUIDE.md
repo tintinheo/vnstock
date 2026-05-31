@@ -34,7 +34,7 @@ Vietnam Multi-Timeframe Trading Platform
 | Disk      | 500 MB  | 2 GB        |
 | OS        | Windows 10 / macOS 12 / Ubuntu 22.04 | — |
 
-**Internet access** is required for live price data (DNSE, SSI, CafeF APIs).
+**Internet access** is required for live price and macro data (DNSE, SSI, Yahoo chart API, KBS snapshot API).
 
 ---
 
@@ -135,7 +135,7 @@ Sonet4.6/
 ├── config.py               ← All constants, universe, timeframe configs
 │
 ├── core/
-│   ├── data_fetcher.py     ← OHLCV download (DNSE → SSI → CafeF fallback)
+│   ├── data_fetcher.py     ← OHLCV download (DNSE → SSI fallback)
 │   ├── macro_data.py       ← World markets, foreign flow, market breadth
 │   ├── indicators.py       ← All technical indicators
 │   ├── regime.py           ← Market regime detection (HMM + rule-based)
@@ -162,7 +162,7 @@ Sonet4.6/
 │   ├── backtest_tab.py     ← Backtest UI
 │   └── portfolio_tab.py    ← Portfolio tracker UI
 │
-├── tests/                  ← pytest suite (159 tests)
+├── tests/                  ← pytest suite (407 tests collected as of 2026-05-31)
 └── requirements.txt
 ```
 
@@ -197,18 +197,17 @@ portfolio/tracker  ──►  Portfolio tab
 | Section | Description |
 |---------|-------------|
 | World Markets | Gold, WTI Oil, DXY, S&P 500, VIX, CSI 300, Nikkei — price and % change |
-| Foreign Flow | Net foreign buy/sell for the current session (VN market) |
+| Foreign Flow | Net foreign buy/sell for the current session (VN market, KBS snapshot) |
 | Market Breadth | Advance/decline ratio, stocks above SMA20 |
-| Macro Score | Composite 0–100 score; drives regime bias and score adjustments |
+| Macro Score | Composite 0–10 score; drives regime bias and score adjustments |
 
-**Macro Score interpretation:**
+**Macro Score interpretation (0–10):**
 
 | Score | Meaning |
 |-------|---------|
-| 70–100 | Strong bull conditions — full position sizing |
-| 50–69 | Neutral — standard sizing |
-| 30–49 | Caution — reduce size, prefer 3M/5M holds |
-| 0–29 | Risk-off — avoid new entries |
+| 7.5–10.0 | Bull conditions — strongest macro support |
+| 4.5–7.4 | Neutral — mixed but tradable conditions |
+| 0.0–4.4 | Risk-off / bear bias — reduce aggressiveness |
 
 ---
 
@@ -229,7 +228,7 @@ Five timeframe scanners: **1W** (1 week), **2W** (2 weeks), **1M** (1 month), **
 |--------|-------------|
 | Ticker | Stock symbol |
 | Score | Signal strength 0–100 |
-| Action | BUY / WATCH / HOLD / AVOID |
+| Action | STRONG BUY / BUY / HOLD / WATCH / SELL |
 | Price | Last close price (VND) |
 | Stop | Recommended stop-loss price |
 | Target | Recommended take-profit price |
@@ -240,10 +239,11 @@ Five timeframe scanners: **1W** (1 week), **2W** (2 weeks), **1M** (1 month), **
 
 | Score | Action |
 |-------|--------|
-| ≥ 75 | BUY |
-| 60–74 | WATCH |
-| 45–59 | HOLD |
-| < 45 | AVOID |
+| ≥ 80 | STRONG BUY |
+| 65–79 | BUY |
+| 45–64 | HOLD |
+| 30–44 | WATCH |
+| < 30 | SELL |
 
 **Timeframe selection guide:**
 
@@ -256,6 +256,8 @@ Five timeframe scanners: **1W** (1 week), **2W** (2 weeks), **1M** (1 month), **
 | 5M | ~110 sessions | Long-term positions |
 
 Longer timeframes (3M, 5M) use a more lenient regime filter (accepts bear market entries), while shorter timeframes (1W, 2W) are filtered to bull/sideways only.
+
+Foreign-flow note: the current KBS integration exposes session-level net flow only. The UI labels this clearly; verified rolling 20-session foreign-flow history is not yet implemented.
 
 ---
 
@@ -440,7 +442,7 @@ The score (0–100) is a weighted composite of:
 | Macro adjustment | ±5 | Macro score above/below neutral |
 | Foreign flow | ±5 | Net foreign buy/sell direction |
 
-**Manipulation detection:** If `manipulation_score ≥ 50` (abnormal volume spike pattern), a warning is shown and the raw score is capped. Avoid entering on manipulation signals.
+**Manipulation detection:** If `manipulation_score > 65` or the ticker shows persistent floor-streak behavior, the UI warns and `STRONG BUY` can be downgraded to `BUY`. Treat these names as higher-risk candidates.
 
 ---
 
@@ -448,10 +450,10 @@ The score (0–100) is a weighted composite of:
 
 ```bash
 cd D:\portfolio\vnstock\newTradingOS\Sonet4.6
-python -m pytest tests/ -v
+python -m pytest tests/ -q --tb=short
 ```
 
-Expected: **159 tests, all passing** (~3 minutes due to ML model tests).
+Current baseline: **407 tests passed** (`python -m pytest tests/ -q --tb=short` on 2026-05-31). Runtime depends on the ML-heavy modules and local machine speed.
 
 To run a specific module's tests:
 
@@ -467,17 +469,17 @@ To run with coverage:
 python -m pytest tests/ --cov=core --cov=ml --cov=portfolio --cov=backtest --cov-report=term-missing
 ```
 
-Test files:
+Representative test modules:
 
-| File | Tests | Covers |
-|------|-------|--------|
-| `test_backtest.py` | 23 | Backtest engine, trades, T+2, fees, summaries |
-| `test_data_fetcher.py` | 17 | OHLCV download, normalization, parsing |
-| `test_ensemble.py` | 17 | ML ensemble, forecast results, weight redistribution |
-| `test_indicators.py` | 30 | All technical indicators |
-| `test_portfolio.py` | 28 | Kelly, sizing, tracker, metrics |
-| `test_regime.py` | 15 | Regime detection (HMM + rule-based) |
-| `test_scoring.py` | 29 | Signal scoring, batch scanner |
+| File | Covers |
+|------|--------|
+| `test_backtest.py` | Backtest engine, fills, T+2, fees, summaries |
+| `test_data_fetcher.py` | OHLCV download, normalization, parsing, fallback rules |
+| `test_ensemble.py` | ML ensemble, forecast results, weight redistribution |
+| `test_indicators.py` | All technical indicators |
+| `test_portfolio.py` | Kelly, sizing, tracker, persistence, metrics |
+| `test_regime.py` | Regime detection (HMM + rule-based) |
+| `test_scoring.py` | Signal scoring, batch scanner |
 
 ---
 
@@ -495,7 +497,7 @@ Test files:
 
 - Check the ticker code is correct (e.g., `VCB` not `vcb`)
 - HNX and UPCOM tickers are mapped automatically via `TICKER_EXCHANGE` in `config.py`
-- Some tickers may be delisted or temporarily unavailable; the app falls back across three data sources (DNSE → SSI → CafeF)
+- Some tickers may be delisted or temporarily unavailable; the app currently falls back across two data sources (DNSE → SSI)
 
 ### ML Forecast is very slow
 
@@ -510,7 +512,7 @@ Test files:
 
 ### Portfolio file corrupted
 
-Delete `data/portfolio.json` to reset. The portfolio will start fresh from `INITIAL_CAPITAL`.
+The portfolio writer now uses a temp-file + replace flow to reduce corruption risk. If the file is still unreadable, delete `data/portfolio.json` to reset from `INITIAL_CAPITAL`.
 
 ### Streamlit cache issues
 

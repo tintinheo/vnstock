@@ -18,6 +18,79 @@ from ui.components import (
 )
 
 
+MODEL_LABELS = {
+    "lstm": "LSTM",
+    "xgb": "XGBoost",
+    "rf": "RandomForest",
+    "prophet": "Prophet",
+    "arima": "ARIMA",
+    "mc": "Monte Carlo",
+    "holt": "Holt",
+}
+
+
+def _format_model_name(model: str) -> str:
+    return MODEL_LABELS.get(model, model.upper())
+
+
+def _latest_bar_date_label(df: pd.DataFrame) -> str:
+    if df is None or len(df.index) == 0:
+        return "N/A"
+
+    try:
+        return pd.Timestamp(df.index[-1]).strftime("%Y-%m-%d")
+    except Exception:
+        return str(df.index[-1])
+
+
+def _forecast_trust_state(
+    fc,
+    data_source: str,
+    df_raw: pd.DataFrame,
+    regime: str,
+) -> dict:
+    active_models = sorted(fc.model_preds.keys())
+    available_models = {
+        name for name, available in fc.method_flags.items() if available
+    }
+    expected_models = sorted(
+        available_models | set(fc.weights_used.keys()) | set(active_models)
+    )
+
+    fallback_only = active_models == ["holt"]
+    if fallback_only:
+        expected_models = ["holt"]
+
+    inactive_models = [
+        model for model in expected_models if model not in active_models
+    ]
+    models_expected = len(expected_models)
+    models_used = len(active_models)
+
+    band_pct = 0.0
+    if fc.current_price > 0 and fc.prices_bull and fc.prices_bear:
+        band_pct = (
+            (fc.prices_bull[-1] - fc.prices_bear[-1])
+            / fc.current_price
+            * 100
+        )
+
+    degraded = fallback_only or bool(inactive_models)
+
+    return {
+        "source": data_source or "N/A",
+        "as_of": _latest_bar_date_label(df_raw),
+        "regime": regime,
+        "active_models": active_models,
+        "inactive_models": inactive_models,
+        "models_used": models_used,
+        "models_expected": models_expected,
+        "band_pct": round(float(band_pct), 2),
+        "fallback_only": fallback_only,
+        "degraded": degraded,
+    }
+
+
 def render_ml_tab(
     data_dict: dict,
     regime: str,
@@ -25,6 +98,10 @@ def render_ml_tab(
     lang: str = "VI",
 ) -> None:
     st.subheader("🧠 ML Ensemble Forecast")
+
+    if not data_dict:
+        st.info("Chưa có dữ liệu giá. Hãy tải dữ liệu trước khi chạy ML forecast.")
+        return
 
     # ── Model availability banner ─────────────────────────────
     flags = {
@@ -67,9 +144,45 @@ def render_ml_tab(
                 macro_dict=macro_data,
                 n_lstm_epochs=epochs,
             )
+        trust = _forecast_trust_state(fc, src, df_raw, regime)
 
         cfg    = TIMEFRAME_CONFIG[tf]
         n_days = cfg["hold_sessions"]
+
+        t1, t2, t3, t4 = st.columns(4)
+        t1.metric("Nguồn dữ liệu", trust["source"])
+        t2.metric("Bar cuối", trust["as_of"])
+        t3.metric("Models chạy", f"{trust['models_used']}/{trust['models_expected']}")
+        t4.metric("Dải P75-P25", f"{trust['band_pct']:.1f}%")
+
+        active_models = ", ".join(
+            _format_model_name(model) for model in trust["active_models"]
+        ) or "N/A"
+        st.caption(
+            f"Cơ sở forecast: {active_models} | Regime đầu vào: {trust['regime']}"
+        )
+
+        if trust["fallback_only"]:
+            st.warning(
+                "Forecast này đang ở chế độ fallback: toàn bộ model chính không đóng góp, "
+                "kết quả hiện chỉ dựa trên Holt smoothing. Không nên xem đây là tín hiệu mạnh."
+            )
+        elif trust["degraded"]:
+            inactive_models = ", ".join(
+                _format_model_name(model) for model in trust["inactive_models"]
+            )
+            st.info(
+                "Forecast này đang dùng ensemble suy giảm: một số model không tham gia run hiện tại "
+                f"({inactive_models}). Trọng số đã được tái phân bổ trên các model còn lại."
+            )
+
+        if trust["band_pct"] >= 12:
+            st.warning(
+                f"Dải bất định P75-P25 đang rộng {trust['band_pct']:.1f}% so với giá hiện tại. "
+                "Nên xem target như vùng tham chiếu thay vì mức giá chắc chắn."
+            )
+
+        st.divider()
 
         # ── Price chart with forecast ─────────────────────────
         df_ind = compute_all(df_raw.copy(), cfg)

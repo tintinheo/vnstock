@@ -178,22 +178,23 @@ def download_data(
             logger.debug("%s %s unexpected: %s", src_name, symbol, exc)
             df = pd.DataFrame()
 
-        if len(df) > len(best_df):
-            best_df, best_src = df, src_name
+        cleaned = _clean_df(df)
 
-        if len(df) >= min_rows:
-            logger.info("OK %s %s: %d rows", src_name, symbol, len(df))
-            return _clean_df(df), src_name
+        if len(cleaned) > len(best_df):
+            best_df, best_src = cleaned, src_name
+
+        if len(cleaned) >= min_rows:
+            logger.info("OK %s %s: %d rows", src_name, symbol, len(cleaned))
+            return cleaned, src_name
 
         logger.debug("skip %s %s: %d rows (need %d)",
-                     src_name, symbol, len(df), min_rows)
+                     src_name, symbol, len(cleaned), min_rows)
 
     # Return best partial result rather than empty
     if not best_df.empty:
-        cleaned = _clean_df(best_df)
         logger.warning("partial %s: only %d rows from %s",
-                       symbol, len(cleaned), best_src)
-        return cleaned, best_src
+                       symbol, len(best_df), best_src)
+        return best_df, best_src
 
     logger.error("No data for %s (exchange=%s)", symbol,
                  TICKER_EXCHANGE.get(symbol, "HOSE"))
