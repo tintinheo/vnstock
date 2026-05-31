@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.audit import ACTION_CLOSE, ACTION_SCAN, filter_events, get_event_detail_kind
-from ui.audit_tab import _apply_audit_preset
+from ui.audit_tab import _apply_audit_preset, _audit_review_state
 
 
 def _scan_summary_event(*, legacy: bool = False) -> dict:
@@ -122,3 +122,27 @@ def test_apply_audit_preset_can_keep_buy_signals_only():
 
     assert len(filtered) == 1
     assert filtered[0]["detail"]["signal_action"] == "BUY"
+
+
+def test_audit_review_state_prioritises_issue_events():
+    issue_event = _scan_result_event()
+    issue_event["detail"].update({
+        "manip_flag": True,
+        "regime_ok": False,
+        "message": "macro weak",
+    })
+    state = _audit_review_state([issue_event], "Issues only")
+
+    assert state["tone"] == "warning"
+    assert state["issues"] == 1
+    assert state["priority_events"] == [issue_event]
+
+
+def test_audit_review_state_can_surface_buy_signal_review():
+    buy_event = _scan_result_event()
+
+    state = _audit_review_state([buy_event], "BUY / STRONG BUY")
+
+    assert state["tone"] == "success"
+    assert state["buy_signals"] == 1
+    assert "BUY/STRONG BUY" in state["primary"]

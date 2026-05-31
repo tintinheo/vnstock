@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import streamlit as st
+from ui.components import render_decision_panel, render_section_header
 
 # Locate docs directory relative to this file:
 # guide_tab.py → ui/ → Sonet4.6/ → docs/
@@ -25,12 +26,92 @@ def _load_md(path: Path) -> str:
         return f"_Lỗi đọc file: {exc}_"
 
 
+def _guide_quickstart(lang: str = "VI") -> list[dict[str, str]]:
+    if lang == "VI":
+        return [
+            {
+                "title": "1. Tải dữ liệu",
+                "body": "Chọn watchlist hoặc universe phù hợp, sau đó tải giá để app có context review ban đầu.",
+            },
+            {
+                "title": "2. Cập nhật macro",
+                "body": "Nạp regime, macro score, foreign-flow và trust labels trước khi đánh giá tín hiệu.",
+            },
+            {
+                "title": "3. Review tín hiệu",
+                "body": "Bắt đầu từ Signal Review và Macro Pulse; chỉ mở diagnostics sâu khi cần xác minh thêm.",
+            },
+            {
+                "title": "4. Validate hành động",
+                "body": "Dùng ML, Backtest và Portfolio để kiểm tra forecast usage, độ robust và room rủi ro trước khi vào lệnh.",
+            },
+        ]
+    return [
+        {
+            "title": "1. Load data",
+            "body": "Choose a watchlist or universe first so every review workspace has current price context.",
+        },
+        {
+            "title": "2. Refresh macro",
+            "body": "Refresh macro to load regime, macro score, foreign flow, and trust labels before judging any signal.",
+        },
+        {
+            "title": "3. Review signals",
+            "body": "Start with Signal Review and Macro Pulse; only open deep diagnostics when you need more confirmation.",
+        },
+        {
+            "title": "4. Validate action",
+            "body": "Use ML, Backtest, and Portfolio to validate forecast usage, robustness, and risk room before acting.",
+        },
+    ]
+
+
 def render_guide_tab(lang: str = "VI") -> None:
     """Render the full in-app documentation viewer."""
 
-    st.header("📖 Hướng Dẫn Sử Dụng" if lang == "VI" else "📖 User Guide")
+    render_section_header(
+        "📖 Hướng Dẫn Sử Dụng" if lang == "VI" else "📖 User Guide",
+        "Bắt đầu từ quick-start workflow trước, rồi mới mở full reference khi cần tra cứu chi tiết.",
+    )
+    render_decision_panel(
+        "Quick start",
+        "Tải dữ liệu -> cập nhật macro -> review -> validate trước khi hành động"
+        if lang == "VI"
+        else "Load data -> refresh macro -> review -> validate before acting",
+        "Guide tab ưu tiên onboarding nhanh; tài liệu đầy đủ vẫn nằm phía dưới để tra cứu sâu."
+        if lang == "VI"
+        else "The guide starts with onboarding; the full reference remains below for deeper lookup.",
+        metrics=[
+            (
+                "Primary flow" if lang != "VI" else "Luồng chính",
+                "Guided review",
+                "Macro + Signal Review first",
+            ),
+            (
+                "Decision mode" if lang != "VI" else "Decision mode",
+                "Trust-first",
+                "Read provenance before conviction",
+            ),
+            (
+                "Advanced tools" if lang != "VI" else "Công cụ sâu",
+                "ML | Backtest | Portfolio",
+                "Validate before sizing",
+            ),
+        ],
+        tone="info",
+    )
+
+    cards = _guide_quickstart(lang)
+    st.subheader("🚀 Quick Start" if lang != "VI" else "🚀 Bắt Đầu Nhanh")
+    cols = st.columns(2)
+    for index, card in enumerate(cards):
+        with cols[index % 2]:
+            with st.container(border=True):
+                st.markdown(f"**{card['title']}**")
+                st.caption(card["body"])
 
     # ── Document selector + search ───────────────────────────────────────────
+    st.divider()
     col_sel, col_search = st.columns([3, 2])
     with col_sel:
         selected = st.selectbox(
@@ -92,7 +173,11 @@ def render_guide_tab(lang: str = "VI") -> None:
     st.divider()
 
     # ── Main content ──────────────────────────────────────────────────────────
-    st.markdown(content, unsafe_allow_html=False)
+    with st.expander(
+        "📚 Full reference document" if lang != "VI" else "📚 Tài liệu tham chiếu đầy đủ",
+        expanded=bool(search_term),
+    ):
+        st.markdown(content, unsafe_allow_html=False)
 
     # ── Download ──────────────────────────────────────────────────────────────
     st.divider()

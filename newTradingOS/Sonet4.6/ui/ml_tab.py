@@ -22,6 +22,7 @@ from ui.components import (
     YELLOW,
     apply_dark_chart_layout,
     candlestick_chart,
+    render_decision_panel,
     render_guidance_callout,
     render_section_header,
     vn_future_trading_dates,
@@ -170,11 +171,11 @@ def render_ml_tab(
         "RandomForest": True,
         "Monte Carlo":  True,
     }
-    cols = st.columns(len(flags))
-    for col, (name, avail) in zip(cols, flags.items()):
-        col.metric(name, "✅" if avail else "❌")
-
-    st.divider()
+    with st.expander("🧪 Model & Runtime Availability", expanded=False):
+        cols = st.columns(len(flags))
+        for col, (name, avail) in zip(cols, flags.items()):
+            col.metric(name, "✅" if avail else "❌")
+        st.caption("Nếu một model runtime không sẵn sàng, ensemble sẽ tự động degrade và usage policy sẽ phản ánh điều đó.")
 
     # ── Controls ─────────────────────────────────────────────
     c1, c2, c3 = st.columns(3)
@@ -211,21 +212,24 @@ def render_ml_tab(
 
         cfg    = TIMEFRAME_CONFIG[tf]
         n_days = cfg["hold_sessions"]
-
-        t1, t2, t3, t4 = st.columns(4)
-        t1.metric("Nguồn dữ liệu", trust["source"])
-        t2.metric("Bar cuối", trust["as_of"])
-        t3.metric("Models chạy", f"{trust['models_used']}/{trust['models_expected']}")
-        t4.metric("Dải P75-P25", f"{trust['band_pct']:.1f}%")
-
-        p1, p2, p3 = st.columns(3)
-        p1.metric("Usage Policy", usage_policy["usage"], usage_policy["confidence"])
-        p2.metric("Decision Mode", "Trust-first", f"Regime {trust['regime']}")
-        p3.metric("Next Step", usage_policy["next_step"], f"Models {trust['models_used']}/{trust['models_expected']}")
-
+        inactive_count = len(trust["inactive_models"])
         active_models = ", ".join(
             _format_model_name(model) for model in trust["active_models"]
         ) or "N/A"
+
+        render_decision_panel(
+            "Forecast usage policy",
+            f"{usage_policy['usage']} | {usage_policy['confidence']} confidence",
+            f"{usage_policy['next_step']} | Regime {trust['regime']} | Exchange {exchange}",
+            metrics=[
+                ("Nguồn dữ liệu", trust["source"], f"Bar cuối {trust['as_of']}"),
+                ("Models chạy", f"{trust['models_used']}/{trust['models_expected']}", f"Inactive {inactive_count}"),
+                ("Dải P75-P25", f"{trust['band_pct']:.1f}%", f"Upside {fc.upside_pct:+.1f}%"),
+                ("Decision mode", "Trust-first", f"Horizon {n_days} phiên"),
+            ],
+            tone=usage_policy["tone"],
+        )
+
         st.caption(
             f"Cơ sở forecast: {active_models} | Regime đầu vào: {trust['regime']} | Exchange: {exchange}"
         )

@@ -16,6 +16,7 @@ from core.audit import log_events, ACTION_SCAN
 from core.scoring import SignalResult, batch_score
 from ui.components import (
     candlestick_chart,
+    render_decision_panel,
     render_guidance_callout,
     render_section_header,
     render_trust_ribbon,
@@ -87,6 +88,74 @@ def _foreign_flow_row_detail(ticker: str, foreign_flows: dict) -> dict:
         "ff_basis": payload.get("basis", "not_available"),
         "ff_session_trend": payload.get("session_trend", "neutral"),
         "ff_is_proxy": bool(payload.get("is_20d_proxy", False)),
+    }
+
+
+def _scanner_review_state(
+    review_focus: str,
+    visible_results: list[SignalResult],
+    all_results: list[SignalResult],
+) -> dict[str, str]:
+    visible_buy = sum(1 for result in visible_results if result.action in ("BUY", "STRONG BUY"))
+    visible_risk = sum(1 for result in visible_results if result.action in ("WATCH", "SELL"))
+    all_buy = sum(1 for result in all_results if result.action in ("BUY", "STRONG BUY"))
+    avg_visible_score = (
+        sum(float(result.score) for result in visible_results) / len(visible_results)
+        if visible_results else 0.0
+    )
+
+    if not visible_results:
+        return {
+            "primary": "Không có mã phù hợp focus hiện tại",
+            "secondary": "Đổi review focus hoặc nới điều kiện để không bỏ lỡ setup đang có.",
+            "tone": "warning",
+        }
+
+    if review_focus == "Theo dõi rủi ro":
+        if visible_risk:
+            return {
+                "primary": f"Ưu tiên xử lý {visible_risk} mã đang phát tín hiệu rủi ro",
+                "secondary": "Đọc WATCH/SELL trước để loại mã yếu hoặc gắn cờ cần theo dõi thêm.",
+                "tone": "warning",
+            }
+        return {
+            "primary": "Chưa có cảnh báo nổi bật trong focus rủi ro",
+            "secondary": "Có thể quay lại Top ideas để tìm setup mới hoặc mở toàn bộ bảng để rà thêm.",
+            "tone": "info",
+        }
+
+    if visible_buy >= 3 and avg_visible_score >= 65:
+        return {
+            "primary": f"Có {visible_buy} mã BUY+ đáng review trước",
+            "secondary": "Bắt đầu từ Top Ideas, sau đó dùng review table để so stop, target và provenance.",
+            "tone": "success",
+        }
+
+    if visible_buy >= 1:
+        return {
+            "primary": "Review chọn lọc các mã BUY trước",
+            "secondary": "Đối chiếu stop/target, source và foreign-flow basis trước khi mở diagnostics sâu.",
+            "tone": "info",
+        }
+
+    if all_buy >= 1:
+        return {
+            "primary": "Focus hiện tại đang che bớt các mã BUY",
+            "secondary": "Chuyển sang Top ideas hoặc Mua tiềm năng nếu mục tiêu là tìm entry mới.",
+            "tone": "info",
+        }
+
+    if visible_risk >= 1:
+        return {
+            "primary": "Chưa có buy setup rõ, ưu tiên watchlist và risk review",
+            "secondary": "Dùng bảng review để loại mã yếu trước khi tăng conviction cho ý tưởng mới.",
+            "tone": "warning",
+        }
+
+    return {
+        "primary": "Dùng bảng review để sàng lọc thêm",
+        "secondary": "Hiện chưa có edge mạnh nổi bật; ưu tiên đọc trust labels trước khi hành động.",
+        "tone": "info",
     }
 
 
@@ -362,35 +431,9 @@ def render_scanner_tab(
         st.warning("Không có dữ liệu để quét.")
         return
 
-    # ── Summary metrics (full unfiltered set) ─────────────────
     buy_count  = sum(1 for r in all_results if r.action in ("BUY", "STRONG BUY"))
     watch_count= sum(1 for r in all_results if r.action == "WATCH")
     avg_score  = sum(r.score for r in all_results) / len(all_results)
-    m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Tổng mã", len(all_results))
-    m2.metric("BUY / STRONG BUY", buy_count)
-    m3.metric("WATCH", watch_count)
-    m4.metric("Score trung bình", f"{avg_score:.1f}")
-
-    render_trust_ribbon([
-        ("Latest bar", _latest_bar_date(data_dict)),
-        ("Source mix", _source_mix(data_dict)),
-        ("Macro as-of", st.session_state.get("macro_updated_at") or "—"),
-        (
-            "Foreign flow basis",
-            _foreign_flow_basis(tf, foreign_flows)
-            if tf in ("2W", "1M", "3M", "5M")
-            else f"{_foreign_flow_basis(tf, foreign_flows)} on this timeframe",
-        ),
-    ])
-
-    _macro_stale = macro_stale
-    if _macro_stale:
-        render_guidance_callout(
-            "Scanner trust warning",
-            f"Macro data is partial. Missing components: {', '.join(_macro_stale)}.",
-            tone="warning",
-        )
 
     review_focus = st.radio(
         "Review focus",
@@ -412,6 +455,46 @@ def render_scanner_tab(
         r for r in all_results
         if allowed_actions is None or r.action in allowed_actions
     ]
+    visible_buy_count = sum(1 for r in visible_results if r.action in ("BUY", "STRONG BUY"))
+    visible_risk_count = sum(1 for r in visible_results if r.action in ("WATCH", "SELL"))
+    avg_visible_score = (
+        sum(float(r.score) for r in visible_results) / len(visible_results)
+        if visible_results else 0.0
+    )
+    review_state = _scanner_review_state(review_focus, visible_results, all_results)
+
+    render_decision_panel(
+        "Scanner review stance",
+        review_state["primary"],
+        review_state["secondary"],
+        metrics=[
+            ("Visible", f"{len(visible_results)}/{len(all_results)}", f"Focus {review_focus}"),
+            ("BUY+", str(visible_buy_count), f"All {buy_count}"),
+            ("Risk rows", str(visible_risk_count), f"WATCH {watch_count}"),
+            ("Avg score", f"{avg_visible_score:.1f}", f"All {avg_score:.1f}"),
+        ],
+        tone=review_state["tone"],
+    )
+
+    render_trust_ribbon([
+        ("Latest bar", _latest_bar_date(data_dict)),
+        ("Source mix", _source_mix(data_dict)),
+        ("Macro as-of", st.session_state.get("macro_updated_at") or "—"),
+        (
+            "Foreign flow basis",
+            _foreign_flow_basis(tf, foreign_flows)
+            if tf in ("2W", "1M", "3M", "5M")
+            else f"{_foreign_flow_basis(tf, foreign_flows)} on this timeframe",
+        ),
+    ])
+
+    _macro_stale = macro_stale
+    if _macro_stale:
+        render_guidance_callout(
+            "Scanner trust warning",
+            f"Macro data is partial. Missing components: {', '.join(_macro_stale)}.",
+            tone="warning",
+        )
 
     top_candidates = sorted(
         [r for r in all_results if r.action in ("STRONG BUY", "BUY")],
@@ -442,7 +525,10 @@ def render_scanner_tab(
                             f"history {ff_detail['ff_history_sessions']}P"
                         )
 
-    st.caption(f"Đang xem **{len(visible_results)} / {len(all_results)}** mã theo focus: **{review_focus}**.")
+    st.caption(
+        f"Đang xem **{len(visible_results)} / {len(all_results)}** mã theo focus: **{review_focus}**. "
+        "Bảng review là lớp quyết định chính; diagnostics sâu được giữ phía dưới theo nhu cầu."
+    )
 
     # ── Full result table — all rows, color-coded by Action ──
     rows = []
@@ -486,6 +572,7 @@ def render_scanner_tab(
 
     styled = df_out.style.apply(_colour_row, axis=1)
 
+    st.subheader("🧾 Review Table")
     st.info("💡 Màu hàng: 🟩 STRONG BUY → BUY → 🟨 HOLD → 🟦 WATCH → 🟥 SELL. "
             "Click tiêu đề cột để sắp xếp.")
     st.dataframe(
@@ -548,13 +635,25 @@ def render_scanner_tab(
         key=f"dl_{tf}",
     )
 
-    # ── Detail expanders — ALL tickers grouped by action ─────
-    st.divider()
-    st.subheader("🔍 Chi tiết tất cả tín hiệu")
+    show_deep_dive = st.toggle(
+        "Hiện diagnostics sâu",
+        value=False,
+        key=f"scan_diagnostics_{tf}",
+        help="Mở khi cần đọc từng breakdown, chart chi tiết và hướng dẫn giải thích tín hiệu.",
+    )
 
-    # Newbie guide (collapsed by default)
-    with st.expander("📖 Hướng dẫn đọc kết quả (dành cho người mới)", expanded=False):
-        st.markdown("""
+    # ── Detail expanders — ALL tickers grouped by action ─────
+    if show_deep_dive:
+        st.divider()
+        st.subheader("🔬 Diagnostics & Deep Dive")
+        st.caption(
+            "Phần này dành cho đọc breakdown, chart chi tiết và hướng dẫn giải thích tín hiệu. "
+            "Không cần mở nếu mục tiêu chỉ là chọn nhanh các mã đáng review."
+        )
+
+        # Newbie guide (collapsed by default)
+        with st.expander("📖 Hướng dẫn đọc kết quả (dành cho người mới)", expanded=False):
+            st.markdown("""
 **Score (0–100)** — Điểm tổng hợp tất cả chỉ báo kỹ thuật.
 - ≥ 80 → **STRONG BUY**: Tín hiệu rất mạnh, nhiều chỉ báo cùng đồng thuận tăng.
 - 65–79 → **BUY**: Tín hiệu tốt, phù hợp để mở vị thế.
@@ -588,129 +687,128 @@ def render_scanner_tab(
 **Regime OK** ✅ — Chế độ thị trường hiện tại phù hợp với chiến lược mua. ❌ = thị trường đang xấu, hạn chế mở vị thế mới.
 
 **Manip ⚠️** — Phát hiện dấu hiệu thao túng giá (đẩy giá, bán phá giá). Nếu có dấu hiệu này, hãy thận trọng hơn.
-        """)
+            """)
 
-    # Group results by action priority
-    _ACTION_ORDER = ["STRONG BUY", "BUY", "HOLD", "WATCH", "SELL"]
-    _ACTION_ICON  = {
-        "STRONG BUY": "🟢",
-        "BUY":        "🟩",
-        "HOLD":       "🟨",
-        "WATCH":      "🟦",
-        "SELL":       "🟥",
-    }
-    grouped: dict[str, list] = {a: [] for a in _ACTION_ORDER}
-    for r in visible_results:
-        grouped.setdefault(r.action, []).append(r)
+        # Group results by action priority
+        _ACTION_ORDER = ["STRONG BUY", "BUY", "HOLD", "WATCH", "SELL"]
+        _ACTION_ICON  = {
+            "STRONG BUY": "🟢",
+            "BUY":        "🟩",
+            "HOLD":       "🟨",
+            "WATCH":      "🟦",
+            "SELL":       "🟥",
+        }
+        grouped: dict[str, list] = {a: [] for a in _ACTION_ORDER}
+        for r in visible_results:
+            grouped.setdefault(r.action, []).append(r)
 
-    for action in _ACTION_ORDER:
-        group = grouped.get(action, [])
-        if not group:
-            continue
-        icon = _ACTION_ICON.get(action, "⬜")
-        with st.expander(f"{icon} {action} — {len(group)} mã", expanded=(action in ("STRONG BUY", "BUY"))):
-            # Action-level explanation
-            _ACTION_EXPLAIN = {
-                "STRONG BUY": "Tín hiệu rất mạnh. Nhiều chỉ báo đồng thuận tăng. Phù hợp mở vị thế đầy đủ với stop loss chặt.",
-                "BUY":        "Tín hiệu tốt. Phù hợp mở vị thế một phần, chờ xác nhận thêm nếu muốn an toàn hơn.",
-                "HOLD":       "Chưa có tín hiệu rõ ràng. Nếu đang giữ thì tiếp tục, chưa nên mua thêm.",
-                "WATCH":      "Tín hiệu yếu. Cho vào danh sách theo dõi, chờ điểm vào tốt hơn.",
-                "SELL":       "Tín hiệu xấu. Nếu đang giữ cổ phiếu này, cân nhắc thoát ra để bảo vệ vốn.",
-            }
-            st.caption(_ACTION_EXPLAIN.get(action, ""))
+        for action in _ACTION_ORDER:
+            group = grouped.get(action, [])
+            if not group:
+                continue
+            icon = _ACTION_ICON.get(action, "⬜")
+            with st.expander(f"{icon} {action} — {len(group)} mã", expanded=(action in ("STRONG BUY", "BUY"))):
+                # Action-level explanation
+                _ACTION_EXPLAIN = {
+                    "STRONG BUY": "Tín hiệu rất mạnh. Nhiều chỉ báo đồng thuận tăng. Phù hợp mở vị thế đầy đủ với stop loss chặt.",
+                    "BUY":        "Tín hiệu tốt. Phù hợp mở vị thế một phần, chờ xác nhận thêm nếu muốn an toàn hơn.",
+                    "HOLD":       "Chưa có tín hiệu rõ ràng. Nếu đang giữ thì tiếp tục, chưa nên mua thêm.",
+                    "WATCH":      "Tín hiệu yếu. Cho vào danh sách theo dõi, chờ điểm vào tốt hơn.",
+                    "SELL":       "Tín hiệu xấu. Nếu đang giữ cổ phiếu này, cân nhắc thoát ra để bảo vệ vốn.",
+                }
+                st.caption(_ACTION_EXPLAIN.get(action, ""))
 
-            for r in group:
-                with st.expander(
-                    f"**{r.ticker}** — Score: {r.score:.0f}  |  "
-                    f"Giá: {r.price:,.0f}  |  Stop: {r.stop_loss:,.0f}  |  "
-                    f"Target: {r.take_profit:,.0f}  |  R/R: 1:{r.rr_ratio}",
-                    expanded=False,
-                ):
-                    c_info, c_chart = st.columns([1, 3])
+                for r in group:
+                    with st.expander(
+                        f"**{r.ticker}** — Score: {r.score:.0f}  |  "
+                        f"Giá: {r.price:,.0f}  |  Stop: {r.stop_loss:,.0f}  |  "
+                        f"Target: {r.take_profit:,.0f}  |  R/R: 1:{r.rr_ratio}",
+                        expanded=False,
+                    ):
+                        c_info, c_chart = st.columns([1, 3])
 
-                    with c_info:
-                        st.markdown("##### Tóm tắt quyết định")
-                        rsi_val  = r.indicators.get("RSI", None)
-                        adx_val  = r.indicators.get("ADX", None)
-                        vol_val  = r.indicators.get("Vol_ratio", None)
-                        mfi_val  = r.indicators.get("MFI", None)
-                        bb_val   = r.indicators.get("BB_%B", None)
-                        manip_s  = r.indicators.get("Manip_score", None)
+                        with c_info:
+                            st.markdown("##### Tóm tắt quyết định")
+                            rsi_val  = r.indicators.get("RSI", None)
+                            adx_val  = r.indicators.get("ADX", None)
+                            vol_val  = r.indicators.get("Vol_ratio", None)
+                            mfi_val  = r.indicators.get("MFI", None)
+                            bb_val   = r.indicators.get("BB_%B", None)
+                            manip_s  = r.indicators.get("Manip_score", None)
 
-                        # Score bar
-                        score_pct = int(r.score)
-                        st.progress(score_pct / 100,
-                                    text=f"Score: **{r.score:.0f}/100**")
+                            score_pct = int(r.score)
+                            st.progress(score_pct / 100,
+                                        text=f"Score: **{r.score:.0f}/100**")
 
-                        st.markdown("**Các chỉ báo chính:**")
-                        if rsi_val is not None:
-                            rsi_note = ("quá mua ⚠️" if rsi_val > 70
-                                        else "quá bán 💡" if rsi_val < 30
-                                        else "bình thường")
-                            st.caption(f"RSI {rsi_val:.1f} — {rsi_note}")
-                        if adx_val is not None:
-                            adx_note = "xu hướng mạnh ✅" if adx_val > 25 else "sideway ⚠️"
-                            st.caption(f"ADX {adx_val:.1f} — {adx_note}")
-                        if vol_val is not None:
-                            vol_note = "đột biến 🚀" if vol_val > 2 else ("thấp 😴" if vol_val < 0.5 else "bình thường")
-                            st.caption(f"Vol× {vol_val:.2f} — {vol_note}")
-                        if mfi_val is not None:
-                            mfi_note = "dòng tiền vào mạnh ✅" if mfi_val > 60 else ("dòng tiền ra ⚠️" if mfi_val < 40 else "trung tính")
-                            st.caption(f"MFI {mfi_val:.1f} — {mfi_note}")
-                        if bb_val is not None:
-                            bb_note = ("sát trần BB ⚠️" if bb_val > 0.8
-                                       else "sát đáy BB 💡" if bb_val < 0.2
-                                       else "giữa dải BB")
-                            st.caption(f"BB %B {bb_val:.2f} — {bb_note}")
+                            st.markdown("**Các chỉ báo chính:**")
+                            if rsi_val is not None:
+                                rsi_note = ("quá mua ⚠️" if rsi_val > 70
+                                            else "quá bán 💡" if rsi_val < 30
+                                            else "bình thường")
+                                st.caption(f"RSI {rsi_val:.1f} — {rsi_note}")
+                            if adx_val is not None:
+                                adx_note = "xu hướng mạnh ✅" if adx_val > 25 else "sideway ⚠️"
+                                st.caption(f"ADX {adx_val:.1f} — {adx_note}")
+                            if vol_val is not None:
+                                vol_note = "đột biến 🚀" if vol_val > 2 else ("thấp 😴" if vol_val < 0.5 else "bình thường")
+                                st.caption(f"Vol× {vol_val:.2f} — {vol_note}")
+                            if mfi_val is not None:
+                                mfi_note = "dòng tiền vào mạnh ✅" if mfi_val > 60 else ("dòng tiền ra ⚠️" if mfi_val < 40 else "trung tính")
+                                st.caption(f"MFI {mfi_val:.1f} — {mfi_note}")
+                            if bb_val is not None:
+                                bb_note = ("sát trần BB ⚠️" if bb_val > 0.8
+                                           else "sát đáy BB 💡" if bb_val < 0.2
+                                           else "giữa dải BB")
+                                st.caption(f"BB %B {bb_val:.2f} — {bb_note}")
 
-                        df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
-                        exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
-                        st.markdown("**Trust & Provenance:**")
-                        st.markdown(source_badge(src), unsafe_allow_html=True)
-                        st.caption(f"Exchange: {exchange}")
-                        st.caption(f"Latest bar date: {_format_bar_date(df_raw)}")
-                        if tf in ("2W", "1M", "3M", "5M"):
-                            ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
-                            st.caption(
-                                "Foreign flow: "
-                                f"20d={ff_detail['ff_trend_20d']} | "
-                                f"history={ff_detail['ff_history_sessions']} sessions | "
-                                f"session={ff_detail['ff_session_trend']}"
-                            )
-                            st.caption(f"Foreign flow basis: {ff_detail['ff_basis']}")
-                        if r.message:
-                            st.warning(r.message)
+                            df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+                            exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
+                            st.markdown("**Trust & Provenance:**")
+                            st.markdown(source_badge(src), unsafe_allow_html=True)
+                            st.caption(f"Exchange: {exchange}")
+                            st.caption(f"Latest bar date: {_format_bar_date(df_raw)}")
+                            if tf in ("2W", "1M", "3M", "5M"):
+                                ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
+                                st.caption(
+                                    "Foreign flow: "
+                                    f"20d={ff_detail['ff_trend_20d']} | "
+                                    f"history={ff_detail['ff_history_sessions']} sessions | "
+                                    f"session={ff_detail['ff_session_trend']}"
+                                )
+                                st.caption(f"Foreign flow basis: {ff_detail['ff_basis']}")
+                            if r.message:
+                                st.warning(r.message)
 
-                        st.markdown("**Quản lý rủi ro:**")
-                        if r.price > 0 and r.stop_loss > 0:
-                            risk_pct = abs(r.price - r.stop_loss) / r.price * 100
-                            st.caption(f"Rủi ro nếu chạm Stop: **{risk_pct:.1f}%** vốn vị thế")
-                        if r.price > 0 and r.take_profit > 0:
-                            gain_pct = abs(r.take_profit - r.price) / r.price * 100
-                            st.caption(f"Tiềm năng lợi nhuận: **{gain_pct:.1f}%** nếu đạt Target")
+                            st.markdown("**Quản lý rủi ro:**")
+                            if r.price > 0 and r.stop_loss > 0:
+                                risk_pct = abs(r.price - r.stop_loss) / r.price * 100
+                                st.caption(f"Rủi ro nếu chạm Stop: **{risk_pct:.1f}%** vốn vị thế")
+                            if r.price > 0 and r.take_profit > 0:
+                                gain_pct = abs(r.take_profit - r.price) / r.price * 100
+                                st.caption(f"Tiềm năng lợi nhuận: **{gain_pct:.1f}%** nếu đạt Target")
 
-                        if not r.regime_ok:
-                            st.warning("⚠️ Chế độ thị trường không thuận lợi — hạn chế mở vị thế mới.")
-                        if r.manip_flag:
-                            st.error(f"🚨 Phát hiện dấu hiệu thao túng (điểm: {manip_s}). Hãy thận trọng!")
+                            if not r.regime_ok:
+                                st.warning("⚠️ Chế độ thị trường không thuận lợi — hạn chế mở vị thế mới.")
+                            if r.manip_flag:
+                                st.error(f"🚨 Phát hiện dấu hiệu thao túng (điểm: {manip_s}). Hãy thận trọng!")
 
-                        st.markdown("**Breakdown điểm:**")
-                        for k, v in r.breakdown.items():
-                            bar = "█" * max(0, int(v * 3))
-                            st.caption(f"{k}: {bar} {v:.1f}")
+                            st.markdown("**Breakdown điểm:**")
+                            for k, v in r.breakdown.items():
+                                bar = "█" * max(0, int(v * 3))
+                                st.caption(f"{k}: {bar} {v:.1f}")
 
-                    with c_chart:
-                        if df_raw is not None and not df_raw.empty:
-                            df_ind = compute_all(df_raw.copy(), TIMEFRAME_CONFIG[tf], exchange=exchange)
-                            lookback_bars = {"1W": 60, "2W": 90, "1M": 120,
-                                             "3M": 200, "5M": 300}.get(tf, 120)
-                            fig = candlestick_chart(
-                                df_ind.tail(lookback_bars), r.ticker, tf,
-                                signal=r, height=480,
-                            )
-                            st.plotly_chart(fig, width="stretch")
-                        else:
-                            st.info("Không có dữ liệu biểu đồ.")
+                        with c_chart:
+                            if df_raw is not None and not df_raw.empty:
+                                df_ind = compute_all(df_raw.copy(), TIMEFRAME_CONFIG[tf], exchange=exchange)
+                                lookback_bars = {"1W": 60, "2W": 90, "1M": 120,
+                                                 "3M": 200, "5M": 300}.get(tf, 120)
+                                fig = candlestick_chart(
+                                    df_ind.tail(lookback_bars), r.ticker, tf,
+                                    signal=r, height=480,
+                                )
+                                st.plotly_chart(fig, width="stretch")
+                            else:
+                                st.info("Không có dữ liệu biểu đồ.")
 
     # ── Audit Viewer ──────────────────────────────────────────
     with st.expander("🗂️ Lịch sử Audit (tất cả lần chạy)", expanded=False):

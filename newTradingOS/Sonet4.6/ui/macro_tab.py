@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 from config import TIMEFRAME_CONFIG, WORLD_IMPACT_VI, WORLD_IMPACT_EN
 from core.regime import regime_label_vi
-from ui.components import GREEN, GREY, RED, YELLOW, render_guidance_callout, render_section_header, render_trust_ribbon, world_sparkline
+from ui.components import GREEN, GREY, RED, YELLOW, render_decision_panel, render_guidance_callout, render_section_header, render_trust_ribbon, world_sparkline
 
 
 def _world_as_of(info: dict | None) -> str:
@@ -85,6 +85,38 @@ def _overall_tf_condition(
     return "🚫 Rủi ro cao"
 
 
+def _macro_decision_state(
+    overall_macro: str,
+    exposure_title: str,
+    exposure_hint: str,
+    preferred_tfs: list[str],
+    cautious_tfs: list[str],
+    blocked_tfs: list[str],
+) -> dict[str, str]:
+    if overall_macro == "✅ Thuận lợi":
+        tone = "success"
+    elif overall_macro == "🚫 Rủi ro cao":
+        tone = "warning"
+    elif overall_macro == "⚪ Thiếu dữ liệu":
+        tone = "warning"
+    else:
+        tone = "info"
+
+    support_bits = [f"Market stance: {overall_macro}"]
+    if preferred_tfs:
+        support_bits.append(f"Ưu tiên review: {', '.join(preferred_tfs[:3])}")
+    if cautious_tfs:
+        support_bits.append(f"Review chọn lọc: {', '.join(cautious_tfs[:2])}")
+    if blocked_tfs:
+        support_bits.append(f"Hạn chế: {', '.join(blocked_tfs[:2])}")
+
+    return {
+        "primary": exposure_title,
+        "secondary": f"{exposure_hint} | {' | '.join(support_bits)}",
+        "tone": tone,
+    }
+
+
 def render_macro_tab(
     macro_data: dict,
     regime_result,          # RegimeResult
@@ -112,11 +144,106 @@ def render_macro_tab(
     stale_fields = macro_data.get("stale_fields", [])
     component_states = _macro_component_states(macro_data)
 
-    # ── Row 1: Key metrics ────────────────────────────────────
+    tf_guidance: list[tuple[str, str]] = []
+    for tf, cfg in TIMEFRAME_CONFIG.items():
+        regime_ok = regime_result.regime == cfg["regime_filter"] or cfg["regime_filter"] == "all"
+        tf_guidance.append((tf, _overall_tf_condition(regime_ok, component_states["dxy"], component_states["vix"], component_states["foreign"])))
+
+    preferred_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "✅ Thuận lợi"]
+    cautious_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "⚠️ Thận trọng"]
+    blocked_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "🚫 Rủi ro cao"]
+
+    overall_macro = _overall_tf_condition(
+        regime_result.regime != "bear",
+        component_states["dxy"],
+        component_states["vix"],
+        component_states["foreign"],
+    )
+    if overall_macro == "✅ Thuận lợi":
+        exposure_title = "Có thể tăng nhịp review"
+        exposure_hint = "Ưu tiên setup mạnh và lọc theo liquidity/risk"
+    elif overall_macro == "⚠️ Thận trọng":
+        exposure_title = "Giữ trạng thái chọn lọc"
+        exposure_hint = "Ưu tiên 1-2 setup tốt nhất, tránh dàn trải"
+    elif overall_macro == "⚪ Thiếu dữ liệu":
+        exposure_title = "Review có điều kiện"
+        exposure_hint = "Đọc trust labels trước khi nâng conviction"
+    else:
+        exposure_title = "Thiên về phòng thủ"
+        exposure_hint = "Giảm tốc độ vào lệnh mới, ưu tiên bảo toàn vốn"
+
+    decision_state = _macro_decision_state(
+        overall_macro,
+        exposure_title,
+        exposure_hint,
+        preferred_tfs,
+        cautious_tfs,
+        blocked_tfs,
+    )
+    render_decision_panel(
+        "Macro decision bridge",
+        decision_state["primary"],
+        decision_state["secondary"],
+        metrics=[
+            (
+                "Market Stance",
+                overall_macro,
+                f"Regime: {regime_label_vi(regime_result.regime) if lang == 'VI' else regime_result.regime.title()}",
+            ),
+            (
+                "Preferred TFs",
+                ", ".join(preferred_tfs[:3]) if preferred_tfs else "Chưa có TF thuận lợi rõ",
+                f"Cautious: {', '.join(cautious_tfs[:2]) if cautious_tfs else '—'}",
+            ),
+            ("Exposure", exposure_title, exposure_hint),
+        ],
+        tone=decision_state["tone"],
+    )
+
+    render_trust_ribbon([
+        ("World as-of", _latest_world_as_of(world)),
+        ("World source", "Yahoo chart API"),
+        (
+            "Breadth basis",
+            "KBS intraday snapshot" if component_states["breadth"] is not None else "unavailable on this refresh",
+        ),
+        (
+            "Foreign flow basis",
+            ff.get("basis", "unavailable on this refresh") if component_states["foreign"] is not None else "unavailable on this refresh",
+        ),
+    ])
+
+    if stale_fields:
+        render_guidance_callout(
+            "Macro trust warning",
+            f"Some components are missing or stale. Current gaps: {', '.join(stale_fields)}.",
+            tone="warning",
+        )
+    else:
+        st.caption("Macro trust: critical components loaded successfully for this refresh.")
+
+    guidance_bits = []
+    if preferred_tfs:
+        guidance_bits.append(f"Ưu tiên review: {', '.join(preferred_tfs[:3])}")
+    if blocked_tfs:
+        guidance_bits.append(f"TF nên hạn chế: {', '.join(blocked_tfs[:3])}")
+    if component_states["foreign"] is False:
+        guidance_bits.append("Khối ngoại đang tạo lực cản")
+    if component_states["dxy"] is False:
+        guidance_bits.append("DXY đang bất lợi cho risk-on")
+    if component_states["vix"] is False:
+        guidance_bits.append("VIX cao, cần giảm conviction")
+
+    if guidance_bits:
+        render_guidance_callout("Macro reading", " | ".join(guidance_bits), tone="info")
+
+    st.divider()
+
+    st.subheader("🧾 Evidence Snapshot")
+    st.caption("Các evidence card dưới đây giải thích vì sao macro đang cho stance hiện tại.")
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         regime_str = regime_label_vi(regime_result.regime) if lang == "VI" else regime_result.regime.title()
-        color  = {"bull": GREEN, "bear": RED, "sideways": YELLOW}.get(regime_result.regime, GREY)
         emoji  = {"bull": "🟢", "bear": "🔴", "sideways": "🟡"}.get(regime_result.regime, "⚪")
         st.metric("Market Regime", f"{emoji} {regime_str}",
                   f"Prob: {regime_result.probability:.0%} | {regime_result.method.upper()}")
@@ -161,88 +288,6 @@ def render_macro_tab(
             ad_str = f"{adv}/{dec}" if total > 0 else "N/A"
             breadth_label = "Tốt" if ad_ratio > 0.55 else "Xấu" if ad_ratio < 0.45 else "Trung bình"
             st.metric("A/D Ratio", ad_str, breadth_label)
-
-    render_trust_ribbon([
-        ("World as-of", _latest_world_as_of(world)),
-        ("World source", "Yahoo chart API"),
-        (
-            "Breadth basis",
-            "KBS intraday snapshot" if component_states["breadth"] is not None else "unavailable on this refresh",
-        ),
-        (
-            "Foreign flow basis",
-            ff.get("basis", "unavailable on this refresh") if component_states["foreign"] is not None else "unavailable on this refresh",
-        ),
-    ])
-
-    if stale_fields:
-        render_guidance_callout(
-            "Macro trust warning",
-            f"Some components are missing or stale. Current gaps: {', '.join(stale_fields)}.",
-            tone="warning",
-        )
-    else:
-        st.caption("Macro trust: critical components loaded successfully for this refresh.")
-
-    tf_guidance: list[tuple[str, str]] = []
-    for tf, cfg in TIMEFRAME_CONFIG.items():
-        regime_ok = regime_result.regime == cfg["regime_filter"] or cfg["regime_filter"] == "all"
-        tf_guidance.append((tf, _overall_tf_condition(regime_ok, component_states["dxy"], component_states["vix"], component_states["foreign"])))
-
-    preferred_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "✅ Thuận lợi"]
-    cautious_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "⚠️ Thận trọng"]
-    blocked_tfs = [TIMEFRAME_CONFIG[tf]["label"] for tf, status in tf_guidance if status == "🚫 Rủi ro cao"]
-
-    overall_macro = _overall_tf_condition(
-        regime_result.regime != "bear",
-        component_states["dxy"],
-        component_states["vix"],
-        component_states["foreign"],
-    )
-    if overall_macro == "✅ Thuận lợi":
-        exposure_title = "Có thể tăng nhịp review"
-        exposure_hint = "Ưu tiên setup mạnh và lọc theo liquidity/risk"
-    elif overall_macro == "⚠️ Thận trọng":
-        exposure_title = "Giữ trạng thái chọn lọc"
-        exposure_hint = "Ưu tiên 1-2 setup tốt nhất, tránh dàn trải"
-    elif overall_macro == "⚪ Thiếu dữ liệu":
-        exposure_title = "Review có điều kiện"
-        exposure_hint = "Đọc trust labels trước khi nâng conviction"
-    else:
-        exposure_title = "Thiên về phòng thủ"
-        exposure_hint = "Giảm tốc độ vào lệnh mới, ưu tiên bảo toàn vốn"
-
-    st.divider()
-    st.subheader("🧭 Macro Guidance")
-    g1, g2, g3 = st.columns(3)
-    g1.metric(
-        "Market Stance",
-        overall_macro,
-        f"Regime: {regime_label_vi(regime_result.regime) if lang == 'VI' else regime_result.regime.title()}",
-    )
-    g2.metric(
-        "Preferred TFs",
-        ", ".join(preferred_tfs[:3]) if preferred_tfs else "Chưa có TF thuận lợi rõ",
-        f"Cautious: {', '.join(cautious_tfs[:2]) if cautious_tfs else '—'}",
-    )
-    g3.metric("Exposure Guidance", exposure_title, exposure_hint)
-
-    guidance_bits = []
-    if preferred_tfs:
-        guidance_bits.append(f"Ưu tiên review: {', '.join(preferred_tfs[:3])}")
-    if blocked_tfs:
-        guidance_bits.append(f"TF nên hạn chế: {', '.join(blocked_tfs[:3])}")
-    if component_states["foreign"] is False:
-        guidance_bits.append("Khối ngoại đang tạo lực cản")
-    if component_states["dxy"] is False:
-        guidance_bits.append("DXY đang bất lợi cho risk-on")
-    if component_states["vix"] is False:
-        guidance_bits.append("VIX cao, cần giảm conviction")
-
-    if guidance_bits:
-        render_guidance_callout("Macro reading", " | ".join(guidance_bits), tone="info")
-
-    st.divider()
 
     # ── World Markets Table ───────────────────────────────────
     st.subheader("🌍 Thị Trường Thế Giới")

@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 from config import TIMEFRAME_CONFIG, INITIAL_CAPITAL, TICKER_EXCHANGE
 from backtest.engine import BacktestResult, run_backtest, run_multi_tf_backtest, summarise_results, trades_to_df
-from ui.components import GREEN, RED, YELLOW, equity_chart, render_guidance_callout, render_section_header
+from ui.components import GREEN, RED, YELLOW, equity_chart, render_decision_panel, render_guidance_callout, render_section_header
 
 
 def _backtest_review_table(results: dict[str, BacktestResult]) -> pd.DataFrame:
@@ -119,6 +119,24 @@ def _backtest_review_summary(compare_df: pd.DataFrame) -> dict[str, str | int]:
     }
 
 
+def _backtest_decision_state(review_summary: dict[str, str | int]) -> dict[str, str]:
+    robust_count = int(review_summary.get("robust_count", 0) or 0)
+    best_verdict = str(review_summary.get("best_verdict", ""))
+
+    if robust_count > 0:
+        tone = "success"
+    elif best_verdict in ("Có thể dùng", "Chưa có kết quả"):
+        tone = "info"
+    else:
+        tone = "warning"
+
+    return {
+        "primary": str(review_summary.get("next_action", "Chạy backtest")),
+        "secondary": str(review_summary.get("next_hint", "Cần ít nhất một kết quả hợp lệ để so sánh")),
+        "tone": tone,
+    }
+
+
 def render_backtest_tab(
     data_dict: dict,
     lang: str = "VI",
@@ -157,34 +175,40 @@ def render_backtest_tab(
             key="bt_single_tf",
         )
 
-    # ── Regime & Macro controls ──────────────────────────────
-    c4, c5 = st.columns(2)
-    with c4:
-        regime_bt = st.selectbox(
-            "Regime thị trường",
-            ["bull", "sideways", "bear"],
-            index=0,
-            key="bt_regime",
-            help="Chọn chế độ thị trường để backtest. bull=tăng, sideways=đi ngang, bear=giảm.\n"
-                 "Ảnh hưởng trực tiếp đến regime_filter của từng TF: 1W chỉ cho BUY khi bull.",
-        )
-    with c5:
-        macro_bt = st.slider(
-            "Macro Score", 0.0, 10.0, 6.0, step=0.5,
-            key="bt_macro",
-            help="Điểm vĩ mô (0–10) áp dụng cho scoring. 10 = môi trường rất thuận lợi.",
-        )
-
     historical_regime_available = isinstance(vni_df, pd.DataFrame) and not vni_df.empty and "Close" in vni_df.columns
-    use_historical_regime = st.toggle(
-        "Dùng regime lịch sử VNINDEX",
-        value=historical_regime_available,
-        disabled=not historical_regime_available,
-        key="bt_hist_regime",
-        help="Nếu có dữ liệu VNINDEX từ lần cập nhật macro gần nhất, backtest sẽ dùng regime rule-based theo từng ngày thay vì áp một regime cố định cho toàn bộ lịch sử.",
+    with st.expander("🧭 Backtest Assumptions & Overrides", expanded=False):
+        c4, c5 = st.columns(2)
+        with c4:
+            regime_bt = st.selectbox(
+                "Regime thị trường",
+                ["bull", "sideways", "bear"],
+                index=0,
+                key="bt_regime",
+                help="Chọn chế độ thị trường để backtest. bull=tăng, sideways=đi ngang, bear=giảm.\n"
+                     "Ảnh hưởng trực tiếp đến regime_filter của từng TF: 1W chỉ cho BUY khi bull.",
+            )
+        with c5:
+            macro_bt = st.slider(
+                "Macro Score", 0.0, 10.0, 6.0, step=0.5,
+                key="bt_macro",
+                help="Điểm vĩ mô (0–10) áp dụng cho scoring. 10 = môi trường rất thuận lợi.",
+            )
+
+        use_historical_regime = st.toggle(
+            "Dùng regime lịch sử VNINDEX",
+            value=historical_regime_available,
+            disabled=not historical_regime_available,
+            key="bt_hist_regime",
+            help="Nếu có dữ liệu VNINDEX từ lần cập nhật macro gần nhất, backtest sẽ dùng regime rule-based theo từng ngày thay vì áp một regime cố định cho toàn bộ lịch sử.",
+        )
+        if not historical_regime_available:
+            st.caption("Chạy `Cập nhật Macro` để bật backtest theo regime lịch sử VNINDEX.")
+
+    mode_label = "historical VNI rule-based" if historical_regime_available and use_historical_regime else f"scalar {st.session_state.get('bt_regime', 'bull')}"
+    st.caption(
+        f"Assumptions hiện tại: regime {st.session_state.get('bt_regime', 'bull')} | "
+        f"macro {float(st.session_state.get('bt_macro', 6.0)):.1f} | {mode_label}."
     )
-    if not historical_regime_available:
-        st.caption("Chạy `Cập nhật Macro` để bật backtest theo regime lịch sử VNINDEX.")
 
     with st.expander("⚠️ Backtest Trust & Assumptions", expanded=False):
         st.markdown(
@@ -245,12 +269,20 @@ def render_backtest_tab(
         summary_df = summarise_results(results)
         compare_df = _backtest_review_table(results)
         review_summary = _backtest_review_summary(compare_df)
+        decision_state = _backtest_decision_state(review_summary)
 
-        s1, s2, s3, s4 = st.columns(4)
-        s1.metric("Best TF", review_summary["best_tf"], str(review_summary["best_verdict"]))
-        s2.metric("Robust TFs", int(review_summary["robust_count"]), f"/{len(compare_df)} timeframe")
-        s3.metric("Review Mode", "Multi-TF" if run_all_tf else "Single TF", f"Exchange {exchange}")
-        s4.metric("Next Step", str(review_summary["next_action"]), str(review_summary["next_hint"]))
+        render_decision_panel(
+            "Backtest review summary",
+            decision_state["primary"],
+            decision_state["secondary"],
+            metrics=[
+                ("Best TF", review_summary["best_tf"], str(review_summary["best_verdict"])),
+                ("Robust TFs", str(int(review_summary["robust_count"])), f"/{len(compare_df)} timeframe"),
+                ("Review Mode", "Multi-TF" if run_all_tf else "Single TF", f"Exchange {exchange}"),
+                ("Assumptions", regime_mode_label, f"Macro {macro_bt:.1f}"),
+            ],
+            tone=decision_state["tone"],
+        )
 
         render_guidance_callout(
             "Review flow",

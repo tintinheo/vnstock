@@ -44,6 +44,41 @@ def render_section_header(title: str, subtitle: str | None = None) -> None:
         st.caption(subtitle)
 
 
+def render_decision_panel(
+    title: str,
+    primary: str,
+    secondary: str | None = None,
+    *,
+    metrics: list[tuple[str, str, str | None]] | None = None,
+    tone: str = "info",
+) -> None:
+    accents = {
+        "info": (BLUE, "#0f1724", "🧭"),
+        "success": (GREEN, "#0f1c16", "✅"),
+        "warning": (YELLOW, "#1f1a11", "⚠️"),
+    }
+    accent, background, icon = accents.get(tone, accents["info"])
+    st.markdown(
+        (
+            f"<div style='border:1px solid {accent}55;border-left:4px solid {accent};"
+            f"border-radius:14px;padding:0.9rem 1rem;margin:0.15rem 0 0.85rem 0;background:{background};'>"
+            f"<div style='font-size:0.84rem;color:#9db0c9;margin-bottom:0.3rem;'>{icon} {title}</div>"
+            f"<div style='font-size:1.15rem;font-weight:700;color:#fafafa;'>{primary}</div>"
+            "</div>"
+        ),
+        unsafe_allow_html=True,
+    )
+    if secondary:
+        st.caption(secondary)
+    if metrics:
+        cols = st.columns(len(metrics))
+        for col, (label, value, delta) in zip(cols, metrics):
+            if delta is None:
+                col.metric(label, value)
+            else:
+                col.metric(label, value, delta)
+
+
 def render_trust_ribbon(items: list[tuple[str, str]]) -> None:
     if not items:
         return

@@ -68,7 +68,7 @@ from core.regime import detect_regime
 from core.universe import get_cached_exchange_counts, resolve_universe_symbols
 from core.audit import log_event, ACTION_LOAD, ACTION_MACRO
 from portfolio.tracker import Portfolio
-from ui.components import render_guidance_callout, render_trust_ribbon
+from ui.components import render_decision_panel, render_guidance_callout, render_trust_ribbon
 
 # ─── Logging ─────────────────────────────────────────────────
 logging.basicConfig(
@@ -550,19 +550,31 @@ workflow_state = _workflow_state(
     st.session_state.get("macro_stale", []),
 )
 
-st.subheader("🧭 Review Workflow")
-wf1, wf2, wf3, wf4 = st.columns(4)
-wf1.metric("1. Dữ liệu", workflow_state["data_value"], workflow_state["data_delta"])
-wf2.metric("2. Macro", workflow_state["macro_value"], workflow_state["macro_delta"])
-wf3.metric("3. Review", workflow_state["review_value"], workflow_state["review_delta"])
-wf4.metric("Next Action", workflow_state["next_action"], workflow_state["next_hint"])
-st.caption(
-    "Guided flow: tải dữ liệu -> cập nhật macro -> mở review workspace. "
-    "Advanced tabs vẫn khả dụng nếu cần so sánh nhiều timeframe song song."
+workflow_tone = (
+    "success"
+    if workflow_state["review_value"] == "✅ Reviewable" and not st.session_state.get("macro_stale")
+    else "warning"
+    if st.session_state.get("macro_stale")
+    else "info"
+)
+render_decision_panel(
+    "Review Workflow",
+    workflow_state["next_action"],
+    (
+        f"{workflow_state['next_hint']}. Guided flow giữ analyst ở một luồng chính; "
+        "Advanced tabs vẫn khả dụng khi cần so sánh nhiều timeframe song song."
+    ),
+    metrics=[
+        ("1. Dữ liệu", workflow_state["data_value"], workflow_state["data_delta"]),
+        ("2. Macro", workflow_state["macro_value"], workflow_state["macro_delta"]),
+        ("3. Review", workflow_state["review_value"], workflow_state["review_delta"]),
+    ],
+    tone=workflow_tone,
 )
 st.divider()
 
 # Status bar
+st.caption("Session snapshot: kiểm tra trạng thái thị trường, độ tươi dữ liệu và giá trị danh mục trước khi mở workspace review.")
 c1, c2, c3, c4 = st.columns(4)
 c1.metric("Tickers loaded", len(data_dict))
 if regime_result:

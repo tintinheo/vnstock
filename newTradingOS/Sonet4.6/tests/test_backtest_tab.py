@@ -1,11 +1,41 @@
 from __future__ import annotations
 
 from backtest.engine import BacktestResult
-from ui.backtest_tab import _backtest_review_summary, _backtest_review_table
+from ui.backtest_tab import _backtest_decision_state, _backtest_review_summary, _backtest_review_table
 
 
 def _result(metrics: dict) -> BacktestResult:
     return BacktestResult(ticker="VCB", timeframe="1M", metrics=metrics)
+
+
+def test_backtest_decision_state_marks_robust_summary_as_success():
+    state = _backtest_decision_state(
+        {
+            "best_tf": "1M",
+            "best_verdict": "Ưu tiên review",
+            "robust_count": 2,
+            "next_action": "Review sâu 1M",
+            "next_hint": "Ưu tiên equity curve, trade log và exit reasons của TF tốt nhất",
+        }
+    )
+
+    assert state["tone"] == "success"
+    assert state["primary"] == "Review sâu 1M"
+
+
+def test_backtest_decision_state_marks_cautious_summary_as_warning():
+    state = _backtest_decision_state(
+        {
+            "best_tf": "3M",
+            "best_verdict": "Thận trọng",
+            "robust_count": 0,
+            "next_action": "Thận trọng với mọi TF",
+            "next_hint": "Ưu tiên xem assumptions và thử regime/macro khác",
+        }
+    )
+
+    assert state["tone"] == "warning"
+    assert "assumptions" in state["secondary"]
 
 
 def test_backtest_review_table_ranks_stronger_timeframe_first():

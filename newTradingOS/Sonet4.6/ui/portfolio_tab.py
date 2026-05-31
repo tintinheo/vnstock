@@ -15,7 +15,7 @@ from portfolio.sizing import (
     kelly_fraction, position_size_vnd,
     allocate_budget, compute_portfolio_metrics, _position_risk_vnd,
 )
-from ui.components import GREEN, RED, YELLOW, equity_chart, render_guidance_callout, render_section_header
+from ui.components import GREEN, RED, YELLOW, equity_chart, render_decision_panel, render_guidance_callout, render_section_header
 
 
 def _portfolio_review_state(
@@ -97,6 +97,27 @@ def render_portfolio_tab(
 
     st.divider()
 
+    empty_state = _portfolio_review_state(
+        portfolio.capital,
+        portfolio.cash,
+        0.0,
+        len(portfolio.open_positions),
+        0,
+    )
+    if not portfolio.open_positions:
+        cash_pct = (portfolio.cash / portfolio.capital * 100) if portfolio.capital else 0.0
+        render_decision_panel(
+            "Portfolio stance",
+            empty_state["stance"],
+            f"{empty_state['detail']} | {empty_state['next_action']}",
+            metrics=[
+                ("Cash room", f"{cash_pct:.1f}%", f"{portfolio.cash:,.0f} VND"),
+                ("Open positions", "0", "Danh mục đang trống"),
+                ("Realised P/L", f"{portfolio.realised_pnl:,.0f} VND", f"{portfolio.realised_pnl / portfolio.capital * 100:+.2f}%" if portfolio.capital else None),
+            ],
+            tone="success",
+        )
+
     # ── Open Positions ────────────────────────────────────────
     st.subheader("📂 Vị Thế Đang Mở")
     if portfolio.open_positions:
@@ -134,12 +155,21 @@ def render_portfolio_tab(
             len(portfolio.open_positions),
             ready_to_close,
         )
+        cash_pct = (portfolio.cash / portfolio.capital * 100) if portfolio.capital else 0.0
+        portfolio_tone = "warning" if risk_budget_pct >= 6.0 else "info"
 
-        st.subheader("🧭 Portfolio Guidance")
-        pg1, pg2, pg3 = st.columns(3)
-        pg1.metric("Portfolio stance", review_state["stance"], review_state["detail"])
-        pg2.metric("Ready to close", ready_to_close, f"/{len(portfolio.open_positions)} vị thế")
-        pg3.metric("Next action", review_state["next_action"], "Tập trung vào risk + cash rotation")
+        render_decision_panel(
+            "Portfolio stance",
+            review_state["stance"],
+            f"{review_state['detail']} | {review_state['next_action']}",
+            metrics=[
+                ("Ready to close", str(ready_to_close), f"/{len(portfolio.open_positions)} vị thế"),
+                ("Cash room", f"{cash_pct:.1f}%", f"{portfolio.cash:,.0f} VND"),
+                ("Risk budget", f"{risk_budget_pct:.2f}%", f"{total_risk_vnd:,.0f} VND"),
+                ("Unrealized P/L", f"{_unreal:+,.0f} VND", f"{_unreal_pct:+.2f}%"),
+            ],
+            tone=portfolio_tone,
+        )
 
         if risk_budget_pct >= 6.0:
             render_guidance_callout(
@@ -262,79 +292,79 @@ def render_portfolio_tab(
     st.divider()
 
     # ── Position Sizer ────────────────────────────────────────
-    st.subheader("📐 Position Sizer (Kelly Criterion)")
-    c1, c2, c3, c4, c5 = st.columns(5)
-    with c1:
-        wr   = st.number_input("Win Rate (%)", 0.0, 100.0, 55.0, key="ks_wr") / 100
-    with c2:
-        avgw = st.number_input("Avg Win (%)", 0.1, 50.0, 8.0, key="ks_aw") / 100
-    with c3:
-        avgl = st.number_input("Avg Loss (%)", 0.1, 30.0, 4.0, key="ks_al") / 100
-    with c4:
-        price_in = st.number_input("Giá vào", 1000.0, 500000.0, 50000.0,
-                                    step=500.0, key="ks_price")
-    with c5:
-        budget_profile = st.selectbox(
-            "Budget profile",
-            ["aggressive", "balanced", "conservative"],
-            index=1,
-            key="ks_budget_profile",
+    with st.expander("📐 Position Sizer & Budget Tools", expanded=False):
+        c1, c2, c3, c4, c5 = st.columns(5)
+        with c1:
+            wr   = st.number_input("Win Rate (%)", 0.0, 100.0, 55.0, key="ks_wr") / 100
+        with c2:
+            avgw = st.number_input("Avg Win (%)", 0.1, 50.0, 8.0, key="ks_aw") / 100
+        with c3:
+            avgl = st.number_input("Avg Loss (%)", 0.1, 30.0, 4.0, key="ks_al") / 100
+        with c4:
+            price_in = st.number_input("Giá vào", 1000.0, 500000.0, 50000.0,
+                                        step=500.0, key="ks_price")
+        with c5:
+            budget_profile = st.selectbox(
+                "Budget profile",
+                ["aggressive", "balanced", "conservative"],
+                index=1,
+                key="ks_budget_profile",
+            )
+
+        kf  = kelly_fraction(wr, avgw, avgl)
+        ns, vnd = position_size_vnd(portfolio.cash, kf, price_in)
+        budget_plan = allocate_budget(portfolio.cash, budget_profile)
+
+        st.info(
+            f"**Kelly fraction:** {kf*100:.1f}%  |  "
+            f"**Số cổ phiếu:** {ns:,}  |  "
+            f"**Giá trị:** {vnd:,.0f} VND"
         )
-
-    kf  = kelly_fraction(wr, avgw, avgl)
-    ns, vnd = position_size_vnd(portfolio.cash, kf, price_in)
-    budget_plan = allocate_budget(portfolio.cash, budget_profile)
-
-    st.info(
-        f"**Kelly fraction:** {kf*100:.1f}%  |  "
-        f"**Số cổ phiếu:** {ns:,}  |  "
-        f"**Giá trị:** {vnd:,.0f} VND"
-    )
-    st.caption(f"Budget profile `{budget_profile}` giúp quy đổi cash hiện tại thành room theo từng timeframe.")
-    st.dataframe(
-        pd.DataFrame([
-            {"Timeframe": tf, "Budget VND": round(amount, 0)}
-            for tf, amount in budget_plan.items()
-        ]),
-        width="stretch",
-        hide_index=True,
-    )
+        st.caption(f"Budget profile `{budget_profile}` giúp quy đổi cash hiện tại thành room theo từng timeframe.")
+        st.dataframe(
+            pd.DataFrame([
+                {"Timeframe": tf, "Budget VND": round(amount, 0)}
+                for tf, amount in budget_plan.items()
+            ]),
+            width="stretch",
+            hide_index=True,
+        )
 
     st.divider()
 
     # ── Trade History ─────────────────────────────────────────
-    st.subheader("📋 Lịch Sử Giao Dịch")
-    if portfolio.trades:
-        t_df = portfolio.trades_df()
-        st.dataframe(t_df, width="stretch", hide_index=True)
+    with st.expander("📋 Trade History & Analytics", expanded=False):
+        if portfolio.trades:
+            t_df = portfolio.trades_df()
+            st.dataframe(t_df, width="stretch", hide_index=True)
 
-        pnls = [(t.pnl_pct or 0) for t in portfolio.trades]
-        # Equity curve đúng: cộng pnl_vnd thực từng trade theo thứ tự thời gian.
-        # Cách cũ dùng pnl_pct trên 100% vốn là sai (mỗi position chỉ dùng 10-25% vốn).
-        _sorted_trades  = sorted(portfolio.trades, key=lambda t: t.exit_date or "")
-        _total_pnl_vnd  = sum(t.pnl_vnd or 0 for t in _sorted_trades)
-        _start_capital  = max(portfolio.capital - _total_pnl_vnd, 0.0)
-        capital_curve   = [_start_capital]
-        _running        = _start_capital
-        for _t in _sorted_trades:
-            _running += (_t.pnl_vnd or 0)
-            capital_curve.append(max(_running, 0.0))
-        if len(capital_curve) > 2:
-            fig = equity_chart(capital_curve, INITIAL_CAPITAL,
-                               title="Historical P&L Curve")
-            st.plotly_chart(fig, width="stretch")
+            pnls = [(t.pnl_pct or 0) for t in portfolio.trades]
+            # Equity curve đúng: cộng pnl_vnd thực từng trade theo thứ tự thời gian.
+            # Cách cũ dùng pnl_pct trên 100% vốn là sai (mỗi position chỉ dùng 10-25% vốn).
+            _sorted_trades  = sorted(portfolio.trades, key=lambda t: t.exit_date or "")
+            _total_pnl_vnd  = sum(t.pnl_vnd or 0 for t in _sorted_trades)
+            _start_capital  = max(portfolio.capital - _total_pnl_vnd, 0.0)
+            capital_curve   = [_start_capital]
+            _running        = _start_capital
+            for _t in _sorted_trades:
+                _running += (_t.pnl_vnd or 0)
+                capital_curve.append(max(_running, 0.0))
+            if len(capital_curve) > 2:
+                fig = equity_chart(capital_curve, INITIAL_CAPITAL,
+                                   title="Historical P&L Curve")
+                st.plotly_chart(fig, width="stretch")
 
-        metrics = compute_portfolio_metrics(
-            capital_curve,
-            [{"pnl_pct": p} for p in pnls],
-            date_index=[_sorted_trades[0].entry_date] + [t.exit_date or _sorted_trades[0].entry_date for t in _sorted_trades],
-        )
-        c1, c2, c3, c4 = st.columns(4)
-        c1.metric("Win Rate", f"{metrics.get('win_rate', 0):.1f}%")
-        c2.metric("Sharpe",   f"{metrics.get('sharpe', 0):.2f}")
-        c3.metric("Max DD",   f"{metrics.get('max_dd', 0):.1f}%")
-        c4.metric("P/F",      f"{metrics.get('profit_factor', 0):.2f}")
-    else:
-        st.info("Chưa có giao dịch nào được ghi nhận.")
+            metrics = compute_portfolio_metrics(
+                capital_curve,
+                [{"pnl_pct": p} for p in pnls],
+                date_index=[_sorted_trades[0].entry_date] + [t.exit_date or _sorted_trades[0].entry_date for t in _sorted_trades],
+            )
+            c1, c2, c3, c4 = st.columns(4)
+            c1.metric("Win Rate", f"{metrics.get('win_rate', 0):.1f}%")
+            c2.metric("Sharpe",   f"{metrics.get('sharpe', 0):.2f}")
+            c3.metric("Max DD",   f"{metrics.get('max_dd', 0):.1f}%")
+            c4.metric("P/F",      f"{metrics.get('profit_factor', 0):.2f}")
+        else:
+            st.info("Chưa có giao dịch nào được ghi nhận.")
 
     return portfolio

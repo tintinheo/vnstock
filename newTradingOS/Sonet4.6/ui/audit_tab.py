@@ -9,7 +9,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
-from ui.components import render_guidance_callout, render_section_header
+from ui.components import render_decision_panel, render_guidance_callout, render_section_header
 
 from core.audit import (
     load_events, filter_events, get_event_detail_kind,
@@ -72,6 +72,88 @@ def _apply_audit_preset(events: list[dict], preset: str) -> list[dict]:
                     flagged.append(event)
         return flagged
     return events
+
+
+def _audit_issue_events(events: list[dict]) -> list[dict]:
+    flagged: list[dict] = []
+    for event in events:
+        detail = event.get("detail", {})
+        if event.get("result") in ("fail", "partial"):
+            flagged.append(event)
+            continue
+        if event.get("action") == ACTION_SCAN and get_event_detail_kind(event) == "result":
+            if detail.get("manip_flag") or not detail.get("regime_ok", True) or detail.get("message"):
+                flagged.append(event)
+    return flagged
+
+
+def _audit_review_state(events: list[dict], preset: str) -> dict[str, object]:
+    issues = _audit_issue_events(events)
+    scan_summaries = [
+        event for event in events
+        if event.get("action") == ACTION_SCAN and get_event_detail_kind(event) == "summary"
+    ]
+    buy_signals = [
+        event for event in events
+        if event.get("action") == ACTION_SCAN
+        and get_event_detail_kind(event) == "result"
+        and event.get("detail", {}).get("signal_action") in ("BUY", "STRONG BUY")
+    ]
+    macro_refreshes = [event for event in events if event.get("action") == ACTION_MACRO]
+    trade_closes = [event for event in events if event.get("action") == ACTION_CLOSE]
+
+    if issues:
+        tone = "warning"
+        primary = f"Ưu tiên review {len(issues)} sự kiện cần chú ý"
+        secondary = "Mở priority queue trước để xem các issue, manip flags, regime mismatch hoặc run bị partial/fail."
+    elif buy_signals:
+        tone = "success"
+        primary = f"Có {len(buy_signals)} BUY/STRONG BUY events trong scope hiện tại"
+        secondary = "Dùng scan summaries để đọc bối cảnh run trước, rồi mới mở raw table nếu cần forensic detail."
+    elif scan_summaries:
+        tone = "info"
+        primary = f"Có {len(scan_summaries)} scan runs để review"
+        secondary = "Bắt đầu từ scan summaries để hiểu context, tránh nhảy thẳng vào từng dòng event rời rạc."
+    elif macro_refreshes:
+        tone = "info"
+        primary = f"Scope hiện tại chủ yếu là {len(macro_refreshes)} macro refreshes"
+        secondary = "Dùng raw table để so độ tươi dữ liệu, score và regime giữa các lần refresh."
+    else:
+        tone = "info"
+        primary = "Scope hiện tại thiên về lịch sử vận hành"
+        secondary = "Dùng filters để thu hẹp xuống scan summaries, BUY signals hoặc issue-only khi cần quyết định nhanh hơn."
+
+    return {
+        "primary": primary,
+        "secondary": secondary,
+        "tone": tone,
+        "issues": len(issues),
+        "scan_summaries": len(scan_summaries),
+        "buy_signals": len(buy_signals),
+        "macro_refreshes": len(macro_refreshes),
+        "trade_closes": len(trade_closes),
+        "priority_events": issues[:5],
+        "preset": preset,
+    }
+
+
+def _priority_event_label(event: dict) -> str:
+    detail = event.get("detail", {})
+    action_label = _ACTION_LABELS.get(event.get("action", ""), event.get("action", "—"))
+    ticker = event.get("ticker") or "—"
+    if event.get("action") == ACTION_SCAN and get_event_detail_kind(event) == "result":
+        signal = detail.get("signal_action", "—")
+        score = float(detail.get("score", 0.0) or 0.0)
+        notes = []
+        if detail.get("manip_flag"):
+            notes.append("manip")
+        if not detail.get("regime_ok", True):
+            notes.append("regime")
+        if detail.get("message"):
+            notes.append(str(detail.get("message")))
+        note_label = f" | {'; '.join(notes)}" if notes else ""
+        return f"{event.get('ts', '—')[:16].replace('T', ' ')} | {ticker} | {signal} {score:.1f}{note_label}"
+    return f"{event.get('ts', '—')[:16].replace('T', ' ')} | {action_label} | {ticker} | result={event.get('result', 'ok')}"
 
 
 def _events_to_df(events: list[dict]) -> pd.DataFrame:
@@ -307,11 +389,34 @@ def render_audit_tab(lang: str = "VI") -> None:
         date_to=today_str if days_ago >= 0 else None,
     )
 
+    review_state = _audit_review_state(filtered, preset)
+
+    render_decision_panel(
+        "Audit review scope",
+        str(review_state["primary"]),
+        str(review_state["secondary"]),
+        metrics=[
+            ("Issues", str(review_state["issues"]), f"Preset {preset}"),
+            ("Scan runs", str(review_state["scan_summaries"]), f"BUY+ {review_state['buy_signals']}"),
+            ("Macro refreshes", str(review_state["macro_refreshes"]), f"Trade closes {review_state['trade_closes']}"),
+            ("Scope", str(len(filtered)), f"/{len(events)} events"),
+        ],
+        tone=str(review_state["tone"]),
+    )
+
     render_guidance_callout(
         "Audit scope",
         f"{len(filtered)} sự kiện | preset: {preset} | scope: {len(scoped_events)}/{len(events)}",
         tone="info",
     )
+
+    priority_events = review_state["priority_events"]
+    if priority_events:
+        with st.expander("🚨 Priority queue", expanded=True):
+            for event in priority_events:
+                st.caption(_priority_event_label(event))
+    else:
+        st.caption("Priority queue trống trong scope hiện tại.")
 
     # ── Summary metrics (for trade actions) ────────────────────
     trade_events = [e for e in filtered if e["action"] in (ACTION_OPEN, ACTION_CLOSE)]
@@ -345,6 +450,8 @@ def render_audit_tab(lang: str = "VI") -> None:
         return ""
 
     styled = df.style.map(_highlight_result, subset=["Kết quả"])
+    st.subheader("🧾 Raw Audit Events")
+    st.caption("Bảng này dành cho forensic review sau khi đã đọc decision summary và priority queue phía trên.")
     st.dataframe(styled, width="stretch", hide_index=True, height=min(760, 56 + len(df) * 34))
 
     # ── Export ─────────────────────────────────────────────────
