@@ -15,7 +15,7 @@ APP_FILE = Path(__file__).resolve().parents[1] / "app.py"
 
 
 def _make_ohlcv(n: int = 180, start_price: float = 50_000.0) -> pd.DataFrame:
-    dates = pd.bdate_range("2025-01-02", periods=n)
+    dates = pd.bdate_range(end="2026-05-29", periods=n)
     closes = pd.Series([start_price + (i * 120.0) for i in range(n)], index=dates)
     return pd.DataFrame(
         {
@@ -80,7 +80,13 @@ def _base_app_patches(monkeypatch, *, event_calls: list[tuple]) -> None:
         },
     )
     monkeypatch.setattr(macro_data, "get_macro_score", lambda payload: (6.75, "bull", []))
-    monkeypatch.setattr(macro_data, "fetch_vni_data", lambda days=365: _make_ohlcv(n=220, start_price=1_200.0))
+    def _fetch_vni_stub(days=365):
+        df = _make_ohlcv(n=220, start_price=1_200.0)
+        df.attrs["source_mode"] = "live"
+        df.attrs["source_name"] = "DNSE"
+        return df
+
+    monkeypatch.setattr(macro_data, "fetch_vni_data", _fetch_vni_stub)
     monkeypatch.setattr(
         macro_data,
         "fetch_foreign_flow_tickers",
@@ -169,6 +175,7 @@ def test_app_smoke_watchlist_load_then_macro_refresh(monkeypatch):
     assert at.session_state["macro_updated_at"]
     assert at.session_state["regime_result"].regime == "bull"
     assert at.session_state["regime_stale"] is False
+    assert at.session_state["regime_source"] == "live (DNSE)"
     assert at.session_state["foreign_flows_cache"]["VCB"]["basis"] == "cafef-20d"
     assert at.session_state["foreign_flow_meta"]["requested_symbols"] == 1
     assert at.session_state["foreign_flow_meta"]["bounded_mode"] is False
@@ -237,4 +244,25 @@ def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
     assert at.session_state["universe_meta"]["resolved_count"] == 125
     assert at.session_state["foreign_flow_meta"]["requested_symbols"] == 125
     assert at.session_state["foreign_flow_meta"]["bounded_mode"] is True
+    assert at.session_state["regime_source"] == "live (DNSE)"
     assert [args[0] for args, _ in event_calls] == [ACTION_LOAD, ACTION_MACRO]
+
+
+def test_app_smoke_vni_fetch_failure_marks_regime_stale_without_macro_partial(monkeypatch):
+    import core.macro_data as macro_data
+
+    event_calls: list[tuple] = []
+
+    _base_app_patches(monkeypatch, event_calls=event_calls)
+    monkeypatch.setattr(macro_data, "fetch_vni_data", lambda days=365: pd.DataFrame())
+
+    at = AppTest.from_file(str(APP_FILE))
+    at.run(timeout=120)
+    at.sidebar.button[1].click().run(timeout=120)
+
+    assert len(at.exception) == 0
+    assert at.session_state["macro_stale"] == []
+    assert at.session_state["regime_stale"] is True
+    assert at.session_state["regime_result"] is None
+    assert at.session_state["regime_source"] == "unavailable"
+    assert [args[0] for args, _ in event_calls] == [ACTION_MACRO]

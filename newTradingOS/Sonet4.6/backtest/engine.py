@@ -54,6 +54,22 @@ def _entry_levels_from_signal(entry_price: float, signal, exchange: str) -> tupl
     return float(stop_loss), float(take_profit)
 
 
+def _mark_to_market_equity(
+    capital: float,
+    close_price: float,
+    entry_px: float,
+    committed_vnd: float,
+) -> float:
+    """Estimate end-of-bar equity for an open position using close-to-close MTM."""
+    if committed_vnd <= 0 or entry_px <= 0 or close_price <= 0:
+        return max(capital, 1.0)
+
+    close_px_net = close_price * (1 - SELL_TOTAL)
+    open_pnl = (close_px_net / entry_px) - 1
+    open_vnd = committed_vnd * open_pnl
+    return max(capital + open_vnd, 1.0)
+
+
 # ─────────────────────────────────────────────────────────────
 # DATA CLASSES
 # ─────────────────────────────────────────────────────────────
@@ -146,6 +162,7 @@ def run_backtest(
         row  = df.iloc[i]
         price = float(row["Close"])
         exec_price = _execution_price(row)
+        bar_equity = capital
 
         if not in_trade:
             # Compute the signal on the prior completed bar set only; trade on the
@@ -174,13 +191,14 @@ def run_backtest(
                 if _n_shares == 0:
                     continue   # Cannot afford minimum 1 VN lot — skip signal
                 in_trade    = True
+                bar_equity = _mark_to_market_equity(capital, price, entry_px, _vnd_committed)
 
         else:
             sessions_held = i - entry_idx
 
             # T+2 enforcement: can only sell after 2 sessions
             if sessions_held < 2:
-                equity.append(equity[-1])
+                equity.append(_mark_to_market_equity(capital, price, entry_px, _vnd_committed))
                 continue
 
             exit_reason: Optional[str] = None
@@ -252,8 +270,15 @@ def run_backtest(
                 trades.append(t)
                 trade_stats.update(trade_pnl)
                 in_trade = False
+                _n_shares = 0
+                _vnd_committed = 0.0
 
-        equity.append(capital)
+            if in_trade:
+                bar_equity = _mark_to_market_equity(capital, price, entry_px, _vnd_committed)
+            else:
+                bar_equity = capital
+
+        equity.append(bar_equity)
 
     # Handle open position at end: mark-to-market điểm equity cuối cùng.
     # Tránh bỏ qua unrealized P&L khi backtest kết thúc đang giữ lệnh —

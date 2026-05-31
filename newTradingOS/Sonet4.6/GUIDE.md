@@ -108,7 +108,7 @@ print('All core dependencies OK')
 
 ```bash
 cd D:\portfolio\vnstock\newTradingOS\Sonet4.6
-streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Streamlit will open your browser at `http://localhost:8501` automatically.
@@ -116,13 +116,13 @@ Streamlit will open your browser at `http://localhost:8501` automatically.
 To specify a port:
 
 ```bash
-streamlit run app.py --server.port 8502
+python -m streamlit run app.py --server.port 8502
 ```
 
 To expose on your local network (for mobile access):
 
 ```bash
-streamlit run app.py --server.address 0.0.0.0
+python -m streamlit run app.py --server.address 0.0.0.0
 ```
 
 ---
@@ -136,10 +136,12 @@ Sonet4.6/
 │
 ├── core/
 │   ├── data_fetcher.py     ← OHLCV download (DNSE → SSI fallback)
-│   ├── macro_data.py       ← World markets, foreign flow, market breadth
+│   ├── macro_data.py       ← World markets, foreign flow, market breadth, VNINDEX fallback/cache
+│   ├── foreign_flow_crawler.py ← CafeF foreign-flow history + market backfill cache
 │   ├── indicators.py       ← All technical indicators
 │   ├── regime.py           ← Market regime detection (HMM + rule-based)
 │   └── scoring.py          ← Signal scoring engine
+│   └── universe.py         ← Live listing master + configured fallback
 │
 ├── ml/
 │   ├── features.py         ← Feature engineering for ML models
@@ -162,7 +164,7 @@ Sonet4.6/
 │   ├── backtest_tab.py     ← Backtest UI
 │   └── portfolio_tab.py    ← Portfolio tracker UI
 │
-├── tests/                  ← pytest suite (407 tests collected as of 2026-05-31)
+├── tests/                  ← pytest suite
 └── requirements.txt
 ```
 
@@ -197,9 +199,11 @@ portfolio/tracker  ──►  Portfolio tab
 | Section | Description |
 |---------|-------------|
 | World Markets | Gold, WTI Oil, DXY, S&P 500, VIX, CSI 300, Nikkei — price and % change |
-| Foreign Flow | Net foreign buy/sell for the current session (VN market, KBS snapshot) |
+| Foreign Flow | CafeF market history when cache is available; KBS snapshot fallback otherwise |
 | Market Breadth | Advance/decline ratio, stocks above SMA20 |
 | Macro Score | Composite 0–10 score; drives regime bias and score adjustments |
+
+Trust ribbon fields now explicitly show price freshness, price source mix, macro refresh timestamp, VNINDEX regime source (`live` vs `cache`), and the actual foreign-flow basis used by the session.
 
 **Macro Score interpretation (0–10):**
 
@@ -217,10 +221,10 @@ Five timeframe scanners: **1W** (1 week), **2W** (2 weeks), **1M** (1 month), **
 
 **Workflow:**
 
-1. Select tickers to scan (default watchlist or full market list)
-2. Click **Run Scanner**
-3. Results table shows all tickers above the minimum score threshold
-4. Click any ticker row to see its full signal breakdown
+1. Load a universe from the sidebar (`Watchlist`, `VN30`, `VN100`, `Market Scan`, `HOSE`, `HNX`, `UPCOM`)
+2. Refresh Macro to populate regime, trust surfaces, and foreign-flow context
+3. Review results in the default **Signal Review** workspace or switch to **Advanced tabs**
+4. Click any ticker row to inspect the full signal breakdown
 
 **Scanner results columns:**
 
@@ -257,7 +261,11 @@ Five timeframe scanners: **1W** (1 week), **2W** (2 weeks), **1M** (1 month), **
 
 Longer timeframes (3M, 5M) use a more lenient regime filter (accepts bear market entries), while shorter timeframes (1W, 2W) are filtered to bull/sideways only.
 
-Foreign-flow note: the current KBS integration exposes session-level net flow only. The UI labels this clearly; verified rolling 20-session foreign-flow history is not yet implemented.
+Foreign-flow note: the app now prefers verified CafeF rolling history where available, and clearly labels KBS session-only fallback as a proxy. Large universes may use bounded mode: cached CafeF summaries first, KBS snapshot for the remainder.
+
+Listing-universe note: `Market Scan` remains a curated fast bucket, while `HOSE`, `HNX`, and `UPCOM` come from a cached live listing master with configured fallback when the live source is unavailable.
+
+Backtest note: entries are generated from the prior completed bar and executed at the next bar open; stop/target exits are gap-aware, T+2 is enforced, position size is aligned to 100-share lots, and the equity curve is mark-to-market while trades are open so drawdown metrics are not artificially flattened.
 
 ---
 

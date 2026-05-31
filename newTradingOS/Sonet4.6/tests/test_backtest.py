@@ -217,6 +217,50 @@ class TestSignalExecutionTiming:
         assert trade.exit_reason == "stop"
         assert trade.exit_price == 70.0
 
+    def test_equity_marks_to_market_during_t2_hold(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        dip_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 11
+        recovery_bar = dip_bar + 1
+
+        df.iloc[dip_bar, df.columns.get_loc("Open")] = 100.0
+        df.iloc[dip_bar, df.columns.get_loc("High")] = 101.0
+        df.iloc[dip_bar, df.columns.get_loc("Low")] = 79.0
+        df.iloc[dip_bar, df.columns.get_loc("Close")] = 80.0
+
+        df.iloc[recovery_bar, df.columns.get_loc("Open")] = 100.0
+        df.iloc[recovery_bar, df.columns.get_loc("High")] = 101.0
+        df.iloc[recovery_bar, df.columns.get_loc("Low")] = 99.0
+        df.iloc[recovery_bar, df.columns.get_loc("Close")] = 100.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="MTM_T2",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=50.0,
+                take_profit=150.0,
+                rr_ratio=2.0,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="MTM_T2")
+
+        assert len(result.equity_curve) >= 3
+        assert result.equity_curve[2] < result.equity_curve[1], (
+            "Equity should reflect the open-trade drawdown during the T+2 hold window"
+        )
+
 
 # ─────────────────────────────────────────────────────────────
 # BacktestTrade

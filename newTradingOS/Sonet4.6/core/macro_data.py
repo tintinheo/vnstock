@@ -9,6 +9,7 @@ import contextlib
 import io
 import logging
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Optional
 
 import numpy as np
@@ -24,6 +25,15 @@ _YAHOO_HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)",
     "Accept":     "application/json",
 }
+_VNI_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "vnstock" / "vni_history_cache.csv"
+
+
+def _tag_vni_source(df: pd.DataFrame, source_mode: str, source_name: str) -> pd.DataFrame:
+    if df is None:
+        return pd.DataFrame()
+    df.attrs["source_mode"] = source_mode
+    df.attrs["source_name"] = source_name
+    return df
 
 
 # ─────────────────────────────────────────────────────────────
@@ -126,6 +136,55 @@ def _fetch_vni_data_vnstock(days: int = 365) -> pd.DataFrame:
         return pd.DataFrame()
 
 
+def _save_cached_vni_data(df: pd.DataFrame) -> None:
+    if df is None or df.empty:
+        return
+
+    cached = df.copy()
+    if not isinstance(cached.index, pd.DatetimeIndex):
+        if "Date" not in cached.columns:
+            return
+        cached["Date"] = pd.to_datetime(cached["Date"], errors="coerce").dt.normalize()
+        cached = cached.dropna(subset=["Date"]).set_index("Date")
+
+    cached.index = pd.to_datetime(cached.index, errors="coerce")
+    cached = cached[~cached.index.isna()]
+    if cached.empty or "Close" not in cached.columns:
+        return
+
+    cached.index = cached.index.normalize()
+    cached = cached.sort_index()
+    cached = cached[~cached.index.duplicated(keep="last")]
+    cached = cached.reset_index().rename(columns={cached.index.name or "index": "Date"})
+    _VNI_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+    cached.to_csv(_VNI_CACHE_PATH, index=False)
+
+
+def _load_cached_vni_data(days: int = 365) -> pd.DataFrame:
+    if not _VNI_CACHE_PATH.exists():
+        return pd.DataFrame()
+    try:
+        cached = pd.read_csv(_VNI_CACHE_PATH)
+    except Exception as exc:
+        logger.debug("load cached VNINDEX: %s", exc)
+        return pd.DataFrame()
+
+    if "Date" not in cached.columns or "Close" not in cached.columns:
+        return pd.DataFrame()
+
+    cached["Date"] = pd.to_datetime(cached["Date"], errors="coerce").dt.normalize()
+    cached = cached.dropna(subset=["Date"]).set_index("Date").sort_index()
+    for col in ("Open", "High", "Low", "Close", "Volume"):
+        if col in cached.columns:
+            cached[col] = pd.to_numeric(cached[col], errors="coerce")
+    cached = cached.dropna(subset=["Close"])
+    cached = cached[~cached.index.duplicated(keep="last")]
+    if days > 0:
+        min_date = (datetime.now() - timedelta(days=days)).date()
+        cached = cached[cached.index.date >= min_date]
+    return _tag_vni_source(cached, "cache", "VNINDEX cache")
+
+
 def fetch_vni_data(days: int = 365) -> pd.DataFrame:
     """
     Fetch VN-Index (VNINDEX) daily OHLCV from DNSE Entrade.
@@ -133,14 +192,36 @@ def fetch_vni_data(days: int = 365) -> pd.DataFrame:
     """
     from core.data_fetcher import _fetch_dnse
     df = _fetch_dnse("VNINDEX", days=days)
-    if df.empty:
-        # fallback: Yahoo Finance — ^VNINDEX is the correct symbol for VN-Index
-        data = _yahoo_price("^VNINDEX", "2y")
-        if data and data["prices"]:
+    if not df.empty:
+        _save_cached_vni_data(df)
+        return _tag_vni_source(df, "live", "DNSE")
+
+    # fallback: Yahoo Finance — ^VNINDEX is the correct symbol for VN-Index
+    data = _yahoo_price("^VNINDEX", "2y")
+    if data and data["prices"]:
+        timestamps = data.get("timestamps") or []
+        if len(timestamps) == len(data["prices"]):
+            index = pd.to_datetime(timestamps, unit="s", errors="coerce")
+            df = pd.DataFrame({"Close": data["prices"]}, index=index)
+            df.index.name = "Date"
+            df = df[~df.index.isna()]
+            df.index = df.index.normalize()
+            df = df[~df.index.duplicated(keep="last")]
+        else:
             df = pd.DataFrame({"Close": data["prices"]})
-    if df.empty:
-        df = _fetch_vni_data_vnstock(days=days)
-    return df
+        if not df.empty:
+            _save_cached_vni_data(df)
+            return _tag_vni_source(df, "live", "Yahoo")
+
+    df = _fetch_vni_data_vnstock(days=days)
+    if not df.empty:
+        _save_cached_vni_data(df)
+        return _tag_vni_source(df, "live", "vnstock")
+
+    cached = _load_cached_vni_data(days=days)
+    if cached.empty:
+        return cached
+    return _tag_vni_source(cached, "cache", "VNINDEX cache")
 
 
 # ─────────────────────────────────────────────────────────────

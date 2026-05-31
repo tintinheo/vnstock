@@ -27,7 +27,7 @@
 
 ## 1. Tổng quan
 
-NewTradingOS v14.0 là ứng dụng phân tích cổ phiếu đa khung thời gian, được tối ưu hoá riêng cho thị trường chứng khoán Việt Nam (HoSE + HNX).
+NewTradingOS v14.0 là ứng dụng phân tích cổ phiếu đa khung thời gian, được tối ưu hoá riêng cho thị trường chứng khoán Việt Nam (HOSE + HNX + UPCOM).
 
 ### Điểm nổi bật
 
@@ -37,19 +37,21 @@ NewTradingOS v14.0 là ứng dụng phân tích cổ phiếu đa khung thời gi
 | **100 điểm composite** | 7 thành phần điểm, mỗi thành phần đo một khía cạnh khác nhau |
 | **VN-specific indicators** | CMF, SuperTrend, Ceiling/Floor Streak - được hiệu chỉnh riêng cho VN |
 | **ML Ensemble 6 models** | LSTM, XGBoost, RF, Prophet, ARIMA, Monte Carlo |
-| **Macro regime detection** | HMM + world markets + foreign flow → regime label |
+| **Macro regime detection** | HMM + world markets + foreign flow → regime label, kèm provenance live/cache |
 | **Portfolio tracker** | Mở/đóng vị thế, P&L, T+2 readiness |
 | **Audit log bất biến** | Ghi lại mọi sự kiện kinh doanh |
 
 ### Vũ trụ cổ phiếu
 
-| Danh sách | Số mã | Mô tả |
+| Danh sách | Quy mô | Mô tả |
 |---|---|---|
-| VN30 | 30 | Blue chip HoSE |
+| Watchlist | Động | Do người dùng nhập, mỗi mã 1 dòng |
+| VN30 | 30 | Blue chip HOSE |
 | VN100 | 100 | Top 100 vốn hoá |
-| HOSE | 110 | Sàn HoSE mở rộng |
-| HNX | 20 | Sàn Hà Nội |
-| MARKET_SCAN_LIST | 130 | HOSE + HNX kết hợp |
+| Market Scan | Cố định | Curated universe của app để scan nhanh |
+| HOSE / HNX / UPCOM | Động | Lấy từ live listing master có cache; fallback bucket cấu hình nếu nguồn live lỗi |
+
+> **Lưu ý:** Số mã HOSE/HNX/UPCOM không còn là số cố định trong docs. Ứng dụng dùng live listing master khi khả dụng, nên số lượng có thể thay đổi theo thời điểm.
 
 ---
 
@@ -106,20 +108,18 @@ python -m streamlit run app.py
 |---|---|
 | **Language** | Chuyển đổi Tiếng Việt / English |
 | **Watchlist** | Danh sách mã theo dõi (mỗi mã 1 dòng) |
-| **Universe** | Chọn tập dữ liệu: Watchlist / VN30 / VN100 / HOSE / HNX |
+| **Chế độ review** | `Guided review` mặc định hoặc `Advanced tabs` nếu muốn tách 5 scanner |
+| **Scan universe** | Watchlist / VN30 / VN100 / Market Scan / HOSE / HNX / UPCOM |
 | **Lookback days** | Số ngày lịch sử (180–1095 ngày) |
 | **🔄 Tải Dữ Liệu** | Tải OHLCV cho tất cả mã trong universe |
-| **🌐 Cập nhật Macro** | Tải dữ liệu vĩ mô (thị trường thế giới + VN breadth) |
+| **🌐 Cập nhật Macro** | Tải dữ liệu vĩ mô, regime VNINDEX và foreign-flow coverage |
 
 ### Các tab chính
 
 ```
 🌐 Macro Pulse     — Tổng quan vĩ mô và chế độ thị trường
-⚡ 1W Scanner      — Quét tín hiệu khung 1 tuần
-📅 2W Scanner      — Quét tín hiệu khung 2 tuần
-📆 1M Scanner      — Quét tín hiệu khung 1 tháng
-📊 3M Scanner      — Quét tín hiệu khung 3 tháng
-🎯 5M Scanner      — Quét tín hiệu khung 5 tháng
+🔎 Signal Review   — Workspace review hợp nhất (mặc định)
+⚡/📅/📆/📊/🎯      — 5 scanner riêng khi chọn Advanced tabs
 🧠 ML Forecast     — Dự báo giá bằng AI ensemble
 🧪 Backtest        — Kiểm thử chiến lược lịch sử
 💼 Portfolio       — Quản lý danh mục
@@ -132,8 +132,8 @@ python -m streamlit run app.py
 ```
 1. Sidebar → Chọn Universe → Tải Dữ Liệu
 2. Sidebar → Cập nhật Macro
-3. Tab Macro Pulse → Xác định regime (bull/sideways/bear)
-4. Tab Scanner phù hợp → Lọc mã theo tín hiệu
+3. Tab Macro Pulse → Đọc trust ribbon, Macro Score và nguồn regime `live/cache`
+4. Tab Signal Review (hoặc Advanced tabs) → Lọc mã theo tín hiệu
 5. Mã quan tâm → Xem chi tiết điểm và stop/target
 6. Tab Portfolio → Mở vị thế
 7. Theo dõi stop/target hàng ngày
@@ -143,7 +143,7 @@ python -m streamlit run app.py
 
 ## 4. Macro Pulse
 
-**Đọc điều kiện thị trường trước khi scan.**
+**Đọc điều kiện thị trường trước khi scan. Trust ribbon là lớp sự thật đầu tiên phải đọc.**
 
 ### Các chỉ số vĩ mô được theo dõi
 
@@ -164,6 +164,20 @@ python -m streamlit run app.py
 - Hiệu suất thị trường thế giới (mỗi thị trường +0 đến +1 điểm)
 - Breadth VN-Index (tỷ lệ tăng/giảm)
 - Dòng tiền ngoại (±1 điểm)
+
+### Trust ribbon trong Macro / App shell
+
+- **Price bars as-of**: ngày bar gần nhất của dữ liệu giá đang dùng
+- **Source mix**: DNSE / SSI mix cho universe đang tải
+- **Macro updated**: thời điểm refresh macro gần nhất
+- **VNI regime source**: `live (DNSE)` / `live (Yahoo)` / `live (vnstock)` / `cache` / `unavailable`
+- **Foreign flow basis**: tổng hợp basis thực tế của foreign-flow đang dùng
+
+### Foreign flow và regime stale
+
+- Market-wide foreign-flow ưu tiên **CafeF market history backfill** khi cache sẵn có, chỉ fallback sang **KBS snapshot** khi cần.
+- Với universe lớn, foreign-flow theo từng mã có thể chạy ở **bounded mode**: ưu tiên CafeF cache, phần còn thiếu dùng KBS snapshot để tránh treo macro refresh.
+- Nếu VNINDEX không làm mới được, ứng dụng hiển thị **VNI regime stale** riêng; đây không còn bị gộp nhầm vào `Macro data partial`.
 
 | MacroScore | Regime Label | Ý nghĩa |
 |---|---|---|
@@ -193,7 +207,7 @@ python -m streamlit run app.py
 | 📊 3M | ~66 phiên | Positional (kết hợp BCTC) | Mọi regime |
 | 🎯 5M | ~110 phiên | Macro-driven, vị thế lớn | Mọi regime |
 
-### Cách đọc kết quả Scanner
+### Cách đọc kết quả Scanner / Signal Review
 
 | Cột | Ý nghĩa |
 |---|---|
@@ -205,6 +219,13 @@ python -m streamlit run app.py
 | **Target** | Giá mục tiêu |
 | **R:R** | Tỷ lệ Risk:Reward |
 | **Nguồn** | Nguồn dữ liệu bar hiện tại (DNSE / SSI) |
+
+### Foreign-flow provenance trong scanner
+
+- Các TF dài hơn (`2W`, `1M`, `3M`, `5M`) đọc thêm basis foreign-flow nếu đã có.
+- `CafeF foreign history | 20 sessions` = có history xác minh.
+- `KBS snapshot | session net only` = chỉ là snapshot theo phiên, không được xem như 20 phiên thật.
+- Khi scan universe lớn, hãy đọc trust ribbon/callout trước khi dùng foreign-flow như điều kiện ưu tiên.
 
 ### Thứ tự ưu tiên khi lọc
 
@@ -280,9 +301,12 @@ Total    [max 100]
 
 ### T+2 trong Backtest
 
-Backtest mô phỏng đúng quy tắc thanh toán:
+Backtest mô phỏng đúng quy tắc thanh toán và thực thi lệnh:
 - Mua ngày T → chỉ được bán khi đã giữ đủ tối thiểu 2 phiên giao dịch
 - Lệnh signal/time-exit được thực hiện ở open của bar kế tiếp khi vị thế đã T+2 ready
+- Stop/target có xử lý gap-aware: nếu mở cửa đã vượt stop/target thì fill tại giá mở cửa
+- Equity curve được **mark-to-market theo từng bar** khi đang giữ lệnh để Max Drawdown/Sharpe phản ánh thực tế hơn
+- Position size được làm tròn theo **lot 100 cổ phiếu** của thị trường Việt Nam
 
 ### Chỉ số hiệu suất
 

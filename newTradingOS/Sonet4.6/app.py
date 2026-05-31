@@ -108,6 +108,8 @@ def _init_session():
         st.session_state.regime_updated_at = None
     if "regime_stale" not in st.session_state:
         st.session_state.regime_stale = False
+    if "regime_source" not in st.session_state:
+        st.session_state.regime_source = "—"
     if "macro_score" not in st.session_state:
         st.session_state.macro_score   = 5.0
     if "macro_regime" not in st.session_state:
@@ -198,6 +200,39 @@ def _foreign_flow_coverage(foreign_flows: dict) -> dict[str, int]:
         "unavailable": unavailable,
         "other": other,
     }
+
+
+def _is_vni_regime_stale(vni_df, max_age_days: int = 5) -> bool:
+    if vni_df is None or getattr(vni_df, "empty", True):
+        return True
+    try:
+        latest = vni_df.index[-1]
+    except Exception:
+        return False
+
+    try:
+        latest_date = latest.date()
+    except AttributeError:
+        try:
+            latest_date = datetime.fromisoformat(str(latest)).date()
+        except Exception:
+            return False
+
+    return (datetime.now().date() - latest_date).days > max_age_days
+
+
+def _regime_source_label(vni_df) -> str:
+    if vni_df is None or getattr(vni_df, "empty", True):
+        return "unavailable"
+
+    source_mode = str(vni_df.attrs.get("source_mode") or "unknown").strip().lower()
+    source_name = str(vni_df.attrs.get("source_name") or "").strip()
+
+    if source_mode == "cache":
+        return "cache"
+    if source_mode == "live":
+        return f"live ({source_name})" if source_name else "live"
+    return source_name or "unknown"
 
 
 def _workflow_state(
@@ -379,15 +414,14 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         # Yahoo Finance fallback when DNSE/SSI cannot serve index data.
         from core.macro_data import fetch_vni_data as _fetch_vni
         vni_df = _fetch_vni(days=365)
+        st.session_state.regime_source = _regime_source_label(vni_df)
         if not vni_df.empty and "Close" in vni_df.columns:
             rr = detect_regime(vni_df["Close"])
             st.session_state.regime_result = rr
             st.session_state.regime_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.regime_stale = False
+            st.session_state.regime_stale = _is_vni_regime_stale(vni_df)
         else:
             st.session_state.regime_stale = True
-            if "VNI regime" not in stale:
-                stale.append("VNI regime")
 
         st.session_state.macro_stale  = stale
 
@@ -517,6 +551,7 @@ render_trust_ribbon([
     ("Price bars as-of", _latest_bar_date_label(data_dict)),
     ("Source mix", _source_mix_label(data_dict)),
     ("Macro updated", st.session_state.get("macro_updated_at") or "—"),
+    ("VNI regime source", st.session_state.get("regime_source") or "—"),
     ("Foreign flow basis", _ff_basis),
 ])
 
@@ -530,6 +565,18 @@ if _stale:
     render_guidance_callout(
         "Macro data partial",
         f"Thiếu: {', '.join(_stale)}. Nhấn Cập nhật Macro để thử lại; kết quả hiện tại dùng mặc định neutral.",
+        tone="warning",
+    )
+
+if st.session_state.get("regime_stale"):
+    _regime_msg = (
+        "Không thể làm mới VNINDEX gần đây; app đang giữ regime trước đó và đánh dấu stale trong metric."
+        if st.session_state.get("regime_result")
+        else "Không thể làm mới VNINDEX; app tạm giữ regime mặc định sideways cho tới khi lần cập nhật sau thành công."
+    )
+    render_guidance_callout(
+        "VNI regime stale",
+        _regime_msg,
         tone="warning",
     )
 

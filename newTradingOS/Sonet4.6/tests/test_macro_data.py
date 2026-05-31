@@ -438,6 +438,34 @@ class TestFetchMacroStaleDetection:
 
 
 class TestFetchVniData:
+    @patch("core.macro_data._load_cached_vni_data")
+    @patch("core.macro_data._fetch_vni_data_vnstock")
+    @patch("core.macro_data._yahoo_price")
+    @patch("core.data_fetcher._fetch_dnse")
+    def test_falls_back_to_cached_history_when_all_live_sources_fail(
+        self,
+        mock_dnse,
+        mock_yahoo,
+        mock_vnstock,
+        mock_cached,
+    ):
+        mock_dnse.return_value = pd.DataFrame()
+        mock_yahoo.return_value = None
+        mock_vnstock.return_value = pd.DataFrame()
+        expected = pd.DataFrame(
+            {"Close": [1248.0, 1251.0]},
+            index=pd.to_datetime(["2026-05-28", "2026-05-29"]),
+        )
+        mock_cached.return_value = expected
+
+        result = fetch_vni_data(days=365)
+
+        assert result.equals(expected)
+        mock_cached.assert_called_once_with(days=365)
+        assert result.attrs["source_mode"] == "cache"
+        assert result.attrs["source_name"] == "VNINDEX cache"
+
+    @patch("core.macro_data._save_cached_vni_data")
     @patch("core.macro_data._fetch_vni_data_vnstock")
     @patch("core.macro_data._yahoo_price")
     @patch("core.data_fetcher._fetch_dnse")
@@ -446,6 +474,7 @@ class TestFetchVniData:
         mock_dnse,
         mock_yahoo,
         mock_vnstock,
+        mock_save,
     ):
         mock_dnse.return_value = pd.DataFrame()
         mock_yahoo.return_value = None
@@ -459,6 +488,9 @@ class TestFetchVniData:
 
         assert result.equals(expected)
         mock_vnstock.assert_called_once_with(days=365)
+        mock_save.assert_called_once()
+        assert result.attrs["source_mode"] == "live"
+        assert result.attrs["source_name"] == "vnstock"
 
 
 # ─────────────────────────────────────────────────────────────
