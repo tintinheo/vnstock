@@ -354,7 +354,17 @@ class TestScannerAuditEvents:
             regime="bull",
             macro_score=6.5,
             data_dict=sample_data_dict,
-            foreign_flows={"VIC": {"net_buy_value": 1.0}},
+            foreign_flows={
+                "VIC": {
+                    "net_buy_value": 1.0,
+                    "net_20d": 250.0,
+                    "trend_20d": "accumulate",
+                    "history_sessions": 20,
+                    "basis": "CafeF foreign history | 20 sessions",
+                    "session_trend": "Mua ròng",
+                    "is_20d_proxy": False,
+                }
+            },
             audit_path="data/audit/2026-05-31.jsonl",
             exchange_map={"VIC": "HOSE", "PVS": "HNX", "ART": "UPCOM"},
             macro_stale=["foreign_flow"],
@@ -374,6 +384,9 @@ class TestScannerAuditEvents:
         assert result_event["detail"]["kind"] == "result"
         assert result_event["detail"]["signal_action"] == "STRONG BUY"
         assert result_event["detail"]["exchange"] == "HOSE"
+        assert result_event["detail"]["ff_history_sessions"] == 20
+        assert result_event["detail"]["ff_trend_20d"] == "accumulate"
+        assert result_event["detail"]["ff_basis"] == "CafeF foreign history | 20 sessions"
         assert result_event["detail"]["audit_file"].endswith("2026-05-31.jsonl")
 
     def test_audit_tab_formats_scan_result_event(self):

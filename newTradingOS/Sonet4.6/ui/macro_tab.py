@@ -39,16 +39,29 @@ def _status_icon(value: bool | None) -> str:
     return "—"
 
 
+def _foreign_flow_signal(ff: dict) -> float:
+    return float(ff.get("signal_net_buy", ff.get("net_buy", 0.0)) or 0.0)
+
+
+def _foreign_flow_20d_label(trend: str) -> str:
+    return {
+        "accumulate": "Tích lũy 20P",
+        "distribute": "Phân phối 20P",
+        "neutral": "Trung tính 20P",
+    }.get(trend, trend or "N/A")
+
+
 def _macro_component_states(macro_data: dict) -> dict[str, bool | None]:
     stale_fields = set(macro_data.get("stale_fields", []))
     ff = macro_data.get("foreign_flow", {})
     dxy_trend = macro_data.get("dxy_trend", "neutral")
     vix_level = macro_data.get("vix_level", "normal")
+    ff_signal = _foreign_flow_signal(ff)
 
     return {
         "dxy": None if "DXY (USD Index)" in stale_fields else dxy_trend not in ("strong_up",),
         "vix": None if "VIX" in stale_fields else vix_level == "normal",
-        "foreign": None if "foreign_flow" in stale_fields else ff.get("net_buy", 0) > -1e10,
+        "foreign": None if "foreign_flow" in stale_fields else ff_signal > -1e10,
         "breadth": None if "market_breadth" in stale_fields else True,
     }
 
@@ -127,7 +140,13 @@ def render_macro_tab(
             st.metric("Foreign Flow", "N/A", "Stale/Missing")
         else:
             ff_net = ff.get("net_buy", 0) / 1e9
-            st.metric("Foreign Flow", f"{ff_net:+.1f} tỷ", ff.get("trend", "N/A"))
+            history_sessions = int(ff.get("history_sessions", 0) or 0)
+            delta = ff.get("trend", "N/A")
+            if history_sessions >= 20:
+                delta = f"{delta} | 20P {ff.get('net_buy_20d', 0) / 1e9:+.1f} tỷ"
+            elif history_sessions > 1:
+                delta = f"{delta} | hist {history_sessions}P"
+            st.metric("Foreign Flow", f"{ff_net:+.1f} tỷ", delta)
 
     with c5:
         if component_states["breadth"] is None:
@@ -148,7 +167,7 @@ def render_macro_tab(
         if component_states["breadth"] is not None else "Breadth basis: unavailable on this refresh"
     )
     trust4.caption(
-        "Foreign flow basis: KBS snapshot | session net only"
+        f"Foreign flow basis: {ff.get('basis', 'unavailable on this refresh')}"
         if component_states["foreign"] is not None else "Foreign flow basis: unavailable on this refresh"
     )
 
@@ -189,6 +208,43 @@ def render_macro_tab(
     st.dataframe(df_w, width="stretch", hide_index=True)  # noqa: deprecated-arg
     st.caption("World market rows are delayed end-of-bar snapshots from Yahoo chart API, not exchange-native live feeds.")
 
+    ff_history = ff.get("history", []) or []
+    if ff_history:
+        st.divider()
+        st.subheader("🌊 Lịch Sử Khối Ngoại")
+        df_ff = pd.DataFrame(ff_history)
+        df_ff["date"] = pd.to_datetime(df_ff["date"], errors="coerce")
+        df_ff = df_ff.dropna(subset=["date"]).sort_values("date")
+
+        ff1, ff2, ff3 = st.columns(3)
+        ff1.metric("Net 20 phiên", f"{ff.get('net_buy_20d', 0) / 1e9:+.1f} tỷ", _foreign_flow_20d_label(ff.get("trend_20d", "neutral")))
+        ff2.metric("History Sessions", int(ff.get("history_sessions", 0) or 0), f"As-of {ff.get('history_as_of') or '—'}")
+        ff3.metric("Signal Used", f"{_foreign_flow_signal(ff) / 1e9:+.1f} tỷ", "avg 20P" if int(ff.get("history_sessions", 0) or 0) >= 20 else "latest session")
+
+        net_vals = df_ff["net_buy"] / 1e9
+        colors = [GREEN if value > 0 else RED if value < 0 else GREY for value in net_vals]
+        fig_ff = go.Figure(go.Bar(
+            x=df_ff["date"].dt.date.astype(str),
+            y=net_vals,
+            marker_color=colors,
+            hovertemplate="%{x}<br>Net %{y:.1f} tỷ<extra></extra>",
+        ))
+        fig_ff.update_layout(
+            height=260,
+            template="plotly_dark",
+            paper_bgcolor="#0e1117",
+            plot_bgcolor="#0e1117",
+            margin=dict(l=40, r=10, t=20, b=40),
+            xaxis_title="Session",
+            yaxis_title="Net buy (tỷ VND)",
+            showlegend=False,
+        )
+        st.plotly_chart(fig_ff, width="stretch")
+        st.caption(
+            "Macro foreign-flow chart uses cached/backfilled CafeF market history when available; "
+            "fallback refreshes only have current-session KBS net flow."
+        )
+
     st.divider()
 
     # ── TF Condition Scorecard ────────────────────────────────
@@ -217,7 +273,7 @@ def render_macro_tab(
 
     df_tf = pd.DataFrame(rows_tf)
     st.dataframe(df_tf, width="stretch", hide_index=True)  # noqa: deprecated-arg
-    st.caption("Foreign flow in this scorecard uses current-session KBS snapshot net flow, not verified rolling 20-session history.")
+    st.caption("Foreign flow in this scorecard uses verified market history when available, otherwise current-session KBS snapshot net flow.")
 
     # ── Regime History Chart ──────────────────────────────────
     if regime_result.history and len(regime_result.history) > 20:

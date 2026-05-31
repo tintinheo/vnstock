@@ -11,9 +11,10 @@ from __future__ import annotations
 
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 
-from core.macro_data import get_macro_score
+from core.macro_data import fetch_market_foreign_flow, fetch_vni_data, get_macro_score
 
 
 # ─────────────────────────────────────────────────────────────
@@ -130,27 +131,83 @@ class TestGetMacroScoreValues:
 
 
 class TestForeignFlowBatch:
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_tickers")
     @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_fetch_foreign_flow_tickers_reuses_single_snapshot(self, mock_snapshot):
+    def test_fetch_foreign_flow_tickers_prefers_cafef_history(
+        self,
+        mock_snapshot,
+        mock_cafef,
+    ):
         from core.macro_data import fetch_foreign_flow_tickers
 
+        mock_cafef.return_value = {
+            "VCB": {
+                "net_buy_value": 17_447_020_000,
+                "buy_value": 26_644_080_000,
+                "sell_value": 9_197_060_000,
+                "net_20d": 1_139_201_540_000,
+                "trend_20d": "accumulate",
+                "session_net_proxy": 17_447_020_000,
+                "session_trend": "neutral",
+                "history_sessions": 20,
+                "is_20d_proxy": False,
+                "basis": "CafeF foreign history | 20 sessions",
+            },
+            "MBB": {
+                "net_buy_value": -8_000_000_000,
+                "buy_value": 2_000_000_000,
+                "sell_value": 10_000_000_000,
+                "net_20d": -120_000_000_000,
+                "trend_20d": "distribute",
+                "session_net_proxy": -8_000_000_000,
+                "session_trend": "neutral",
+                "history_sessions": 20,
+                "is_20d_proxy": False,
+                "basis": "CafeF foreign history | 20 sessions",
+            },
+        }
+
+        result = fetch_foreign_flow_tickers(["VCB", "MBB"])
+
+        mock_snapshot.assert_not_called()
+        assert result["VCB"]["trend_20d"] == "accumulate"
+        assert result["VCB"]["history_sessions"] == 20
+        assert result["VCB"]["is_20d_proxy"] is False
+        assert result["MBB"]["trend_20d"] == "distribute"
+
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_tickers")
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_foreign_flow_tickers_falls_back_to_snapshot_for_missing_symbols(
+        self,
+        mock_snapshot,
+        mock_cafef,
+    ):
+        from core.macro_data import fetch_foreign_flow_tickers
+
+        mock_cafef.return_value = {
+            "VCB": {
+                "net_buy_value": 17_447_020_000,
+                "buy_value": 26_644_080_000,
+                "sell_value": 9_197_060_000,
+                "net_20d": 1_139_201_540_000,
+                "trend_20d": "accumulate",
+                "session_net_proxy": 17_447_020_000,
+                "session_trend": "neutral",
+                "history_sessions": 20,
+                "is_20d_proxy": False,
+                "basis": "CafeF foreign history | 20 sessions",
+            },
+        }
         mock_snapshot.return_value = [
-            {"SB": "VCB", "CP": 50_000, "FB": 2_000_000, "FS": 500_000},
             {"SB": "MBB", "CP": 25_000, "FB": 300_000, "FS": 800_000},
         ]
 
         result = fetch_foreign_flow_tickers(["VCB", "MBB", "FPT"])
 
         assert mock_snapshot.call_count == 1
-        assert result["VCB"]["net_buy_value"] == 75_000_000_000
-        assert result["VCB"]["net_20d"] == 0
-        assert result["VCB"]["trend_20d"] == "neutral"
-        assert result["VCB"]["session_net_proxy"] == 75_000_000_000
-        assert result["VCB"]["session_trend"] == "accumulate"
-        assert result["VCB"]["history_sessions"] == 1
-        assert result["VCB"]["is_20d_proxy"] is True
+        assert result["VCB"]["history_sessions"] == 20
         assert result["MBB"]["net_buy_value"] == -12_500_000_000
-        assert result["MBB"]["session_trend"] == "neutral"
+        assert result["MBB"]["is_20d_proxy"] is True
         assert result["FPT"] == {
             "net_buy_value": 0,
             "buy_value": 0,
@@ -163,6 +220,52 @@ class TestForeignFlowBatch:
             "is_20d_proxy": False,
             "basis": "not_available",
         }
+
+
+class TestMarketForeignFlow:
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    @patch("core.foreign_flow_crawler.fetch_cafef_market_foreign_flow")
+    def test_fetch_market_foreign_flow_prefers_cafef_history(
+        self,
+        mock_cafef_market,
+        mock_snapshot,
+    ):
+        mock_cafef_market.return_value = {
+            "net_buy": 12_000_000_000,
+            "buy": 80_000_000_000,
+            "sell": 68_000_000_000,
+            "trend": "Mua ròng",
+            "fetch_ok": True,
+            "net_buy_20d": 140_000_000_000,
+            "trend_20d": "accumulate",
+            "history_sessions": 20,
+            "signal_net_buy": 7_000_000_000,
+            "basis": "CafeF market history | 20 sessions",
+            "history": [{"date": "2026-05-29", "net_buy": 12_000_000_000}],
+            "history_as_of": "2026-05-29",
+        }
+
+        result = fetch_market_foreign_flow(days=20)
+
+        mock_snapshot.assert_not_called()
+        assert result["fetch_ok"] is True
+        assert result["history_sessions"] == 20
+        assert result["signal_net_buy"] == 7_000_000_000
+        assert result["basis"] == "CafeF market history | 20 sessions"
+
+    def test_get_macro_score_prefers_signal_net_buy_when_present(self):
+        macro = {
+            "dxy_trend": "neutral",
+            "vix_level": "normal",
+            "foreign_flow": {"net_buy": 20_000_000_000, "signal_net_buy": -20_000_000_000},
+            "ad_ratio": 0.5,
+            "stale_fields": [],
+        }
+
+        score, label, _ = get_macro_score(macro)
+
+        assert score == 3.5
+        assert label == "bear"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -299,70 +402,118 @@ class TestFetchMacroStaleDetection:
         assert "foreign_flow" in result.get("stale_fields", [])
 
 
+class TestFetchVniData:
+    @patch("core.macro_data._fetch_vni_data_vnstock")
+    @patch("core.macro_data._yahoo_price")
+    @patch("core.data_fetcher._fetch_dnse")
+    def test_falls_back_to_vnstock_when_dnse_and_yahoo_fail(
+        self,
+        mock_dnse,
+        mock_yahoo,
+        mock_vnstock,
+    ):
+        mock_dnse.return_value = pd.DataFrame()
+        mock_yahoo.return_value = None
+        expected = pd.DataFrame(
+            {"Close": [1250.1, 1255.2]},
+            index=pd.to_datetime(["2026-05-28", "2026-05-29"]),
+        )
+        mock_vnstock.return_value = expected
+
+        result = fetch_vni_data(days=365)
+
+        assert result.equals(expected)
+        mock_vnstock.assert_called_once_with(days=365)
+
+
 # ─────────────────────────────────────────────────────────────
 # FIX #4 — fetch_foreign_flow_ticker snapshot contract
 # ─────────────────────────────────────────────────────────────
 class TestFetchForeignFlowTicker20d:
     """
-    Tests now use KBS IIS snapshot format:
-    [{"SB": "VCB", "EX": "HOSE", "RE": ..., "CP": price, "FB": buy_vol, "FS": sell_vol, ...}]
-    KBS provides a single-session snapshot, so verified 20-session history is unavailable.
-    The function must expose session_net_proxy/session_trend and keep net_20d neutral.
+    fetch_foreign_flow_ticker now prefers verified CafeF 20-session history,
+    but must still fall back to KBS snapshot safely when history is unavailable.
     """
 
-    @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_net_20d_accumulate(self, mock_snap):
-        """Large positive session net → session_trend=accumulate, but net_20d stays unavailable."""
-        # net = (7e6 - 1e6) * 10000 = 6e6 * 10000 = 6e10 (60B VND)
-        mock_snap.return_value = [
-            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
-             "FB": 7_000_000, "FS": 1_000_000, "FT": 8_000_000},
-        ]
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker")
+    def test_net_20d_accumulate(self, mock_cafef):
+        """Verified 20-session history should expose real 20d accumulation."""
+        mock_cafef.return_value = {
+            "net_buy_value": 17_447_020_000,
+            "buy_value": 26_644_080_000,
+            "sell_value": 9_197_060_000,
+            "net_20d": 1_139_201_540_000,
+            "trend_20d": "accumulate",
+            "session_net_proxy": 17_447_020_000,
+            "session_trend": "neutral",
+            "history_sessions": 20,
+            "is_20d_proxy": False,
+            "basis": "CafeF foreign history | 20 sessions",
+        }
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        assert result["net_20d"] == 0
-        assert result["trend_20d"] == "neutral"
-        assert result["session_net_proxy"] == pytest.approx(6e10)
-        assert result["session_trend"] == "accumulate"
-        assert result["history_sessions"] == 1
-        assert result["is_20d_proxy"] is True
+        assert result["net_20d"] == 1_139_201_540_000
+        assert result["trend_20d"] == "accumulate"
+        assert result["history_sessions"] == 20
+        assert result["is_20d_proxy"] is False
 
-    @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_net_20d_distribute(self, mock_snap):
-        """Large negative session net → session_trend=distribute, but net_20d stays unavailable."""
-        # net = (1e6 - 7e6) * 10000 = -6e6 * 10000 = -6e10
-        mock_snap.return_value = [
-            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
-             "FB": 1_000_000, "FS": 7_000_000, "FT": 8_000_000},
-        ]
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker")
+    def test_net_20d_distribute(self, mock_cafef):
+        """Verified 20-session history should expose real 20d distribution."""
+        mock_cafef.return_value = {
+            "net_buy_value": -8_000_000_000,
+            "buy_value": 2_000_000_000,
+            "sell_value": 10_000_000_000,
+            "net_20d": -120_000_000_000,
+            "trend_20d": "distribute",
+            "session_net_proxy": -8_000_000_000,
+            "session_trend": "neutral",
+            "history_sessions": 20,
+            "is_20d_proxy": False,
+            "basis": "CafeF foreign history | 20 sessions",
+        }
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        assert result["net_20d"] == 0
-        assert result["trend_20d"] == "neutral"
-        assert result["session_net_proxy"] == pytest.approx(-6e10)
-        assert result["session_trend"] == "distribute"
+        assert result["net_20d"] == -120_000_000_000
+        assert result["trend_20d"] == "distribute"
+        assert result["history_sessions"] == 20
 
-    @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_net_20d_neutral(self, mock_snap):
-        """Small session net remains session_trend neutral and leaves 20d fields unavailable."""
-        # net = (1.1e6 - 1e6) * 10000 = 1e9 (< 50B threshold)
-        mock_snap.return_value = [
-            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
-             "FB": 1_100_000, "FS": 1_000_000, "FT": 2_100_000},
-        ]
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker")
+    def test_net_20d_neutral(self, mock_cafef):
+        """Small verified 20-session net remains neutral."""
+        mock_cafef.return_value = {
+            "net_buy_value": 1_000_000_000,
+            "buy_value": 11_000_000_000,
+            "sell_value": 10_000_000_000,
+            "net_20d": 9_000_000_000,
+            "trend_20d": "neutral",
+            "session_net_proxy": 1_000_000_000,
+            "session_trend": "neutral",
+            "history_sessions": 20,
+            "is_20d_proxy": False,
+            "basis": "CafeF foreign history | 20 sessions",
+        }
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
-        assert result["net_20d"] == 0
+        assert result["net_20d"] == 9_000_000_000
         assert result["trend_20d"] == "neutral"
-        assert result["session_trend"] == "neutral"
+        assert result["history_sessions"] == 20
 
-    @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_returns_all_expected_keys(self, mock_snap):
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker")
+    def test_returns_all_expected_keys(self, mock_cafef):
         """Result must always include both legacy and proxy-disclosure keys."""
-        mock_snap.return_value = [
-            {"SB": "VCB", "EX": "HOSE", "RE": 95000, "CP": 10000,
-             "FB": 1_000_000, "FS": 500_000, "FT": 1_500_000},
-        ]
+        mock_cafef.return_value = {
+            "net_buy_value": 1,
+            "buy_value": 2,
+            "sell_value": 1,
+            "net_20d": 10,
+            "trend_20d": "neutral",
+            "session_net_proxy": 1,
+            "session_trend": "neutral",
+            "history_sessions": 20,
+            "is_20d_proxy": False,
+            "basis": "CafeF foreign history | 20 sessions",
+        }
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")
         for key in (
@@ -371,9 +522,10 @@ class TestFetchForeignFlowTicker20d:
         ):
             assert key in result, f"Missing key: {key}"
 
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker", side_effect=RuntimeError("CafeF down"))
     @patch("core.macro_data._fetch_kbs_market_snapshot")
-    def test_empty_data_returns_safe_defaults(self, mock_snap):
-        """Empty snapshot must return zeros without crashing."""
+    def test_empty_data_returns_safe_defaults(self, mock_snap, _mock_cafef):
+        """Empty fallback snapshot must return zeros without crashing."""
         mock_snap.return_value = []
 
         from core.macro_data import fetch_foreign_flow_ticker
@@ -382,9 +534,10 @@ class TestFetchForeignFlowTicker20d:
         assert result["net_20d"] == 0
         assert result["trend_20d"] == "neutral"
 
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker", side_effect=RuntimeError("CafeF down"))
     @patch("core.macro_data._fetch_kbs_market_snapshot", return_value=[])
-    def test_network_error_returns_safe_defaults(self, _mock_snap):
-        """When snapshot returns empty (network failure), fetch_foreign_flow_ticker
+    def test_network_error_returns_safe_defaults(self, _mock_snap, _mock_cafef):
+        """When CafeF and snapshot both fail, fetch_foreign_flow_ticker
         must return safe zero defaults without crashing."""
         from core.macro_data import fetch_foreign_flow_ticker
         result = fetch_foreign_flow_ticker("VCB")

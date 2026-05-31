@@ -5,6 +5,8 @@ All data from free public APIs.
 """
 from __future__ import annotations
 
+import contextlib
+import io
 import logging
 from datetime import datetime, timedelta
 from typing import Optional
@@ -13,7 +15,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from config import WORLD_SYMBOLS, API_TIMEOUT
+from config import WORLD_SYMBOLS, API_TIMEOUT, TICKER_EXCHANGE
 
 logger = logging.getLogger("TradingOS.macro")
 
@@ -81,6 +83,49 @@ def fetch_world_markets() -> dict[str, Optional[dict]]:
 # ─────────────────────────────────────────────────────────────
 # VN-INDEX & MARKET BREADTH
 # ─────────────────────────────────────────────────────────────
+def _fetch_vni_data_vnstock(days: int = 365) -> pd.DataFrame:
+    """Fallback VNINDEX history via vnstock when public chart APIs fail."""
+    try:
+        quiet = io.StringIO()
+        with contextlib.redirect_stdout(quiet), contextlib.redirect_stderr(quiet):
+            from vnstock import Vnstock
+
+            start = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+            end = datetime.now().strftime("%Y-%m-%d")
+            raw = Vnstock().stock(symbol="VNINDEX", source="VCI").quote.history(
+                start=start,
+                end=end,
+            )
+        if raw is None or raw.empty:
+            return pd.DataFrame()
+
+        df = raw.rename(columns={
+            "time": "Date",
+            "open": "Open",
+            "high": "High",
+            "low": "Low",
+            "close": "Close",
+            "volume": "Volume",
+        }).copy()
+        if "Date" not in df.columns or "Close" not in df.columns:
+            return pd.DataFrame()
+
+        df["Date"] = pd.to_datetime(df["Date"], errors="coerce").dt.normalize()
+        df = df.dropna(subset=["Date"]).set_index("Date").sort_index()
+        for col in ("Open", "High", "Low", "Close", "Volume"):
+            if col in df.columns:
+                df[col] = pd.to_numeric(df[col], errors="coerce")
+        df = df.dropna(subset=["Close"])
+        df = df[~df.index.duplicated(keep="last")]
+        if days > 0:
+            min_date = (datetime.now() - timedelta(days=days)).date()
+            df = df[df.index.date >= min_date]
+        return df
+    except Exception as exc:
+        logger.debug("vnstock VNINDEX: %s", exc)
+        return pd.DataFrame()
+
+
 def fetch_vni_data(days: int = 365) -> pd.DataFrame:
     """
     Fetch VN-Index (VNINDEX) daily OHLCV from DNSE Entrade.
@@ -93,6 +138,8 @@ def fetch_vni_data(days: int = 365) -> pd.DataFrame:
         data = _yahoo_price("^VNINDEX", "2y")
         if data and data["prices"]:
             df = pd.DataFrame({"Close": data["prices"]})
+    if df.empty:
+        df = _fetch_vni_data_vnstock(days=days)
     return df
 
 
@@ -215,37 +262,77 @@ def _foreign_flow_from_snapshot_item(item: dict | None) -> dict:
 
 
 def fetch_foreign_flow_tickers(symbols: list[str]) -> dict[str, dict]:
-    """Fetch foreign-flow data for many symbols using a single KBS snapshot."""
+    """Fetch foreign-flow data, preferring verified CafeF history over KBS snapshot."""
     if not symbols:
         return {}
 
-    data = _fetch_kbs_market_snapshot()
-    lookup = {
-        (item.get("SB", "") or "").upper(): item
-        for item in data
+    normalized = [str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()]
+    exchange_map = {
+        symbol: TICKER_EXCHANGE.get(symbol, "HOSE")
+        for symbol in normalized
     }
-    return {
-        symbol: _foreign_flow_from_snapshot_item(lookup.get(symbol.upper()))
-        for symbol in symbols
-    }
+
+    history_results: dict[str, dict] = {}
+    try:
+        from core.foreign_flow_crawler import fetch_cafef_foreign_flow_tickers
+
+        history_results = fetch_cafef_foreign_flow_tickers(
+            normalized,
+            exchange_map=exchange_map,
+            sessions=20,
+        )
+    except Exception as exc:
+        logger.debug("CafeF foreign batch: %s", exc)
+
+    missing = [symbol for symbol in normalized if symbol not in history_results]
+    lookup: dict[str, dict] = {}
+    if missing:
+        data = _fetch_kbs_market_snapshot()
+        lookup = {
+            (item.get("SB", "") or "").upper(): item
+            for item in data
+        }
+    results: dict[str, dict] = {}
+    for symbol in symbols:
+        symbol_upper = str(symbol).strip().upper()
+        if symbol_upper in history_results:
+            results[symbol] = history_results[symbol_upper]
+        else:
+            results[symbol] = _foreign_flow_from_snapshot_item(lookup.get(symbol_upper))
+    return results
 
 
 def fetch_foreign_flow_ticker(symbol: str) -> dict:
     """
-    Fetch foreign buy/sell for a specific ticker from KBS IIS snapshot.
+    Fetch foreign buy/sell for a specific ticker.
 
     Returns
     -------
     dict with keys: net_buy_value, buy_value, sell_value, net_20d, trend_20d,
     session_net_proxy, session_trend, history_sessions, is_20d_proxy, basis.
     All monetary values in VND (shares × price).
-    Verified 20-session history is not available from the intraday snapshot;
-    callers should use net_buy_value/session_net_proxy for today's session signal.
+    Prefers verified CafeF multi-session history and falls back to KBS intraday
+    snapshot when history cannot be retrieved.
     """
+    symbol = symbol.strip().upper()
+    exchange = TICKER_EXCHANGE.get(symbol, "HOSE")
+
+    try:
+        from core.foreign_flow_crawler import fetch_cafef_foreign_flow_ticker
+
+        history_result = fetch_cafef_foreign_flow_ticker(
+            symbol,
+            exchange=exchange,
+            sessions=20,
+        )
+        if int(history_result.get("history_sessions", 0) or 0) > 0:
+            return history_result
+    except Exception as exc:
+        logger.debug("CafeF foreign ticker %s: %s", symbol, exc)
+
     data = _fetch_kbs_market_snapshot()
-    sym_upper = symbol.upper()
     for item in data:
-        if (item.get("SB", "") or "").upper() == sym_upper:
+        if (item.get("SB", "") or "").upper() == symbol:
             return _foreign_flow_from_snapshot_item(item)
     # Ticker not found in snapshot (may be halted or not in top 500)
     return _empty_foreign_flow()
@@ -253,12 +340,36 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
 
 def fetch_market_foreign_flow(days: int = 20) -> dict:
     """
-    Compute aggregate market foreign flow from KBS IIS snapshot.
-    Sums (FB-FS)*CP across all stocks to get net VND flow for the session.
+    Compute aggregate market foreign flow.
+
+    Prefers cached/backfilled CafeF market history for multi-session context and
+    falls back to KBS IIS snapshot when history is unavailable.
     """
+    try:
+        from core.foreign_flow_crawler import fetch_cafef_market_foreign_flow
+
+        history_result = fetch_cafef_market_foreign_flow(sessions=days)
+        if history_result.get("fetch_ok", False):
+            return history_result
+    except Exception as exc:
+        logger.debug("CafeF market foreign flow: %s", exc)
+
     data = _fetch_kbs_market_snapshot()
     if not data:
-        return {"net_buy": 0, "buy": 0, "sell": 0, "trend": "N/A", "fetch_ok": False}
+        return {
+            "net_buy": 0,
+            "buy": 0,
+            "sell": 0,
+            "trend": "N/A",
+            "fetch_ok": False,
+            "net_buy_20d": 0,
+            "trend_20d": "neutral",
+            "history_sessions": 0,
+            "signal_net_buy": 0,
+            "basis": "not_available",
+            "history": [],
+            "history_as_of": None,
+        }
     net_buy = buy = sell = 0.0
     for item in data:
         cp = float(item.get("CP", 0) or 0)
@@ -271,8 +382,15 @@ def fetch_market_foreign_flow(days: int = 20) -> dict:
         "net_buy":  net_buy,
         "buy":      buy,
         "sell":     sell,
-        "trend":    "Mua r\u00f2ng" if net_buy > 0 else "B\u00e1n r\u00f2ng",
+        "trend":    "Mua r\u00f2ng" if net_buy > 0 else "B\u00e1n r\u00f2ng" if net_buy < 0 else "Trung t\u00ednh",
         "fetch_ok": True,
+        "net_buy_20d": 0,
+        "trend_20d": "neutral",
+        "history_sessions": 1,
+        "signal_net_buy": net_buy,
+        "basis": "KBS snapshot | session net only",
+        "history": [],
+        "history_as_of": None,
     }
 
 
@@ -370,7 +488,8 @@ def get_macro_score(macro: dict) -> tuple[float, str, list[str]]:
     elif vix_level == "elevated": score -= 0.75
 
     # Foreign flow
-    ff_net = macro.get("foreign_flow", {}).get("net_buy", 0)
+    ff_payload = macro.get("foreign_flow", {})
+    ff_net = ff_payload.get("signal_net_buy", ff_payload.get("net_buy", 0))
     if ff_net > 1e10:    score += 1.5   # Strong foreign buy (>10B VND)
     elif ff_net > 0:     score += 0.5
     elif ff_net < -1e10: score -= 1.5

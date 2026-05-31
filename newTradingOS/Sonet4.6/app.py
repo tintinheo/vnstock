@@ -141,6 +141,19 @@ def _latest_bar_date_label(data_dict: dict) -> str:
         latest = idx if latest is None or idx > latest else latest
     return str(latest) if latest is not None else "—"
 
+
+def _foreign_flow_basis_label(foreign_flows: dict) -> str:
+    if not foreign_flows:
+        return "Not loaded"
+    counts: dict[str, int] = {}
+    for payload in foreign_flows.values():
+        basis = payload.get("basis") or "unknown"
+        counts[basis] = counts.get(basis, 0) + 1
+    return ", ".join(
+        f"{basis}:{counts[basis]}"
+        for basis in sorted(counts)
+    )
+
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
 # ─────────────────────────────────────────────────────────────
@@ -347,7 +360,7 @@ trust2.caption(f"Source mix: {_source_mix_label(data_dict)}")
 trust3.caption(
     f"Macro updated: {st.session_state.get('macro_updated_at') or '—'}"
 )
-_ff_basis = "KBS snapshot | session net only" if st.session_state.get("foreign_flows_cache") else "Not loaded"
+_ff_basis = _foreign_flow_basis_label(st.session_state.get("foreign_flows_cache", {}))
 trust4.caption(f"Foreign flow basis: {_ff_basis}")
 
 st.caption(

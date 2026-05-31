@@ -58,18 +58,40 @@ def _latest_bar_date(data_dict: dict) -> str:
 
 def _foreign_flow_basis(tf: str, foreign_flows: dict) -> str:
     if tf in ("2W", "1M", "3M", "5M"):
-        return "KBS snapshot | session net only" if foreign_flows else "not loaded"
+        if not foreign_flows:
+            return "not loaded"
+        counts: dict[str, int] = {}
+        for payload in foreign_flows.values():
+            basis = payload.get("basis") or "unknown"
+            counts[basis] = counts.get(basis, 0) + 1
+        return ", ".join(
+            f"{basis}:{counts[basis]}"
+            for basis in sorted(counts)
+        )
     return "not used"
+
+
+def _foreign_flow_row_detail(ticker: str, foreign_flows: dict) -> dict:
+    payload = foreign_flows.get(ticker, {}) if foreign_flows else {}
+    return {
+        "ff_trend_20d": payload.get("trend_20d", "neutral"),
+        "ff_history_sessions": int(payload.get("history_sessions", 0) or 0),
+        "ff_basis": payload.get("basis", "not_available"),
+        "ff_session_trend": payload.get("session_trend", "neutral"),
+        "ff_is_proxy": bool(payload.get("is_20d_proxy", False)),
+    }
 
 
 def _scan_result_records(
     results: list[SignalResult],
     data_dict: dict,
+    foreign_flows: dict,
     exchange_map: dict | None = None,
 ) -> list[dict]:
     rows = []
     for r in results:
         df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+        ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
         rows.append({
             "ticker": r.ticker,
             "score": round(r.score, 1),
@@ -85,6 +107,7 @@ def _scan_result_records(
             "bar_date": _format_bar_date(df_raw),
             "message": r.message,
             "adv20_bn": round(float(r.indicators.get("ADV20_bn", 0.0) or 0.0), 2),
+            **ff_detail,
         })
     return rows
 
@@ -147,7 +170,12 @@ def _build_scan_audit_events(
     exchange_map: dict | None = None,
     macro_stale: list[str] | None = None,
 ) -> list[dict]:
-    result_rows = _scan_result_records(results, data_dict, exchange_map=exchange_map)
+    result_rows = _scan_result_records(
+        results,
+        data_dict,
+        foreign_flows,
+        exchange_map=exchange_map,
+    )
     source_mix = _source_mix(data_dict)
     latest_bar_date = _latest_bar_date(data_dict)
     foreign_flow_basis = _foreign_flow_basis(tf, foreign_flows)
@@ -190,6 +218,11 @@ def _build_scan_audit_events(
                 "bar_date": row["bar_date"],
                 "message": row["message"],
                 "adv20_bn": row["adv20_bn"],
+                "ff_trend_20d": row["ff_trend_20d"],
+                "ff_history_sessions": row["ff_history_sessions"],
+                "ff_basis": row["ff_basis"],
+                "ff_session_trend": row["ff_session_trend"],
+                "ff_is_proxy": row["ff_is_proxy"],
                 "audit_file": audit_path,
             },
             "result": "ok",
@@ -212,7 +245,12 @@ def _write_audit(
     date_str  = datetime.now().strftime("%Y-%m-%d")
     filepath  = os.path.join(_AUDIT_DIR, f"{date_str}.jsonl")
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    result_rows = _scan_result_records(results, data_dict, exchange_map=exchange_map)
+    result_rows = _scan_result_records(
+        results,
+        data_dict,
+        foreign_flows,
+        exchange_map=exchange_map,
+    )
 
     record = {
         "ts":          timestamp,
@@ -346,12 +384,15 @@ def render_scanner_tab(
     for r in all_results:
         df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
         exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
+        ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
         rows.append({
             "Mã":        r.ticker,
             "Score":     round(r.score, 1),
             "Action":    r.action,
             "Sàn":       exchange,
             "Bar Date":  _format_bar_date(df_raw),
+            "FF Hist":   ff_detail["ff_history_sessions"],
+            "FF 20D":    ff_detail["ff_trend_20d"],
             "Giá":       round(r.price, 0),
             "Stop":      round(r.stop_loss, 0),
             "Target":    round(r.take_profit, 0),
@@ -389,6 +430,8 @@ def render_scanner_tab(
         column_config={
             "Score":     st.column_config.NumberColumn("Score", format="%.1f",
                              help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán."),
+            "FF Hist":   st.column_config.NumberColumn("FF Hist", format="%d",
+                             help="Số phiên lịch sử foreign-flow đã xác minh cho mã này."),
             "Giá":       st.column_config.NumberColumn("Giá (VND)", format="%,.0f"),
             "Stop":      st.column_config.NumberColumn("Stop (VND)", format="%,.0f"),
             "Target":    st.column_config.NumberColumn("Target (VND)", format="%,.0f"),
@@ -532,7 +575,14 @@ def render_scanner_tab(
                         st.caption(f"Exchange: {exchange}")
                         st.caption(f"Latest bar date: {_format_bar_date(df_raw)}")
                         if tf in ("2W", "1M", "3M", "5M"):
-                            st.caption("Foreign flow basis: KBS snapshot | session net only")
+                            ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
+                            st.caption(
+                                "Foreign flow: "
+                                f"20d={ff_detail['ff_trend_20d']} | "
+                                f"history={ff_detail['ff_history_sessions']} sessions | "
+                                f"session={ff_detail['ff_session_trend']}"
+                            )
+                            st.caption(f"Foreign flow basis: {ff_detail['ff_basis']}")
                         if r.message:
                             st.warning(r.message)
 
@@ -627,6 +677,8 @@ def _render_audit_viewer(tf: str) -> None:
             "Sàn":      res.get("exchange", "—"),
             "Nguồn":    res.get("source", "—"),
             "Bar Date": res.get("bar_date", "—"),
+            "FF Hist":  res.get("ff_history_sessions", "—"),
+            "FF 20D":   res.get("ff_trend_20d", "—"),
             "Giá":      f"{res['price']:,.0f}",
             "Stop":     f"{res['stop_loss']:,.0f}",
             "Target":   f"{res['take_profit']:,.0f}",

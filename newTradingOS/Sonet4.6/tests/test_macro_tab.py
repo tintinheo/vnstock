@@ -42,3 +42,12 @@ def test_macro_component_states_keep_loaded_foreign_flow_signal():
     assert states["vix"] is True
     assert states["foreign"] is True
     assert states["breadth"] is True
+
+
+def test_macro_component_states_prefers_signal_net_buy():
+    payload = _macro_payload(ff_net=2e10)
+    payload["foreign_flow"]["signal_net_buy"] = -2e10
+
+    states = _macro_component_states(payload)
+
+    assert states["foreign"] is False
