@@ -6,7 +6,7 @@ import os
 
 import pandas as pd
 
-from config import HNX_LIST, HOSE_LIST, MARKET_SCAN_LIST, UPCOM_LIST, VN100_LIST, VN30_LIST
+from config import HNX_LIST, HOSE_LIST, MARKET_SCAN_LIST, TICKER_EXCHANGE, UPCOM_LIST, VN100_LIST, VN30_LIST
 
 logger = logging.getLogger("TradingOS.universe")
 
@@ -122,6 +122,51 @@ def get_cached_exchange_counts() -> dict[str, int]:
     }
 
 
+def _build_listing_exchange_map(df: pd.DataFrame) -> dict[str, str]:
+    if df is None or df.empty:
+        return {}
+    deduped = df.drop_duplicates(subset=["symbol"], keep="first")
+    return {
+        str(symbol).strip().upper(): str(exchange).strip().upper()
+        for symbol, exchange in deduped[["symbol", "exchange"]].itertuples(index=False, name=None)
+    }
+
+
+def resolve_exchange_map(
+    symbols: list[str],
+    *,
+    listing_master: pd.DataFrame | None = None,
+    listing_source: str | None = None,
+    prefer_live: bool = False,
+    force_refresh: bool = False,
+) -> tuple[dict[str, str], str]:
+    normalized_symbols = [str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()]
+    if not normalized_symbols:
+        return {}, "configured-only"
+
+    working_listing = listing_master if listing_master is not None and not listing_master.empty else _empty_listing_master()
+    exchange_source = "configured-only"
+
+    if working_listing.empty:
+        if prefer_live and listing_source != "unavailable":
+            working_listing, exchange_source = fetch_listing_master(force_refresh=force_refresh)
+        else:
+            if prefer_live:
+                exchange_source = "configured-only"
+            else:
+                working_listing = load_cached_listing_master()
+                exchange_source = "cache" if not working_listing.empty else "configured-only"
+    else:
+        exchange_source = listing_source or "listing-master"
+
+    listing_map = _build_listing_exchange_map(working_listing)
+    exchange_map = {
+        symbol: listing_map.get(symbol, TICKER_EXCHANGE.get(symbol, "HOSE"))
+        for symbol in normalized_symbols
+    }
+    return exchange_map, exchange_source
+
+
 def resolve_universe_symbols(
     selections: list[str],
     watchlist: list[str],
@@ -174,9 +219,18 @@ def resolve_universe_symbols(
                 )
 
     resolved = sorted(symbols)
+    exchange_map, exchange_map_source = resolve_exchange_map(
+        resolved,
+        listing_master=listing_master,
+        listing_source=listing_source,
+        prefer_live=bool(live_requested),
+        force_refresh=force_refresh,
+    )
     return resolved, {
         "selection_sources": selection_sources,
         "listing_source": listing_source,
+        "exchange_map": exchange_map,
+        "exchange_map_source": exchange_map_source,
         "resolved_count": len(resolved),
         "warnings": warnings,
         "used_live_listing": any(source.startswith("live-listing") for source in selection_sources.values()),

@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import inspect
+
 import pandas as pd
 
 from ml.ensemble import ForecastResult
+from ui.components import vn_future_trading_dates
 from ui.ml_tab import _forecast_trust_state, _forecast_usage_policy
 
 
@@ -113,3 +116,17 @@ def test_forecast_usage_policy_can_mark_clean_signal_as_sizing_review():
 
     assert policy["usage"] == "Eligible for sizing review"
     assert policy["tone"] == "success"
+
+
+def test_render_ml_tab_accepts_exchange_map_param():
+    from ui.ml_tab import render_ml_tab
+
+    sig = inspect.signature(render_ml_tab)
+    assert "exchange_map" in sig.parameters
+    assert sig.parameters["exchange_map"].default is None
+
+
+def test_vn_future_trading_dates_skip_national_day_holiday():
+    dates = vn_future_trading_dates(pd.Timestamp("2026-09-01"), 2)
+
+    assert list(dates.strftime("%Y-%m-%d")) == ["2026-09-03", "2026-09-04"]

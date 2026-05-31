@@ -10,7 +10,7 @@ import pandas as pd
 import pytest
 
 from core.regime import (
-    detect_regime, detect_market_regime, _detect_rule,
+    detect_regime, detect_market_regime, detect_regime_history, _detect_rule,
     regime_color, regime_emoji, regime_label_vi, RegimeResult,
 )
 
@@ -62,6 +62,16 @@ class TestRuleDetection:
     def test_method_label(self, ohlcv_prices):
         r = _detect_rule(ohlcv_prices)
         assert r.method == "rule"
+
+    def test_detect_regime_history_preserves_index(self):
+        idx = pd.bdate_range("2026-01-05", periods=8)
+        prices = pd.Series(np.linspace(1_200.0, 1_230.0, len(idx)), index=idx)
+
+        history = detect_regime_history(prices)
+
+        assert list(history.index) == list(idx)
+        assert len(history) == len(prices)
+        assert set(history.unique()).issubset({"bull", "bear", "sideways"})
 
 
 # â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€

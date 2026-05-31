@@ -19,6 +19,7 @@ import logging
 import os
 import sys
 
+import pandas as pd
 import streamlit as st
 
 # ─── Path setup (must run before local imports) ───────────────
@@ -57,10 +58,11 @@ st.markdown("""
 # ─── Local imports ────────────────────────────────────────────
 from config import (
     MARKET_SCAN_LIST, DEFAULT_WATCHLIST, TIMEFRAME_CONFIG,
-    INITIAL_CAPITAL, VN_SESSIONS_YEAR,
-    VN30_LIST, VN100_LIST, HOSE_LIST, HNX_LIST, UPCOM_LIST,
+    INITIAL_CAPITAL,
+    TICKER_EXCHANGE, VN30_LIST, VN100_LIST, HOSE_LIST, HNX_LIST, UPCOM_LIST,
 )
 from core.data_fetcher import batch_download
+from core.market_calendar import calendar_basis_summary
 from core.macro_data import fetch_macro_indicators, get_macro_score
 from core.regime import detect_regime
 from core.universe import get_cached_exchange_counts, resolve_universe_symbols
@@ -110,6 +112,8 @@ def _init_session():
         st.session_state.regime_stale = False
     if "regime_source" not in st.session_state:
         st.session_state.regime_source = "—"
+    if "vni_df" not in st.session_state:
+        st.session_state.vni_df = None
     if "macro_score" not in st.session_state:
         st.session_state.macro_score   = 5.0
     if "macro_regime" not in st.session_state:
@@ -128,6 +132,8 @@ def _init_session():
         st.session_state.data_version  = 0
     if "universe_meta" not in st.session_state:
         st.session_state.universe_meta = {}
+    if "exchange_map" not in st.session_state:
+        st.session_state.exchange_map = {}
     if "foreign_flow_meta" not in st.session_state:
         st.session_state.foreign_flow_meta = {}
 
@@ -233,6 +239,30 @@ def _regime_source_label(vni_df) -> str:
     if source_mode == "live":
         return f"live ({source_name})" if source_name else "live"
     return source_name or "unknown"
+
+
+def _vni_history_days_for_loaded_data(data_dict: dict, default_days: int = 365) -> int:
+    earliest_date = None
+    for payload in (data_dict or {}).values():
+        if not isinstance(payload, tuple) or not payload:
+            continue
+        df = payload[0]
+        if df is None or getattr(df, "empty", True):
+            continue
+        index = pd.to_datetime(getattr(df, "index", []), errors="coerce")
+        index = index[~index.isna()]
+        if len(index) == 0:
+            continue
+        current_earliest = index.min().date()
+        if earliest_date is None or current_earliest < earliest_date:
+            earliest_date = current_earliest
+
+    baseline = max(365, int(default_days or 365))
+    if earliest_date is None:
+        return baseline
+
+    required_days = (datetime.now().date() - earliest_date).days + 30
+    return max(baseline, min(required_days, 3650))
 
 
 def _workflow_state(
@@ -368,6 +398,11 @@ if sb.button("🔄 Tải Dữ Liệu", type="primary", key="btn_load"):
         chunk_size=120,
         on_progress=_on_progress,
     )
+    _resolved_exchange_map = universe_meta.get("exchange_map", {})
+    st.session_state.exchange_map = {
+        symbol: str(_resolved_exchange_map.get(symbol, TICKER_EXCHANGE.get(symbol, "HOSE"))).strip().upper() or "HOSE"
+        for symbol in st.session_state.data_dict
+    }
     st.session_state.data_loaded_at = _t.strftime("%Y-%m-%d %H:%M:%S")
     _prog.empty()
     _stat.empty()
@@ -413,7 +448,12 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         # Detect regime from VNI — use fetch_vni_data() which has a
         # Yahoo Finance fallback when DNSE/SSI cannot serve index data.
         from core.macro_data import fetch_vni_data as _fetch_vni
-        vni_df = _fetch_vni(days=365)
+        vni_days = _vni_history_days_for_loaded_data(
+            st.session_state.get("data_dict", {}),
+            default_days=365,
+        )
+        vni_df = _fetch_vni(days=vni_days)
+        st.session_state.vni_df = vni_df
         st.session_state.regime_source = _regime_source_label(vni_df)
         if not vni_df.empty and "Close" in vni_df.columns:
             rr = detect_regime(vni_df["Close"])
@@ -433,7 +473,8 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
             from core.macro_data import fetch_foreign_flow_tickers
 
             st.session_state.foreign_flows_cache = fetch_foreign_flow_tickers(
-                _loaded_tickers
+                _loaded_tickers,
+                exchange_map=st.session_state.get("exchange_map", {}),
             )
             ff_meta = _foreign_flow_coverage(st.session_state.foreign_flows_cache)
             ff_meta["requested_symbols"] = len(_loaded_tickers)
@@ -547,12 +588,14 @@ c4.metric("Portfolio Value", f"{portfolio.market_value(_mtm_prices):,.0f} VND")
 
 # Global trust ribbon: provenance + freshness for price and macro inputs.
 _ff_basis = _foreign_flow_basis_label(st.session_state.get("foreign_flows_cache", {}))
+_calendar_basis = calendar_basis_summary(st.session_state.get("exchange_map", {}))
 render_trust_ribbon([
     ("Price bars as-of", _latest_bar_date_label(data_dict)),
     ("Source mix", _source_mix_label(data_dict)),
     ("Macro updated", st.session_state.get("macro_updated_at") or "—"),
     ("VNI regime source", st.session_state.get("regime_source") or "—"),
     ("Foreign flow basis", _ff_basis),
+    ("Calendar basis", _calendar_basis),
 ])
 
 st.caption(
@@ -631,12 +674,10 @@ tab_idx += 1
 
 # ── Signal Review / Advanced Scanner Tabs ─────────────────────
 from ui.scanner_tab import render_scanner_tab
-from config import TICKER_EXCHANGE as _TICKER_EXCHANGE
 
-# Build exchange map once for all scanner tabs.
-# Tickers not in TICKER_EXCHANGE default to HOSE (±7%).
 _exchange_map: dict[str, str] = {
-    t: _TICKER_EXCHANGE.get(t, "HOSE") for t in data_dict
+    t: str(st.session_state.get("exchange_map", {}).get(t, TICKER_EXCHANGE.get(t, "HOSE"))).strip().upper() or "HOSE"
+    for t in data_dict
 }
 
 # Use cached foreign flows from session_state (populated during Macro update
@@ -704,7 +745,7 @@ with tabs[tab_idx]:
     if not data_dict:
         st.info("Tải dữ liệu trước.")
     else:
-        render_ml_tab(data_dict, regime_label, macro_data, lang)
+        render_ml_tab(data_dict, regime_label, macro_data, lang, exchange_map=_exchange_map)
 tab_idx += 1
 
 # ── Tab 7: Backtest ───────────────────────────────────────────
@@ -713,7 +754,12 @@ with tabs[tab_idx]:
     if not data_dict:
         st.info("Tải dữ liệu trước.")
     else:
-        render_backtest_tab(data_dict, lang)
+        render_backtest_tab(
+            data_dict,
+            lang,
+            exchange_map=_exchange_map,
+            vni_df=st.session_state.get("vni_df"),
+        )
 tab_idx += 1
 
 # ── Tab 8: Portfolio ──────────────────────────────────────────

@@ -17,6 +17,7 @@ from typing import Optional
 import pandas as pd
 
 from config import BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL, LOT_SIZE
+from core.market_calendar import trading_sessions_between
 
 logger = logging.getLogger("TradingOS.tracker")
 
@@ -36,11 +37,7 @@ def _coerce_iso_date(value: str | date | None) -> date:
 
 
 def _trading_sessions_between(entry_date: str, exit_date: str | date | None = None) -> int:
-    start = _coerce_iso_date(entry_date)
-    end = _coerce_iso_date(exit_date)
-    if end <= start:
-        return 0
-    return max(len(pd.bdate_range(start=start, end=end)) - 1, 0)
+    return trading_sessions_between(entry_date, exit_date)
 
 
 @dataclass

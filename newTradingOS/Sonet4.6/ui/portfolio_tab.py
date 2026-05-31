@@ -83,7 +83,7 @@ def render_portfolio_tab(
     )
     render_guidance_callout(
         "Trust note",
-        "Live portfolio blocks closes until T+2 readiness and uses business-day sessions as the settlement estimate. Intraday execution, slippage, and order-book effects are still not modeled.",
+        "Live portfolio blocks closes until T+2 readiness and estimates settlement from Vietnam trading sessions (weekdays excluding public holidays). Intraday execution, slippage, and order-book effects are still not modeled.",
         tone="info",
     )
 
@@ -195,7 +195,7 @@ def render_portfolio_tab(
         pos_df["Sessions Held"] = [p.held_sessions(today_iso) for p in portfolio.open_positions]
         pos_df["T+2 Ready"] = ["✅" if p.settlement_ready(today_iso) else "⏳" for p in portfolio.open_positions]
         st.dataframe(pos_df, width="stretch", hide_index=True)
-        st.caption("T+2 readiness is estimated from business-day sessions between entry date and today.")
+        st.caption("T+2 readiness is estimated from Vietnam trading sessions between entry date and today.")
 
         # Quick close
         close_options = {
@@ -325,7 +325,9 @@ def render_portfolio_tab(
             st.plotly_chart(fig, width="stretch")
 
         metrics = compute_portfolio_metrics(
-            capital_curve, [{"pnl_pct": p} for p in pnls]
+            capital_curve,
+            [{"pnl_pct": p} for p in pnls],
+            date_index=[_sorted_trades[0].entry_date] + [t.exit_date or _sorted_trades[0].entry_date for t in _sorted_trades],
         )
         c1, c2, c3, c4 = st.columns(4)
         c1.metric("Win Rate", f"{metrics.get('win_rate', 0):.1f}%")

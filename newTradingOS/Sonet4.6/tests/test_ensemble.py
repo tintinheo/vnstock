@@ -157,6 +157,16 @@ class TestEnsembleForecast:
             result = ensemble_forecast(ohlcv_small, "1M", ticker="VCB")
         assert isinstance(result, ForecastResult)
 
+    def test_exchange_is_forwarded_to_monte_carlo(self, ohlcv):
+        with patch("ml.ensemble.rf_predict", return_value=self._mock_preds(20)), \
+             patch("ml.ensemble.monte_carlo_predict", return_value=self._mock_preds(20)) as mock_mc, \
+             patch("ml.ensemble.holt_predict", return_value=self._mock_preds(20)), \
+             patch("ml.ensemble.get_lstm_forecast", return_value={"prices": self._mock_preds(20), "available": True}):
+            result = ensemble_forecast(ohlcv, "1M", ticker="ZZZ", exchange="UPCOM")
+
+        assert isinstance(result, ForecastResult)
+        assert mock_mc.call_args.kwargs["exchange"] == "UPCOM"
+
 
 # ─────────────────────────────────────────────────────────────
 # FIX #5 — Walk-forward train/test split in RandomForest

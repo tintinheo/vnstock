@@ -177,6 +177,36 @@ class TestForeignFlowBatch:
 
     @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_tickers")
     @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_foreign_flow_tickers_forwards_exchange_map_override(
+        self,
+        mock_snapshot,
+        mock_cafef,
+    ):
+        from core.macro_data import fetch_foreign_flow_tickers
+
+        mock_cafef.return_value = {
+            "ZZZ": {
+                "net_buy_value": 1_000_000_000,
+                "buy_value": 2_000_000_000,
+                "sell_value": 1_000_000_000,
+                "net_20d": 20_000_000_000,
+                "trend_20d": "accumulate",
+                "session_net_proxy": 1_000_000_000,
+                "session_trend": "neutral",
+                "history_sessions": 20,
+                "is_20d_proxy": False,
+                "basis": "CafeF foreign history | 20 sessions",
+            },
+        }
+
+        result = fetch_foreign_flow_tickers(["ZZZ"], exchange_map={"ZZZ": "HNX"})
+
+        mock_snapshot.assert_not_called()
+        assert result["ZZZ"]["history_sessions"] == 20
+        assert mock_cafef.call_args.kwargs["exchange_map"] == {"ZZZ": "HNX"}
+
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_tickers")
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
     def test_fetch_foreign_flow_tickers_falls_back_to_snapshot_for_missing_symbols(
         self,
         mock_snapshot,
@@ -588,6 +618,27 @@ class TestFetchForeignFlowTicker20d:
             "session_net_proxy", "session_trend", "history_sessions", "is_20d_proxy", "basis",
         ):
             assert key in result, f"Missing key: {key}"
+
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker")
+    def test_exchange_map_override_is_forwarded_to_cafef(self, mock_cafef):
+        mock_cafef.return_value = {
+            "net_buy_value": 1,
+            "buy_value": 2,
+            "sell_value": 1,
+            "net_20d": 10,
+            "trend_20d": "neutral",
+            "session_net_proxy": 1,
+            "session_trend": "neutral",
+            "history_sessions": 20,
+            "is_20d_proxy": False,
+            "basis": "CafeF foreign history | 20 sessions",
+        }
+
+        from core.macro_data import fetch_foreign_flow_ticker
+
+        fetch_foreign_flow_ticker("xyz", exchange_map={"XYZ": "UPCOM"})
+
+        mock_cafef.assert_called_once_with("XYZ", exchange="UPCOM", sessions=20)
 
     @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_ticker", side_effect=RuntimeError("CafeF down"))
     @patch("core.macro_data._fetch_kbs_market_snapshot")

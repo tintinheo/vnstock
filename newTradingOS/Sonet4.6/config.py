@@ -4,6 +4,8 @@ All constants, universe definitions, timeframe configurations.
 """
 from __future__ import annotations
 
+from core.market_calendar import annualization_sessions_per_year, trading_sessions_in_year as vn_trading_sessions_in_year
+
 # ─────────────────────────────────────────────────────────────
 # TRADING COSTS (VN-specific, T+2 settlement)
 # ─────────────────────────────────────────────────────────────
@@ -16,7 +18,13 @@ SELL_TOTAL   = SELL_FEE + SELL_TAX + SLIPPAGE
 
 INITIAL_CAPITAL  = 100_000_000   # 100M VND default
 LOT_SIZE         = 100           # Minimum lot size VN
-VN_SESSIONS_YEAR = 240           # ~240 trading sessions/year
+BACKTEST_MAX_ENTRY_PARTICIPATION = 0.20  # Conservative max entry fill vs bar volume
+BACKTEST_MAX_EXIT_PARTICIPATION = BACKTEST_MAX_ENTRY_PARTICIPATION
+
+
+# Backward-compatible snapshot for callers/tests that still import the symbol
+# directly. Runtime annualization should use annualization_sessions_per_year().
+VN_SESSIONS_YEAR = annualization_sessions_per_year()
 
 # ─────────────────────────────────────────────────────────────
 # API CONSTANTS

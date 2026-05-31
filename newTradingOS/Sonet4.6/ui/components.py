@@ -13,6 +13,7 @@ import streamlit as st
 from plotly.subplots import make_subplots
 
 from config import TIMEFRAME_CONFIG
+from core.market_calendar import future_trading_dates as vn_future_trading_dates
 
 # ─── Colour constants ────────────────────────────────────────
 GREEN  = "#00cc66"
@@ -204,8 +205,7 @@ def candlestick_chart(
     if forecast is not None and forecast.prices:
         last_date  = df.index[-1]
         n_days     = len(forecast.prices)
-        # Use business day offset
-        fut_dates  = pd.bdate_range(start=last_date, periods=n_days + 1)[1:]
+        fut_dates  = vn_future_trading_dates(last_date, n_days)
         fig.add_trace(go.Scatter(
             x=list(fut_dates), y=forecast.prices,
             name="Ensemble", line=dict(color=PURPLE, width=2, dash="dot"),

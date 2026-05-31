@@ -21,10 +21,12 @@ import pandas as pd
 
 from config import (
     BUY_TOTAL, SELL_TOTAL, INITIAL_CAPITAL,
-    TIMEFRAME_CONFIG, VN_SESSIONS_YEAR, LOT_SIZE, TICKER_EXCHANGE,
+    EXCHANGE_PRICE_LIMIT, TIMEFRAME_CONFIG, LOT_SIZE, TICKER_EXCHANGE,
+    BACKTEST_MAX_ENTRY_PARTICIPATION, BACKTEST_MAX_EXIT_PARTICIPATION,
     round_to_tick, get_tick_size,
 )
 from core.indicators import compute_all, atr as _atr
+from core.regime import detect_regime_history
 from core.scoring import compute_score
 from portfolio.sizing import compute_portfolio_metrics, TradeStats, position_size_vnd
 
@@ -70,6 +72,95 @@ def _mark_to_market_equity(
     return max(capital + open_vnd, 1.0)
 
 
+def _limit_price(prev_close: float, exchange: str, *, upper: bool) -> float:
+    if prev_close <= 0:
+        return 0.0
+    limit_pct = float(EXCHANGE_PRICE_LIMIT.get(str(exchange).upper(), 0.07))
+    multiplier = 1.0 + limit_pct if upper else 1.0 - limit_pct
+    return float(round_to_tick(prev_close * multiplier, exchange))
+
+
+def _is_hard_limit_lock(
+    row: pd.Series,
+    prev_close: float,
+    exchange: str,
+    *,
+    upper: bool,
+) -> bool:
+    prices = [
+        float(row.get("Open", 0.0) or 0.0),
+        float(row.get("High", 0.0) or 0.0),
+        float(row.get("Low", 0.0) or 0.0),
+        float(row.get("Close", 0.0) or 0.0),
+    ]
+    if min(prices) <= 0:
+        return False
+    if max(prices) - min(prices) > 1e-9:
+        return False
+
+    limit_price = _limit_price(prev_close, exchange, upper=upper)
+    if limit_price <= 0:
+        return False
+
+    tick = float(get_tick_size(limit_price, exchange))
+    tolerance = max(tick / 2.0, 1.0)
+    return abs(prices[-1] - limit_price) <= tolerance
+
+
+def _has_tradeable_liquidity(row: pd.Series) -> bool:
+    volume = float(row.get("Volume", 0.0) or 0.0)
+    return volume > 0
+
+
+def _cap_shares_by_liquidity(
+    requested_shares: int,
+    row: pd.Series,
+    *,
+    lot_size: int = LOT_SIZE,
+    max_participation: float = BACKTEST_MAX_ENTRY_PARTICIPATION,
+) -> int:
+    if requested_shares <= 0:
+        return 0
+
+    volume = float(row.get("Volume", 0.0) or 0.0)
+    max_fill_shares = int(volume * max(float(max_participation), 0.0))
+    if max_fill_shares < lot_size:
+        return 0
+
+    max_lots = max_fill_shares // lot_size
+    if max_lots <= 0:
+        return 0
+    return min(requested_shares, max_lots * lot_size)
+
+
+def _historical_regime_series(
+    benchmark_close: Optional[pd.Series],
+    target_index: pd.Index,
+    default_regime: str,
+) -> Optional[pd.Series]:
+    if benchmark_close is None:
+        return None
+
+    benchmark = pd.Series(benchmark_close).dropna().copy()
+    if benchmark.empty:
+        return None
+
+    benchmark.index = pd.to_datetime(benchmark.index, errors="coerce")
+    benchmark = benchmark[~benchmark.index.isna()]
+    benchmark = benchmark[~benchmark.index.duplicated(keep="last")].sort_index()
+    if benchmark.empty:
+        return None
+
+    regimes = detect_regime_history(benchmark)
+    if regimes.empty:
+        return None
+
+    target_dates = pd.DatetimeIndex(pd.to_datetime(target_index, errors="coerce")).normalize()
+    fallback = str(default_regime).strip().lower() or "sideways"
+    aligned = regimes.reindex(target_dates, method="ffill")
+    return aligned.fillna(fallback).astype(str)
+
+
 # ─────────────────────────────────────────────────────────────
 # DATA CLASSES
 # ─────────────────────────────────────────────────────────────
@@ -111,6 +202,8 @@ def run_backtest(
     regime: str = "bull",
     macro_score: float = 6.0,
     position_pct: Optional[float] = None,
+    exchange: Optional[str] = None,
+    benchmark_close: Optional[pd.Series] = None,
 ) -> BacktestResult:
     """
     Run a single-stock backtest for a given timeframe.
@@ -135,12 +228,14 @@ def run_backtest(
         )
 
     pos_pct  = position_pct or cfg["position_pct"]
-    exchange = TICKER_EXCHANGE.get(ticker.upper(), "HOSE")
+    exchange = str(exchange or TICKER_EXCHANGE.get(ticker.upper(), "HOSE")).strip().upper() or "HOSE"
     # Precompute indicators once — tránh O(n²) khi gọi compute_score trong vòng lặp.
     # Tất cả rolling indicators có tính causal: giá trị tại bar i hoàn toàn
     # được xác định bởi dữ liệu <= bar i → an toàn khi dùng df toàn bộ.
     df       = compute_all(df.copy(), cfg, exchange=exchange)
     df       = df.dropna(subset=["SMA_slow", "ATR"])
+    historical_regimes = _historical_regime_series(benchmark_close, df.index, regime)
+    regime_mode = "historical_vni_rule" if historical_regimes is not None else "scalar"
 
     capital      = initial_capital
     equity       = [capital]
@@ -154,6 +249,11 @@ def run_backtest(
     take_profit  = 0.0
     _n_shares    = 0        # lot-aligned share count for current open trade
     _vnd_committed = 0.0   # actual VND invested (lot-aligned) for current trade
+    _entry_shares = 0
+    _entry_cost_vnd = 0.0
+    _realized_exit_vnd = 0.0
+    _realized_exit_gross = 0.0
+    _pending_exit_reason: Optional[str] = None
 
     # Warm-up: need enough rows to compute all indicators
     warm_up = cfg["sma_slow"] + 10
@@ -161,7 +261,12 @@ def run_backtest(
     for i in range(warm_up, len(df)):
         row  = df.iloc[i]
         price = float(row["Close"])
+        current_regime = str(historical_regimes.iloc[i]) if historical_regimes is not None else regime
         exec_price = _execution_price(row)
+        prev_close = float(df["Close"].iloc[i - 1]) if i > 0 else price
+        upper_locked = _is_hard_limit_lock(row, prev_close, exchange, upper=True)
+        lower_locked = _is_hard_limit_lock(row, prev_close, exchange, upper=False)
+        has_liquidity = _has_tradeable_liquidity(row)
         bar_equity = capital
 
         if not in_trade:
@@ -169,7 +274,7 @@ def run_backtest(
             # next bar so entries do not use same-bar close information.
             sig = compute_score(
                 df.iloc[:i], tf,
-                regime=regime,
+                regime=current_regime,
                 macro_score=macro_score,
                 ticker=ticker,
                 exchange=exchange,
@@ -177,6 +282,14 @@ def run_backtest(
             )
 
             if sig.action in ("BUY", "STRONG BUY") and sig.regime_ok:
+                if not has_liquidity:
+                    equity.append(capital)
+                    continue
+                # Conservative VN rule: a hard ceiling-lock bar is treated as
+                # non-executable for buys because the offer queue may be empty.
+                if upper_locked:
+                    equity.append(capital)
+                    continue
                 if exec_price <= sig.stop_loss or exec_price >= sig.take_profit:
                     equity.append(capital)
                     continue
@@ -185,11 +298,23 @@ def run_backtest(
                 stop_loss, take_profit = _entry_levels_from_signal(exec_price, sig, exchange)
                 # VN LOT_SIZE enforcement: position size rounded down to nearest
                 # 100-share lot so simulated trades match real broker constraints.
-                _n_shares, _vnd_committed = position_size_vnd(
+                requested_shares, _ = position_size_vnd(
                     capital, pos_pct, exec_price, lot_size=LOT_SIZE
+                )
+                _n_shares = _cap_shares_by_liquidity(
+                    requested_shares,
+                    row,
+                    lot_size=LOT_SIZE,
+                    max_participation=BACKTEST_MAX_ENTRY_PARTICIPATION,
                 )
                 if _n_shares == 0:
                     continue   # Cannot afford minimum 1 VN lot — skip signal
+                _vnd_committed = round(_n_shares * exec_price * (1 + BUY_TOTAL), 0)
+                _entry_shares = _n_shares
+                _entry_cost_vnd = _vnd_committed
+                _realized_exit_vnd = 0.0
+                _realized_exit_gross = 0.0
+                _pending_exit_reason = None
                 in_trade    = True
                 bar_equity = _mark_to_market_equity(capital, price, entry_px, _vnd_committed)
 
@@ -201,77 +326,116 @@ def run_backtest(
                 equity.append(_mark_to_market_equity(capital, price, entry_px, _vnd_committed))
                 continue
 
-            exit_reason: Optional[str] = None
+            # Conservative VN rule: a zero-volume bar is treated as
+            # non-executable for exits because no tradeable liquidity exists.
+            if not has_liquidity:
+                equity.append(_mark_to_market_equity(capital, price, entry_px, _vnd_committed))
+                continue
+
+            # Conservative VN rule: a hard floor-lock bar is treated as
+            # non-executable for sells because exit liquidity may vanish.
+            if lower_locked:
+                equity.append(_mark_to_market_equity(capital, price, entry_px, _vnd_committed))
+                continue
+
             bar_open = exec_price
             bar_low = float(row["Low"])
             bar_high = float(row["High"])
+            exit_reason: Optional[str] = _pending_exit_reason
 
-            # Gap-aware stop/target fills for long positions.
-            # If both stop and target are touched in the same bar, stop wins
-            # because the intraday sequence is unknowable from OHLC data.
-            if bar_open <= stop_loss:
-                exit_reason = "stop"
-                exit_px     = bar_open
-            elif bar_low <= stop_loss:
-                exit_reason = "stop"
-                exit_px     = stop_loss
-
-            elif bar_open >= take_profit:
-                exit_reason = "target"
-                exit_px     = bar_open
-            elif bar_high >= take_profit:
-                exit_reason = "target"
-                exit_px     = take_profit
-
-            # Time exit: held max hold_sessions
-            elif sessions_held >= cfg["hold_sessions"]:
-                exit_reason = "time"
-                exit_px     = bar_open
-
-            # Signal exit: sell signal
+            if exit_reason is not None:
+                exit_px = bar_open
             else:
-                sig_exit = compute_score(
-                    df.iloc[:i], tf,
-                    regime=regime,
-                    macro_score=macro_score,
-                    ticker=ticker,
-                    exchange=exchange,
-                    _precomputed=True,
-                )
-                if sig_exit.action == "SELL":
-                    exit_reason = "signal"
+                # Gap-aware stop/target fills for long positions.
+                # If both stop and target are touched in the same bar, stop wins
+                # because the intraday sequence is unknowable from OHLC data.
+                if bar_open <= stop_loss:
+                    exit_reason = "stop"
+                    exit_px     = bar_open
+                elif bar_low <= stop_loss:
+                    exit_reason = "stop"
+                    exit_px     = stop_loss
+
+                elif bar_open >= take_profit:
+                    exit_reason = "target"
+                    exit_px     = bar_open
+                elif bar_high >= take_profit:
+                    exit_reason = "target"
+                    exit_px     = take_profit
+
+                # Time exit: held max hold_sessions
+                elif sessions_held >= cfg["hold_sessions"]:
+                    exit_reason = "time"
                     exit_px     = bar_open
 
+                # Signal exit: sell signal
+                else:
+                    sig_exit = compute_score(
+                        df.iloc[:i], tf,
+                        regime=current_regime,
+                        macro_score=macro_score,
+                        ticker=ticker,
+                        exchange=exchange,
+                        _precomputed=True,
+                    )
+                    if sig_exit.action == "SELL":
+                        exit_reason = "signal"
+                        exit_px     = bar_open
+
             if exit_reason:
+                fillable_exit_shares = _cap_shares_by_liquidity(
+                    _n_shares,
+                    row,
+                    lot_size=LOT_SIZE,
+                    max_participation=BACKTEST_MAX_EXIT_PARTICIPATION,
+                )
+                if fillable_exit_shares == 0:
+                    _pending_exit_reason = exit_reason
+                    equity.append(_mark_to_market_equity(capital, price, entry_px, _vnd_committed))
+                    continue
+
                 exit_px_net = exit_px * (1 - SELL_TOTAL)
                 trade_pnl   = (exit_px_net / entry_px) - 1
-                # Use lot-size-aligned position value for realistic VND P&L.
-                # This prevents fractional-share overstatement on small accounts.
-                trade_vnd   = _vnd_committed * trade_pnl
+                filled_cost_vnd = round(fillable_exit_shares * entry_px, 0)
+                trade_vnd   = filled_cost_vnd * trade_pnl
 
                 capital     += trade_vnd
                 capital      = max(capital, 1)   # prevent negative
+                _realized_exit_vnd += trade_vnd
+                _realized_exit_gross += fillable_exit_shares * exit_px
+                _n_shares -= fillable_exit_shares
+                _vnd_committed = round(_n_shares * entry_px, 0)
 
-                t = BacktestTrade(
-                    entry_idx    = entry_idx,
-                    exit_idx     = i,
-                    entry_date   = str(df.index[entry_idx].date()),
-                    exit_date    = str(df.index[i].date()),
-                    entry_price  = round(entry_px / (1 + BUY_TOTAL), 0),  # clean price
-                    exit_price   = round(exit_px, 0),
-                    stop_loss    = round(stop_loss, 0),
-                    take_profit  = round(take_profit, 0),
-                    pnl_pct      = round(trade_pnl, 6),
-                    pnl_vnd      = round(trade_vnd, 0),
-                    hold_sessions= sessions_held,
-                    exit_reason  = exit_reason,
-                    n_shares     = _n_shares,
-                )
-                trades.append(t)
-                trade_stats.update(trade_pnl)
-                in_trade = False
-                _n_shares = 0
-                _vnd_committed = 0.0
+                if _n_shares > 0:
+                    _pending_exit_reason = exit_reason
+                else:
+                    final_trade_pnl = (_realized_exit_vnd / _entry_cost_vnd) if _entry_cost_vnd > 0 else 0.0
+                    avg_exit_price = (_realized_exit_gross / _entry_shares) if _entry_shares > 0 else exit_px
+                    t = BacktestTrade(
+                        entry_idx    = entry_idx,
+                        exit_idx     = i,
+                        entry_date   = str(df.index[entry_idx].date()),
+                        exit_date    = str(df.index[i].date()),
+                        entry_price  = round(entry_px / (1 + BUY_TOTAL), 0),  # clean price
+                        exit_price   = round(avg_exit_price, 0),
+                        stop_loss    = round(stop_loss, 0),
+                        take_profit  = round(take_profit, 0),
+                        pnl_pct      = round(final_trade_pnl, 6),
+                        pnl_vnd      = round(_realized_exit_vnd, 0),
+                        hold_sessions= sessions_held,
+                        exit_reason  = exit_reason,
+                        n_shares     = _entry_shares,
+                    )
+                    trades.append(t)
+                    trade_stats.update(final_trade_pnl)
+                    in_trade = False
+                    _n_shares = 0
+                    _vnd_committed = 0.0
+                    _entry_shares = 0
+                    _entry_cost_vnd = 0.0
+                    _realized_exit_vnd = 0.0
+                    _realized_exit_gross = 0.0
+                    _pending_exit_reason = None
 
             if in_trade:
                 bar_equity = _mark_to_market_equity(capital, price, entry_px, _vnd_committed)
@@ -290,7 +454,11 @@ def run_backtest(
         open_vnd    = _vnd_committed * open_pnl
         equity[-1]  = max(equity[-1] + open_vnd, 1.0)  # cập nhật điểm equity cuối
 
-    metrics = compute_portfolio_metrics(equity, [{"pnl_pct": t.pnl_pct} for t in trades])
+    metrics = compute_portfolio_metrics(
+        equity,
+        [{"pnl_pct": t.pnl_pct} for t in trades],
+        date_index=df.index[warm_up - 1:],
+    )
     metrics["n_trades"]   = len(trades)
     metrics["trade_stats"]= {
         "win_rate":    round(trade_stats.win_rate * 100, 1),
@@ -310,7 +478,9 @@ def run_backtest(
             "initial_capital": initial_capital,
             "position_pct":    pos_pct,
             "regime":          regime,
+            "regime_mode":     regime_mode,
             "macro_score":     macro_score,
+            "exchange":        exchange,
             "n_bars":          len(df),
             "date_from":       str(df.index[0].date()),
             "date_to":         str(df.index[-1].date()),
@@ -324,6 +494,8 @@ def run_multi_tf_backtest(
     initial_capital: float = INITIAL_CAPITAL,
     regime: str = "bull",
     macro_score: float = 6.0,
+    exchange: Optional[str] = None,
+    benchmark_close: Optional[pd.Series] = None,
 ) -> dict[str, BacktestResult]:
     """
     Run backtest for all 5 timeframes on the same OHLCV data.
@@ -332,6 +504,7 @@ def run_multi_tf_backtest(
     ----------
     regime      : chế độ thị trường áp dụng cho tất cả timeframes.
     macro_score : điểm vĩ mô (0–10) áp dụng cho scoring.
+    benchmark_close : chuỗi VNINDEX Close để dùng regime lịch sử theo ngày.
 
     Returns
     -------
@@ -344,6 +517,8 @@ def run_multi_tf_backtest(
             initial_capital=initial_capital,
             regime=regime,
             macro_score=macro_score,
+            exchange=exchange,
+            benchmark_close=benchmark_close,
         )
     return results
 

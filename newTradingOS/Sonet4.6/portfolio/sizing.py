@@ -5,13 +5,15 @@ Kelly Criterion position sizing & portfolio risk budget allocation.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import date
 from typing import Optional
 
 import numpy as np
 
 from config import (
     TIMEFRAME_CONFIG, PORTFOLIO_PROFILES,
-    BUY_TOTAL, SELL_TOTAL, VN_SESSIONS_YEAR, LOT_SIZE,
+    BUY_TOTAL, SELL_TOTAL, LOT_SIZE,
+    annualization_sessions_per_year,
 )
 
 
@@ -138,6 +140,7 @@ def allocate_budget(
 def compute_portfolio_metrics(
     equity_curve: list[float],
     trades: list[dict],
+    date_index=None,
 ) -> dict:
     """
     Compute key portfolio performance metrics.
@@ -158,14 +161,24 @@ def compute_portfolio_metrics(
     returns   = np.diff(eq) / eq[:-1]
     total_ret = (eq[-1] / eq[0]) - 1
     n_sessions = len(eq)
-    cagr       = (1 + total_ret) ** (VN_SESSIONS_YEAR / n_sessions) - 1
+    metric_dates = None
+    if date_index is not None:
+        normalized_dates = [value for value in date_index if value is not None]
+        if len(normalized_dates) == len(eq):
+            metric_dates = normalized_dates[1:]
+        elif len(normalized_dates) >= len(returns):
+            metric_dates = normalized_dates[-len(returns):]
+        elif normalized_dates:
+            metric_dates = normalized_dates
+    annual_sessions = annualization_sessions_per_year(metric_dates)
+    cagr       = (1 + total_ret) ** (annual_sessions / n_sessions) - 1
 
     # Sharpe (annualised)
     # Lãi suất phi rủi ro tham chiếu: tiền gửi VN 2025 dao động 4.5-5.5%/năm (NHNN).
     # Dùng 4.5% để phản ánh đúng chi phí cơ hội thực tế của nhà đầu tư VN.
-    rf_daily = 0.045 / VN_SESSIONS_YEAR  # 4.5% VN deposit rate (NHNN benchmark)
+    rf_daily = 0.045 / annual_sessions  # 4.5% VN deposit rate (NHNN benchmark)
     excess   = returns - rf_daily
-    sharpe   = (excess.mean() / (excess.std() + 1e-9)) * np.sqrt(VN_SESSIONS_YEAR)
+    sharpe   = (excess.mean() / (excess.std() + 1e-9)) * np.sqrt(annual_sessions)
 
     # Max Drawdown
     peak    = np.maximum.accumulate(eq)
@@ -191,6 +204,7 @@ def compute_portfolio_metrics(
         "win_rate":       round(win_rt * 100, 2),
         "profit_factor":  round(pf, 3),
         "n_trades":       len(pnls),
+        "annual_sessions": annual_sessions,
         "avg_win":        round(np.mean(wins) * 100, 2) if wins else 0,
         "avg_loss":       round(np.mean(losses) * 100, 2) if losses else 0,
     }

@@ -10,6 +10,7 @@ import tempfile
 import numpy as np
 import pytest
 
+from config import annualization_sessions_per_year, vn_trading_sessions_in_year
 from portfolio.sizing import (
     kelly_fraction, position_size_vnd,
     allocate_budget, compute_portfolio_metrics,
@@ -188,6 +189,29 @@ class TestPortfolio:
         assert len(pf.open_positions) == 0
         assert len(pf.trades) == 1
 
+    def test_vietnam_public_holiday_does_not_count_as_trading_session(self):
+        pf = Portfolio(capital=INITIAL_CAPITAL)
+        pos = self._make_position(entry=50_000, entry_date="2026-09-01")
+        pf.open_position(pos)
+
+        blocked = pf.close_position("VCB", 55_000, "2026-09-03", "manual")
+
+        assert blocked is None
+        assert pf.open_positions[0].held_sessions("2026-09-03") == 1
+        assert pf.open_positions[0].settlement_ready("2026-09-03") is False
+
+    def test_close_allowed_after_two_vietnam_trading_sessions_around_holiday(self):
+        pf = Portfolio(capital=INITIAL_CAPITAL)
+        pos = self._make_position(entry=50_000, entry_date="2026-09-01")
+        pf.open_position(pos)
+
+        closed = pf.close_position("VCB", 55_000, "2026-09-04", "manual")
+
+        assert closed is not None
+        assert closed.sessions_held == 2
+        assert len(pf.open_positions) == 0
+        assert len(pf.trades) == 1
+
     def test_close_nonexistent_ticker(self):
         pf     = Portfolio(capital=INITIAL_CAPITAL)
         result = pf.close_position("NONE", 50_000)
@@ -275,6 +299,29 @@ class TestPortfolioMetrics:
     def test_empty_curve(self):
         m = compute_portfolio_metrics([100], [])
         assert m == {}
+
+    def test_annualization_uses_actual_vn_sessions_for_single_year_dates(self):
+        eq = [100.0, 101.0, 102.0, 103.0]
+        dates = ["2026-01-02", "2026-01-03", "2026-01-06", "2026-01-07"]
+
+        metrics = compute_portfolio_metrics(eq, [], date_index=dates)
+
+        assert metrics["annual_sessions"] == vn_trading_sessions_in_year(2026)
+
+    def test_annualization_uses_weighted_sessions_across_multiple_years(self):
+        eq = [100.0, 101.0, 102.0, 103.0, 104.0]
+        dates = [
+            "2023-12-27",
+            "2023-12-28",
+            "2024-01-02",
+            "2024-01-03",
+            "2024-01-04",
+        ]
+
+        metrics = compute_portfolio_metrics(eq, [], date_index=dates)
+        expected = annualization_sessions_per_year(dates[1:])
+
+        assert metrics["annual_sessions"] == expected
 
 
 # ────────────────────────────────────────────────────────────
@@ -553,7 +600,7 @@ class TestVnRiskFreeRate:
 
     def test_sharpe_lower_with_higher_rfr(self):
         """Với rf=4.5% thay vì 3%, Sharpe phải nhỏ hơn hoặc bằng."""
-        from portfolio.sizing import compute_portfolio_metrics, VN_SESSIONS_YEAR
+        from portfolio.sizing import compute_portfolio_metrics
         eq = list(range(100, 200))  # monotone increasing
         trades = [{"pnl_pct": 0.05}] * 10
 

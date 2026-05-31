@@ -12,7 +12,10 @@ from backtest.engine import (
     run_backtest, run_multi_tf_backtest, summarise_results,
     trades_to_df, BacktestResult, BacktestTrade,
 )
-from config import BUY_FEE, SELL_FEE, SELL_TAX, TIMEFRAME_CONFIG
+from config import (
+    BUY_FEE, SELL_FEE, SELL_TAX, TIMEFRAME_CONFIG,
+    BACKTEST_MAX_ENTRY_PARTICIPATION, BACKTEST_MAX_EXIT_PARTICIPATION,
+)
 from core.scoring import SignalResult
 
 T2_SESSIONS = 2  # VN T+2 settlement: minimum sessions before sell
@@ -217,6 +220,261 @@ class TestSignalExecutionTiming:
         assert trade.exit_reason == "stop"
         assert trade.exit_price == 70.0
 
+    def test_upper_limit_lock_skips_buy_entry(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        warm_up = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 10
+        df.iloc[warm_up, df.columns.get_loc("Open")] = 107.0
+        df.iloc[warm_up, df.columns.get_loc("High")] = 107.0
+        df.iloc[warm_up, df.columns.get_loc("Low")] = 107.0
+        df.iloc[warm_up, df.columns.get_loc("Close")] = 107.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="CEIL_LOCK",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="CEIL_LOCK")
+
+        assert result.trades == []
+
+    def test_floor_limit_lock_blocks_stop_exit_until_next_tradeable_bar(self, monkeypatch):
+        import backtest.engine as engine
+
+        n = 120
+        dates = pd.bdate_range("2026-01-01", periods=n)
+        df = pd.DataFrame({
+            "Open":   np.full(n, 50_000.0),
+            "High":   np.full(n, 50_100.0),
+            "Low":    np.full(n, 49_900.0),
+            "Close":  np.full(n, 50_000.0),
+            "Volume": np.full(n, 1_000_000.0),
+        }, index=dates)
+        df.index.name = "Date"
+        lock_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 12
+        next_bar = lock_bar + 1
+
+        df.iloc[lock_bar, df.columns.get_loc("Open")] = 46_500.0
+        df.iloc[lock_bar, df.columns.get_loc("High")] = 46_500.0
+        df.iloc[lock_bar, df.columns.get_loc("Low")] = 46_500.0
+        df.iloc[lock_bar, df.columns.get_loc("Close")] = 46_500.0
+
+        df.iloc[next_bar, df.columns.get_loc("Open")] = 46_000.0
+        df.iloc[next_bar, df.columns.get_loc("High")] = 47_000.0
+        df.iloc[next_bar, df.columns.get_loc("Low")] = 45_000.0
+        df.iloc[next_bar, df.columns.get_loc("Close")] = 46_200.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="FLOOR_LOCK",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=50_000.0,
+                stop_loss=47_500.0,
+                take_profit=65_000.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="FLOOR_LOCK")
+
+        assert result.trades, "Expected stop exit after the hard floor-lock session clears"
+        trade = result.trades[0]
+        assert trade.exit_reason == "stop"
+        assert trade.exit_price == 46_000.0
+        assert trade.hold_sessions == 3
+
+    def test_zero_volume_bar_skips_buy_entry(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        warm_up = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 10
+        df.iloc[warm_up, df.columns.get_loc("Volume")] = 0.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="ZERO_VOL_ENTRY",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="ZERO_VOL_ENTRY")
+
+        assert result.trades == []
+
+    def test_zero_volume_bar_blocks_stop_exit_until_next_liquid_bar(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        block_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 12
+        next_bar = block_bar + 1
+
+        df.iloc[block_bar, df.columns.get_loc("Open")] = 90.0
+        df.iloc[block_bar, df.columns.get_loc("High")] = 90.0
+        df.iloc[block_bar, df.columns.get_loc("Low")] = 80.0
+        df.iloc[block_bar, df.columns.get_loc("Close")] = 85.0
+        df.iloc[block_bar, df.columns.get_loc("Volume")] = 0.0
+
+        df.iloc[next_bar, df.columns.get_loc("Open")] = 70.0
+        df.iloc[next_bar, df.columns.get_loc("High")] = 72.0
+        df.iloc[next_bar, df.columns.get_loc("Low")] = 60.0
+        df.iloc[next_bar, df.columns.get_loc("Close")] = 65.0
+        df.iloc[next_bar, df.columns.get_loc("Volume")] = 1_000_000.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="ZERO_VOL_EXIT",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="ZERO_VOL_EXIT")
+
+        assert result.trades, "Expected stop exit after liquidity returns"
+        trade = result.trades[0]
+        assert trade.exit_reason == "stop"
+        assert trade.exit_price == 70.0
+        assert trade.hold_sessions == 3
+
+    def test_entry_size_is_capped_by_bar_liquidity(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        warm_up = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 10
+        df.iloc[warm_up, df.columns.get_loc("Volume")] = 1_250.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="LIQ_CAP",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 10.0,
+                action="BUY" if state["calls"] == 1 else "SELL",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(df, "1M", ticker="LIQ_CAP")
+
+        assert result.trades, "Expected trade with entry size capped by bar liquidity"
+        trade = result.trades[0]
+        expected_cap = int((1_250.0 * BACKTEST_MAX_ENTRY_PARTICIPATION) // 100) * 100
+        assert trade.n_shares == expected_cap
+
+    def test_exit_unwinds_across_multiple_bars_when_liquidity_is_thin(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = self._execution_df()
+        exit_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 12
+        next_bar = exit_bar + 1
+
+        df.iloc[exit_bar, df.columns.get_loc("Open")] = 70.0
+        df.iloc[exit_bar, df.columns.get_loc("High")] = 72.0
+        df.iloc[exit_bar, df.columns.get_loc("Low")] = 60.0
+        df.iloc[exit_bar, df.columns.get_loc("Close")] = 68.0
+        df.iloc[exit_bar, df.columns.get_loc("Volume")] = 1_250.0
+
+        df.iloc[next_bar, df.columns.get_loc("Open")] = 74.0
+        df.iloc[next_bar, df.columns.get_loc("High")] = 76.0
+        df.iloc[next_bar, df.columns.get_loc("Low")] = 73.0
+        df.iloc[next_bar, df.columns.get_loc("Close")] = 75.0
+        df.iloc[next_bar, df.columns.get_loc("Volume")] = 1_250.0
+
+        state = {"calls": 0}
+
+        def stub_score(signal_df, tf, **kwargs):
+            state["calls"] += 1
+            return SignalResult(
+                ticker="EXIT_LIQ_CAP",
+                timeframe=tf,
+                score=85.0 if state["calls"] == 1 else 50.0,
+                action="BUY" if state["calls"] == 1 else "HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", self._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+
+        result = engine.run_backtest(
+            df,
+            "1M",
+            ticker="EXIT_LIQ_CAP",
+            initial_capital=300_000.0,
+        )
+
+        assert result.trades, "Expected full liquidation once enough thin-liquidity bars accumulate"
+        trade = result.trades[0]
+        expected_exit_cap = int((1_250.0 * BACKTEST_MAX_EXIT_PARTICIPATION) // 100) * 100
+        assert expected_exit_cap == 200
+        assert trade.n_shares == 400
+        assert trade.exit_reason == "stop"
+        assert trade.exit_price == 72.0
+        assert trade.hold_sessions == 3
+
     def test_equity_marks_to_market_during_t2_hold(self, monkeypatch):
         import backtest.engine as engine
 
@@ -303,6 +561,22 @@ class TestMultiTFBacktest:
         for r in results.values():
             assert isinstance(r, BacktestResult)
 
+    def test_exchange_override_is_forwarded_to_each_tf(self, ohlcv, monkeypatch):
+        import backtest.engine as engine
+
+        seen_exchanges: list[str | None] = []
+
+        def stub_run_backtest(df, tf, **kwargs):
+            seen_exchanges.append(kwargs.get("exchange"))
+            return BacktestResult(ticker="ZZZ", timeframe=tf)
+
+        monkeypatch.setattr(engine, "run_backtest", stub_run_backtest)
+
+        results = engine.run_multi_tf_backtest(ohlcv, ticker="ZZZ", exchange="UPCOM")
+
+        assert set(results.keys()) == set(TIMEFRAME_CONFIG.keys())
+        assert seen_exchanges == ["UPCOM"] * len(TIMEFRAME_CONFIG)
+
 
 class TestBacktestExchangePropagation:
     def test_hnx_ticker_exchange_passed_to_compute_all_and_score(self, ohlcv, monkeypatch):
@@ -331,6 +605,33 @@ class TestBacktestExchangePropagation:
         assert seen_compute_score, "compute_score was not called"
         assert set(seen_compute_all) == {"HNX"}
         assert set(seen_compute_score) == {"HNX"}
+
+    def test_explicit_exchange_override_is_used_for_live_symbol_not_in_config(self, ohlcv, monkeypatch):
+        import backtest.engine as engine
+        from core.indicators import compute_all as real_compute_all
+        from core.scoring import compute_score as real_compute_score
+
+        seen_compute_all: list[str] = []
+        seen_compute_score: list[str] = []
+
+        def capture_compute_all(df, cfg, exchange="HOSE"):
+            seen_compute_all.append(exchange)
+            return real_compute_all(df, cfg, exchange=exchange)
+
+        def capture_compute_score(df, tf, **kwargs):
+            seen_compute_score.append(kwargs.get("exchange"))
+            return real_compute_score(df, tf, **kwargs)
+
+        monkeypatch.setattr(engine, "compute_all", capture_compute_all)
+        monkeypatch.setattr(engine, "compute_score", capture_compute_score)
+
+        result = engine.run_backtest(ohlcv, "1M", ticker="ZZZ", exchange="UPCOM")
+
+        assert isinstance(result, BacktestResult)
+        assert seen_compute_all, "compute_all was not called"
+        assert seen_compute_score, "compute_score was not called"
+        assert set(seen_compute_all) == {"UPCOM"}
+        assert set(seen_compute_score) == {"UPCOM"}
 
 
 # ─────────────────────────────────────────────────────────────
@@ -513,6 +814,47 @@ class TestMultiTFRegimePassthrough:
                 assert res.params.get("regime") == "bull", (
                     f"TF={tf}: default regime should be 'bull'"
                 )
+
+    def test_historical_regime_series_overrides_scalar_regime_by_date(self, monkeypatch):
+        import backtest.engine as engine
+
+        df = TestSignalExecutionTiming()._execution_df()
+        captured_regimes: list[str] = []
+        switch_bar = TIMEFRAME_CONFIG["1M"]["sma_slow"] + 15
+        benchmark_close = pd.Series(np.linspace(1_000.0, 1_150.0, len(df)), index=df.index)
+        regime_history = pd.Series("bear", index=df.index, dtype="object")
+        regime_history.iloc[switch_bar:] = "bull"
+
+        def stub_score(signal_df, tf, **kwargs):
+            captured_regimes.append(str(kwargs.get("regime")))
+            return SignalResult(
+                ticker="REGIME_HISTORY",
+                timeframe=tf,
+                score=50.0,
+                action="HOLD",
+                price=100.0,
+                stop_loss=80.0,
+                take_profit=130.0,
+                rr_ratio=1.5,
+                atr=1.0,
+                regime_ok=True,
+            )
+
+        monkeypatch.setattr(engine, "compute_all", TestSignalExecutionTiming()._stub_compute_all)
+        monkeypatch.setattr(engine, "compute_score", stub_score)
+        monkeypatch.setattr(engine, "detect_regime_history", lambda prices: regime_history.reindex(prices.index))
+
+        result = engine.run_backtest(
+            df,
+            "1M",
+            ticker="REGIME_HISTORY",
+            regime="bull",
+            benchmark_close=benchmark_close,
+        )
+
+        assert captured_regimes[0] == "bear"
+        assert captured_regimes[-1] == "bull"
+        assert result.params.get("regime_mode") == "historical_vni_rule"
 
     def test_all_tfs_present_with_custom_regime(self, ohlcv):
         """Tất cả 5 TF phải có trong kết quả kể cả khi truyền regime sideways."""

@@ -122,6 +122,8 @@ def _backtest_review_summary(compare_df: pd.DataFrame) -> dict[str, str | int]:
 def render_backtest_tab(
     data_dict: dict,
     lang: str = "VI",
+    exchange_map: dict[str, str] | None = None,
+    vni_df: pd.DataFrame | None = None,
 ) -> None:
     render_section_header(
         "🧪 Backtest Engine — T+2 Realistic (VN)",
@@ -173,11 +175,22 @@ def render_backtest_tab(
             help="Điểm vĩ mô (0–10) áp dụng cho scoring. 10 = môi trường rất thuận lợi.",
         )
 
+    historical_regime_available = isinstance(vni_df, pd.DataFrame) and not vni_df.empty and "Close" in vni_df.columns
+    use_historical_regime = st.toggle(
+        "Dùng regime lịch sử VNINDEX",
+        value=historical_regime_available,
+        disabled=not historical_regime_available,
+        key="bt_hist_regime",
+        help="Nếu có dữ liệu VNINDEX từ lần cập nhật macro gần nhất, backtest sẽ dùng regime rule-based theo từng ngày thay vì áp một regime cố định cho toàn bộ lịch sử.",
+    )
+    if not historical_regime_available:
+        st.caption("Chạy `Cập nhật Macro` để bật backtest theo regime lịch sử VNINDEX.")
+
     with st.expander("⚠️ Backtest Trust & Assumptions", expanded=False):
         st.markdown(
-            "- Regime và macro score đang được giữ cố định cho toàn bộ run backtest hiện tại.\n"
+            "- Macro score vẫn đang giữ cố định cho toàn bộ run backtest; regime có thể chạy theo lịch sử VNINDEX rule-based nếu dữ liệu macro đã được cập nhật.\n"
             "- T+2 exits được enforce theo số phiên nắm giữ, không phải theo dữ liệu order book thực.\n"
-            "- Fill logic hiện dùng heuristic theo giá bar/stop/target, chưa có mô hình queue priority, limit-lock hay halt.\n"
+            "- Fill logic hiện dùng heuristic theo giá bar/stop/target; app đã chặn mua ở bar trần khóa cứng, chặn bán ở bar sàn khóa cứng, bỏ qua execution trên bar volume = 0, và cap kích thước entry/exit theo thanh khoản bar nên có thể unwind nhiều bar, nhưng vẫn chưa có mô hình queue priority, ATO/ATC hay halt chi tiết.\n"
             "- Routing biên độ giá dùng exchange map của ticker để phân biệt HOSE/HNX/UPCOM.\n"
             "- Kết quả phù hợp cho decision-support và so sánh tương đối, chưa phải execution-grade simulation."
         )
@@ -188,7 +201,14 @@ def render_backtest_tab(
             st.error(f"Không có dữ liệu cho {ticker}")
             return
 
-        exchange = TICKER_EXCHANGE.get(ticker.upper(), "HOSE")
+        resolved_exchange_map = exchange_map or {}
+        exchange = str(resolved_exchange_map.get(ticker, TICKER_EXCHANGE.get(ticker.upper(), "HOSE"))).strip().upper() or "HOSE"
+        benchmark_close = vni_df["Close"] if use_historical_regime and historical_regime_available else None
+        regime_mode_label = (
+            f"historical VNI rule-based | fallback {regime_bt}"
+            if benchmark_close is not None
+            else f"scalar {regime_bt}"
+        )
 
         with st.spinner("Đang chạy backtest…"):
             if run_all_tf:
@@ -198,6 +218,8 @@ def render_backtest_tab(
                     initial_capital=capital,
                     regime=regime_bt,
                     macro_score=macro_bt,
+                    exchange=exchange,
+                    benchmark_close=benchmark_close,
                 )
             else:
                 assert single_tf is not None
@@ -209,6 +231,8 @@ def render_backtest_tab(
                         initial_capital=capital,
                         regime=regime_bt,
                         macro_score=macro_bt,
+                        exchange=exchange,
+                        benchmark_close=benchmark_close,
                     )
                 }
 
@@ -216,7 +240,7 @@ def render_backtest_tab(
         st.subheader(f"📊 Kết quả — {ticker} | {src}")
         st.caption(
             f"Exchange: {exchange} | Source: {src} | "
-            f"Regime input: {regime_bt} | Macro input: {macro_bt:.1f}"
+            f"Regime mode: {regime_mode_label} | Macro input: {macro_bt:.1f}"
         )
         summary_df = summarise_results(results)
         compare_df = _backtest_review_table(results)

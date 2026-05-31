@@ -377,6 +377,7 @@ def fetch_foreign_flow_tickers(
     *,
     sessions: int = 20,
     live_refresh_limit: int = _CAFEF_TICKER_LIVE_REFRESH_LIMIT,
+    exchange_map: dict[str, str] | None = None,
 ) -> dict[str, dict]:
     """Fetch foreign-flow data, preferring verified CafeF history over KBS snapshot."""
     if not symbols:
@@ -384,8 +385,13 @@ def fetch_foreign_flow_tickers(
 
     normalized = [str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()]
     unique_symbols = list(dict.fromkeys(normalized))
-    exchange_map = {
-        symbol: TICKER_EXCHANGE.get(symbol, "HOSE")
+    incoming_exchange_map = {
+        str(symbol).strip().upper(): str(exchange).strip().upper()
+        for symbol, exchange in (exchange_map or {}).items()
+        if str(symbol).strip()
+    }
+    resolved_exchange_map = {
+        symbol: incoming_exchange_map.get(symbol, TICKER_EXCHANGE.get(symbol, "HOSE"))
         for symbol in unique_symbols
     }
 
@@ -404,7 +410,7 @@ def fetch_foreign_flow_tickers(
 
             history_results = fetch_cafef_foreign_flow_tickers(
                 unique_symbols,
-                exchange_map=exchange_map,
+                exchange_map=resolved_exchange_map,
                 sessions=sessions,
             )
         except Exception as exc:
@@ -428,7 +434,12 @@ def fetch_foreign_flow_tickers(
     return results
 
 
-def fetch_foreign_flow_ticker(symbol: str) -> dict:
+def fetch_foreign_flow_ticker(
+    symbol: str,
+    *,
+    exchange: str | None = None,
+    exchange_map: dict[str, str] | None = None,
+) -> dict:
     """
     Fetch foreign buy/sell for a specific ticker.
 
@@ -441,7 +452,16 @@ def fetch_foreign_flow_ticker(symbol: str) -> dict:
     snapshot when history cannot be retrieved.
     """
     symbol = symbol.strip().upper()
-    exchange = TICKER_EXCHANGE.get(symbol, "HOSE")
+    incoming_exchange_map = {
+        str(item_symbol).strip().upper(): str(item_exchange).strip().upper()
+        for item_symbol, item_exchange in (exchange_map or {}).items()
+        if str(item_symbol).strip()
+    }
+    exchange = (
+        incoming_exchange_map.get(symbol)
+        or (str(exchange).strip().upper() if exchange else "")
+        or TICKER_EXCHANGE.get(symbol, "HOSE")
+    )
 
     try:
         from core.foreign_flow_crawler import fetch_cafef_foreign_flow_ticker

@@ -46,6 +46,7 @@ def ensemble_forecast(
     macro_dict: dict | None = None,
     foreign_flow: pd.Series | None = None,
     n_lstm_epochs: int = 60,
+    exchange: str = "HOSE",
 ) -> ForecastResult:
     """
     Run all available models and combine predictions using timeframe weights.
@@ -127,7 +128,7 @@ def ensemble_forecast(
 
     # Monte Carlo (always available)
     try:
-        preds = monte_carlo_predict(df, n_days)
+        preds = monte_carlo_predict(df, n_days, exchange=exchange)
         if preds:
             model_preds["mc"] = preds
     except Exception as exc:

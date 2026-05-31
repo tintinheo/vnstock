@@ -191,6 +191,30 @@ def detect_regime(prices: pd.Series, use_hmm: bool = True) -> RegimeResult:
     return _detect_rule(prices)
 
 
+def detect_regime_history(prices: pd.Series) -> pd.Series:
+    """
+    Build a per-session regime series aligned to the input VNINDEX dates.
+
+    Historical backtests need one regime label per session. Use the deterministic
+    rule-based detector here so the output length always matches the input index.
+    """
+    if prices is None:
+        return pd.Series(dtype="object")
+
+    history_prices = pd.Series(prices).dropna().copy()
+    if history_prices.empty:
+        return pd.Series(dtype="object")
+
+    history_prices.index = pd.to_datetime(history_prices.index, errors="coerce")
+    history_prices = history_prices[~history_prices.index.isna()]
+    history_prices = history_prices[~history_prices.index.duplicated(keep="last")].sort_index()
+    if history_prices.empty:
+        return pd.Series(dtype="object")
+
+    result = _detect_rule(history_prices)
+    return pd.Series(result.history, index=history_prices.index, name="regime", dtype="object")
+
+
 # Alias kept for clarity — prefer calling detect_regime explicitly with VNI data.
 detect_market_regime = detect_regime
 

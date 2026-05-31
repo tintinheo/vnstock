@@ -90,7 +90,7 @@ def _base_app_patches(monkeypatch, *, event_calls: list[tuple]) -> None:
     monkeypatch.setattr(
         macro_data,
         "fetch_foreign_flow_tickers",
-        lambda tickers: {
+        lambda tickers, exchange_map=None: {
             ticker: {
                 "basis": "cafef-20d",
                 "signal_net_buy": 12_500_000_000.0,
@@ -125,6 +125,8 @@ def test_app_smoke_watchlist_load_then_macro_refresh(monkeypatch):
             {
                 "selection_sources": {"Watchlist": "session-watchlist"},
                 "listing_source": "configured-only",
+                "exchange_map": {"VCB": "HOSE"},
+                "exchange_map_source": "configured-only",
                 "resolved_count": 1,
                 "warnings": [],
                 "used_live_listing": False,
@@ -162,6 +164,7 @@ def test_app_smoke_watchlist_load_then_macro_refresh(monkeypatch):
         {"symbols": ["VCB"], "days": 730, "max_workers": 8, "chunk_size": 120}
     ]
     assert sorted(at.session_state["data_dict"].keys()) == ["VCB"]
+    assert at.session_state["exchange_map"] == {"VCB": "HOSE"}
     assert at.session_state["universe_meta"]["selection_sources"] == {"Watchlist": "session-watchlist"}
     assert at.session_state["data_version"] == 1
     assert at.session_state["data_loaded_at"]
@@ -176,10 +179,191 @@ def test_app_smoke_watchlist_load_then_macro_refresh(monkeypatch):
     assert at.session_state["regime_result"].regime == "bull"
     assert at.session_state["regime_stale"] is False
     assert at.session_state["regime_source"] == "live (DNSE)"
+    assert at.session_state["vni_df"] is not None
+    assert "Close" in at.session_state["vni_df"].columns
     assert at.session_state["foreign_flows_cache"]["VCB"]["basis"] == "cafef-20d"
     assert at.session_state["foreign_flow_meta"]["requested_symbols"] == 1
     assert at.session_state["foreign_flow_meta"]["bounded_mode"] is False
     assert [args[0] for args, _ in event_calls] == [ACTION_LOAD, ACTION_MACRO]
+
+
+def test_app_smoke_macro_refresh_passes_live_exchange_map_to_foreign_flow(monkeypatch):
+    import core.data_fetcher as data_fetcher
+    import core.macro_data as macro_data
+    import core.universe as universe
+
+    event_calls: list[tuple] = []
+    foreign_flow_calls: list[dict] = []
+    sample_df = _make_ohlcv()
+
+    _base_app_patches(monkeypatch, event_calls=event_calls)
+
+    monkeypatch.setattr(
+        universe,
+        "resolve_universe_symbols",
+        lambda selections, watchlist, force_refresh=False: (
+            ["ZZZ"],
+            {
+                "selection_sources": {"Watchlist": "session-watchlist"},
+                "listing_source": "cache",
+                "exchange_map": {"ZZZ": "HNX"},
+                "exchange_map_source": "cache",
+                "resolved_count": 1,
+                "warnings": [],
+                "used_live_listing": False,
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        data_fetcher,
+        "batch_download",
+        lambda symbols, days=730, max_workers=8, delay=0.05, chunk_size=120, on_progress=None: {
+            symbol: (sample_df.copy(), "TEST") for symbol in symbols
+        },
+    )
+
+    def _capture_foreign_flow(tickers, exchange_map=None):
+        foreign_flow_calls.append({
+            "tickers": list(tickers),
+            "exchange_map": dict(exchange_map or {}),
+        })
+        return {
+            ticker: {
+                "basis": "cafef-20d",
+                "signal_net_buy": 12_500_000_000.0,
+                "net_buy_20d": 12_500_000_000.0,
+                "trend_20d": "accumulate",
+            }
+            for ticker in tickers
+        }
+
+    monkeypatch.setattr(macro_data, "fetch_foreign_flow_tickers", _capture_foreign_flow)
+
+    at = AppTest.from_file(str(APP_FILE))
+    at.run(timeout=120)
+
+    at.sidebar.text_area[0].set_value("ZZZ").run(timeout=120)
+    at.sidebar.multiselect[0].set_value(["Watchlist"]).run(timeout=120)
+    at.sidebar.button[0].click().run(timeout=120)
+    at.sidebar.button[1].click().run(timeout=120)
+
+    assert len(at.exception) == 0
+    assert foreign_flow_calls == [{"tickers": ["ZZZ"], "exchange_map": {"ZZZ": "HNX"}}]
+
+
+def test_app_smoke_macro_refresh_expands_vni_history_for_long_loaded_data(monkeypatch):
+    import core.data_fetcher as data_fetcher
+    import core.macro_data as macro_data
+    import core.universe as universe
+
+    event_calls: list[tuple] = []
+    vni_days_calls: list[int] = []
+    sample_df = _make_ohlcv(n=540)
+
+    _base_app_patches(monkeypatch, event_calls=event_calls)
+
+    monkeypatch.setattr(
+        universe,
+        "resolve_universe_symbols",
+        lambda selections, watchlist, force_refresh=False: (
+            ["VCB"],
+            {
+                "selection_sources": {"Watchlist": "session-watchlist"},
+                "listing_source": "configured-only",
+                "exchange_map": {"VCB": "HOSE"},
+                "exchange_map_source": "configured-only",
+                "resolved_count": 1,
+                "warnings": [],
+                "used_live_listing": False,
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        data_fetcher,
+        "batch_download",
+        lambda symbols, days=730, max_workers=8, delay=0.05, chunk_size=120, on_progress=None: {
+            symbol: (sample_df.copy(), "TEST") for symbol in symbols
+        },
+    )
+
+    def _capture_vni(days=365):
+        vni_days_calls.append(int(days))
+        df = _make_ohlcv(n=min(max(int(days), 30), 260), start_price=1_200.0)
+        df.attrs["source_mode"] = "live"
+        df.attrs["source_name"] = "DNSE"
+        return df
+
+    monkeypatch.setattr(macro_data, "fetch_vni_data", _capture_vni)
+
+    at = AppTest.from_file(str(APP_FILE))
+    at.run(timeout=120)
+
+    at.sidebar.text_area[0].set_value("VCB").run(timeout=120)
+    at.sidebar.multiselect[0].set_value(["Watchlist"]).run(timeout=120)
+    at.sidebar.button[0].click().run(timeout=120)
+    at.sidebar.button[1].click().run(timeout=120)
+
+    assert len(at.exception) == 0
+    assert vni_days_calls, "Expected macro refresh to request VNINDEX history"
+    assert vni_days_calls[-1] > 365
+
+
+def test_app_smoke_passes_exchange_map_to_ml_tab(monkeypatch):
+    import core.data_fetcher as data_fetcher
+    import core.universe as universe
+    import ui.ml_tab as ml_tab
+
+    event_calls: list[tuple] = []
+    ml_calls: list[dict] = []
+    sample_df = _make_ohlcv()
+
+    _base_app_patches(monkeypatch, event_calls=event_calls)
+
+    monkeypatch.setattr(
+        universe,
+        "resolve_universe_symbols",
+        lambda selections, watchlist, force_refresh=False: (
+            ["ZZZ"],
+            {
+                "selection_sources": {"Watchlist": "session-watchlist"},
+                "listing_source": "cache",
+                "exchange_map": {"ZZZ": "UPCOM"},
+                "exchange_map_source": "cache",
+                "resolved_count": 1,
+                "warnings": [],
+                "used_live_listing": False,
+            },
+        ),
+    )
+
+    monkeypatch.setattr(
+        data_fetcher,
+        "batch_download",
+        lambda symbols, days=730, max_workers=8, delay=0.05, chunk_size=120, on_progress=None: {
+            symbol: (sample_df.copy(), "TEST") for symbol in symbols
+        },
+    )
+
+    def _capture_ml_tab(data_dict, regime, macro_data, lang="VI", exchange_map=None):
+        ml_calls.append({
+            "tickers": sorted(data_dict.keys()),
+            "exchange_map": dict(exchange_map or {}),
+        })
+        st.caption("ml-ok-captured")
+
+    monkeypatch.setattr(ml_tab, "render_ml_tab", _capture_ml_tab)
+
+    at = AppTest.from_file(str(APP_FILE))
+    at.run(timeout=120)
+    at.sidebar.text_area[0].set_value("ZZZ").run(timeout=120)
+    at.sidebar.multiselect[0].set_value(["Watchlist"]).run(timeout=120)
+    at.sidebar.button[0].click().run(timeout=120)
+
+    assert len(at.exception) == 0
+    assert ml_calls
+    assert ml_calls[-1] == {"tickers": ["ZZZ"], "exchange_map": {"ZZZ": "UPCOM"}}
 
 
 def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
@@ -189,6 +373,10 @@ def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
     batch_calls: list[dict] = []
     event_calls: list[tuple] = []
     large_symbols = [f"S{index:03d}" for index in range(125)]
+    large_exchange_map = {
+        symbol: ("HOSE" if index < 60 else "HNX")
+        for index, symbol in enumerate(large_symbols)
+    }
     sample_df = _make_ohlcv(n=120)
 
     _base_app_patches(monkeypatch, event_calls=event_calls)
@@ -204,6 +392,8 @@ def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
                     "HNX": "live-listing:cache",
                 },
                 "listing_source": "cache",
+                "exchange_map": large_exchange_map,
+                "exchange_map_source": "cache",
                 "resolved_count": len(large_symbols),
                 "warnings": [],
                 "used_live_listing": True,
@@ -240,6 +430,8 @@ def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
         {"symbol_count": 125, "days": 730, "max_workers": 6, "chunk_size": 120}
     ]
     assert len(at.session_state["data_dict"]) == 125
+    assert at.session_state["exchange_map"]["S000"] == "HOSE"
+    assert at.session_state["exchange_map"]["S124"] == "HNX"
     assert at.session_state["universe_meta"]["used_live_listing"] is True
     assert at.session_state["universe_meta"]["resolved_count"] == 125
     assert at.session_state["foreign_flow_meta"]["requested_symbols"] == 125

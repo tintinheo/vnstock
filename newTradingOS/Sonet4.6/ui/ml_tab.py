@@ -8,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import plotly.graph_objects as go
 
-from config import TIMEFRAME_CONFIG
+from config import TIMEFRAME_CONFIG, TICKER_EXCHANGE
 from ml.ensemble import ensemble_forecast
 from ml.lstm_model import TF_AVAILABLE
 from ml.classical_models import XGB_AVAILABLE, PROPHET_AVAILABLE, ARIMA_AVAILABLE
@@ -24,6 +24,7 @@ from ui.components import (
     candlestick_chart,
     render_guidance_callout,
     render_section_header,
+    vn_future_trading_dates,
 )
 
 
@@ -149,6 +150,7 @@ def render_ml_tab(
     regime: str,
     macro_data: dict,
     lang: str = "VI",
+    exchange_map: dict[str, str] | None = None,
 ) -> None:
     render_section_header(
         "🧠 ML Ensemble Forecast",
@@ -192,6 +194,9 @@ def render_ml_tab(
             st.error(f"Không có dữ liệu cho {ticker}")
             return
 
+        resolved_exchange_map = exchange_map or {}
+        exchange = str(resolved_exchange_map.get(ticker, TICKER_EXCHANGE.get(ticker.upper(), "HOSE"))).strip().upper() or "HOSE"
+
         with st.spinner(f"Đang chạy ML ensemble cho {ticker} ({tf})…"):
             fc = ensemble_forecast(
                 df_raw.copy(), tf,
@@ -199,6 +204,7 @@ def render_ml_tab(
                 regime=regime,
                 macro_dict=macro_data,
                 n_lstm_epochs=epochs,
+                exchange=exchange,
             )
         trust = _forecast_trust_state(fc, src, df_raw, regime)
         usage_policy = _forecast_usage_policy(trust, fc.upside_pct)
@@ -221,7 +227,7 @@ def render_ml_tab(
             _format_model_name(model) for model in trust["active_models"]
         ) or "N/A"
         st.caption(
-            f"Cơ sở forecast: {active_models} | Regime đầu vào: {trust['regime']}"
+            f"Cơ sở forecast: {active_models} | Regime đầu vào: {trust['regime']} | Exchange: {exchange}"
         )
 
         if trust["fallback_only"]:
@@ -254,7 +260,7 @@ def render_ml_tab(
         st.divider()
 
         # ── Price chart with forecast ─────────────────────────
-        df_ind = compute_all(df_raw.copy(), cfg)
+        df_ind = compute_all(df_raw.copy(), cfg, exchange=exchange)
         lookback_bars = {"1W": 60, "2W": 90, "1M": 120, "3M": 200, "5M": 300}.get(tf, 120)
         fig = candlestick_chart(df_ind.tail(lookback_bars), ticker, tf,
                                  forecast=fc, height=550)
@@ -287,9 +293,7 @@ def render_ml_tab(
                      hide_index=True)
 
         # ── Individual model curves ───────────────────────────
-        fut_dates = pd.bdate_range(
-            start=df_raw.index[-1], periods=n_days + 1
-        )[1:]
+        fut_dates = vn_future_trading_dates(df_raw.index[-1], n_days)
 
         model_colors = {
             "lstm":    PURPLE,
