@@ -9,13 +9,63 @@ from datetime import date
 import streamlit as st
 import pandas as pd
 
-from config import INITIAL_CAPITAL
+from config import INITIAL_CAPITAL, SELL_TOTAL
 from portfolio.tracker import Portfolio, Position
 from portfolio.sizing import (
     kelly_fraction, position_size_vnd,
     allocate_budget, compute_portfolio_metrics, _position_risk_vnd,
 )
-from ui.components import GREEN, RED, YELLOW, equity_chart
+from ui.components import GREEN, RED, YELLOW, equity_chart, render_guidance_callout, render_section_header
+
+
+def _portfolio_review_state(
+    capital: float,
+    cash: float,
+    risk_budget_pct: float,
+    open_positions: int,
+    ready_to_close: int,
+) -> dict[str, str]:
+    cash_pct = (cash / capital * 100) if capital else 0.0
+
+    if open_positions == 0:
+        return {
+            "stance": "Sẵn sàng giải ngân",
+            "detail": "Danh mục đang trống, có thể chọn lọc setup mới",
+            "next_action": "Review scanner top ideas",
+        }
+    if risk_budget_pct >= 6.0:
+        return {
+            "stance": "Phòng thủ",
+            "detail": f"Rủi ro tới stop đang cao ({risk_budget_pct:.2f}% vốn)",
+            "next_action": "Ưu tiên giảm risk hoặc chốt bớt vị thế",
+        }
+    if cash_pct <= 15.0:
+        return {
+            "stance": "Gần full allocation",
+            "detail": f"Cash còn {cash_pct:.1f}% vốn | ready to close {ready_to_close}/{open_positions}",
+            "next_action": "Chỉ thêm vị thế khi conviction rất rõ",
+        }
+    return {
+        "stance": "Cân bằng",
+        "detail": f"Cash {cash_pct:.1f}% vốn | ready to close {ready_to_close}/{open_positions}",
+        "next_action": "Có thể xoay vòng danh mục một cách chọn lọc",
+    }
+
+
+def _close_preview(position: Position, current_price: float, as_of_date: str) -> dict[str, float | int | bool]:
+    cash_released = current_price * position.n_shares * (1 - SELL_TOTAL)
+    pnl_vnd = round(cash_released - position.cost_vnd, 0)
+    pnl_pct = round((cash_released / position.cost_vnd - 1) * 100, 2) if position.cost_vnd > 0 else 0.0
+    sessions_held = position.held_sessions(as_of_date)
+    settlement_ready = position.settlement_ready(as_of_date)
+    return {
+        "current_price": current_price,
+        "cash_released": round(cash_released, 0),
+        "pnl_vnd": pnl_vnd,
+        "pnl_pct": pnl_pct,
+        "sessions_held": sessions_held,
+        "settlement_ready": settlement_ready,
+    }
 
 
 def render_portfolio_tab(
@@ -27,10 +77,14 @@ def render_portfolio_tab(
     Render portfolio management tab.
     Returns potentially updated Portfolio.
     """
-    st.subheader("💼 Portfolio Tracker")
-    st.caption(
-        "Trust note: live portfolio blocks closes until T+2 readiness and uses business-day sessions "
-        "as the settlement estimate. Intraday execution, slippage, and order-book effects are still not modeled."
+    render_section_header(
+        "💼 Portfolio Tracker",
+        "Bắt đầu từ stance danh mục, rồi xem close preview, risk budget, và room vốn theo timeframe.",
+    )
+    render_guidance_callout(
+        "Trust note",
+        "Live portfolio blocks closes until T+2 readiness and uses business-day sessions as the settlement estimate. Intraday execution, slippage, and order-book effects are still not modeled.",
+        tone="info",
     )
 
     # ── Summary metrics ───────────────────────────────────────
@@ -72,6 +126,33 @@ def render_portfolio_tab(
 
         total_risk_vnd = sum(risk_vnd for risk_vnd, _ in risk_by_position)
         risk_budget_pct = (total_risk_vnd / portfolio.capital * 100) if portfolio.capital else 0.0
+        ready_to_close = sum(1 for p in portfolio.open_positions if p.settlement_ready(today_iso))
+        review_state = _portfolio_review_state(
+            portfolio.capital,
+            portfolio.cash,
+            risk_budget_pct,
+            len(portfolio.open_positions),
+            ready_to_close,
+        )
+
+        st.subheader("🧭 Portfolio Guidance")
+        pg1, pg2, pg3 = st.columns(3)
+        pg1.metric("Portfolio stance", review_state["stance"], review_state["detail"])
+        pg2.metric("Ready to close", ready_to_close, f"/{len(portfolio.open_positions)} vị thế")
+        pg3.metric("Next action", review_state["next_action"], "Tập trung vào risk + cash rotation")
+
+        if risk_budget_pct >= 6.0:
+            render_guidance_callout(
+                "Risk budget warning",
+                f"Rủi ro tới stop đang ở {risk_budget_pct:.2f}% vốn. Ưu tiên giảm risk trước khi thêm vị thế mới.",
+                tone="warning",
+            )
+        elif ready_to_close < len(portfolio.open_positions):
+            render_guidance_callout(
+                "Settlement timing",
+                f"{len(portfolio.open_positions) - ready_to_close} vị thế chưa đủ T+2. Nếu cần xoay vòng, xem kỹ close preview trước khi hành động.",
+                tone="info",
+            )
 
         cm1, cm2, cm3, cm4 = st.columns(4)
         cm1.metric(
@@ -134,10 +215,21 @@ def render_portfolio_tab(
                 key="close_reason",
             )
         with col_close3:
+            selected_pos = close_options[close_label]
+            df_t, _ = data_dict.get(selected_pos.ticker, (None, None))
+            preview_price = float(df_t["Close"].iloc[-1]) if df_t is not None and not df_t.empty else selected_pos.entry_price
+            preview = _close_preview(selected_pos, preview_price, today_iso)
+            st.metric(
+                "Close preview",
+                f"{preview['pnl_pct']:+.2f}%",
+                f"{preview['pnl_vnd']:+,.0f} VND",
+            )
+            st.caption(
+                f"Sessions {preview['sessions_held']} | T+2 {'ready' if preview['settlement_ready'] else 'pending'} | "
+                f"Cash release {preview['cash_released']:,.0f} VND"
+            )
             if st.button("🔴 Đóng lệnh", key="btn_close"):
-                selected_pos = close_options[close_label]
                 # Get current price
-                df_t, _ = data_dict.get(selected_pos.ticker, (None, None))
                 if df_t is not None and not df_t.empty:
                     cur_price = float(df_t["Close"].iloc[-1])
                     pos = portfolio.close_position(
@@ -171,7 +263,7 @@ def render_portfolio_tab(
 
     # ── Position Sizer ────────────────────────────────────────
     st.subheader("📐 Position Sizer (Kelly Criterion)")
-    c1, c2, c3, c4 = st.columns(4)
+    c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         wr   = st.number_input("Win Rate (%)", 0.0, 100.0, 55.0, key="ks_wr") / 100
     with c2:
@@ -181,14 +273,31 @@ def render_portfolio_tab(
     with c4:
         price_in = st.number_input("Giá vào", 1000.0, 500000.0, 50000.0,
                                     step=500.0, key="ks_price")
+    with c5:
+        budget_profile = st.selectbox(
+            "Budget profile",
+            ["aggressive", "balanced", "conservative"],
+            index=1,
+            key="ks_budget_profile",
+        )
 
     kf  = kelly_fraction(wr, avgw, avgl)
     ns, vnd = position_size_vnd(portfolio.cash, kf, price_in)
+    budget_plan = allocate_budget(portfolio.cash, budget_profile)
 
     st.info(
         f"**Kelly fraction:** {kf*100:.1f}%  |  "
         f"**Số cổ phiếu:** {ns:,}  |  "
         f"**Giá trị:** {vnd:,.0f} VND"
+    )
+    st.caption(f"Budget profile `{budget_profile}` giúp quy đổi cash hiện tại thành room theo từng timeframe.")
+    st.dataframe(
+        pd.DataFrame([
+            {"Timeframe": tf, "Budget VND": round(amount, 0)}
+            for tf, amount in budget_plan.items()
+        ]),
+        width="stretch",
+        hide_index=True,
     )
 
     st.divider()

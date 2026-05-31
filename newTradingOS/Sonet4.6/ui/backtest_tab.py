@@ -9,15 +9,124 @@ import pandas as pd
 import plotly.graph_objects as go
 
 from config import TIMEFRAME_CONFIG, INITIAL_CAPITAL, TICKER_EXCHANGE
-from backtest.engine import run_backtest, run_multi_tf_backtest, summarise_results, trades_to_df
-from ui.components import equity_chart, GREEN, RED, YELLOW
+from backtest.engine import BacktestResult, run_backtest, run_multi_tf_backtest, summarise_results, trades_to_df
+from ui.components import GREEN, RED, YELLOW, equity_chart, render_guidance_callout, render_section_header
+
+
+def _backtest_review_table(results: dict[str, BacktestResult]) -> pd.DataFrame:
+    rows: list[dict] = []
+    for tf, res in results.items():
+        metrics = res.metrics
+        if "error" in metrics:
+            rows.append({
+                "TF": tf,
+                "Review Score": -1,
+                "Verdict": "Thiếu dữ liệu",
+                "CAGR %": 0.0,
+                "Total Ret %": 0.0,
+                "Sharpe": 0.0,
+                "Max DD %": 0.0,
+                "Win Rate %": 0.0,
+                "# Trades": 0,
+                "Error": metrics["error"],
+            })
+            continue
+
+        review_score = 0
+        total_return = float(metrics.get("total_return", 0.0) or 0.0)
+        sharpe = float(metrics.get("sharpe", 0.0) or 0.0)
+        max_dd = float(metrics.get("max_dd", 0.0) or 0.0)
+        win_rate = float(metrics.get("win_rate", 0.0) or 0.0)
+        n_trades = int(metrics.get("n_trades", 0) or 0)
+        profit_factor = float(metrics.get("profit_factor", 0.0) or 0.0)
+
+        review_score += 1 if total_return > 0 else 0
+        review_score += 1 if sharpe >= 0.8 else 0
+        review_score += 1 if max_dd >= -15 else 0
+        review_score += 1 if profit_factor >= 1.1 else 0
+        review_score += 1 if n_trades >= 3 else 0
+
+        if review_score >= 4:
+            verdict = "Ưu tiên review"
+        elif review_score >= 2:
+            verdict = "Có thể dùng"
+        else:
+            verdict = "Thận trọng"
+
+        rows.append({
+            "TF": tf,
+            "Review Score": review_score,
+            "Verdict": verdict,
+            "CAGR %": float(metrics.get("cagr", 0.0) or 0.0),
+            "Total Ret %": total_return,
+            "Sharpe": sharpe,
+            "Max DD %": max_dd,
+            "Win Rate %": win_rate,
+            "# Trades": n_trades,
+            "Error": "",
+        })
+
+    compare_df = pd.DataFrame(rows)
+    if compare_df.empty:
+        return compare_df
+
+    compare_df = compare_df.sort_values(
+        ["Review Score", "Total Ret %", "Sharpe", "Max DD %"],
+        ascending=[False, False, False, False],
+    ).reset_index(drop=True)
+    compare_df.insert(0, "Rank", range(1, len(compare_df) + 1))
+    return compare_df
+
+
+def _backtest_review_summary(compare_df: pd.DataFrame) -> dict[str, str | int]:
+    if compare_df.empty:
+        return {
+            "best_tf": "—",
+            "best_verdict": "Chưa có kết quả",
+            "robust_count": 0,
+            "next_action": "Chạy backtest",
+            "next_hint": "Cần ít nhất một kết quả hợp lệ để so sánh",
+        }
+
+    valid_df = compare_df[compare_df["Review Score"] >= 0]
+    if valid_df.empty:
+        return {
+            "best_tf": "—",
+            "best_verdict": "Thiếu dữ liệu",
+            "robust_count": 0,
+            "next_action": "Tăng lookback",
+            "next_hint": "Dữ liệu chưa đủ cho timeframe đang chọn",
+        }
+
+    best_row = valid_df.iloc[0]
+    robust_count = int((valid_df["Review Score"] >= 4).sum())
+    if best_row["Review Score"] >= 4:
+        next_action = f"Review sâu {best_row['TF']}"
+        next_hint = "Ưu tiên equity curve, trade log và exit reasons của TF tốt nhất"
+    elif best_row["Review Score"] >= 2:
+        next_action = f"So sánh {best_row['TF']} với TF khác"
+        next_hint = "Kiểm tra drawdown và số trade trước khi tin vào CAGR"
+    else:
+        next_action = "Thận trọng với mọi TF"
+        next_hint = "Ưu tiên xem assumptions và thử regime/macro khác"
+
+    return {
+        "best_tf": str(best_row["TF"]),
+        "best_verdict": str(best_row["Verdict"]),
+        "robust_count": robust_count,
+        "next_action": next_action,
+        "next_hint": next_hint,
+    }
 
 
 def render_backtest_tab(
     data_dict: dict,
     lang: str = "VI",
 ) -> None:
-    st.subheader("🧪 Backtest Engine — T+2 Realistic (VN)")
+    render_section_header(
+        "🧪 Backtest Engine — T+2 Realistic (VN)",
+        "So sánh matrix trước để chọn timeframe đáng xem sâu, rồi mới mở từng tab equity/trade log.",
+    )
 
     if not data_dict:
         st.info("Chưa có dữ liệu giá. Hãy tải dữ liệu trước khi chạy backtest.")
@@ -110,7 +219,28 @@ def render_backtest_tab(
             f"Regime input: {regime_bt} | Macro input: {macro_bt:.1f}"
         )
         summary_df = summarise_results(results)
-        st.dataframe(summary_df, width="stretch", hide_index=True)
+        compare_df = _backtest_review_table(results)
+        review_summary = _backtest_review_summary(compare_df)
+
+        s1, s2, s3, s4 = st.columns(4)
+        s1.metric("Best TF", review_summary["best_tf"], str(review_summary["best_verdict"]))
+        s2.metric("Robust TFs", int(review_summary["robust_count"]), f"/{len(compare_df)} timeframe")
+        s3.metric("Review Mode", "Multi-TF" if run_all_tf else "Single TF", f"Exchange {exchange}")
+        s4.metric("Next Step", str(review_summary["next_action"]), str(review_summary["next_hint"]))
+
+        render_guidance_callout(
+            "Review flow",
+            "Dùng comparison matrix để chọn timeframe đáng xem sâu trước khi mở từng tab chi tiết.",
+            tone="info",
+        )
+        st.dataframe(
+            compare_df[["Rank", "TF", "Verdict", "Review Score", "Total Ret %", "Sharpe", "Max DD %", "Win Rate %", "# Trades", "Error"]],
+            width="stretch",
+            hide_index=True,
+        )
+
+        with st.expander("📋 Raw performance table", expanded=False):
+            st.dataframe(summary_df, width="stretch", hide_index=True)
 
         # ── Per-TF equity curves ──────────────────────────────
         st.subheader("📈 Equity Curves")

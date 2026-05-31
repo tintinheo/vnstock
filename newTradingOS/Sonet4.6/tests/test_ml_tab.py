@@ -3,7 +3,7 @@ from __future__ import annotations
 import pandas as pd
 
 from ml.ensemble import ForecastResult
-from ui.ml_tab import _forecast_trust_state
+from ui.ml_tab import _forecast_trust_state, _forecast_usage_policy
 
 
 def _make_result(
@@ -85,3 +85,31 @@ def test_forecast_trust_state_for_full_runtime_ensemble():
     assert trust["models_expected"] == 3
     assert trust["inactive_models"] == []
     assert trust["band_pct"] == 10.0
+
+
+def test_forecast_usage_policy_marks_fallback_as_informational_only():
+    policy = _forecast_usage_policy(
+        {
+            "fallback_only": True,
+            "degraded": True,
+            "band_pct": 4.0,
+        },
+        upside_pct=8.0,
+    )
+
+    assert policy["usage"] == "Informational only"
+    assert policy["confidence"] == "Low"
+
+
+def test_forecast_usage_policy_can_mark_clean_signal_as_sizing_review():
+    policy = _forecast_usage_policy(
+        {
+            "fallback_only": False,
+            "degraded": False,
+            "band_pct": 6.0,
+        },
+        upside_pct=7.5,
+    )
+
+    assert policy["usage"] == "Eligible for sizing review"
+    assert policy["tone"] == "success"

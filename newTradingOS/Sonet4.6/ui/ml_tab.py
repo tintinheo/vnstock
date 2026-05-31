@@ -14,7 +14,16 @@ from ml.lstm_model import TF_AVAILABLE
 from ml.classical_models import XGB_AVAILABLE, PROPHET_AVAILABLE, ARIMA_AVAILABLE
 from core.indicators import compute_all
 from ui.components import (
-    candlestick_chart, GREEN, RED, YELLOW, BLUE, PURPLE, GREY,
+    BLUE,
+    GREEN,
+    GREY,
+    PURPLE,
+    RED,
+    YELLOW,
+    apply_dark_chart_layout,
+    candlestick_chart,
+    render_guidance_callout,
+    render_section_header,
 )
 
 
@@ -91,13 +100,60 @@ def _forecast_trust_state(
     }
 
 
+def _forecast_usage_policy(trust: dict, upside_pct: float) -> dict[str, str]:
+    if trust.get("fallback_only"):
+        return {
+            "usage": "Informational only",
+            "confidence": "Low",
+            "next_step": "Không dùng để sizing; chờ scanner và macro xác nhận",
+            "tone": "warning",
+        }
+    if trust.get("band_pct", 0.0) >= 12:
+        return {
+            "usage": "Watchlist candidate" if upside_pct > 0 else "Informational only",
+            "confidence": "Low",
+            "next_step": "Dải bất định còn rộng, chỉ dùng như vùng tham chiếu",
+            "tone": "warning",
+        }
+    if trust.get("degraded"):
+        return {
+            "usage": "Watchlist candidate" if upside_pct >= 5 else "Scenario support",
+            "confidence": "Medium",
+            "next_step": "Cần thêm xác nhận từ scanner score, regime và risk budget",
+            "tone": "info",
+        }
+    if upside_pct >= 5 and trust.get("band_pct", 0.0) <= 8:
+        return {
+            "usage": "Eligible for sizing review",
+            "confidence": "Higher",
+            "next_step": "Đối chiếu scanner, stop/target và room vốn trước khi hành động",
+            "tone": "success",
+        }
+    if upside_pct > 0:
+        return {
+            "usage": "Scenario support",
+            "confidence": "Medium",
+            "next_step": "Dùng như lớp xác nhận bổ sung, không phải quyết định độc lập",
+            "tone": "info",
+        }
+    return {
+        "usage": "Informational only",
+        "confidence": "Medium",
+        "next_step": "Forecast chưa cho bullish edge rõ ràng",
+        "tone": "info",
+    }
+
+
 def render_ml_tab(
     data_dict: dict,
     regime: str,
     macro_data: dict,
     lang: str = "VI",
 ) -> None:
-    st.subheader("🧠 ML Ensemble Forecast")
+    render_section_header(
+        "🧠 ML Ensemble Forecast",
+        "Đọc usage policy và confidence trước, sau đó mới nhìn chart ensemble và dispersion giữa các model.",
+    )
 
     if not data_dict:
         st.info("Chưa có dữ liệu giá. Hãy tải dữ liệu trước khi chạy ML forecast.")
@@ -145,6 +201,7 @@ def render_ml_tab(
                 n_lstm_epochs=epochs,
             )
         trust = _forecast_trust_state(fc, src, df_raw, regime)
+        usage_policy = _forecast_usage_policy(trust, fc.upside_pct)
 
         cfg    = TIMEFRAME_CONFIG[tf]
         n_days = cfg["hold_sessions"]
@@ -154,6 +211,11 @@ def render_ml_tab(
         t2.metric("Bar cuối", trust["as_of"])
         t3.metric("Models chạy", f"{trust['models_used']}/{trust['models_expected']}")
         t4.metric("Dải P75-P25", f"{trust['band_pct']:.1f}%")
+
+        p1, p2, p3 = st.columns(3)
+        p1.metric("Usage Policy", usage_policy["usage"], usage_policy["confidence"])
+        p2.metric("Decision Mode", "Trust-first", f"Regime {trust['regime']}")
+        p3.metric("Next Step", usage_policy["next_step"], f"Models {trust['models_used']}/{trust['models_expected']}")
 
         active_models = ", ".join(
             _format_model_name(model) for model in trust["active_models"]
@@ -181,6 +243,13 @@ def render_ml_tab(
                 f"Dải bất định P75-P25 đang rộng {trust['band_pct']:.1f}% so với giá hiện tại. "
                 "Nên xem target như vùng tham chiếu thay vì mức giá chắc chắn."
             )
+
+        if usage_policy["tone"] == "success":
+            render_guidance_callout("Usage guidance", usage_policy["next_step"], tone="success")
+        elif usage_policy["tone"] == "warning":
+            render_guidance_callout("Usage guidance", usage_policy["next_step"], tone="warning")
+        else:
+            render_guidance_callout("Usage guidance", usage_policy["next_step"], tone="info")
 
         st.divider()
 
@@ -269,11 +338,11 @@ def render_ml_tab(
                 showlegend=True, opacity=0.5,
             ))
 
-        fig2.update_layout(
-            height=400, template="plotly_dark",
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+        apply_dark_chart_layout(
+            fig2,
+            height=400,
             title=f"{ticker} — Individual Model Forecasts ({tf})",
-            legend=dict(orientation="h"),
             margin=dict(l=40, r=40, t=60, b=30),
+            legend=dict(orientation="h"),
         )
         st.plotly_chart(fig2, width="stretch")

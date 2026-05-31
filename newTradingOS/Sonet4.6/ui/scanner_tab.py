@@ -14,7 +14,15 @@ import pandas as pd
 from config import TIMEFRAME_CONFIG, score_to_action
 from core.audit import log_events, ACTION_SCAN
 from core.scoring import SignalResult, batch_score
-from ui.components import score_badge, source_badge, candlestick_chart, score_radar
+from ui.components import (
+    candlestick_chart,
+    render_guidance_callout,
+    render_section_header,
+    render_trust_ribbon,
+    score_badge,
+    score_radar,
+    source_badge,
+)
 from core.indicators import compute_all
 
 # ── Audit logging ─────────────────────────────────────────────
@@ -293,7 +301,10 @@ def render_scanner_tab(
     cfg   = TIMEFRAME_CONFIG[tf]
     label = cfg["label"] if lang == "VI" else cfg["label_en"]
 
-    st.subheader(f"📡 Scanner — {label}")
+    render_section_header(
+        f"📡 Scanner — {label}",
+        "Đọc top ideas trước, sau đó dùng review focus để thu hẹp table và diagnostics sâu.",
+    )
 
     # ── Session-state scan cache ──────────────────────────────
     data_version = st.session_state.get("data_version", 0)
@@ -361,47 +372,101 @@ def render_scanner_tab(
     m3.metric("WATCH", watch_count)
     m4.metric("Score trung bình", f"{avg_score:.1f}")
 
-    trust1, trust2, trust3, trust4 = st.columns(4)
-    trust1.caption(f"Latest bar: {_latest_bar_date(data_dict)}")
-    trust2.caption(f"Source mix: {_source_mix(data_dict)}")
-    trust3.caption(f"Macro as-of: {st.session_state.get('macro_updated_at') or '—'}")
-    if tf in ("2W", "1M", "3M", "5M"):
-        trust4.caption(
-            f"Foreign flow basis: {_foreign_flow_basis(tf, foreign_flows)}"
-        )
-    else:
-        trust4.caption(f"Foreign flow basis: {_foreign_flow_basis(tf, foreign_flows)} on this timeframe")
+    render_trust_ribbon([
+        ("Latest bar", _latest_bar_date(data_dict)),
+        ("Source mix", _source_mix(data_dict)),
+        ("Macro as-of", st.session_state.get("macro_updated_at") or "—"),
+        (
+            "Foreign flow basis",
+            _foreign_flow_basis(tf, foreign_flows)
+            if tf in ("2W", "1M", "3M", "5M")
+            else f"{_foreign_flow_basis(tf, foreign_flows)} on this timeframe",
+        ),
+    ])
 
     _macro_stale = macro_stale
     if _macro_stale:
-        st.warning(
-            "Scanner trust warning: macro data is partial. "
-            f"Missing components: {', '.join(_macro_stale)}."
+        render_guidance_callout(
+            "Scanner trust warning",
+            f"Macro data is partial. Missing components: {', '.join(_macro_stale)}.",
+            tone="warning",
         )
+
+    review_focus = st.radio(
+        "Review focus",
+        ["Top ideas", "Mua tiềm năng", "Theo dõi rủi ro", "Tất cả"],
+        index=0,
+        horizontal=True,
+        key=f"scan_focus_{tf}",
+        help="Dùng filter này để thu hẹp table và diagnostics theo mục tiêu review hiện tại.",
+    )
+
+    focus_actions = {
+        "Top ideas": {"STRONG BUY", "BUY"},
+        "Mua tiềm năng": {"STRONG BUY", "BUY", "HOLD"},
+        "Theo dõi rủi ro": {"WATCH", "SELL"},
+        "Tất cả": None,
+    }
+    allowed_actions = focus_actions.get(review_focus)
+    visible_results = [
+        r for r in all_results
+        if allowed_actions is None or r.action in allowed_actions
+    ]
+
+    top_candidates = sorted(
+        [r for r in all_results if r.action in ("STRONG BUY", "BUY")],
+        key=lambda item: (-item.score, item.ticker),
+    )[:4]
+
+    if top_candidates:
+        st.subheader("⭐ Top Ideas")
+        card_cols = st.columns(2)
+        for idx, result in enumerate(top_candidates):
+            df_raw, src = data_dict.get(result.ticker, (None, "NONE"))
+            ff_detail = _foreign_flow_row_detail(result.ticker, foreign_flows)
+            with card_cols[idx % 2]:
+                with st.container(border=True):
+                    st.markdown(f"**{result.ticker}**")
+                    st.markdown(score_badge(result.score, result.action), unsafe_allow_html=True)
+                    st.caption(
+                        f"Giá {result.price:,.0f} | Stop {result.stop_loss:,.0f} | "
+                        f"Target {result.take_profit:,.0f} | R/R 1:{result.rr_ratio}"
+                    )
+                    st.caption(
+                        f"Nguồn {src} | Bar {_format_bar_date(df_raw)} | "
+                        f"Regime {'OK' if result.regime_ok else 'Caution'}"
+                    )
+                    if tf in ("2W", "1M", "3M", "5M"):
+                        st.caption(
+                            f"Foreign flow {ff_detail['ff_trend_20d']} | "
+                            f"history {ff_detail['ff_history_sessions']}P"
+                        )
+
+    st.caption(f"Đang xem **{len(visible_results)} / {len(all_results)}** mã theo focus: **{review_focus}**.")
 
     # ── Full result table — all rows, color-coded by Action ──
     rows = []
-    for r in all_results:
+    for r in visible_results:
         df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
         exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
         ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
         rows.append({
             "Mã":        r.ticker,
-            "Score":     round(r.score, 1),
             "Action":    r.action,
-            "Sàn":       exchange,
-            "Bar Date":  _format_bar_date(df_raw),
-            "FF Hist":   ff_detail["ff_history_sessions"],
-            "FF 20D":    ff_detail["ff_trend_20d"],
+            "Score":     round(r.score, 1),
             "Giá":       round(r.price, 0),
             "Stop":      round(r.stop_loss, 0),
             "Target":    round(r.take_profit, 0),
             "R/R":       r.rr_ratio,
+            "Sàn":       exchange,
+            "Nguồn":     src,
+            "Bar Date":  _format_bar_date(df_raw),
+            "FF Hist":   ff_detail["ff_history_sessions"],
+            "FF 20D":    ff_detail["ff_trend_20d"],
             "RSI":       r.indicators.get("RSI", None),
             "Vol×":      r.indicators.get("Vol_ratio", None),
             "Regime OK": r.regime_ok,
             "Manip":     r.manip_flag,
-            "Nguồn":     src,
         })
 
     df_out = pd.DataFrame(rows)
@@ -429,15 +494,21 @@ def render_scanner_tab(
         hide_index=True,
         column_config={
             "Score":     st.column_config.NumberColumn("Score", format="%.1f",
-                             help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán."),
+                             help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán.", width="small"),
+            "Action":    st.column_config.TextColumn("Action", width="small"),
+            "Mã":        st.column_config.TextColumn("Mã", width="small"),
+            "Sàn":       st.column_config.TextColumn("Sàn", width="small"),
+            "Nguồn":     st.column_config.TextColumn("Nguồn", width="small"),
+            "Bar Date":  st.column_config.TextColumn("Bar Date", width="small"),
             "FF Hist":   st.column_config.NumberColumn("FF Hist", format="%d",
-                             help="Số phiên lịch sử foreign-flow đã xác minh cho mã này."),
-            "Giá":       st.column_config.NumberColumn("Giá (VND)", format="%,.0f"),
-            "Stop":      st.column_config.NumberColumn("Stop (VND)", format="%,.0f"),
-            "Target":    st.column_config.NumberColumn("Target (VND)", format="%,.0f"),
-            "R/R":       st.column_config.NumberColumn("R/R", format="1:%.1f"),
-            "RSI":       st.column_config.NumberColumn("RSI", format="%.1f"),
-            "Vol×":      st.column_config.NumberColumn("Vol×", format="%.2f"),
+                             help="Số phiên lịch sử foreign-flow đã xác minh cho mã này.", width="small"),
+            "FF 20D":    st.column_config.TextColumn("FF 20D", width="small"),
+            "Giá":       st.column_config.NumberColumn("Giá (VND)", format="%,.0f", width="small"),
+            "Stop":      st.column_config.NumberColumn("Stop (VND)", format="%,.0f", width="small"),
+            "Target":    st.column_config.NumberColumn("Target (VND)", format="%,.0f", width="small"),
+            "R/R":       st.column_config.NumberColumn("R/R", format="1:%.1f", width="small"),
+            "RSI":       st.column_config.NumberColumn("RSI", format="%.1f", width="small"),
+            "Vol×":      st.column_config.NumberColumn("Vol×", format="%.2f", width="small"),
             "Regime OK": st.column_config.CheckboxColumn("Regime OK"),
             "Manip":     st.column_config.CheckboxColumn("Manip ⚠️"),
         },
@@ -445,7 +516,31 @@ def render_scanner_tab(
     )
 
     # ── Download full CSV ─────────────────────────────────────
-    csv = df_out.to_csv(index=False).encode("utf-8-sig")
+    full_rows = []
+    for r in all_results:
+        df_raw, src = data_dict.get(r.ticker, (None, "NONE"))
+        exchange = exchange_map.get(r.ticker, "HOSE") if exchange_map else "HOSE"
+        ff_detail = _foreign_flow_row_detail(r.ticker, foreign_flows)
+        full_rows.append({
+            "Mã":        r.ticker,
+            "Action":    r.action,
+            "Score":     round(r.score, 1),
+            "Giá":       round(r.price, 0),
+            "Stop":      round(r.stop_loss, 0),
+            "Target":    round(r.take_profit, 0),
+            "R/R":       r.rr_ratio,
+            "Sàn":       exchange,
+            "Nguồn":     src,
+            "Bar Date":  _format_bar_date(df_raw),
+            "FF Hist":   ff_detail["ff_history_sessions"],
+            "FF 20D":    ff_detail["ff_trend_20d"],
+            "RSI":       r.indicators.get("RSI", None),
+            "Vol×":      r.indicators.get("Vol_ratio", None),
+            "Regime OK": r.regime_ok,
+            "Manip":     r.manip_flag,
+        })
+
+    csv = pd.DataFrame(full_rows).to_csv(index=False).encode("utf-8-sig")
     st.download_button(
         f"⬇️ Tải CSV đầy đủ ({tf}) — {len(df_out)} mã", csv,
         file_name=f"scan_{tf}_{datetime.now().strftime('%Y%m%d_%H%M')}.csv",
@@ -505,7 +600,7 @@ def render_scanner_tab(
         "SELL":       "🟥",
     }
     grouped: dict[str, list] = {a: [] for a in _ACTION_ORDER}
-    for r in all_results:
+    for r in visible_results:
         grouped.setdefault(r.action, []).append(r)
 
     for action in _ACTION_ORDER:

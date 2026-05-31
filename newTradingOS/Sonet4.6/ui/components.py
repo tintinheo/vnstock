@@ -9,6 +9,7 @@ from typing import Optional
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import streamlit as st
 from plotly.subplots import make_subplots
 
 from config import TIMEFRAME_CONFIG
@@ -34,6 +35,59 @@ REGIME_COLORS = {
     "sideways": YELLOW,
     "bear":     RED,
 }
+
+
+def render_section_header(title: str, subtitle: str | None = None) -> None:
+    st.subheader(title)
+    if subtitle:
+        st.caption(subtitle)
+
+
+def render_trust_ribbon(items: list[tuple[str, str]]) -> None:
+    if not items:
+        return
+    cols = st.columns(len(items))
+    for col, (label, value) in zip(cols, items):
+        col.caption(f"{label}: {value}")
+
+
+def render_guidance_callout(title: str, body: str, tone: str = "info") -> None:
+    message = f"**{title}** — {body}" if body else f"**{title}**"
+    renderer = {
+        "warning": st.warning,
+        "success": st.success,
+        "info": st.info,
+    }.get(tone, st.info)
+    renderer(message)
+
+
+def apply_dark_chart_layout(
+    fig: go.Figure,
+    *,
+    height: int | None = None,
+    margin: dict | None = None,
+    title: str | dict | None = None,
+    showlegend: bool | None = None,
+    transparent: bool = False,
+    **extra_layout,
+) -> go.Figure:
+    background = "rgba(0,0,0,0)" if transparent else "#0e1117"
+    layout: dict = {
+        "template": "plotly_dark",
+        "paper_bgcolor": background,
+        "plot_bgcolor": background,
+    }
+    if height is not None:
+        layout["height"] = height
+    if margin is not None:
+        layout["margin"] = margin
+    if title is not None:
+        layout["title"] = title
+    if showlegend is not None:
+        layout["showlegend"] = showlegend
+    layout.update(extra_layout)
+    fig.update_layout(**layout)
+    return fig
 
 
 # ─────────────────────────────────────────────────────────────
@@ -261,13 +315,12 @@ def equity_chart(
         fill="tozeroy", fillcolor="rgba(255,68,68,0.12)",
     ), row=2, col=1)
 
-    fig.update_layout(
-        height=450, template="plotly_dark",
-        paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+    return apply_dark_chart_layout(
+        fig,
+        height=450,
         margin=dict(l=40, r=40, t=50, b=30),
         showlegend=False,
     )
-    return fig
 
 
 # ─────────────────────────────────────────────────────────────
@@ -287,18 +340,16 @@ def score_radar(breakdown: dict, title: str = "") -> go.Figure:
         fillcolor="rgba(126,184,255,0.2)",
         line=dict(color=BLUE, width=2),
     ))
-    fig.update_layout(
+    return apply_dark_chart_layout(
+        fig,
+        height=300,
+        title=dict(text=title, font=dict(size=13)),
+        margin=dict(l=30, r=30, t=50, b=10),
         polar=dict(
             bgcolor="#0e1117",
             radialaxis=dict(visible=True, range=[0, 10], color=GREY),
         ),
-        template="plotly_dark",
-        paper_bgcolor="#0e1117",
-        height=300,
-        title=dict(text=title, font=dict(size=13)),
-        margin=dict(l=30, r=30, t=50, b=10),
     )
-    return fig
 
 
 # ─────────────────────────────────────────────────────────────
@@ -309,12 +360,12 @@ def world_sparkline(prices: list[float], color: str = BLUE) -> go.Figure:
         y=prices, mode="lines",
         line=dict(color=color, width=1.5),
     ))
-    fig.update_layout(
-        height=60, margin=dict(l=0, r=0, t=0, b=0),
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
+    return apply_dark_chart_layout(
+        fig,
+        height=60,
+        margin=dict(l=0, r=0, t=0, b=0),
+        transparent=True,
+        showlegend=False,
         xaxis=dict(visible=False),
         yaxis=dict(visible=False),
-        showlegend=False,
     )
-    return fig

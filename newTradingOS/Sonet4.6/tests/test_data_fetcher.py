@@ -17,7 +17,7 @@ import pytest
 # We need the project root on sys.path (conftest does this already).
 from core.data_fetcher import (
     _normalize_price_scale, _clean_df,
-    _parse_udf, download_data, get_latest_price,
+    _parse_udf, batch_download, download_data, get_latest_price,
 )
 
 
@@ -227,3 +227,39 @@ class TestGetLatestPrice:
             mock_dl.return_value = (pd.DataFrame(), "NONE")
             price = get_latest_price("INVALID")
         assert price is None or price == 0.0
+
+
+class TestBatchDownload:
+    def test_large_universe_uses_chunks(self):
+        import concurrent.futures
+
+        created: list[int] = []
+
+        class SpyExecutor:
+            def __init__(self, *args, **kwargs):
+                created.append(int(kwargs.get("max_workers", args[0] if args else 0)))
+                self._executor = concurrent.futures.ThreadPoolExecutor(*args, **kwargs)
+
+            def __enter__(self):
+                self._executor.__enter__()
+                return self._executor
+
+            def __exit__(self, exc_type, exc, tb):
+                return self._executor.__exit__(exc_type, exc, tb)
+
+        progress: list[int] = []
+
+        with patch("core.data_fetcher.download_data", side_effect=lambda sym, days: (pd.DataFrame({"Close": [1.0]}), "DNSE")), \
+             patch("core.data_fetcher.ThreadPoolExecutor", SpyExecutor):
+            results = batch_download(
+                ["AAA", "BBB", "CCC", "DDD", "EEE"],
+                days=30,
+                max_workers=3,
+                chunk_size=2,
+                delay=0.0,
+                on_progress=lambda done, total, sym: progress.append(done),
+            )
+
+        assert len(results) == 5
+        assert len(created) == 3
+        assert progress[-1] == 5

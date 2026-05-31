@@ -156,8 +156,13 @@ def round_to_tick(price: float, exchange: str = "HOSE") -> float:
     return float(round(price / tick) * tick)
 
 # ─────────────────────────────────────────────────────────────
-# EXCHANGE-BASED UNIVERSE LISTS
+# CONFIGURED UNIVERSE BUCKETS (not full exchange listings)
 # ─────────────────────────────────────────────────────────────
+# These lists are the UI buckets used by the app. They are intentionally
+# narrower than the full HOSE/HNX/UPCOM listing masters.
+# - HOSE_LIST is derived from the curated sector universe.
+# - HNX_LIST comes from explicit exchange routing maintained in config.
+# - UPCOM_LIST is the curated-universe subset routed to UPCOM.
 # HOSE = all SECTOR_MAP tickers NOT in HNX / UPCOM
 HOSE_LIST: list[str] = sorted(set(
     t for tks in SECTOR_MAP.values() for t in tks
@@ -166,6 +171,11 @@ HOSE_LIST: list[str] = sorted(set(
 
 # HNX = all tickers explicitly routed to HNX
 HNX_LIST: list[str] = sorted(t for t, ex in TICKER_EXCHANGE.items() if ex == "HNX")
+
+# UPCOM = all curated-universe tickers explicitly routed to UPCOM
+UPCOM_LIST: list[str] = sorted(
+    t for t in MARKET_SCAN_LIST if TICKER_EXCHANGE.get(t) == "UPCOM"
+)
 
 # VN30 — approximate current index constituents (HOSE only)
 VN30_LIST: list[str] = [

@@ -206,6 +206,7 @@ def batch_download(
     days: int = 730,
     max_workers: int = 8,
     delay: float = 0.05,
+    chunk_size: int = 120,
     on_progress=None,   # callable(done: int, total: int, sym: str) | None
 ) -> dict[str, tuple[pd.DataFrame, str]]:
     """
@@ -223,16 +224,31 @@ def batch_download(
         return sym, df, src
 
     total = len(symbols)
-    with ThreadPoolExecutor(max_workers=max_workers) as pool:
-        futures = {pool.submit(_worker, s): s for s in symbols}
-        for fut in as_completed(futures):
-            sym, df, src = fut.result()
-            results[sym] = (df, src)
-            if on_progress is not None:
-                try:
-                    on_progress(len(results), total, sym)
-                except Exception:
-                    pass  # never let UI errors block data fetching
+    if total == 0:
+        return results
+
+    normalized_chunk_size = max(1, int(chunk_size or total))
+    chunks = [
+        symbols[index:index + normalized_chunk_size]
+        for index in range(0, total, normalized_chunk_size)
+    ]
+
+    for chunk_index, chunk in enumerate(chunks, start=1):
+        worker_count = min(max_workers, len(chunk))
+        logger.info(
+            "batch_download chunk %d/%d: %d symbols with %d workers",
+            chunk_index, len(chunks), len(chunk), worker_count,
+        )
+        with ThreadPoolExecutor(max_workers=max(1, worker_count)) as pool:
+            futures = {pool.submit(_worker, s): s for s in chunk}
+            for fut in as_completed(futures):
+                sym, df, src = fut.result()
+                results[sym] = (df, src)
+                if on_progress is not None:
+                    try:
+                        on_progress(len(results), total, sym)
+                    except Exception:
+                        pass  # never let UI errors block data fetching
 
     return results
 

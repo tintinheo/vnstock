@@ -221,6 +221,41 @@ class TestForeignFlowBatch:
             "basis": "not_available",
         }
 
+    @patch("core.foreign_flow_crawler.load_cached_foreign_flow")
+    @patch("core.foreign_flow_crawler.fetch_cafef_foreign_flow_tickers")
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_foreign_flow_tickers_large_batch_uses_cache_and_snapshot_without_cafef(
+        self,
+        mock_snapshot,
+        mock_cafef,
+        mock_cached,
+    ):
+        from core.macro_data import fetch_foreign_flow_tickers
+
+        cached_rows = []
+        for index in range(20):
+            cached_rows.append({
+                "ticker": "VCB",
+                "date": f"2026-05-{31 - index:02d}",
+                "net_value": 10_000_000_000,
+                "buy_value": 15_000_000_000,
+                "sell_value": 5_000_000_000,
+            })
+        mock_cached.return_value = pd.DataFrame(cached_rows)
+        mock_snapshot.return_value = [
+            {"SB": "MBB", "CP": 25_000, "FB": 300_000, "FS": 800_000},
+        ]
+
+        symbols = ["VCB", "MBB"] + [f"X{i:03d}" for i in range(130)]
+        result = fetch_foreign_flow_tickers(symbols)
+
+        mock_cafef.assert_not_called()
+        assert result["VCB"]["history_sessions"] == 20
+        assert result["VCB"]["is_20d_proxy"] is False
+        assert result["VCB"]["trend_20d"] == "accumulate"
+        assert result["MBB"]["net_buy_value"] == -12_500_000_000
+        assert result["MBB"]["is_20d_proxy"] is True
+
 
 class TestMarketForeignFlow:
     @patch("core.macro_data._fetch_kbs_market_snapshot")

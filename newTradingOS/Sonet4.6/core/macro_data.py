@@ -153,6 +153,7 @@ _KBS_HEADERS = {"User-Agent": "Mozilla/5.0", "Accept": "application/json"}
 # Simple TTL cache: (_data, _timestamp)
 _kbs_snapshot_cache: tuple[list, datetime | None] = ([], None)
 _KBS_CACHE_TTL = timedelta(minutes=5)
+_CAFEF_TICKER_LIVE_REFRESH_LIMIT = 120
 
 
 def _fetch_kbs_market_snapshot() -> list:
@@ -261,30 +262,74 @@ def _foreign_flow_from_snapshot_item(item: dict | None) -> dict:
     }
 
 
-def fetch_foreign_flow_tickers(symbols: list[str]) -> dict[str, dict]:
+def _cached_foreign_flow_summaries(symbols: list[str], sessions: int = 20) -> dict[str, dict]:
+    if not symbols:
+        return {}
+    try:
+        from core.foreign_flow_crawler import load_cached_foreign_flow, summarize_foreign_flow_history
+
+        cached = load_cached_foreign_flow()
+    except Exception as exc:
+        logger.debug("load cached foreign flow: %s", exc)
+        return {}
+
+    if cached is None or cached.empty or "ticker" not in cached.columns:
+        return {}
+
+    working = cached.copy()
+    working["ticker"] = working["ticker"].astype(str).str.strip().str.upper()
+    wanted = set(symbols)
+    working = working[working["ticker"].isin(wanted)]
+    if working.empty:
+        return {}
+
+    summaries = summarize_foreign_flow_history(working, sessions=sessions)
+    return {
+        symbol: summaries[symbol]
+        for symbol in symbols
+        if symbol in summaries
+    }
+
+
+def fetch_foreign_flow_tickers(
+    symbols: list[str],
+    *,
+    sessions: int = 20,
+    live_refresh_limit: int = _CAFEF_TICKER_LIVE_REFRESH_LIMIT,
+) -> dict[str, dict]:
     """Fetch foreign-flow data, preferring verified CafeF history over KBS snapshot."""
     if not symbols:
         return {}
 
     normalized = [str(symbol).strip().upper() for symbol in symbols if str(symbol).strip()]
+    unique_symbols = list(dict.fromkeys(normalized))
     exchange_map = {
         symbol: TICKER_EXCHANGE.get(symbol, "HOSE")
-        for symbol in normalized
+        for symbol in unique_symbols
     }
 
     history_results: dict[str, dict] = {}
-    try:
-        from core.foreign_flow_crawler import fetch_cafef_foreign_flow_tickers
-
-        history_results = fetch_cafef_foreign_flow_tickers(
-            normalized,
-            exchange_map=exchange_map,
-            sessions=20,
+    live_refresh_limit = max(0, int(live_refresh_limit or 0))
+    if len(unique_symbols) > live_refresh_limit:
+        history_results = _cached_foreign_flow_summaries(unique_symbols, sessions=sessions)
+        logger.info(
+            "Foreign-flow batch bounded for %d tickers: using %d cached CafeF summaries and snapshot fallback",
+            len(unique_symbols),
+            len(history_results),
         )
-    except Exception as exc:
-        logger.debug("CafeF foreign batch: %s", exc)
+    else:
+        try:
+            from core.foreign_flow_crawler import fetch_cafef_foreign_flow_tickers
 
-    missing = [symbol for symbol in normalized if symbol not in history_results]
+            history_results = fetch_cafef_foreign_flow_tickers(
+                unique_symbols,
+                exchange_map=exchange_map,
+                sessions=sessions,
+            )
+        except Exception as exc:
+            logger.debug("CafeF foreign batch: %s", exc)
+
+    missing = [symbol for symbol in unique_symbols if symbol not in history_results]
     lookup: dict[str, dict] = {}
     if missing:
         data = _fetch_kbs_market_snapshot()

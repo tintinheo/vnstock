@@ -9,6 +9,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 import streamlit as st
+from ui.components import render_guidance_callout, render_section_header
 
 from core.audit import (
     load_events, filter_events, get_event_detail_kind,
@@ -29,6 +30,13 @@ _SCAN_KIND_LABELS = {
     "summary": "Tổng hợp lần quét",
     "result": "Chi tiết từng mã",
 }
+_PRESET_LABELS = [
+    "Tất cả",
+    "Scanner summaries",
+    "BUY / STRONG BUY",
+    "Macro refreshes",
+    "Issues only",
+]
 
 
 def _format_scan_top_signals(top_signals: list[dict]) -> str:
@@ -40,11 +48,42 @@ def _format_scan_top_signals(top_signals: list[dict]) -> str:
     )
 
 
+def _apply_audit_preset(events: list[dict], preset: str) -> list[dict]:
+    if preset == "Scanner summaries":
+        return filter_events(events, actions=[ACTION_SCAN], detail_kinds=["summary"])
+    if preset == "BUY / STRONG BUY":
+        return [
+            event for event in events
+            if event.get("action") == ACTION_SCAN
+            and get_event_detail_kind(event) == "result"
+            and event.get("detail", {}).get("signal_action") in ("BUY", "STRONG BUY")
+        ]
+    if preset == "Macro refreshes":
+        return filter_events(events, actions=[ACTION_MACRO])
+    if preset == "Issues only":
+        flagged: list[dict] = []
+        for event in events:
+            detail = event.get("detail", {})
+            if event.get("result") in ("fail", "partial"):
+                flagged.append(event)
+                continue
+            if event.get("action") == ACTION_SCAN and get_event_detail_kind(event) == "result":
+                if detail.get("manip_flag") or not detail.get("regime_ok", True) or detail.get("message"):
+                    flagged.append(event)
+        return flagged
+    return events
+
+
 def _events_to_df(events: list[dict]) -> pd.DataFrame:
     rows = []
     for e in events:
         detail = e.get("detail", {})
         detail_kind = get_event_detail_kind(e)
+        signal = "—"
+        score = None
+        source = "—"
+        basis = "—"
+        notes = "—"
         # Build a human-readable summary from the detail dict
         if e["action"] == ACTION_OPEN:
             summary = (
@@ -54,6 +93,7 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                 f"SL {detail.get('stop_loss', 0):,.0f} "
                 f"TP {detail.get('take_profit', 0):,.0f}"
             )
+            notes = f"Entry {detail.get('entry_date', '—')}"
         elif e["action"] == ACTION_CLOSE:
             pnl = detail.get("pnl_pct", 0)
             sign = "+" if pnl >= 0 else ""
@@ -63,6 +103,7 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                 f"PnL: {sign}{pnl:.2f}% ({detail.get('pnl_vnd', 0):,.0f} VND) | "
                 f"Lý do: {detail.get('reason', '')}"
             )
+            notes = f"Sessions {detail.get('sessions', '—')}"
         elif e["action"] == ACTION_LOAD:
             uni = ", ".join(detail.get("universe", []))
             summary = (
@@ -70,12 +111,15 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                 f"{detail.get('loaded', 0)}/{detail.get('total', 0)} mã | "
                 f"{detail.get('days_back', '')} ngày"
             )
+            notes = uni or "—"
         elif e["action"] == ACTION_MACRO:
             summary = (
                 f"Score: {detail.get('macro_score', ''):.1f}/10 | "
                 f"Macro regime: {detail.get('macro_regime', '')} | "
                 f"VNI regime: {detail.get('regime', '')}"
             )
+            score = float(detail.get("macro_score", 0.0) or 0.0)
+            notes = detail.get("regime", "—")
         elif e["action"] == ACTION_SCAN:
             if detail.get("kind") == "result":
                 flags = []
@@ -99,6 +143,11 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                     f"ADV20: {float(detail.get('adv20_bn', 0.0)):.2f} bn"
                     f"{flag_text}"
                 )
+                signal = detail.get("signal_action", "—")
+                score = float(detail.get("score", 0.0) or 0.0)
+                source = detail.get("source", "—")
+                basis = detail.get("ff_basis", "—")
+                notes = "; ".join(flags) if flags else "—"
             else:
                 summary = (
                     f"TF: {e.get('timeframe') or '—'} | "
@@ -114,6 +163,9 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
                     f"Top: {_format_scan_top_signals(detail.get('top_signals', []))} | "
                     f"File: {os.path.basename(detail.get('audit_file', '—'))}"
                 )
+                basis = detail.get("foreign_flow_basis", "—")
+                score = float(detail.get("macro_score", 0.0) or 0.0)
+                notes = ", ".join(detail.get("macro_stale", [])) or "—"
         else:
             summary = str(detail)
 
@@ -128,16 +180,24 @@ def _events_to_df(events: list[dict]) -> pd.DataFrame:
             "Ticker":      e.get("ticker") or "—",
             "Timeframe":   e.get("timeframe") or "—",
             "Kết quả":     e.get("result", "ok").upper(),
+            "Tín hiệu":    signal,
+            "Điểm":        score,
+            "Nguồn":       source,
+            "Basis":       basis,
+            "Ghi chú":     notes,
             "Chi tiết":    summary,
         })
     if rows:
         return pd.DataFrame(rows)
     return pd.DataFrame(columns=["Thời gian", "Hành động", "Phân loại", "Ticker",
-                                  "Timeframe", "Kết quả", "Chi tiết"])
+                                  "Timeframe", "Kết quả", "Tín hiệu", "Điểm", "Nguồn", "Basis", "Ghi chú", "Chi tiết"])
 
 
 def render_audit_tab(lang: str = "VI") -> None:
-    st.subheader("📜 Nhật Ký Hoạt Động (Audit Log)")
+    render_section_header(
+        "📜 Nhật Ký Hoạt Động (Audit Log)",
+        "Dùng preset để bóc nhanh scan summaries, BUY signals, macro refreshes, hoặc các issue cần review.",
+    )
 
     # Load raw events
     events = load_events()
@@ -148,6 +208,9 @@ def render_audit_tab(lang: str = "VI") -> None:
 
     # ── Filters ────────────────────────────────────────────────
     st.markdown("#### 🔍 Bộ lọc")
+    preset = st.selectbox("Preset", _PRESET_LABELS, index=0, key="audit_preset")
+    scoped_events = _apply_audit_preset(events, preset)
+
     col1, col2, col3, col4, col5 = st.columns([2, 2, 1, 1, 1])
 
     with col1:
@@ -162,7 +225,7 @@ def render_audit_tab(lang: str = "VI") -> None:
 
     with col2:
         all_tickers = sorted({
-            e["ticker"] for e in events
+            e["ticker"] for e in scoped_events
             if e.get("ticker") and e["ticker"] not in ("", "—")
         })
         sel_tickers = st.multiselect(
@@ -175,7 +238,7 @@ def render_audit_tab(lang: str = "VI") -> None:
 
     with col3:
         all_tfs = sorted({
-            e.get("timeframe", "") for e in events
+            e.get("timeframe", "") for e in scoped_events
             if e.get("timeframe") and e["timeframe"] not in ("", "—")
         })
         sel_tf = st.selectbox(
@@ -211,7 +274,7 @@ def render_audit_tab(lang: str = "VI") -> None:
         kind for kind in ("summary", "result")
         if kind in {
             get_event_detail_kind(e)
-            for e in events
+            for e in scoped_events
             if e.get("action") == ACTION_SCAN
         }
     ]
@@ -234,7 +297,7 @@ def render_audit_tab(lang: str = "VI") -> None:
 
     # Apply filters
     filtered = filter_events(
-        events,
+        scoped_events,
         actions=sel_actions or None,
         tickers=sel_tickers or None,
         timeframe=sel_tf or None,
@@ -244,7 +307,11 @@ def render_audit_tab(lang: str = "VI") -> None:
         date_to=today_str if days_ago >= 0 else None,
     )
 
-    st.caption(f"**{len(filtered)}** sự kiện (tổng: {len(events)})")
+    render_guidance_callout(
+        "Audit scope",
+        f"{len(filtered)} sự kiện | preset: {preset} | scope: {len(scoped_events)}/{len(events)}",
+        tone="info",
+    )
 
     # ── Summary metrics (for trade actions) ────────────────────
     trade_events = [e for e in filtered if e["action"] in (ACTION_OPEN, ACTION_CLOSE)]
@@ -278,7 +345,7 @@ def render_audit_tab(lang: str = "VI") -> None:
         return ""
 
     styled = df.style.map(_highlight_result, subset=["Kết quả"])
-    st.dataframe(styled, width="stretch", hide_index=True)
+    st.dataframe(styled, width="stretch", hide_index=True, height=min(760, 56 + len(df) * 34))
 
     # ── Export ─────────────────────────────────────────────────
     csv = df.to_csv(index=False).encode("utf-8-sig")

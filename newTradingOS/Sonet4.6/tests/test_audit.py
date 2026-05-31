@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from core.audit import ACTION_CLOSE, ACTION_SCAN, filter_events, get_event_detail_kind
+from ui.audit_tab import _apply_audit_preset
 
 
 def _scan_summary_event(*, legacy: bool = False) -> dict:
@@ -89,3 +90,35 @@ def test_audit_tab_dataframe_marks_scan_subtypes():
     ])
 
     assert list(df["Phân loại"]) == ["Tổng hợp scan", "Tín hiệu từng mã"]
+
+
+def test_audit_tab_dataframe_exposes_structured_scan_columns():
+    from ui.audit_tab import _events_to_df
+
+    event = _scan_result_event()
+    event["detail"].update({
+        "source": "DNSE",
+        "ff_basis": "CafeF foreign history | 20 sessions",
+        "manip_flag": True,
+        "regime_ok": False,
+        "message": "macro weak",
+    })
+
+    df = _events_to_df([event])
+
+    assert df.iloc[0]["Tín hiệu"] == "BUY"
+    assert df.iloc[0]["Điểm"] == 82.0
+    assert df.iloc[0]["Nguồn"] == "DNSE"
+    assert df.iloc[0]["Basis"] == "CafeF foreign history | 20 sessions"
+    assert "manip" in df.iloc[0]["Ghi chú"]
+
+
+def test_apply_audit_preset_can_keep_buy_signals_only():
+    buy_event = _scan_result_event()
+    sell_event = _scan_result_event()
+    sell_event["detail"]["signal_action"] = "SELL"
+
+    filtered = _apply_audit_preset([buy_event, sell_event], "BUY / STRONG BUY")
+
+    assert len(filtered) == 1
+    assert filtered[0]["detail"]["signal_action"] == "BUY"
