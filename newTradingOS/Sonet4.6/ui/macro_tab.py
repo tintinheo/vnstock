@@ -352,17 +352,24 @@ border-radius:14px;padding:1rem 1.25rem;margin-bottom:0.75rem;background:{_stanc
             st.dataframe(pd.DataFrame(rows_ex), width="stretch", hide_index=True)
 
         _sym = breadth.get("symbols", {}) if isinstance(breadth, dict) else {}
-        _signal_groups = [
-            ("📈 Tăng mạnh", "up_strong"),
-            ("🟢 Tăng", "up"),
-            ("🔴 Giảm", "down"),
-            ("📉 Giảm mạnh", "down_strong"),
-        ]
-        for _label, _key in _signal_groups:
+        _signal_styles = {
+            "up_strong":   ("📈 Tăng mạnh",  "#00cc66", "#001a0d"),
+            "up":          ("🟢 Tăng",        "#33aa66", "#001a0d"),
+            "down":        ("🔴 Giảm",        "#cc4444", "#1a0000"),
+            "down_strong": ("📉 Giảm mạnh",  "#ff2222", "#2a0000"),
+        }
+        for _key, (_label, _fg, _bg) in _signal_styles.items():
             _tickers = _sym.get(_key, [])
             if _tickers:
                 with st.expander(f"{_label} — {len(_tickers)} mã", expanded=False):
-                    st.caption(", ".join(_tickers))
+                    _chips = "".join(
+                        f'<span style="display:inline-block;margin:2px 3px;padding:2px 8px;'
+                        f'border-radius:4px;background:{_bg};color:{_fg};'
+                        f'font-size:0.82rem;font-weight:600;border:1px solid {_fg}40;'
+                        f'letter-spacing:0.03em">{t}</span>'
+                        for t in _tickers
+                    )
+                    st.markdown(f'<div style="line-height:1.8">{_chips}</div>', unsafe_allow_html=True)
 
         if breadth_history:
             history_df = pd.DataFrame(breadth_history)
