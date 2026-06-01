@@ -77,11 +77,19 @@ def _parse_udf(raw: dict) -> pd.DataFrame:
 
 
 def _normalize_price_scale(df: pd.DataFrame) -> None:
-    """In-place: some APIs return x1000 VND (e.g. 25.6 instead of 25,600)."""
+    """In-place: some APIs return x1000 VND (e.g. 88.0 instead of 88,000).
+
+    Threshold rationale: any actively-traded VN stock has a real price >= 100 VND
+    (as of 2026, the lowest-priced stocks on HNX/UPCOM are ~120-200 VND).
+    Kilo-format API values for such stocks always return < 100.0
+    (e.g. 88.0 = 88,000 VND; 4.5 = 4,500 VND).
+    Using 500 as threshold would incorrectly multiply genuine 200-499 VND
+    penny stocks by 1000, silently corrupting their price series.
+    """
     if df.empty:
         return
     med = df["Close"].dropna().median()
-    if 0 < med < 500:
+    if 0 < med < 100:
         for col in ("Open", "High", "Low", "Close"):
             if col in df.columns:
                 df[col] = df[col] * 1000

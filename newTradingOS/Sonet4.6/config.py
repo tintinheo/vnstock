@@ -193,10 +193,53 @@ VN30_LIST: list[str] = [
     "REE","EIB","NVL","KDH","PDR","BVH",
 ]
 
-# VN100 = VN30 + next ~70 liquid HOSE stocks
-VN100_LIST: list[str] = sorted(set(
-    VN30_LIST + [t for t in HOSE_LIST if t not in VN30_LIST][:70]
-))
+# VN100 = VN30 + ~70 curated HOSE tickers beyond VN30, selected by
+# market-cap and liquidity (last verified: 2026-06).
+# IMPORTANT: Update this list ~quarterly as VN100 constituents rotate.
+# Do NOT replace with `HOSE_LIST[:70]` — that produces an alphabetically
+# sorted slice (ACB, AGR, ANV...) instead of the actual VN100 index.
+_VN100_EXTRA: list[str] = [
+    # Ngân hàng (ngoài VN30)
+    "ACB", "LPB", "MSB", "OCB", "SHB", "SSB", "TPB", "VIB",
+    # Chứng khoán
+    "HCM", "VIX", "VND",
+    # Bất động sản
+    "CII", "DIG", "DXG", "DXS", "HDG", "NLG", "SZC", "TDH",
+    # Dầu khí
+    "DPM", "PVD", "PVT",
+    # Thép & vật liệu
+    "HSG", "NKG",
+    # Điện
+    "BWE", "GEG", "NT2", "PC1", "TBC",
+    # Hóa chất
+    "BMP", "CSV", "DCM", "DGC",
+    # Xây dựng
+    "CTD", "EVE", "FCN", "VCG",
+    # Logistics & vận tải
+    "DVP", "GMD", "HAH", "VSC",
+    # Thực phẩm & nông nghiệp
+    "ANV", "BAF", "GTN", "KDF", "NSC", "PAN", "SBT",
+    # Dược
+    "DHG", "IMP",
+    # Bảo hiểm
+    "BIC", "BMI", "MIG", "PGI",
+    # Công nghệ
+    "CMG",
+    # Hàng không
+    "SCS",
+    # Bán lẻ & tiêu dùng
+    "KDF",
+    # Khu công nghiệp & đa ngành
+    "GEX", "HAG", "KBC", "KSB", "SZC", "TCH", "TCM",
+    # Tài nguyên & khai khoáng
+    "VGC", "VHC",
+]
+# Deduplicate và loại bỏ các ticker đã thuộc VN30 hoặc TICKER_EXCHANGE (HNX/UPCOM)
+_VN100_EXTRA = [
+    t for t in dict.fromkeys(_VN100_EXTRA)
+    if t not in VN30_LIST and t not in TICKER_EXCHANGE
+]
+VN100_LIST: list[str] = sorted(set(VN30_LIST + _VN100_EXTRA))
 
 # ─────────────────────────────────────────────────────────────
 # MULTI-TIMEFRAME CONFIGURATION

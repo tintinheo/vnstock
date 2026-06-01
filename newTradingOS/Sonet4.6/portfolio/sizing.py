@@ -243,10 +243,16 @@ def check_risk_budget(
     new_trade: dict,
     total_capital: float,
     tf: str,
-    max_portfolio_risk_pct: float = 0.20,
+    max_portfolio_risk_pct: float = 0.15,
 ) -> tuple[bool, str]:
     """
     Check if a new trade fits within risk budget.
+
+    Default max_portfolio_risk_pct reduced from 0.20 → 0.15 (VN-01 fix).
+    Rationale: VN market has ±7% daily limits, limited hedge instruments,
+    and no reliable circuit breaker. At 6 positions × 2.5% risk each = 15%
+    total capital at risk — already the practical maximum for retail traders.
+    Callers can still pass max_portfolio_risk_pct=0.20 for aggressive profiles.
 
     Returns
     -------

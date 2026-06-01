@@ -665,3 +665,87 @@ class TestVNTickSize:
         from core.scoring import compute_score
         sig = compute_score(ohlcv, "1M", exchange="HOSE", ticker="VCB")
         assert sig.take_profit > sig.price
+
+
+# ─────────────────────────────────────────────────────────────
+# VN-03 — MFI period follows cfg['volume_ma'], not hardcoded 14
+# ─────────────────────────────────────────────────────────────
+class TestMFIPeriodConsistency:
+    """VN-03 fix: MFI phải dùng cfg['volume_ma'] (giống CMF), không hardcode 14.
+
+    1W: volume_ma=5  → MFI responds to last 5 sessions only.
+    5M: volume_ma=20 → MFI smoother, captures monthly accumulation.
+    Dùng hardcode 14 trên 1W (5 phiên/tuần) là sai về kỹ thuật.
+    """
+
+    def _make_monotone_volume_df(self, n: int = 300) -> "pd.DataFrame":
+        import pandas as pd
+        dates = pd.bdate_range(end="2026-05-29", periods=n)
+        return pd.DataFrame({
+            "Open":   [50_000.0] * n,
+            "High":   [51_000.0] * n,
+            "Low":    [49_000.0] * n,
+            "Close":  [50_000.0] * n,
+            "Volume": [i * 100_000 for i in range(1, n + 1)],  # steadily increasing
+        }, index=dates)
+
+    def test_mfi_column_present_in_compute_all(self, ohlcv):
+        """compute_all phải trả về DataFrame có cột 'MFI'."""
+        from config import TIMEFRAME_CONFIG
+        from core.indicators import compute_all
+        cfg = TIMEFRAME_CONFIG["1M"]
+        result = compute_all(ohlcv.copy(), cfg)
+        assert "MFI" in result.columns, "MFI column missing from compute_all output"
+
+    def test_mfi_not_null_at_last_bar(self, ohlcv):
+        """MFI tại bar cuối cùng phải có giá trị (không NaN)."""
+        import pandas as pd
+        from config import TIMEFRAME_CONFIG
+        from core.indicators import compute_all
+        cfg = TIMEFRAME_CONFIG["1M"]
+        result = compute_all(ohlcv.copy(), cfg)
+        assert not pd.isna(result["MFI"].iloc[-1]), "MFI is NaN at last bar"
+
+    def test_mfi_and_cmf_use_same_period_in_compute_all(self, ohlcv):
+        """MFI và CMF đều dùng cfg['volume_ma'] — kết quả nhất quán."""
+        import pandas as pd
+        from config import TIMEFRAME_CONFIG
+        from core.indicators import compute_all
+        cfg = TIMEFRAME_CONFIG["1W"]   # volume_ma=5
+        result = compute_all(ohlcv.copy(), cfg)
+        assert "MFI" in result.columns
+        assert "CMF" in result.columns
+        assert not pd.isna(result["MFI"].iloc[-1])
+        assert not pd.isna(result["CMF"].iloc[-1])
+
+    def test_mfi_differs_by_period_between_1w_and_5m(self):
+        """MFI với period=5 (1W) và period=20 (5M) phải cho kết quả khác nhau."""
+        import pandas as pd
+        from config import TIMEFRAME_CONFIG
+        from core.indicators import compute_all
+        df_base = self._make_monotone_volume_df()
+        cfg_1w = TIMEFRAME_CONFIG["1W"]   # volume_ma=5
+        cfg_5m = TIMEFRAME_CONFIG["5M"]   # volume_ma=20
+        df_1w = compute_all(df_base.copy(), cfg_1w)
+        df_5m = compute_all(df_base.copy(), cfg_5m)
+        mfi_1w = float(df_1w["MFI"].iloc[-1])
+        mfi_5m = float(df_5m["MFI"].iloc[-1])
+        assert mfi_1w != mfi_5m, (
+            f"MFI with period=5 (1W) and period=20 (5M) should differ "
+            f"for monotone volume data, but both = {mfi_1w:.4f}"
+        )
+
+    @pytest.mark.parametrize("tf, expected_period", [
+        ("1W", 5),
+        ("2W", 10),
+        ("1M", 20),
+        ("3M", 20),
+        ("5M", 20),
+    ])
+    def test_volume_ma_config_matches_expected(self, tf, expected_period):
+        """cfg['volume_ma'] của từng TF phải đúng theo spec VN market."""
+        from config import TIMEFRAME_CONFIG
+        cfg = TIMEFRAME_CONFIG[tf]
+        assert cfg["volume_ma"] == expected_period, (
+            f"TF={tf}: volume_ma={cfg['volume_ma']}, expected {expected_period}"
+        )

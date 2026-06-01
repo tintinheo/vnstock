@@ -445,4 +445,11 @@ def compute_all(df: pd.DataFrame, cfg: dict, exchange: str = "HOSE") -> pd.DataF
     limit_pct = EXCHANGE_PRICE_LIMIT.get(exchange.upper(), 0.07)
     df["Streak"] = ceiling_floor_streak(close, limit_pct=limit_pct)
 
+    # Money Flow Index: period now follows cfg["volume_ma"] to match CMF (VN-03 fix).
+    # Previously hardcoded to period=14 for all timeframes — inconsistent with CMF
+    # which already used cfg["volume_ma"] (5 for 1W, 20 for 1M/3M/5M).
+    # MFI-5 for 1W is more responsive to short-term volume surges (correct for 5-session hold);
+    # MFI-20 for longer TFs is stabler and avoids noise-driven false signals.
+    df["MFI"] = money_flow_index(high, low, close, volume, cfg["volume_ma"])
+
     return df

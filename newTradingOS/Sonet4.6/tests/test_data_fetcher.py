@@ -61,6 +61,91 @@ class TestNormalizePriceScale:
 
 
 # ─────────────────────────────────────────────────────────────
+# BUG-01 regression tests: genuine low-priced stocks must NOT be scaled
+# ─────────────────────────────────────────────────────────────
+class TestNormalizePriceScaleEdge:
+    """Tests for the BUG-01 fix: threshold changed 500 → 100.
+
+    Context: HNX/UPCOM penny stocks can trade at 100-499 VND (genuine prices).
+    The old threshold of 500 would multiply these by 1000, corrupting the data.
+    The new threshold of 100 only triggers for kilo-format API values (e.g. 88.0
+    = 88,000 VND), which are always below 100 for any actively-traded VN stock.
+    """
+
+    def _df(self, med: float, n: int = 5) -> pd.DataFrame:
+        """Build a minimal DataFrame with the given median close."""
+        return pd.DataFrame({
+            "Open":   [med * 0.99] * n,
+            "High":   [med * 1.01] * n,
+            "Low":    [med * 0.98] * n,
+            "Close":  [med] * n,
+            "Volume": [1_000_000] * n,
+        })
+
+    def test_genuine_200_vnd_stock_not_scaled(self):
+        """Cổ phiếu giá 200 VND thực tế không bị nhân 1000 (BUG-01 regression)."""
+        df = self._df(200.0)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 200.0) < 1e-9, (
+            "200 VND stock should NOT be scaled; old threshold 500 would corrupt it"
+        )
+
+    def test_genuine_350_vnd_stock_not_scaled(self):
+        """Cổ phiếu giá 350 VND không bị nhân 1000."""
+        df = self._df(350.0)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 350.0) < 1e-9
+
+    def test_genuine_499_vnd_stock_not_scaled(self):
+        """Cổ phiếu giá 499 VND (sát ngưỡng cũ) không bị nhân 1000."""
+        df = self._df(499.0)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 499.0) < 1e-9
+
+    def test_kilo_format_88_is_scaled(self):
+        """API trả về 88.0 (= 88,000 VND) phải được nhân 1000."""
+        df = self._df(88.0)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 88_000.0) < 1e-9
+
+    def test_kilo_format_4_5_is_scaled(self):
+        """API trả về 4.5 (= 4,500 VND) phải được nhân 1000."""
+        df = self._df(4.5)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 4_500.0) < 1e-9
+
+    def test_boundary_99_is_scaled(self):
+        """Giá trị 99.0 nằm dưới ngưỡng 100 → bị scale (là kilo format)."""
+        df = self._df(99.0)
+        _normalize_price_scale(df)
+        assert df["Close"].iloc[0] > 1_000
+
+    def test_boundary_100_not_scaled(self):
+        """Giá trị 100.0 tại ngưỡng mới → không bị scale (là giá thực 100 VND)."""
+        df = self._df(100.0)
+        _normalize_price_scale(df)
+        assert abs(df["Close"].iloc[0] - 100.0) < 1e-9
+
+    def test_all_ohlc_columns_scaled_together(self):
+        """Khi scale, tất cả cột OHLC phải được nhân đồng thời."""
+        df = self._df(88.0)
+        df["Open"] = 87.0
+        df["High"] = 89.5
+        df["Low"]  = 86.5
+        _normalize_price_scale(df)
+        assert abs(df["Open"].iloc[0] - 87_000.0) < 1e-9
+        assert abs(df["High"].iloc[0] - 89_500.0) < 1e-9
+        assert abs(df["Low"].iloc[0]  - 86_500.0) < 1e-9
+        assert abs(df["Close"].iloc[0] - 88_000.0) < 1e-9
+
+    def test_volume_never_scaled(self):
+        """Volume không bao giờ bị nhân khi scale giá."""
+        df = self._df(88.0)
+        _normalize_price_scale(df)
+        assert df["Volume"].iloc[0] == 1_000_000
+
+
+# ─────────────────────────────────────────────────────────────
 # _clean_df
 # ─────────────────────────────────────────────────────────────
 class TestCleanDf:

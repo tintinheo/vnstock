@@ -25,6 +25,34 @@ from core.indicators import compute_all
 logger = logging.getLogger("TradingOS.scoring")
 
 
+# ────────────────────────────────────────────────────────────
+# RSI ZONE LOOKUP — calibrated per RSI period (BUG-05 fix)
+# ────────────────────────────────────────────────────────────
+# RSI-9 (1W timeframe) oscillates faster and reads higher values than RSI-14/21.
+# Using uniform zone boundaries penalises 1W signals: RSI-9=68 (normal trending)
+# would fall in the "slightly overbought" zone and score only 10 pts, while the
+# same stock scored with RSI-14=62 would get the maximum 15 pts.
+# Each entry: list of (lower_inclusive, upper_exclusive, points).
+_RSI_ZONES: dict[int, list[tuple[float, float, float]]] = {
+    9:  [(0, 35, 4), (35, 48, 12), (48, 68, 15), (68, 78, 10), (78, 88, 5), (88, 101, 2)],
+    14: [(0, 30, 4), (30, 45, 12), (45, 65, 15), (65, 75, 10), (75, 85,  5), (85, 101, 2)],
+    21: [(0, 28, 4), (28, 42, 12), (42, 62, 15), (62, 72, 10), (72, 82,  5), (82, 101, 2)],
+}
+
+
+def _rsi_score(rsi_v: float, rsi_period: int) -> float:
+    """Return RSI score (0–15 pts) using period-calibrated zone boundaries.
+
+    Falls back to period-14 zones for any non-standard period so the function
+    is safe to call from future timeframe configs that use unusual RSI periods.
+    """
+    zones = _RSI_ZONES.get(rsi_period, _RSI_ZONES[14])
+    for lo, hi, pts in zones:
+        if lo <= rsi_v < hi:
+            return float(pts)
+    return 2.0  # safety fallback (RSI >= 101 is mathematically impossible)
+
+
 @dataclass
 class SignalResult:
     ticker:      str
@@ -117,7 +145,12 @@ def compute_score(
         trend += 5
     if last["EMA_fast"] > last["EMA_slow"]:
         trend += 5
-    if last["SMA_fast"] > df["SMA_fast"].iloc[-3]:
+    # Adaptive slope window: proportional to sma_fast period so that
+    # 5M (sma_fast=50) checks slope over 10 bars (meaningful 9% of hold window)
+    # rather than 3 bars (0.3% change in SMA50 — indistinguishable from flat).
+    # 1W (sma_fast=5): max(3, 5//5)=3 bars; 5M (sma_fast=50): max(3,10)=10 bars.
+    slope_bars = max(3, cfg["sma_fast"] // 5)
+    if last["SMA_fast"] > df["SMA_fast"].iloc[-slope_bars]:
         trend += 4
     st_dir = float(last["ST_dir"]) if "ST_dir" in df.columns and not pd.isna(last["ST_dir"]) else 0.0
     if st_dir == 1.0:
@@ -136,26 +169,15 @@ def compute_score(
         mom += 3
     mom = min(mom, 20.0)
 
-    # ── 3. RSI  (15 pts) — VN-tuned zones ─────────────────────
-    # VN stocks can stay RSI 60-75 for weeks during a trend run.
-    # Penalising RSI>65 too harshly causes the scanner to miss the bulk
-    # of the trending phase. Deep oversold (<30) is dangerous in VN
-    # because margin-call cascades can persist for weeks.
+    # ── 3. RSI  (15 pts) — VN-tuned zones, calibrated per RSI period ──────
+    # Uses period-specific zone boundaries (see _RSI_ZONES / _rsi_score above).
+    # RSI-9 (1W) oscillates faster and reads higher: zone 48-68 = max pts.
+    # RSI-14 (2W/1M) classic zones: 45-65 = max pts.
+    # RSI-21 (3M/5M) smoother: 42-62 = max pts.
+    # Deep oversold (<30/28/35 depending on period) still scores low because
+    # margin-call cascades in VN can sustain oversold conditions for weeks.
     rsi_v   = float(last["RSI"]) if not pd.isna(last["RSI"]) else 50.0
-    rsi_pts = 0.0
-    if 45 <= rsi_v < 65:
-        rsi_pts = 15
-    elif 30 <= rsi_v < 45:
-        rsi_pts = 12
-    elif 65 <= rsi_v <= 75:
-        rsi_pts = 10
-    elif rsi_v < 30:
-        rsi_pts = 4
-    elif 75 < rsi_v <= 85:
-        rsi_pts = 5
-    else:
-        rsi_pts = 2
-    rsi_score = rsi_pts
+    rsi_score = _rsi_score(rsi_v, cfg["rsi_period"])
 
     # ── 4. VOLUME / FLOW  (20 pts) — VN-enhanced ───────────────
     # CMF and Streak are VN-specific additions:
@@ -199,13 +221,21 @@ def compute_score(
     # Falls back to today's net flow when net_20d is zero (not provided).
     # 2W included: 10-session hold is long enough for FF trends to matter;
     # a 2-week sustained foreign sell-off is clearly a negative signal.
+    # Threshold tiers (BUG-07 fix):
+    #   > 10B VND (1e10): mua ròng mạnh → 5 pts
+    #   > 1B  VND (1e9):  mua ròng đáng kể → 3 pts
+    #   > 0 but < 1B:     noise intraday, không đáng kể → 1 pt
+    #   < −10B VND:        bán ròng mạnh → 0 pts
+    #   < 0 nhưng > −10B:  bán ròng vừa/trung tính → 1 pt
     ff_pts = 0.0
     if tf in ("2W", "1M", "3M", "5M"):
         ff_ref = foreign_flow_net_20d if foreign_flow_net_20d != 0.0 else foreign_flow_net
         if ff_ref > 1e10:
             ff_pts = 5
-        elif ff_ref > 0:
+        elif ff_ref > 1e9:
             ff_pts = 3
+        elif ff_ref > 0:
+            ff_pts = 1
         elif ff_ref < -1e10:
             ff_pts = 0
         else:
@@ -227,7 +257,9 @@ def compute_score(
 
     # ── TOTAL ─────────────────────────────────────────────────
     score = trend + mom + rsi_score + vol + ff_pts + macro_pts + adx_pts
-    score = round(min(score, 100.0), 2)
+    # Clamp to [0, 100]: vol can be negative (streak floor -3 phiên → vol -= 3)
+    # which can push total below 0 when other components are also weak.
+    score = round(max(0.0, min(score, 100.0)), 2)
 
     # ── REGIME FILTER ─────────────────────────────────────────
     regime_ok = regime in cfg["regime_filter"]

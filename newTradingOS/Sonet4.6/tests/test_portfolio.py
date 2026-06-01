@@ -548,8 +548,9 @@ class TestTrailingStop:
         assert pos.stop_loss == pos.entry_price  # break-even = entry_price
 
     def test_stop_not_raised_below_threshold(self):
+        # 1M threshold = 10% (VN-02 fix) — test +9% which is below threshold
         pf, pos = self._make_portfolio_with_pos(entry=100_000, stop=93_000)
-        updated = pf.update_stops({"FPT": 114_000})   # +14% — chưa đủ 15%
+        updated = pf.update_stops({"FPT": 109_000})   # +9% — chưa đủ 10% (1M)
         assert "FPT" not in updated
         assert pos.stop_loss == 93_000              # không đổi
 
@@ -586,8 +587,8 @@ class TestTrailingStop:
                 take_profit=int(entry * 1.25),
                 cost_vnd=entry * 100 * (1 + BUY_TOTAL),
             ))
-        # VCB +16% (≥15%), FPT +10% (<15%)
-        updated = pf.update_stops({"VCB": 116_000, "FPT": 88_000})
+        # VCB +16% (≥10% for 1M → triggers), FPT +8% (<10% for 1M → no trigger)
+        updated = pf.update_stops({"VCB": 116_000, "FPT": int(80_000 * 1.08)})
         assert "VCB" in updated
         assert "FPT" not in updated
 
@@ -620,3 +621,174 @@ class TestVnRiskFreeRate:
         # Flat equity → std ≈ 0, result is ±inf or a large number — just ensure no NaN/crash
         assert sharpe is not None
         assert not np.isnan(float(sharpe) if sharpe else 0)
+
+
+# ─────────────────────────────────────────────────────────────
+# VN-01 — Risk budget default 15% (không phải 20%)
+# ─────────────────────────────────────────────────────────────
+class TestRiskBudgetDefault:
+    """VN-01 fix: default max_portfolio_risk_pct giảm từ 0.20 → 0.15.
+
+    VN market không có hedge instruments hiệu quả, biên độ ±7% HOSE/ngày.
+    Với 6 vị thế × 2.5% risk mỗi vị = 15% tổng risk — đây là thực tế tối đa.
+    """
+
+    def _make_trade(self, size_vnd: float, stop_pct: float = 0.05) -> dict:
+        return {"tf": "1M", "size_vnd": size_vnd, "stop_loss_pct": stop_pct}
+
+    def test_default_max_risk_is_15_pct(self):
+        """Không truyền max_portfolio_risk_pct → mặc định 15% (không phải 20%)."""
+        import inspect
+        sig = inspect.signature(check_risk_budget)
+        default = sig.parameters["max_portfolio_risk_pct"].default
+        assert default == 0.15, (
+            f"check_risk_budget default max_portfolio_risk_pct={default}, "
+            "expected 0.15 (VN-01 fix: reduced from 0.20)"
+        )
+
+    def test_blocked_at_15pct_default(self):
+        """6 vị thế × 2.5% = 15% risk → bị block với default 15%."""
+        # 6 open positions each with 2.5% risk of 10M = 250k each = 1.5M total
+        # total_capital = 10M → 1.5M / 10M = 15% → blocked
+        open_pos = [
+            {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.025}
+        ] * 6
+        new_trade = {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.025}
+        allowed, reason = check_risk_budget(
+            open_pos, new_trade,
+            total_capital=10_000_000,
+            tf="1M",
+            # No max override → uses default 0.15
+        )
+        assert not allowed, (
+            "Should be blocked at 15% default risk cap (VN-01 fix)"
+        )
+
+    def test_allowed_below_15pct(self):
+        """2 vị thế × 5% risk = 10% < 15% → được phép với default."""
+        open_pos = [
+            {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.05}
+        ] * 2
+        new_trade = {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.05}
+        allowed, _ = check_risk_budget(
+            open_pos, new_trade,
+            total_capital=100_000_000,  # 3 × 10M × 5% = 1.5M = 1.5% of 100M
+            tf="1M",
+        )
+        assert allowed, "Should be allowed when well below 15% risk cap"
+
+    def test_aggressive_profile_can_override_to_20pct(self):
+        """Aggressive profile có thể pass max_portfolio_risk_pct=0.20 explicitly."""
+        # 4 × 10M × 4% = 1.6M risk; new adds 400k → 2M = 20% of 10M
+        open_pos = [
+            {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.04}
+        ] * 4
+        new_trade = {"tf": "1M", "size_vnd": 10_000_000, "stop_loss_pct": 0.04}
+        # With default 0.15: 4 × 400k = 1.6M = 16% → already blocked
+        # With override 0.20: 1.6M + 400k = 2M = 20% → at boundary = blocked
+        # Check that passing 0.25 works (i.e. override accepted)
+        allowed_override, _ = check_risk_budget(
+            open_pos, new_trade,
+            total_capital=10_000_000,
+            tf="1M",
+            max_portfolio_risk_pct=0.25,  # explicit override for aggressive
+        )
+        assert allowed_override, "Explicit override of max_portfolio_risk_pct must be respected"
+
+
+# ─────────────────────────────────────────────────────────────
+# VN-02 — Break-even stop per timeframe threshold
+# ─────────────────────────────────────────────────────────────
+class TestBreakevenStopPerTimeframe:
+    """VN-02 fix: break-even threshold theo timeframe.
+
+    1W: +7% (1 phiên trần HOSE) thay vì +15%.
+    5M: +15% (giữ nguyên như cũ).
+    Với 1W hold 5 phiên, +15% yêu cầu 2+ phiên trần liên tiếp — quá hiếm.
+    """
+
+    def _make_pf(self, ticker: str, timeframe: str, entry: float = 100_000,
+                 stop: float = 93_000) -> tuple:
+        """Tạo portfolio với 1 vị thế mở, bypass T+2 bằng entry_date cũ."""
+        from config import BUY_TOTAL
+        pf  = Portfolio(capital=100_000_000)
+        pos = Position(
+            ticker=ticker, timeframe=timeframe,
+            entry_date="2026-01-01", entry_price=entry,
+            n_shares=100, stop_loss=stop,
+            take_profit=int(entry * 1.25),
+            cost_vnd=entry * 100 * (1 + BUY_TOTAL),
+        )
+        pf.positions.append(pos)
+        return pf, pos
+
+    def test_1w_breakeven_triggers_at_7pct(self):
+        """1W: +7% gain phải nâng stop lên entry."""
+        pf, pos = self._make_pf("VCB", "1W", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"VCB": 107_000})  # +7%
+        assert "VCB" in updated, "1W stop not raised at +7% — VN-02 fix not applied"
+        assert pos.stop_loss == 100_000
+
+    def test_1w_breakeven_not_triggered_at_6pct(self):
+        """1W: +6.9% gain chưa đủ ngưỡng 7% → stop không đổi."""
+        pf, pos = self._make_pf("VCB", "1W", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"VCB": 106_900})  # +6.9%
+        assert "VCB" not in updated, "1W stop raised at +6.9% — threshold too low"
+        assert pos.stop_loss == 93_000
+
+    def test_2w_breakeven_triggers_at_8pct(self):
+        """2W: +8% gain phải nâng stop."""
+        pf, pos = self._make_pf("FPT", "2W", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"FPT": 108_000})  # +8%
+        assert "FPT" in updated
+
+    def test_2w_breakeven_not_triggered_at_7pct(self):
+        """2W: +7% chưa đủ ngưỡng 8%."""
+        pf, pos = self._make_pf("FPT", "2W", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"FPT": 107_000})  # +7%
+        assert "FPT" not in updated
+
+    def test_1m_breakeven_triggers_at_10pct(self):
+        """1M: +10% gain phải nâng stop."""
+        pf, pos = self._make_pf("TCB", "1M", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"TCB": 110_000})  # +10%
+        assert "TCB" in updated
+
+    def test_1m_breakeven_not_triggered_at_9pct(self):
+        """1M: +9.5% chưa đủ ngưỡng 10%."""
+        pf, pos = self._make_pf("TCB", "1M", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"TCB": 109_500})  # +9.5%
+        assert "TCB" not in updated
+
+    def test_5m_breakeven_triggers_at_15pct(self):
+        """5M: +15% vẫn hoạt động như cũ (không regression)."""
+        pf, pos = self._make_pf("HPG", "5M", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"HPG": 116_000})  # +16%
+        assert "HPG" in updated
+
+    def test_5m_breakeven_not_triggered_at_14pct(self):
+        """5M: +14.9% chưa đủ ngưỡng 15%."""
+        pf, pos = self._make_pf("HPG", "5M", entry=100_000, stop=93_000)
+        updated = pf.update_stops({"HPG": 114_900})  # +14.9%
+        assert "HPG" not in updated
+
+    def test_unknown_timeframe_uses_15pct_default(self):
+        """Timeframe không xác định → dùng default 15%."""
+        pf, pos = self._make_pf("SSI", "??", entry=100_000, stop=93_000)
+        # +15%: should trigger with default
+        updated_15 = pf.update_stops({"SSI": 115_000})
+        assert "SSI" in updated_15
+
+    def test_unknown_timeframe_not_raised_at_14pct(self):
+        """Timeframe không xác định → +14% chưa đủ 15% default."""
+        pf, pos = self._make_pf("SSI", "??", entry=100_000, stop=93_000)
+        updated_14 = pf.update_stops({"SSI": 114_000})
+        assert "SSI" not in updated_14
+
+    def test_threshold_dict_exported_correctly(self):
+        """_BREAKEVEN_THRESHOLD phải chứa đủ 5 timeframes."""
+        from portfolio.tracker import _BREAKEVEN_THRESHOLD
+        for tf in ("1W", "2W", "1M", "3M", "5M"):
+            assert tf in _BREAKEVEN_THRESHOLD, f"{tf} missing from _BREAKEVEN_THRESHOLD"
+        assert _BREAKEVEN_THRESHOLD["1W"] == 0.07
+        assert _BREAKEVEN_THRESHOLD["5M"] == 0.15

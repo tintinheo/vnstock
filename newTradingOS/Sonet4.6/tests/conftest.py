@@ -81,6 +81,47 @@ def ohlcv_small():
     return _make_ohlcv_small()
 
 
+def _make_ohlcv_floor_streak(n: int = 300, floor_days: int = 3) -> pd.DataFrame:
+    """Neutral base data followed by `floor_days` consecutive floor-lock bars.
+
+    Each floor bar has close ~7% below previous close (HOSE price limit).
+    Used to test that score stays >= 0 even when streak penalty accumulates.
+    """
+    base = _make_ohlcv(n=n, mu=0.0, sigma=0.005, seed=77)
+    dates = pd.bdate_range(end="2026-05-29", periods=n + floor_days)
+    rows = []
+    last_close = float(base["Close"].iloc[-1])
+    base_dates = list(dates[:n])
+    for i, row in enumerate(base.itertuples()):
+        rows.append({
+            "Open":   float(row.Open),
+            "High":   float(row.High),
+            "Low":    float(row.Low),
+            "Close":  float(row.Close),
+            "Volume": int(row.Volume),
+        })
+    # Append floor-lock bars: close drops ~7% each session, volume collapses
+    for j in range(floor_days):
+        floor_close = round(last_close * (1 - 0.069), 0)  # just below 7% limit
+        rows.append({
+            "Open":   floor_close,
+            "High":   floor_close,
+            "Low":    floor_close,
+            "Close":  floor_close,
+            "Volume": 50_000,  # thin volume during floor sessions
+        })
+        last_close = floor_close
+    df = pd.DataFrame(rows, index=dates[:n + floor_days])
+    df.index.name = "Date"
+    return df
+
+
+@pytest.fixture
+def ohlcv_floor_streak():
+    """300 neutral bars + 3 consecutive floor-lock bars (~-7%/session)."""
+    return _make_ohlcv_floor_streak()
+
+
 @pytest.fixture
 def ohlcv_prices(ohlcv):
     """Just the Close series from synthetic data."""

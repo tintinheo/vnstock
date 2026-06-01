@@ -28,6 +28,22 @@ PORTFOLIO_FILE = os.path.join(
 )
 
 
+# Break-even stop thresholds per timeframe (VN-02 fix).
+# For short holds (1W = 5 sessions) raising the stop requires only +7% gain
+# (1 HOSE trần session) rather than +15%, making the mechanism actually useful.
+# Longer holds retain progressively higher thresholds to avoid premature stop.
+# _BREAKEVEN_THRESHOLD_DEFAULT preserves existing behaviour for positions whose
+# timeframe is unknown or not in the dict (e.g. manual positions).
+_BREAKEVEN_THRESHOLD: dict[str, float] = {
+    "1W": 0.07,
+    "2W": 0.08,
+    "1M": 0.10,
+    "3M": 0.12,
+    "5M": 0.15,
+}
+_BREAKEVEN_THRESHOLD_DEFAULT = 0.15
+
+
 def _coerce_iso_date(value: str | date | None) -> date:
     if value is None:
         return date.today()
@@ -249,13 +265,17 @@ class Portfolio:
             if cur is None or pos.entry_price <= 0:
                 continue
             gain_pct = (cur - pos.entry_price) / pos.entry_price
-            # Break-even: nâng stop lên entry_price khi lãi >= 15%
+            # Break-even: nâng stop lên entry_price theo ngưỡng từng timeframe.
+            # 1W: +7% (1 phiên trần HOSE); 5M: +15% (giữ nguyên như cũ).
             # Chỉ nâng khi stop hiện tại còn thấp hơn entry (tránh gọi lại)
-            if gain_pct >= 0.15 and pos.stop_loss < pos.entry_price:
+            threshold = _BREAKEVEN_THRESHOLD.get(
+                pos.timeframe, _BREAKEVEN_THRESHOLD_DEFAULT
+            )
+            if gain_pct >= threshold and pos.stop_loss < pos.entry_price:
                 pos.stop_loss = pos.entry_price
                 updated.append(pos.ticker)
-                logger.info("Break-even stop: %s stop nâng lên %.0f",
-                            pos.ticker, pos.entry_price)
+                logger.info("Break-even stop: %s stop nâng lên %.0f (threshold=%.0f%%)",
+                            pos.ticker, pos.entry_price, threshold * 100)
         return updated
 
     def to_dict(self) -> dict:

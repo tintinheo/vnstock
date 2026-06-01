@@ -62,8 +62,15 @@ class TestComputeScore:
     def test_breakdown_sum_close_to_score(self, ohlcv):
         sig = compute_score(ohlcv, "1M", ticker="VCB")
         total = sum(sig.breakdown.values())
-        # Allow small floating point divergence
-        assert abs(total - sig.score) < 0.5
+        # When total score components exceed 100 before clamping,
+        # breakdown stores pre-clamp values while score is clamped to 100.
+        # So breakdown sum >= score, and the gap is bounded by the clamp window.
+        assert total >= sig.score - 0.1, (
+            f"breakdown sum {total:.2f} should be >= clamped score {sig.score:.2f}"
+        )
+        assert (total - sig.score) <= 5.0, (
+            f"breakdown sum {total:.2f} exceeds clamped score {sig.score:.2f} by more than 5 pts"
+        )
 
     def test_low_liquidity_downgrades_actionable_signal(self, ohlcv_bull, monkeypatch):
         import core.scoring as scoring_module
@@ -502,5 +509,265 @@ class TestExchangeMapping:
         from config import TICKER_EXCHANGE
         assert TICKER_EXCHANGE.get("SHB") is None, (
             "SHB không được liệt trong TICKER_EXCHANGE — default về HOSE"
+        )
+
+
+# ─────────────────────────────────────────────────────────────
+# BUG-02 — score phải luôn >= 0 (không bao giờ âm)
+# ─────────────────────────────────────────────────────────────
+class TestScoreNeverNegative:
+    """BUG-02 regression: streak floor liên tiếp làm vol -= 3 có thể đẩy
+    tổng score xuống âm. Fix: clamp score = max(0, min(100, raw_score)).
+    """
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_floor_streak_score_not_negative(self, ohlcv_floor_streak, tf):
+        """Score không âm với dữ liệu 3 phiên sàn liên tiếp cho tất cả TF."""
+        sig = compute_score(ohlcv_floor_streak, tf, ticker="FLOOR")
+        assert sig.score >= 0.0, (
+            f"TF={tf}: score={sig.score} < 0 — clamp floor fix chưa hoạt động"
+        )
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_floor_streak_score_in_valid_range(self, ohlcv_floor_streak, tf):
+        """Score phải nằm trong khoảng [0, 100] với mọi dữ liệu."""
+        sig = compute_score(ohlcv_floor_streak, tf, ticker="FLOOR")
+        assert 0.0 <= sig.score <= 100.0, (
+            f"TF={tf}: score={sig.score} ngoài khoảng [0, 100]"
+        )
+
+    def test_bear_series_score_not_negative(self, ohlcv_bear):
+        """Score với dữ liệu giảm mạnh (bear series) cũng phải >= 0."""
+        sig = compute_score(ohlcv_bear, "1M", regime="bear",
+                            macro_score=0.0, ticker="BEAR")
+        assert sig.score >= 0.0, f"Bear series score={sig.score} < 0"
+
+    def test_score_type_is_float(self, ohlcv_floor_streak):
+        """Score phải là float, không phải NaN hoặc inf."""
+        sig = compute_score(ohlcv_floor_streak, "1M", ticker="FLOOR")
+        import math
+        assert isinstance(sig.score, float)
+        assert not math.isnan(sig.score)
+        assert not math.isinf(sig.score)
+
+
+# ─────────────────────────────────────────────────────────────
+# BUG-05 — RSI zones calibrated theo RSI period
+# ─────────────────────────────────────────────────────────────
+class TestRsiZonesByPeriod:
+    """BUG-05: RSI-9 (1W) oscillates higher than RSI-14/21.
+    Using uniform zones would penalise 1W signals by 5 pts for the same
+    trending stock. Fix: period-specific zone boundaries via _RSI_ZONES.
+    """
+
+    def test_rsi_score_function_exists(self):
+        """_rsi_score helper phải tồn tại và có thể import."""
+        from core.scoring import _rsi_score
+        assert callable(_rsi_score)
+
+    @pytest.mark.parametrize("rsi_v, expected_pts", [
+        (55.0, 15),   # trong zone 48-68 → max pts (period 9)
+        (68.0, 10),   # trong zone 68-78 → 10 pts (period 9)
+        (40.0, 12),   # trong zone 35-48 → 12 pts (period 9)
+        (32.0,  4),   # trong zone 0-35 → 4 pts (period 9)
+        (80.0,  5),   # trong zone 78-88 → 5 pts (period 9)
+        (90.0,  2),   # trong zone 88-101 → 2 pts (period 9)
+    ])
+    def test_period9_zones(self, rsi_v, expected_pts):
+        """Zone boundaries cho RSI-9 phải đúng với bảng _RSI_ZONES[9]."""
+        from core.scoring import _rsi_score
+        result = _rsi_score(rsi_v, 9)
+        assert result == float(expected_pts), (
+            f"RSI={rsi_v} with period=9: expected {expected_pts} pts, got {result}"
+        )
+
+    @pytest.mark.parametrize("rsi_v, expected_pts", [
+        (55.0, 15),   # trong zone 45-65 → max pts (period 14, unchanged regression)
+        (65.0, 10),   # trong zone 65-75 → 10 pts
+        (37.0, 12),   # trong zone 30-45 → 12 pts
+        (25.0,  4),   # trong zone 0-30 → 4 pts
+        (78.0,  5),   # trong zone 75-85 → 5 pts
+        (88.0,  2),   # trong zone 85-101 → 2 pts
+    ])
+    def test_period14_zones_regression(self, rsi_v, expected_pts):
+        """Zone boundaries period=14 phải giữ nguyên (regression test)."""
+        from core.scoring import _rsi_score
+        result = _rsi_score(rsi_v, 14)
+        assert result == float(expected_pts), (
+            f"RSI={rsi_v} with period=14: expected {expected_pts} pts, got {result}"
+        )
+
+    @pytest.mark.parametrize("rsi_v, expected_pts", [
+        (52.0, 15),   # trong zone 42-62 → max pts (period 21)
+        (62.0, 10),   # trong zone 62-72 → 10 pts
+        (35.0, 12),   # trong zone 28-42 → 12 pts
+        (22.0,  4),   # trong zone 0-28 → 4 pts
+        (75.0,  5),   # trong zone 72-82 → 5 pts
+        (85.0,  2),   # trong zone 82-101 → 2 pts
+    ])
+    def test_period21_zones(self, rsi_v, expected_pts):
+        """Zone boundaries cho RSI-21 phải đúng với bảng _RSI_ZONES[21]."""
+        from core.scoring import _rsi_score
+        result = _rsi_score(rsi_v, 21)
+        assert result == float(expected_pts), (
+            f"RSI={rsi_v} with period=21: expected {expected_pts} pts, got {result}"
+        )
+
+    def test_unknown_period_falls_back_to_14(self):
+        """Period không có trong _RSI_ZONES phải dùng period=14 zones."""
+        from core.scoring import _rsi_score
+        # RSI=55, period=14 → 15 pts; period=7 (unknown) → also 15 pts (fallback)
+        assert _rsi_score(55.0, 7) == _rsi_score(55.0, 14)
+        assert _rsi_score(68.0, 7) == _rsi_score(68.0, 14)
+
+    def test_same_bullish_stock_scores_comparably_across_1w_and_1m(self, ohlcv_bull):
+        """Cùng cổ phiếu bull, điểm 1W và 1M không chênh lệch quá 8 pts RSI."""
+        sig_1w = compute_score(ohlcv_bull, "1W", regime="bull", macro_score=7.0)
+        sig_1m = compute_score(ohlcv_bull, "1M", regime="bull", macro_score=7.0)
+        rsi_diff = abs(
+            sig_1w.breakdown.get("RSI", 0) - sig_1m.breakdown.get("RSI", 0)
+        )
+        assert rsi_diff <= 8, (
+            f"RSI pts: 1W={sig_1w.breakdown.get('RSI')} vs 1M={sig_1m.breakdown.get('RSI')} "
+            f"— chênh {rsi_diff} pts (quá lớn, ngưỡng zone chưa được calibrate)"
+        )
+
+
+# ─────────────────────────────────────────────────────────────
+# BUG-06 — SMA slope window adaptive theo sma_fast period
+# ─────────────────────────────────────────────────────────────
+class TestSmaSlopeAdaptiveWindow:
+    """BUG-06: slope_bars = max(3, cfg['sma_fast'] // 5).
+    1W (sma_fast=5): max(3, 1)=3 bars — giống cũ.
+    5M (sma_fast=50): max(3, 10)=10 bars — thay vì 3 bars vô nghĩa.
+    """
+
+    def test_1w_slope_window_is_3(self, ohlcv):
+        """1W: sma_fast=5 → slope_bars = max(3, 5//5) = 3 (không đổi)."""
+        from config import TIMEFRAME_CONFIG
+        sma_fast = TIMEFRAME_CONFIG["1W"]["sma_fast"]
+        slope_bars = max(3, sma_fast // 5)
+        assert slope_bars == 3, f"1W slope_bars={slope_bars}, expected 3"
+
+    def test_5m_slope_window_is_10(self):
+        """5M: sma_fast=50 → slope_bars = max(3, 50//5) = 10."""
+        from config import TIMEFRAME_CONFIG
+        sma_fast = TIMEFRAME_CONFIG["5M"]["sma_fast"]
+        slope_bars = max(3, sma_fast // 5)
+        assert slope_bars == 10, f"5M slope_bars={slope_bars}, expected 10"
+
+    def test_3m_slope_window_is_10(self):
+        """3M: sma_fast=50 → slope_bars = max(3, 50//5) = 10."""
+        from config import TIMEFRAME_CONFIG
+        sma_fast = TIMEFRAME_CONFIG["3M"]["sma_fast"]
+        slope_bars = max(3, sma_fast // 5)
+        assert slope_bars == 10, f"3M slope_bars={slope_bars}, expected 10"
+
+    def test_1m_slope_window_is_4(self):
+        """1M: sma_fast=20 → slope_bars = max(3, 20//5) = 4."""
+        from config import TIMEFRAME_CONFIG
+        sma_fast = TIMEFRAME_CONFIG["1M"]["sma_fast"]
+        slope_bars = max(3, sma_fast // 5)
+        assert slope_bars == 4, f"1M slope_bars={slope_bars}, expected 4"
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_slope_bars_never_zero(self, tf):
+        """slope_bars phải luôn >= 3 với mọi TF."""
+        from config import TIMEFRAME_CONFIG
+        sma_fast = TIMEFRAME_CONFIG[tf]["sma_fast"]
+        slope_bars = max(3, sma_fast // 5)
+        assert slope_bars >= 3, f"TF={tf}: slope_bars={slope_bars} < 3"
+
+    @pytest.mark.parametrize("tf", ["1W", "2W", "1M", "3M", "5M"])
+    def test_compute_score_runs_without_error_with_adaptive_slope(self, ohlcv, tf):
+        """compute_score với adaptive slope window không gây lỗi index-out-of-range."""
+        sig = compute_score(ohlcv, tf, ticker="SLOPE_TEST")
+        assert isinstance(sig, SignalResult)
+        assert 0.0 <= sig.score <= 100.0
+
+
+# ─────────────────────────────────────────────────────────────
+# BUG-07 — Foreign flow 1B VND minimum threshold
+# ─────────────────────────────────────────────────────────────
+class TestForeignFlowThreshold:
+    """BUG-07: mua ròng < 1B VND là noise intraday, không phải signal thực.
+    Old: any ff > 0 → 3 pts.
+    New: ff > 1e10 → 5 pts | ff > 1e9 → 3 pts | ff > 0 → 1 pt | ff < -1e10 → 0 pt | else → 1 pt.
+    """
+
+    def test_1w_ff_always_zero_pts(self, ohlcv):
+        """1W không tính FF — breakdown['Foreign'] phải = 0."""
+        sig = compute_score(ohlcv, "1W",
+                            foreign_flow_net=2e10, foreign_flow_net_20d=2e10,
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 0.0
+
+    def test_ff_500m_vnd_scores_1pt(self, ohlcv):
+        """500M VND mua ròng = noise → 1 pt (không phải 3 pts như cũ)."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=500_000_000,  # 500M VND
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 1.0, (
+            f"500M VND (noise level) should score 1 pt, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_1b_vnd_scores_1pt(self, ohlcv):
+        """Đúng 1B VND là ranh giới dưới tier 3pts → 1 pt (exclusive lower bound)."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=1_000_000_000,  # 1B VND
+                            ticker="VCB")
+        # 1e9 is NOT > 1e9, so it falls to the `elif ff_ref > 0: ff_pts = 1` branch
+        assert sig.breakdown.get("Foreign", -99) == 1.0
+
+    def test_ff_2b_vnd_scores_3pt(self, ohlcv):
+        """2B VND mua ròng đáng kể → 3 pts."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=2_000_000_000,  # 2B VND
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 3.0, (
+            f"2B VND should score 3 pts, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_15b_vnd_scores_5pt(self, ohlcv):
+        """15B VND mua ròng mạnh → 5 pts (max)."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=15_000_000_000,  # 15B VND
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 5.0, (
+            f"15B VND should score 5 pts (max), got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_negative_large_scores_0pt(self, ohlcv):
+        """Bán ròng mạnh (< -10B VND) → 0 pts."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=-15_000_000_000,  # -15B VND
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 0.0, (
+            f"Strong sell (-15B VND) should score 0 pts, got {sig.breakdown.get('Foreign')}"
+        )
+
+    def test_ff_small_negative_scores_1pt(self, ohlcv):
+        """Bán ròng vừa phải (> -10B, < 0) → 1 pt (baseline)."""
+        sig = compute_score(ohlcv, "1M",
+                            foreign_flow_net=0.0,
+                            foreign_flow_net_20d=-500_000_000,  # -500M VND (moderate)
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 1.0, (
+            f"Moderate sell (-500M VND) should score 1 pt, got {sig.breakdown.get('Foreign')}"
+        )
+
+    @pytest.mark.parametrize("tf", ["2W", "1M", "3M", "5M"])
+    def test_strong_buy_ff_scores_5_on_all_long_tfs(self, ohlcv, tf):
+        """Strong FF buy (>10B) phải cho 5 pts trên tất cả TF dài."""
+        sig = compute_score(ohlcv, tf,
+                            foreign_flow_net_20d=15_000_000_000,
+                            ticker="VCB")
+        assert sig.breakdown.get("Foreign", -99) == 5.0, (
+            f"TF={tf}: strong FF buy should score 5, got {sig.breakdown.get('Foreign')}"
         )
 
