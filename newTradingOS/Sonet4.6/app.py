@@ -365,54 +365,69 @@ sb.title("🏛️ NewTradingOS v14.0")
 sb.caption("Vietnam Multi-Timeframe Trading Platform")
 sb.divider()
 
-# Language
-lang_choice = sb.radio(
-    "🌐 Language / Ngôn ngữ",
-    ["Tiếng Việt 🇻🇳", "English 🇬🇧"],
-    index=0 if lang == "VI" else 1,
-    horizontal=True,
-)
-st.session_state.lang = "VI" if "Việt" in lang_choice else "EN"
-lang = st.session_state.lang
+# ── Universe & Controls ───────────────────────────────────────
+with sb.expander("⚙️ Universe & Controls", expanded=True):
+    # Language
+    lang_choice = st.radio(
+        "🌐 Language",
+        ["Tiếng Việt 🇻🇳", "English 🇬🇧"],
+        index=0 if lang == "VI" else 1,
+        horizontal=True,
+    )
+    st.session_state.lang = "VI" if "Việt" in lang_choice else "EN"
+    lang = st.session_state.lang
+
+    st.divider()
+
+    review_layout = st.radio(
+        "Chế độ review",
+        ["Guided review", "Advanced tabs"],
+        index=0,
+        help="Guided review gom scanner vào một workspace; Advanced tabs giữ 5 tab scanner riêng.",
+    )
+
+    # Watchlist editor
+    wl_str = st.text_area(
+        "Watchlist (mỗi mã 1 dòng)",
+        value="\n".join(st.session_state.watchlist),
+        height=130,
+        key="wl_editor",
+    )
+    new_wl = [s.strip().upper() for s in wl_str.split("\n") if s.strip()]
+    if new_wl != st.session_state.watchlist:
+        st.session_state.watchlist = new_wl
+
+    universe_choices = st.multiselect(
+        "Scan universe",
+        ["Watchlist", "VN30", "VN100", "Market Scan", "HOSE", "HNX", "UPCOM"],
+        default=["Watchlist"],
+        format_func=_universe_label,
+        key="data_universe",
+    )
+    st.caption(
+        f"Market Scan giữ curated universe ({len(MARKET_SCAN_LIST)} mã). "
+        "HOSE/HNX/UPCOM dùng live listing master khi khả dụng."
+    )
+    days_back = st.slider("Lookback days", 180, 1095, 730, step=90, key="days_back")
 
 sb.divider()
-sb.subheader("⚙️ Cài đặt" if lang == "VI" else "⚙️ Settings")
+universe_choices = st.session_state.get("data_universe", ["Watchlist"])
+days_back = st.session_state.get("days_back", 730)
 
-review_layout = sb.radio(
-    "Chế độ review",
-    ["Guided review", "Advanced tabs"],
-    index=0,
-    help="Guided review gom scanner vào một workspace; Advanced tabs giữ 5 tab scanner riêng.",
-)
+# ── Session Actions ───────────────────────────────────────────
+_btn_col1, _btn_col2 = sb.columns(2)
+_do_refresh = _btn_col1.button("🔄 Tải & Macro", type="primary", key="btn_refresh_all",
+                               help="Tải dữ liệu giá + cập nhật macro trong một bước.",
+                               use_container_width=True)
+_do_macro_only = _btn_col2.button("🌐 Macro only", key="btn_macro_only",
+                                  help="Chỉ cập nhật macro/regime, giữ nguyên dữ liệu giá.",
+                                  use_container_width=True)
+_do_load_only = sb.button("📥 Chỉ tải dữ liệu giá", key="btn_load_only",
+                          help="Tải/làm mới dữ liệu giá mà không cập nhật macro.",
+                          use_container_width=True)
 
-# Watchlist editor
-wl_str = sb.text_area(
-    "Watchlist (mỗi mã 1 dòng)",
-    value="\n".join(st.session_state.watchlist),
-    height=180,
-    key="wl_editor",
-)
-new_wl = [s.strip().upper() for s in wl_str.split("\n") if s.strip()]
-if new_wl != st.session_state.watchlist:
-    st.session_state.watchlist = new_wl
-
-# Data controls
-sb.divider()
-universe_choices = sb.multiselect(
-    "Scan universe",
-    ["Watchlist", "VN30", "VN100", "Market Scan", "HOSE", "HNX", "UPCOM"],
-    default=["Watchlist"],
-    format_func=_universe_label,
-    key="data_universe",
-)
-sb.caption(
-    f"Market Scan giữ curated universe ({len(MARKET_SCAN_LIST)} mã). "
-    "HOSE/HNX/UPCOM dùng live listing master khi khả dụng và sẽ fallback về bucket cấu hình nếu nguồn live không sẵn sàng."
-)
-days_back = sb.slider("Lookback days", 180, 1095, 730, step=90, key="days_back")
-
-# Load / Refresh
-if sb.button("🔄 Tải Dữ Liệu", type="primary", key="btn_load"):
+# ── Shared load-data logic ───────────────────────────────────
+def _run_load_data() -> None:
     sb.caption("🔎 Đang resolve universe…")
     symbols, universe_meta = resolve_universe_symbols(
         universe_choices or ["Watchlist"],
@@ -478,7 +493,8 @@ if sb.button("🔄 Tải Dữ Liệu", type="primary", key="btn_load"):
         result="ok" if _loaded == _total else "partial",
     )
 
-if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
+# ── Shared macro-update logic ────────────────────────────────
+def _run_macro_update() -> None:
     with st.spinner("Đang tải dữ liệu vĩ mô…"):
         macro = fetch_macro_indicators()
         st.session_state.macro_data  = macro
@@ -492,9 +508,6 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
 
         st.session_state.macro_stale  = stale
 
-        # Fetch per-ticker foreign flow snapshot for all loaded tickers.
-        # KBS currently provides session-level net flow only; true 20-session
-        # continuity is not available from this endpoint.
         _loaded_tickers = list(st.session_state.get("data_dict", {}).keys())
         if _loaded_tickers:
             from core.macro_data import fetch_foreign_flow_tickers
@@ -528,6 +541,11 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         },
     )
 
+if _do_refresh or _do_load_only:
+    _run_load_data()
+if _do_refresh or _do_macro_only:
+    _run_macro_update()
+
 sb.divider()
 from ml.lstm_model import TF_AVAILABLE
 from ml.classical_models import XGB_AVAILABLE, PROPHET_AVAILABLE, ARIMA_AVAILABLE
@@ -538,10 +556,10 @@ workflow_state = _workflow_state(
     st.session_state.get("macro_data", {}),
     st.session_state.get("macro_stale", []),
 )
-sb.markdown("#### 🧭 Workflow")
-sb.caption(f"Dữ liệu: {workflow_state['data_value']}")
-sb.caption(f"Macro: {workflow_state['macro_value']}")
-sb.caption(f"Tiếp theo: {workflow_state['next_action']}")
+with sb.expander("🧭 Workflow Status", expanded=False):
+    st.caption(f"Dữ liệu: {workflow_state['data_value']}")
+    st.caption(f"Macro: {workflow_state['macro_value']}")
+    st.caption(f"Tiếp theo: **{workflow_state['next_action']}**")
 
 with sb.expander("🧪 System & Model Status", expanded=False):
     st.caption("**Model availability:**")
@@ -566,9 +584,35 @@ data_dict     = st.session_state.data_dict
 portfolio     = st.session_state.portfolio
 
 if not data_dict:
-    st.info(
-        "👈 Nhấn **Tải Dữ Liệu** ở sidebar để bắt đầu, "
-        "sau đó nhấn **Cập nhật Macro**."
+    # ── Onboarding card ───────────────────────────────────────
+    _step1_done = bool(data_dict)
+    _step2_done = bool(macro_data)
+    _s = lambda done: "✅" if done else "○"
+    st.markdown(
+        f"""
+<div style='border:1px solid #232b3d;border-radius:14px;padding:1.1rem 1.4rem;
+background:#151b28;margin-bottom:1rem;'>
+  <div style='font-size:0.82rem;color:#9db0c9;margin-bottom:0.6rem;'>🚀 Bắt đầu trong 3 bước</div>
+  <div style='display:flex;flex-wrap:wrap;gap:1.5rem;'>
+    <div style='flex:1;min-width:150px;'>
+      <div style='font-weight:700;color:#fafafa;'>① Tải Dữ Liệu</div>
+      <div style='font-size:0.82rem;color:#9db0c9;margin-top:2px;'>Chọn universe → Nhấn 🔄 Tải & Macro</div>
+      <div style='margin-top:4px;font-size:0.9rem;'>⏳ Chưa hoàn thành</div>
+    </div>
+    <div style='flex:1;min-width:150px;opacity:0.5;'>
+      <div style='font-weight:700;color:#fafafa;'>② Cập nhật Macro</div>
+      <div style='font-size:0.82rem;color:#9db0c9;margin-top:2px;'>Nạp regime, VIX, foreign flow</div>
+      <div style='margin-top:4px;font-size:0.9rem;'>○ Cần bước 1 trước</div>
+    </div>
+    <div style='flex:1;min-width:150px;opacity:0.3;'>
+      <div style='font-weight:700;color:#fafafa;'>③ Review Signals</div>
+      <div style='font-size:0.82rem;color:#9db0c9;margin-top:2px;'>Dùng scanner + macro để lọc mã</div>
+      <div style='margin-top:4px;font-size:0.9rem;'>○ Cần bước 1+2</div>
+    </div>
+  </div>
+</div>
+""",
+        unsafe_allow_html=True,
     )
 
 workflow_state = _workflow_state(
@@ -577,143 +621,87 @@ workflow_state = _workflow_state(
     st.session_state.get("macro_stale", []),
 )
 
-workflow_tone = (
-    "success"
-    if workflow_state["review_value"] == "✅ Reviewable" and not st.session_state.get("macro_stale")
-    else "warning"
-    if st.session_state.get("macro_stale")
-    else "info"
-)
-render_decision_panel(
-    "Review Workflow",
-    workflow_state["next_action"],
-    (
-        f"{workflow_state['next_hint']}. Guided flow giữ analyst ở một luồng chính; "
-        "Advanced tabs vẫn khả dụng khi cần so sánh nhiều timeframe song song."
-    ),
-    metrics=[
-        ("1. Dữ liệu", workflow_state["data_value"], workflow_state["data_delta"]),
-        ("2. Macro", workflow_state["macro_value"], workflow_state["macro_delta"]),
-        ("3. Review", workflow_state["review_value"], workflow_state["review_delta"]),
-    ],
-    tone=workflow_tone,
-)
-st.divider()
-
-# Status bar
-st.caption("Session snapshot: kiểm tra trạng thái thị trường, độ tươi dữ liệu và giá trị danh mục trước khi mở workspace review.")
-c1, c2, c3, c4 = st.columns(4)
-c1.metric("Tickers loaded", len(data_dict))
-if regime_result:
-    from core.regime import regime_label_vi, regime_emoji
-    regime_delta = f"Prob {regime_result.probability:.0%}"
-    if st.session_state.get("regime_updated_at"):
-        regime_delta += f" | {st.session_state.get('regime_updated_at')}"
-    if st.session_state.get("regime_stale"):
-        regime_delta += " | stale"
-    c2.metric(
-        "VNI Regime",
-        f"{regime_emoji(regime_result.regime)} {regime_label_vi(regime_result.regime)}",
-        regime_delta,
-    )
-else:
-    c2.metric("VNI Regime", "—")
-c3.metric("Macro Score", f"{macro_score:.1f}/10")
-# Portfolio value: mark-to-market dùng giá hiện tại (thay vì total_value dùng giá vào)
+# ── Session Status Bar (replaces 4-metric row + trust ribbon + decision panel) ──
+from core.regime import regime_label_vi, regime_emoji as _regime_emoji_fn
 _mtm_prices = {
     t: float(df["Close"].iloc[-1])
     for t, (df, _) in data_dict.items()
     if df is not None and not df.empty
 }
-c4.metric("Portfolio Value", f"{portfolio.market_value(_mtm_prices):,.0f} VND")
-
-# Global trust ribbon: provenance + freshness for price and macro inputs.
 _ff_basis = _foreign_flow_basis_label(st.session_state.get("foreign_flows_cache", {}))
 _calendar_basis = calendar_basis_summary(st.session_state.get("exchange_map", {}))
-render_trust_ribbon([
-    ("Price bars as-of", _latest_bar_date_label(data_dict)),
-    ("Source mix", _source_mix_label(data_dict)),
-    ("Macro updated", st.session_state.get("macro_updated_at") or "—"),
-    ("VNI regime source", st.session_state.get("regime_source") or "—"),
-    ("Foreign flow basis", _ff_basis),
-    ("Calendar basis", _calendar_basis),
-])
+_stale = st.session_state.get("macro_stale", [])
+_regime_stale = st.session_state.get("regime_stale", False)
+_ff_meta = st.session_state.get("foreign_flow_meta", {})
+_alert_count = len(_stale) + (1 if _regime_stale else 0) + (1 if _ff_meta.get("bounded_mode") else 0)
 
-st.caption(
-    "Decision-support mode only. Review data freshness, source mix, and proxy labels before acting on any BUY/STRONG BUY signal."
+if regime_result:
+    _regime_str = f"{_regime_emoji_fn(regime_result.regime)} {regime_label_vi(regime_result.regime)} {regime_result.probability:.0%}"
+    _regime_stale_label = " ⚠️stale" if _regime_stale else ""
+    _regime_display = f"{_regime_str}{_regime_stale_label}"
+else:
+    _regime_display = "—"
+
+_status_items = [
+    ("🏛️ Regime", _regime_display),
+    ("📊 Macro", f"{macro_score:.1f}/10"),
+    ("📦 Tickers", str(len(data_dict))),
+    ("💼 Portfolio", f"{portfolio.market_value(_mtm_prices):,.0f} VND" if data_dict else "—"),
+    ("📡 Price as-of", _latest_bar_date_label(data_dict)),
+    ("🔗 Sources", _source_mix_label(data_dict) or "—"),
+]
+if _alert_count:
+    _status_items.append(("⚠️ Alerts", f"{_alert_count} issue{'s' if _alert_count > 1 else ''}"))
+
+_status_html_parts = "".join(
+    f"<span style='margin-right:1.4rem;white-space:nowrap;'>"
+    f"<span style='color:#7a8fa8;font-size:0.78rem;'>{lbl}&nbsp;</span>"
+    f"<span style='color:#e8ecf4;font-size:0.85rem;font-weight:600;'>{val}</span>"
+    f"</span>"
+    for lbl, val in _status_items
+)
+st.markdown(
+    f"<div style='background:#151b28;border:1px solid #232b3d;border-radius:10px;"
+    f"padding:0.55rem 1rem;margin-bottom:0.6rem;display:flex;flex-wrap:wrap;align-items:center;'>"
+    f"{_status_html_parts}</div>",
+    unsafe_allow_html=True,
 )
 
-# Persistent stale-data banner (shown below metrics, cleared on next successful macro update)
-_stale = st.session_state.get("macro_stale", [])
-if _stale:
-    render_guidance_callout(
-        "Macro data partial",
-        f"Thiếu: {', '.join(_stale)}. Nhấn Cập nhật Macro để thử lại; kết quả hiện tại dùng mặc định neutral.",
-        tone="warning",
-    )
+# Stale/alert callouts (below status bar, collapsed by default when no alerts)
+if _stale or _regime_stale or _ff_meta.get("bounded_mode"):
+    with st.expander(f"⚠️ {_alert_count} data alert{'s' if _alert_count > 1 else ''}", expanded=False):
+        if _stale:
+            render_guidance_callout(
+                "Macro data partial",
+                f"Thiếu: {', '.join(_stale)}. Nhấn 🔄 Tải & Macro để thử lại.",
+                tone="warning",
+            )
+        if _regime_stale:
+            _regime_msg = (
+                "Không thể làm mới VNINDEX gần đây; app đang giữ regime trước đó và đánh dấu stale."
+                if st.session_state.get("regime_result")
+                else "Không thể làm mới VNINDEX; app tạm giữ regime mặc định sideways."
+            )
+            render_guidance_callout("VNI regime stale", _regime_msg, tone="warning")
+        if _ff_meta.get("bounded_mode"):
+            render_guidance_callout(
+                "Foreign-flow coverage bounded",
+                f"Universe lớn ({_ff_meta.get('requested_symbols', 0)} mã): "
+                f"CafeF history {_ff_meta.get('full_history', 0)} | "
+                f"KBS snapshot {_ff_meta.get('snapshot_proxy', 0)} | unavailable {_ff_meta.get('unavailable', 0)}.",
+                tone="info",
+            )
 
-if st.session_state.get("regime_stale"):
-    _regime_msg = (
-        "Không thể làm mới VNINDEX gần đây; app đang giữ regime trước đó và đánh dấu stale trong metric."
-        if st.session_state.get("regime_result")
-        else "Không thể làm mới VNINDEX; app tạm giữ regime mặc định sideways cho tới khi lần cập nhật sau thành công."
-    )
-    render_guidance_callout(
-        "VNI regime stale",
-        _regime_msg,
-        tone="warning",
-    )
-
-_ff_meta = st.session_state.get("foreign_flow_meta", {})
-if _ff_meta.get("bounded_mode"):
-    render_guidance_callout(
-        "Foreign-flow coverage bounded",
-        f"Universe lớn ({_ff_meta.get('requested_symbols', 0)} mã): CafeF history {_ff_meta.get('full_history', 0)} | "
-        f"KBS snapshot {_ff_meta.get('snapshot_proxy', 0)} | unavailable {_ff_meta.get('unavailable', 0)}. "
-        "App bỏ qua live CafeF batch để tránh macro refresh treo; review score cần ưu tiên đọc trust ribbon trước khi hành động.",
-        tone="info",
-    )
-
+st.caption("Decision-support mode only. Review data freshness and source mix before acting on any signal.")
 st.divider()
 
 # ─────────────────────────────────────────────────────────────
 # TABS
 # ─────────────────────────────────────────────────────────────
+# TWO-TIER NAVIGATION: Analysis | Management
+# ─────────────────────────────────────────────────────────────
 advanced_scanners = review_layout == "Advanced tabs"
-tab_labels = ["🌐 Macro Pulse"]
-if advanced_scanners:
-    tab_labels.extend([
-        "⚡ 1W Scanner",
-        "📅 2W Scanner",
-        "📆 1M Scanner",
-        "📊 3M Scanner",
-        "🎯 5M Scanner",
-    ])
-else:
-    tab_labels.append("🔎 Signal Review")
-tab_labels.extend([
-    "🧠 ML Forecast",
-    "🧪 Backtest",
-    "💼 Portfolio",
-    "📜 Audit Log",
-    "📖 Hướng Dẫn",
-])
-tabs = st.tabs(tab_labels)
-tab_idx = 0
 
-# ── Tab 0: Macro Pulse ────────────────────────────────────────
-with tabs[tab_idx]:
-    from ui.macro_tab import render_macro_tab
-    if macro_data:
-        if regime_result is None:
-            from core.regime import RegimeResult
-            regime_result = RegimeResult("sideways", 0.5, [], "rule", {})
-        render_macro_tab(macro_data, regime_result, lang)
-    else:
-        st.info("Nhấn **Cập nhật Macro** để tải dữ liệu vĩ mô.")
-tab_idx += 1
-
-# ── Signal Review / Advanced Scanner Tabs ─────────────────────
 from ui.scanner_tab import render_scanner_tab
 
 if data_dict and _is_vni_regime_stale(st.session_state.get("vni_df"), max_age_days=1):
@@ -726,20 +714,40 @@ _exchange_map: dict[str, str] = {
     t: str(st.session_state.get("exchange_map", {}).get(t, TICKER_EXCHANGE.get(t, "HOSE"))).strip().upper() or "HOSE"
     for t in data_dict
 }
-
-# Use cached foreign flows from session_state (populated during Macro update
-# via fetch_foreign_flow_ticker per symbol). Falls back to {} if not loaded.
 _foreign_flows: dict = st.session_state.get("foreign_flows_cache", {})
 
-_TF_MAP = {"⚡ 1W": "1W", "📅 2W": "2W", "📆 1M": "1M", "📊 3M": "3M", "🎯 5M": "5M"}
+# ── Tier 1: Analysis tabs ─────────────────────────────────────
+_analysis_labels = ["🌐 Macro Pulse"]
 if advanced_scanners:
-    for tf in ["1W", "2W", "1M", "3M", "5M"]:
-        with tabs[tab_idx]:
+    _analysis_labels += ["⚡ 1W", "📅 2W", "📆 1M", "📊 3M", "🎯 5M"]
+else:
+    _analysis_labels.append("🔎 Signal Review")
+_analysis_labels += ["🧠 ML Forecast", "🧪 Backtest"]
+
+_analysis_tabs = st.tabs(_analysis_labels)
+_aidx = 0
+
+# Macro Pulse
+with _analysis_tabs[_aidx]:
+    from ui.macro_tab import render_macro_tab
+    if macro_data:
+        if regime_result is None:
+            from core.regime import RegimeResult
+            regime_result = RegimeResult("sideways", 0.5, [], "rule", {})
+        render_macro_tab(macro_data, regime_result, lang)
+    else:
+        st.info("Nhấn **🔄 Tải & Macro** để tải dữ liệu vĩ mô.")
+_aidx += 1
+
+# Signal Review / Advanced Scanners
+if advanced_scanners:
+    for _tf in ["1W", "2W", "1M", "3M", "5M"]:
+        with _analysis_tabs[_aidx]:
             if not data_dict:
                 st.info("Tải dữ liệu trước để quét tín hiệu.")
             else:
                 render_scanner_tab(
-                    tf=tf,
+                    tf=_tf,
                     data_dict=data_dict,
                     regime=regime_label,
                     macro_score=macro_score,
@@ -747,15 +755,15 @@ if advanced_scanners:
                     lang=lang,
                     exchange_map=_exchange_map,
                 )
-        tab_idx += 1
+        _aidx += 1
 else:
-    with tabs[tab_idx]:
+    with _analysis_tabs[_aidx]:
         st.subheader("🔎 Signal Review Workspace")
         if not data_dict:
             st.info("Tải dữ liệu trước để bắt đầu review tín hiệu.")
         else:
-            review_col1, review_col2 = st.columns([3, 2])
-            with review_col1:
+            _rc1, _rc2 = st.columns([3, 2])
+            with _rc1:
                 selected_tf = st.radio(
                     "Timeframe review",
                     ["1W", "2W", "1M", "3M", "5M"],
@@ -764,16 +772,15 @@ else:
                     format_func=lambda tf: TIMEFRAME_CONFIG[tf]["label"],
                     key="guided_review_tf",
                 )
-            with review_col2:
-                review_basis = _foreign_flow_basis_label(_foreign_flows)
+            with _rc2:
                 st.metric(
                     "Review context",
                     f"{TIMEFRAME_CONFIG[selected_tf]['label']} | {regime_label}",
                     f"Macro {macro_score:.1f}/10",
                 )
             st.caption(
-                "Guided review mode gom tất cả scanner vào một workspace. "
-                f"Foreign-flow basis hiện tại: {review_basis}."
+                "Guided review mode. "
+                f"Foreign-flow basis: {_foreign_flow_basis_label(_foreign_flows)}."
             )
             render_scanner_tab(
                 tf=selected_tf,
@@ -784,19 +791,19 @@ else:
                 lang=lang,
                 exchange_map=_exchange_map,
             )
-    tab_idx += 1
+    _aidx += 1
 
-# ── Tab 6: ML Forecast ────────────────────────────────────────
-with tabs[tab_idx]:
+# ML Forecast
+with _analysis_tabs[_aidx]:
     from ui.ml_tab import render_ml_tab
     if not data_dict:
         st.info("Tải dữ liệu trước.")
     else:
         render_ml_tab(data_dict, regime_label, macro_data, lang, exchange_map=_exchange_map)
-tab_idx += 1
+_aidx += 1
 
-# ── Tab 7: Backtest ───────────────────────────────────────────
-with tabs[tab_idx]:
+# Backtest
+with _analysis_tabs[_aidx]:
     from ui.backtest_tab import render_backtest_tab
     if not data_dict:
         st.info("Tải dữ liệu trước.")
@@ -807,22 +814,20 @@ with tabs[tab_idx]:
             exchange_map=_exchange_map,
             vni_df=st.session_state.get("vni_df"),
         )
-tab_idx += 1
 
-# ── Tab 8: Portfolio ──────────────────────────────────────────
-with tabs[tab_idx]:
+# ── Tier 2: Management tabs ───────────────────────────────────
+st.markdown("<div style='margin-top:0.75rem'></div>", unsafe_allow_html=True)
+_mgmt_tabs = st.tabs(["💼 Portfolio", "📜 Audit Log", "📖 Hướng Dẫn"])
+
+with _mgmt_tabs[0]:
     from ui.portfolio_tab import render_portfolio_tab
     updated_pf = render_portfolio_tab(portfolio, data_dict, lang)
     st.session_state.portfolio = updated_pf
-tab_idx += 1
 
-# ── Tab 9: Audit Log ──────────────────────────────────────────
-with tabs[tab_idx]:
+with _mgmt_tabs[1]:
     from ui.audit_tab import render_audit_tab
     render_audit_tab(lang)
-tab_idx += 1
 
-# ── Tab 10: Guide ─────────────────────────────────────────────
-with tabs[tab_idx]:
+with _mgmt_tabs[2]:
     from ui.guide_tab import render_guide_tab
     render_guide_tab(lang)

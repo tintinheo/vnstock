@@ -132,15 +132,13 @@ def render_macro_tab(
 ) -> None:
     """
     Render Macro Pulse tab:
-    - VN Market Regime
-    - World markets table with sparklines
-    - Foreign flow
-    - Market breadth
-    - TF condition scorecard
+    - Pinned macro summary card (always above fold)
+    - Evidence metrics row (always visible)
+    - Collapsible sections: World Markets, Breadth Detail, Foreign Flow, TF Scorecard, Regime History
     """
     render_section_header(
         "🌐 Macro Pulse — Điều Kiện Vĩ Mô Thị Trường",
-        "Đọc market stance trước, sau đó kiểm tra evidence cards và trust ribbon để quyết định mức conviction.",
+        "Đọc market stance trước, sau đó mở các section bên dưới để kiểm tra evidence.",
     )
 
     world        = macro_data.get("world", {})
@@ -190,24 +188,44 @@ def render_macro_tab(
         cautious_tfs,
         blocked_tfs,
     )
-    render_decision_panel(
-        "Macro decision bridge",
-        decision_state["primary"],
-        decision_state["secondary"],
-        metrics=[
-            (
-                "Market Stance",
-                overall_macro,
-                f"Regime: {regime_label_vi(regime_result.regime) if lang == 'VI' else regime_result.regime.title()}",
-            ),
-            (
-                "Preferred TFs",
-                ", ".join(preferred_tfs[:3]) if preferred_tfs else "Chưa có TF thuận lợi rõ",
-                f"Cautious: {', '.join(cautious_tfs[:2]) if cautious_tfs else '—'}",
-            ),
-            ("Exposure", exposure_title, exposure_hint),
-        ],
-        tone=decision_state["tone"],
+
+    # ── Pinned summary card ───────────────────────────────────
+    _stance_accent = {"success": GREEN, "warning": YELLOW, "info": BLUE}.get(decision_state["tone"], GREY)
+    _stance_bg     = {"success": "#0f1c16", "warning": "#1f1a11", "info": "#0f1724"}.get(decision_state["tone"], "#151b28")
+    _regime_str    = regime_label_vi(regime_result.regime) if lang == "VI" else regime_result.regime.title()
+    _regime_emoji  = {"bull": "🟢", "bear": "🔴", "sideways": "🟡"}.get(regime_result.regime, "⚪")
+    _pref_str      = ", ".join(preferred_tfs[:3]) if preferred_tfs else "—"
+    _caut_str      = ", ".join(cautious_tfs[:2]) if cautious_tfs else "—"
+    _dxy_icon      = _status_icon(component_states["dxy"])
+    _vix_icon      = _status_icon(component_states["vix"])
+    _ff_icon       = _status_icon(component_states["foreign"])
+    _br_icon       = _status_icon(component_states["breadth"])
+    _breadth_label, _ = _breadth_condition_label(
+        str(breadth_momentum or "neutral"),
+        float(ad_ratio or 0.5),
+        int(breadth.get("ceiling", 0) or 0) if isinstance(breadth, dict) else 0,
+        int(breadth.get("floor", 0) or 0) if isinstance(breadth, dict) else 0,
+    )
+
+    st.markdown(
+        f"""
+<div style='border:1px solid {_stance_accent}55;border-left:5px solid {_stance_accent};
+border-radius:14px;padding:1rem 1.25rem;margin-bottom:0.75rem;background:{_stance_bg};'>
+  <div style='font-size:0.82rem;color:#9db0c9;margin-bottom:0.25rem;'>🧭 Macro stance</div>
+  <div style='font-size:1.25rem;font-weight:700;color:#fafafa;margin-bottom:0.5rem;'>
+    {overall_macro} &nbsp;·&nbsp; {exposure_title}
+  </div>
+  <div style='display:flex;flex-wrap:wrap;gap:1.5rem;font-size:0.85rem;color:#cdd6e8;'>
+    <span>{_regime_emoji} Regime: <b>{_regime_str}</b> ({regime_result.probability:.0%})</span>
+    <span>DXY {_dxy_icon} &nbsp; VIX {_vix_icon} &nbsp; Foreign {_ff_icon} &nbsp; Breadth {_br_icon}</span>
+    <span>Breadth: <b>{_breadth_label}</b></span>
+    <span>Ưu tiên: <b>{_pref_str}</b></span>
+    <span>Thận trọng: {_caut_str}</span>
+  </div>
+  <div style='margin-top:0.4rem;font-size:0.8rem;color:#7a8fa8;'>{exposure_hint}</div>
+</div>
+""",
+        unsafe_allow_html=True,
     )
 
     render_trust_ribbon([
@@ -229,28 +247,9 @@ def render_macro_tab(
             f"Some components are missing or stale. Current gaps: {', '.join(stale_fields)}.",
             tone="warning",
         )
-    else:
-        st.caption("Macro trust: critical components loaded successfully for this refresh.")
 
-    guidance_bits = []
-    if preferred_tfs:
-        guidance_bits.append(f"Ưu tiên review: {', '.join(preferred_tfs[:3])}")
-    if blocked_tfs:
-        guidance_bits.append(f"TF nên hạn chế: {', '.join(blocked_tfs[:3])}")
-    if component_states["foreign"] is False:
-        guidance_bits.append("Khối ngoại đang tạo lực cản")
-    if component_states["dxy"] is False:
-        guidance_bits.append("DXY đang bất lợi cho risk-on")
-    if component_states["vix"] is False:
-        guidance_bits.append("VIX cao, cần giảm conviction")
-
-    if guidance_bits:
-        render_guidance_callout("Macro reading", " | ".join(guidance_bits), tone="info")
-
-    st.divider()
-
+    # ── Evidence Snapshot (always visible) ───────────────────
     st.subheader("🧾 Evidence Snapshot")
-    st.caption("Các evidence card dưới đây giải thích vì sao macro đang cho stance hiện tại.")
     c1, c2, c3, c4, c5 = st.columns(5)
     with c1:
         regime_str = regime_label_vi(regime_result.regime) if lang == "VI" else regime_result.regime.title()
@@ -299,199 +298,192 @@ def render_macro_tab(
             breadth_label = "Tốt" if ad_ratio > 0.55 else "Xấu" if ad_ratio < 0.45 else "Trung bình"
             st.metric("A/D Ratio", ad_str, breadth_label)
 
-    st.divider()
-    st.subheader("📊 Market Breadth Chi Tiết")
-    movement = breadth.get("movement", {}) if isinstance(breadth, dict) else {}
-    up_strong = int(movement.get("up_strong", 0) or 0)
-    up = int(movement.get("up", 0) or 0)
-    flat = int(movement.get("flat", 0) or 0)
-    down = int(movement.get("down", 0) or 0)
-    down_strong = int(movement.get("down_strong", 0) or 0)
-    ceiling = int(breadth.get("ceiling", 0) or 0)
-    floor = int(breadth.get("floor", 0) or 0)
-    near_ceiling = int(breadth.get("near_ceiling", 0) or 0)
-    near_floor = int(breadth.get("near_floor", 0) or 0)
-    movement_total = max(1, up_strong + up + flat + down + down_strong)
-    condition_label, condition_tone = _breadth_condition_label(
-        str(breadth_momentum or "neutral"),
-        float(ad_ratio or 0.5),
-        ceiling,
-        floor,
-    )
+    # ── Collapsible detail sections ───────────────────────────
+    with st.expander("📊 Market Breadth Chi Tiết", expanded=False):
+        movement = breadth.get("movement", {}) if isinstance(breadth, dict) else {}
+        up_strong = int(movement.get("up_strong", 0) or 0)
+        up = int(movement.get("up", 0) or 0)
+        flat = int(movement.get("flat", 0) or 0)
+        down = int(movement.get("down", 0) or 0)
+        down_strong = int(movement.get("down_strong", 0) or 0)
+        ceiling = int(breadth.get("ceiling", 0) or 0)
+        floor = int(breadth.get("floor", 0) or 0)
+        near_ceiling = int(breadth.get("near_ceiling", 0) or 0)
+        near_floor = int(breadth.get("near_floor", 0) or 0)
+        movement_total = max(1, up_strong + up + flat + down + down_strong)
+        condition_label, condition_tone = _breadth_condition_label(
+            str(breadth_momentum or "neutral"),
+            float(ad_ratio or 0.5),
+            ceiling,
+            floor,
+        )
 
-    b1, b2, b3, b4, b5 = st.columns(5)
-    b1.metric("Tăng mạnh", up_strong, f"{(up_strong / movement_total) * 100:.1f}%")
-    b2.metric("Tăng", up, f"{(up / movement_total) * 100:.1f}%")
-    b3.metric("Đứng giá", flat, f"{(flat / movement_total) * 100:.1f}%")
-    b4.metric("Giảm", down, f"{(down / movement_total) * 100:.1f}%")
-    b5.metric("Giảm mạnh", down_strong, f"{(down_strong / movement_total) * 100:.1f}%")
+        b1, b2, b3, b4, b5 = st.columns(5)
+        b1.metric("Tăng mạnh", up_strong, f"{(up_strong / movement_total) * 100:.1f}%")
+        b2.metric("Tăng", up, f"{(up / movement_total) * 100:.1f}%")
+        b3.metric("Đứng giá", flat, f"{(flat / movement_total) * 100:.1f}%")
+        b4.metric("Giảm", down, f"{(down / movement_total) * 100:.1f}%")
+        b5.metric("Giảm mạnh", down_strong, f"{(down_strong / movement_total) * 100:.1f}%")
 
-    render_guidance_callout(
-        "Breadth condition",
-        (
-            f"Trạng thái: {condition_label} | momentum: {breadth_momentum} | "
-            f"ceiling/floor: {ceiling}/{floor} | near-ceiling/floor: {near_ceiling}/{near_floor}"
-        ),
-        tone=condition_tone,
-    )
+        render_guidance_callout(
+            "Breadth condition",
+            (
+                f"Trạng thái: {condition_label} | momentum: {breadth_momentum} | "
+                f"ceiling/floor: {ceiling}/{floor} | near-ceiling/floor: {near_ceiling}/{near_floor}"
+            ),
+            tone=condition_tone,
+        )
 
-    exchange_breakdown = breadth.get("by_exchange", {}) if isinstance(breadth, dict) else {}
-    if exchange_breakdown:
-        rows_ex = []
-        for ex in ("HOSE", "HNX", "UPCOM"):
-            bucket = exchange_breakdown.get(ex, {})
-            rows_ex.append({
-                "Sàn": ex,
-                "Tăng": int(bucket.get("advance", 0) or 0),
-                "Giảm": int(bucket.get("decline", 0) or 0),
-                "Đứng": int(bucket.get("unchanged", 0) or 0),
-                "Trần": int(bucket.get("ceiling", 0) or 0),
-                "Sàn phiên": int(bucket.get("floor", 0) or 0),
-                "Tăng mạnh": int(bucket.get("up_strong", 0) or 0),
-                "Giảm mạnh": int(bucket.get("down_strong", 0) or 0),
+        exchange_breakdown = breadth.get("by_exchange", {}) if isinstance(breadth, dict) else {}
+        if exchange_breakdown:
+            rows_ex = []
+            for ex in ("HOSE", "HNX", "UPCOM"):
+                bucket = exchange_breakdown.get(ex, {})
+                rows_ex.append({
+                    "Sàn": ex,
+                    "Tăng": int(bucket.get("advance", 0) or 0),
+                    "Giảm": int(bucket.get("decline", 0) or 0),
+                    "Đứng": int(bucket.get("unchanged", 0) or 0),
+                    "Trần": int(bucket.get("ceiling", 0) or 0),
+                    "Sàn phiên": int(bucket.get("floor", 0) or 0),
+                    "Tăng mạnh": int(bucket.get("up_strong", 0) or 0),
+                    "Giảm mạnh": int(bucket.get("down_strong", 0) or 0),
+                })
+            st.dataframe(pd.DataFrame(rows_ex), width="stretch", hide_index=True)
+
+        if breadth_history:
+            history_df = pd.DataFrame(breadth_history)
+            if not history_df.empty and "date" in history_df.columns and "ad_line" in history_df.columns:
+                history_df["date"] = pd.to_datetime(history_df["date"], errors="coerce")
+                history_df = history_df.dropna(subset=["date"]).sort_values("date")
+                fig_ad = go.Figure(go.Scatter(
+                    x=history_df["date"].dt.date.astype(str),
+                    y=history_df["ad_line"],
+                    mode="lines+markers",
+                    line=dict(color="#2ec4b6", width=2),
+                    marker=dict(size=6),
+                    hovertemplate="%{x}<br>AD line: %{y}<extra></extra>",
+                ))
+                fig_ad.update_layout(
+                    height=220,
+                    template="plotly_dark",
+                    paper_bgcolor="#0e1117",
+                    plot_bgcolor="#0e1117",
+                    margin=dict(l=40, r=10, t=20, b=30),
+                    xaxis_title="Session",
+                    yaxis_title="A/D line",
+                    showlegend=False,
+                )
+                st.plotly_chart(fig_ad, width="stretch")
+                st.caption("A/D line dùng 10 phiên gần nhất từ breadth_history.csv.")
+
+    with st.expander("🌍 Thị Trường Thế Giới", expanded=False):
+        impact_map = WORLD_IMPACT_VI if lang == "VI" else WORLD_IMPACT_EN
+        rows = []
+        for name, info in world.items():
+            if info is None:
+                rows.append({"Chỉ số": name, "Giá": "N/A", "1D%": "-",
+                              "5D%": "-", "20D%": "-", "Tác động": impact_map.get(name, "")})
+                continue
+            c1d   = info["pct_1d"]
+            c5d   = info["pct_5d"]
+            c20d  = info["pct_20d"]
+            rows.append({
+                "Chỉ số": name,
+                "Giá":    f"{info['current']:.2f}",
+                "1D%":    f"{c1d:+.2f}%",
+                "5D%":    f"{c5d:+.2f}%",
+                "20D%":   f"{c20d:+.2f}%",
+                "As-of":  _world_as_of(info),
+                "Nguồn":  "Yahoo chart API",
+                "Tác động": impact_map.get(name, ""),
             })
-        st.dataframe(pd.DataFrame(rows_ex), width="stretch", hide_index=True)  # noqa: deprecated-arg
+        st.dataframe(pd.DataFrame(rows), width="stretch", hide_index=True)
+        st.caption("World market rows are delayed end-of-bar snapshots from Yahoo chart API, not exchange-native live feeds.")
 
-    if breadth_history:
-        history_df = pd.DataFrame(breadth_history)
-        if not history_df.empty and "date" in history_df.columns and "ad_line" in history_df.columns:
-            history_df["date"] = pd.to_datetime(history_df["date"], errors="coerce")
-            history_df = history_df.dropna(subset=["date"]).sort_values("date")
-            fig_ad = go.Figure(go.Scatter(
-                x=history_df["date"].dt.date.astype(str),
-                y=history_df["ad_line"],
-                mode="lines+markers",
-                line=dict(color="#2ec4b6", width=2),
-                marker=dict(size=6),
-                hovertemplate="%{x}<br>AD line: %{y}<extra></extra>",
+    ff_history = ff.get("history", []) or []
+    with st.expander("🌊 Lịch Sử Khối Ngoại", expanded=bool(ff_history)):
+        if ff_history:
+            df_ff = pd.DataFrame(ff_history)
+            df_ff["date"] = pd.to_datetime(df_ff["date"], errors="coerce")
+            df_ff = df_ff.dropna(subset=["date"]).sort_values("date")
+
+            ff1, ff2, ff3 = st.columns(3)
+            ff1.metric("Net 20 phiên", f"{ff.get('net_buy_20d', 0) / 1e9:+.1f} tỷ", _foreign_flow_20d_label(ff.get("trend_20d", "neutral")))
+            ff2.metric("History Sessions", int(ff.get("history_sessions", 0) or 0), f"As-of {ff.get('history_as_of') or '—'}")
+            ff3.metric("Signal Used", f"{_foreign_flow_signal(ff) / 1e9:+.1f} tỷ", "avg 20P" if int(ff.get("history_sessions", 0) or 0) >= 20 else "latest session")
+
+            net_vals = df_ff["net_buy"] / 1e9
+            colors = [GREEN if value > 0 else RED if value < 0 else GREY for value in net_vals]
+            fig_ff = go.Figure(go.Bar(
+                x=df_ff["date"].dt.date.astype(str),
+                y=net_vals,
+                marker_color=colors,
+                hovertemplate="%{x}<br>Net %{y:.1f} tỷ<extra></extra>",
             ))
-            fig_ad.update_layout(
-                height=220,
+            fig_ff.update_layout(
+                height=260,
                 template="plotly_dark",
                 paper_bgcolor="#0e1117",
                 plot_bgcolor="#0e1117",
-                margin=dict(l=40, r=10, t=20, b=30),
+                margin=dict(l=40, r=10, t=20, b=40),
                 xaxis_title="Session",
-                yaxis_title="A/D line",
+                yaxis_title="Net buy (tỷ VND)",
                 showlegend=False,
             )
-            st.plotly_chart(fig_ad, width="stretch")
-            st.caption("A/D line dùng 10 phiên gần nhất từ breadth_history.csv.")
-
-    # ── World Markets Table ───────────────────────────────────
-    st.subheader("🌍 Thị Trường Thế Giới")
-    impact_map = WORLD_IMPACT_VI if lang == "VI" else WORLD_IMPACT_EN
-
-    rows = []
-    for name, info in world.items():
-        if info is None:
-            rows.append({"Chỉ số": name, "Giá": "N/A", "1D%": "-",
-                          "5D%": "-", "20D%": "-", "Tác động": impact_map.get(name, "")})
-            continue
-        c1d   = info["pct_1d"]
-        c5d   = info["pct_5d"]
-        c20d  = info["pct_20d"]
-        rows.append({
-            "Chỉ số": name,
-            "Giá":    f"{info['current']:.2f}",
-            "1D%":    f"{c1d:+.2f}%",
-            "5D%":    f"{c5d:+.2f}%",
-            "20D%":   f"{c20d:+.2f}%",
-            "As-of":  _world_as_of(info),
-            "Nguồn":  "Yahoo chart API",
-            "Tác động": impact_map.get(name, ""),
-        })
-    df_w = pd.DataFrame(rows)
-    st.dataframe(df_w, width="stretch", hide_index=True)  # noqa: deprecated-arg
-    st.caption("World market rows are delayed end-of-bar snapshots from Yahoo chart API, not exchange-native live feeds.")
-
-    ff_history = ff.get("history", []) or []
-    if ff_history:
-        st.divider()
-        st.subheader("🌊 Lịch Sử Khối Ngoại")
-        df_ff = pd.DataFrame(ff_history)
-        df_ff["date"] = pd.to_datetime(df_ff["date"], errors="coerce")
-        df_ff = df_ff.dropna(subset=["date"]).sort_values("date")
-
-        ff1, ff2, ff3 = st.columns(3)
-        ff1.metric("Net 20 phiên", f"{ff.get('net_buy_20d', 0) / 1e9:+.1f} tỷ", _foreign_flow_20d_label(ff.get("trend_20d", "neutral")))
-        ff2.metric("History Sessions", int(ff.get("history_sessions", 0) or 0), f"As-of {ff.get('history_as_of') or '—'}")
-        ff3.metric("Signal Used", f"{_foreign_flow_signal(ff) / 1e9:+.1f} tỷ", "avg 20P" if int(ff.get("history_sessions", 0) or 0) >= 20 else "latest session")
-
-        net_vals = df_ff["net_buy"] / 1e9
-        colors = [GREEN if value > 0 else RED if value < 0 else GREY for value in net_vals]
-        fig_ff = go.Figure(go.Bar(
-            x=df_ff["date"].dt.date.astype(str),
-            y=net_vals,
-            marker_color=colors,
-            hovertemplate="%{x}<br>Net %{y:.1f} tỷ<extra></extra>",
-        ))
-        fig_ff.update_layout(
-            height=260,
-            template="plotly_dark",
-            paper_bgcolor="#0e1117",
-            plot_bgcolor="#0e1117",
-            margin=dict(l=40, r=10, t=20, b=40),
-            xaxis_title="Session",
-            yaxis_title="Net buy (tỷ VND)",
-            showlegend=False,
-        )
-        st.plotly_chart(fig_ff, width="stretch")
-        st.caption(
-            "Macro foreign-flow chart uses cached/backfilled CafeF market history when available; "
-            "fallback refreshes only have current-session KBS net flow."
-        )
-
-    st.divider()
+            st.plotly_chart(fig_ff, width="stretch")
+            st.caption(
+                "Macro foreign-flow chart uses cached/backfilled CafeF market history when available; "
+                "fallback refreshes only have current-session KBS net flow."
+            )
+        else:
+            st.info("Chưa có lịch sử khối ngoại. Nhấn Cập nhật Macro để tải.")
 
     # ── TF Condition Scorecard ────────────────────────────────
-    st.subheader("📋 Điều Kiện Vào Lệnh Theo Timeframe")
+    with st.expander("📋 Điều Kiện Vào Lệnh Theo Timeframe", expanded=False):
+        dxy_ok = component_states["dxy"]
+        vix_ok = component_states["vix"]
+        ff_ok  = component_states["foreign"]
 
-    dxy_ok = component_states["dxy"]
-    vix_ok = component_states["vix"]
-    ff_ok  = component_states["foreign"]
+        rows_tf = []
+        for tf in TIMEFRAME_CONFIG:
+            cfg       = TIMEFRAME_CONFIG[tf]
+            label     = cfg["label"] if lang == "VI" else cfg["label_en"]
+            reg_ok    = regime_result.regime in cfg["regime_filter"]
+            overall   = _overall_tf_condition(reg_ok, dxy_ok, vix_ok, ff_ok)
+            rows_tf.append({
+                "Timeframe": label,
+                "Regime":    "✅" if reg_ok else "❌",
+                "DXY":       _status_icon(dxy_ok),
+                "VIX":       _status_icon(vix_ok),
+                "Foreign":   _status_icon(ff_ok),
+                "Tổng thể":  overall,
+                "Max Pos":   cfg["max_positions"],
+                "R/R":       f"1:{cfg['target_rr']}",
+            })
 
-    rows_tf = []
-    for tf in TIMEFRAME_CONFIG:
-        cfg       = TIMEFRAME_CONFIG[tf]
-        label     = cfg["label"] if lang == "VI" else cfg["label_en"]
-        reg_ok    = regime_result.regime in cfg["regime_filter"]
-        overall   = _overall_tf_condition(reg_ok, dxy_ok, vix_ok, ff_ok)
-        rows_tf.append({
-            "Timeframe": label,
-            "Regime":    "✅" if reg_ok else "❌",
-            "DXY":       _status_icon(dxy_ok),
-            "VIX":       _status_icon(vix_ok),
-            "Foreign":   _status_icon(ff_ok),
-            "Tổng thể":  overall,
-            "Max Pos":   cfg["max_positions"],
-            "R/R":       f"1:{cfg['target_rr']}",
-        })
-
-    df_tf = pd.DataFrame(rows_tf)
-    st.dataframe(df_tf, width="stretch", hide_index=True)  # noqa: deprecated-arg
-    st.caption("Foreign flow in this scorecard uses verified market history when available, otherwise current-session KBS snapshot net flow.")
+        st.dataframe(pd.DataFrame(rows_tf), width="stretch", hide_index=True)
+        st.caption("Foreign flow in this scorecard uses verified market history when available, otherwise current-session KBS snapshot net flow.")
 
     # ── Regime History Chart ──────────────────────────────────
     if regime_result.history and len(regime_result.history) > 20:
-        st.divider()
-        st.subheader("📈 Lịch Sử Chế Độ Thị Trường")
-        h = regime_result.history[-120:]
-        state_map = {"bull": 1, "sideways": 0, "bear": -1}
-        state_vals = [state_map.get(s, 0) for s in h]
-        colors = [GREEN if v == 1 else RED if v == -1 else YELLOW for v in state_vals]
+        with st.expander("📈 Lịch Sử Chế Độ Thị Trường", expanded=False):
+            h = regime_result.history[-120:]
+            state_map = {"bull": 1, "sideways": 0, "bear": -1}
+            state_vals = [state_map.get(s, 0) for s in h]
+            colors = [GREEN if v == 1 else RED if v == -1 else YELLOW for v in state_vals]
 
-        fig = go.Figure(go.Bar(
-            x=list(range(len(h))), y=state_vals,
-            marker_color=colors, opacity=0.7,
-        ))
-        fig.update_layout(
-            height=150, template="plotly_dark",
-            paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
-            yaxis=dict(tickvals=[-1, 0, 1],
-                       ticktext=["Bear", "Sideways", "Bull"]),
-            xaxis=dict(visible=False),
-            margin=dict(l=40, r=10, t=20, b=20),
-            showlegend=False,
-        )
-        st.plotly_chart(fig, width="stretch")  # noqa: deprecated-arg
+            fig = go.Figure(go.Bar(
+                x=list(range(len(h))), y=state_vals,
+                marker_color=colors, opacity=0.7,
+            ))
+            fig.update_layout(
+                height=150, template="plotly_dark",
+                paper_bgcolor="#0e1117", plot_bgcolor="#0e1117",
+                yaxis=dict(tickvals=[-1, 0, 1],
+                           ticktext=["Bear", "Sideways", "Bull"]),
+                xaxis=dict(visible=False),
+                margin=dict(l=40, r=10, t=20, b=20),
+                showlegend=False,
+            )
+            st.plotly_chart(fig, width="stretch")

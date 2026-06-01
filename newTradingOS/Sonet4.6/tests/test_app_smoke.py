@@ -157,7 +157,7 @@ def test_app_smoke_watchlist_load_then_macro_refresh(monkeypatch):
 
     at.sidebar.text_area[0].set_value("VCB").run(timeout=120)
     at.sidebar.multiselect[0].set_value(["Watchlist"]).run(timeout=120)
-    at.sidebar.button[0].click().run(timeout=120)
+    at.sidebar.button[2].click().run(timeout=120)
 
     assert len(at.exception) == 0
     assert at.session_state["watchlist"] == ["VCB"]
@@ -246,7 +246,7 @@ def test_app_smoke_macro_refresh_passes_live_exchange_map_to_foreign_flow(monkey
 
     at.sidebar.text_area[0].set_value("ZZZ").run(timeout=120)
     at.sidebar.multiselect[0].set_value(["Watchlist"]).run(timeout=120)
-    at.sidebar.button[0].click().run(timeout=120)
+    at.sidebar.button[2].click().run(timeout=120)
     at.sidebar.button[1].click().run(timeout=120)
 
     assert len(at.exception) == 0
@@ -423,7 +423,7 @@ def test_app_smoke_hose_hnx_load_uses_large_universe_mode(monkeypatch):
     at.run(timeout=120)
 
     at.sidebar.multiselect[0].set_value(["HOSE", "HNX"]).run(timeout=120)
-    at.sidebar.button[0].click().run(timeout=120)
+    at.sidebar.button[2].click().run(timeout=120)
     at.sidebar.button[1].click().run(timeout=120)
 
     assert len(at.exception) == 0

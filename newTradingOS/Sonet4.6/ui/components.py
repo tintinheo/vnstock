@@ -31,6 +31,21 @@ ACTION_COLORS = {
     "SELL":       RED,
 }
 
+# Dark-mode row highlight styles derived from ACTION_COLORS (single source of truth)
+ACTION_ROW_STYLE: dict[str, str] = {
+    "STRONG BUY": "background-color: #1a5e2a; color: #ffffff",
+    "BUY":        "background-color: #1a4a2a; color: #7ecc7e",
+    "HOLD":       "background-color: #3a3010; color: #ffeb9c",
+    "WATCH":      "background-color: #0f1c2e; color: #7eb8ff",
+    "SELL":       "background-color: #3a1010; color: #ff9999",
+}
+
+# Maximum contribution of each score breakdown component (for bar scaling)
+_BREAKDOWN_MAXES: dict[str, float] = {
+    "Trend": 25, "Momentum": 20, "RSI": 15, "Volume": 20,
+    "Foreign": 5, "Macro": 10, "ADX": 5,
+}
+
 REGIME_COLORS = {
     "bull":     GREEN,
     "sideways": YELLOW,
@@ -163,6 +178,31 @@ def source_badge(source: str) -> str:
         f'<span style="background:{bg};color:{fg};'
         f'border-radius:3px;padding:1px 6px;font-size:11px;font-weight:bold;">'
         f'{source}</span>'
+    )
+
+
+def score_breakdown_bar(label: str, value: float, max_val: float | None = None) -> str:
+    """Return an HTML mini progress bar for one score breakdown component.
+
+    Renders as: [label 80px] [colored bar] [value right-aligned]
+    Falls back to GREY bar when max_val is unknown.
+    """
+    effective_max = max_val if (max_val and max_val > 0) else _BREAKDOWN_MAXES.get(label, 10.0)
+    pct = min(100, max(0, int(value / effective_max * 100)))
+    if pct >= 75:
+        bar_color = GREEN
+    elif pct >= 40:
+        bar_color = YELLOW
+    else:
+        bar_color = RED
+    return (
+        f"<div style='display:flex;align-items:center;gap:8px;margin:2px 0;'>"
+        f"<span style='width:76px;font-size:11px;color:#9db0c9;flex-shrink:0;'>{label}</span>"
+        f"<div style='flex:1;background:#1e2533;border-radius:3px;height:7px;'>"
+        f"<div style='width:{pct}%;background:{bar_color};border-radius:3px;height:7px;'></div>"
+        f"</div>"
+        f"<span style='width:34px;text-align:right;font-size:11px;color:#ccc;flex-shrink:0;'>{value:.1f}</span>"
+        f"</div>"
     )
 
 

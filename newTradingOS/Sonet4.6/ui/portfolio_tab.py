@@ -81,11 +81,12 @@ def render_portfolio_tab(
         "💼 Portfolio Tracker",
         "Bắt đầu từ stance danh mục, rồi xem close preview, risk budget, và room vốn theo timeframe.",
     )
-    render_guidance_callout(
-        "Trust note",
-        "Live portfolio blocks closes until T+2 readiness and estimates settlement from Vietnam trading sessions (weekdays excluding public holidays). Intraday execution, slippage, and order-book effects are still not modeled.",
-        tone="info",
-    )
+    with st.expander("ℹ️ Settlement & Execution Caveats", expanded=False):
+        render_guidance_callout(
+            "Trust note",
+            "Live portfolio blocks closes until T+2 readiness and estimates settlement from Vietnam trading sessions (weekdays excluding public holidays). Intraday execution, slippage, and order-book effects are still not modeled.",
+            tone="info",
+        )
 
     # ── Summary metrics ───────────────────────────────────────
     c1, c2, c3, c4 = st.columns(4)

@@ -22,7 +22,9 @@ from ui.components import (
     render_trust_ribbon,
     score_badge,
     score_radar,
+    score_breakdown_bar,
     source_badge,
+    ACTION_ROW_STYLE,
 )
 from core.indicators import compute_all
 
@@ -464,14 +466,23 @@ def render_scanner_tab(
     watch_count= sum(1 for r in all_results if r.action == "WATCH")
     avg_score  = sum(r.score for r in all_results) / len(all_results)
 
-    review_focus = st.radio(
-        "Review focus",
-        ["Top ideas", "Mua tiềm năng", "Theo dõi rủi ro", "Tất cả"],
-        index=0,
-        horizontal=True,
-        key=f"scan_focus_{tf}",
-        help="Dùng filter này để thu hẹp table và diagnostics theo mục tiêu review hiện tại.",
-    )
+    # ── Filter + context row (hoisted above decision panel) ──
+    _filter_col, _ctx_col = st.columns([3, 2])
+    with _filter_col:
+        review_focus = st.radio(
+            "Review focus",
+            ["Top ideas", "Mua tiềm năng", "Theo dõi rủi ro", "Tất cả"],
+            index=0,
+            horizontal=True,
+            key=f"scan_focus_{tf}",
+            help="Dùng filter này để thu hẹp table và diagnostics theo mục tiêu review hiện tại.",
+        )
+    with _ctx_col:
+        st.metric(
+            "Scan context",
+            f"{label} | {regime}",
+            f"Macro {macro_score:.1f}/10 · {buy_count} BUY/{len(all_results)}",
+        )
 
     focus_actions = {
         "Top ideas": {"STRONG BUY", "BUY"},
@@ -599,36 +610,70 @@ def render_scanner_tab(
         style = _ACTION_BG.get(row["Action"], "")
         return [style] * len(row)
 
-    styled = df_out.style.apply(_colour_row, axis=1)
+    # ── Triage / Full-detail column toggle ───────────────────
+    _tbl_hdr, _tbl_toggle = st.columns([5, 2])
+    with _tbl_hdr:
+        st.subheader("🧾 Review Table")
+    with _tbl_toggle:
+        _full_detail = st.toggle(
+            "Hiện đầy đủ cột",
+            value=False,
+            key=f"scan_full_cols_{tf}",
+            help="Triage view (mặc định): 7 cột cốt lõi. Full detail: tất cả 16 cột.",
+        )
 
-    st.subheader("🧾 Review Table")
+    _TRIAGE_COLS = ["Mã", "Action", "Score", "Giá", "R/R", "RSI", "Vol×"]
+    _triage_col_config = {
+        "Score":  st.column_config.NumberColumn("Score", format="%.1f",
+                      help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán.", width="small"),
+        "Action": st.column_config.TextColumn("Action", width="small"),
+        "Mã":     st.column_config.TextColumn("Mã", width="small"),
+        "Giá":    st.column_config.NumberColumn("Giá (VND)", format="%,.0f", width="small"),
+        "R/R":    st.column_config.NumberColumn("R/R", format="1:%.1f", width="small"),
+        "RSI":    st.column_config.NumberColumn("RSI", format="%.1f", width="small"),
+        "Vol×":   st.column_config.NumberColumn("Vol×", format="%.2f", width="small"),
+    }
+    _full_col_config = {
+        "Score":     st.column_config.NumberColumn("Score", format="%.1f",
+                         help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán.", width="small"),
+        "Action":    st.column_config.TextColumn("Action", width="small"),
+        "Mã":        st.column_config.TextColumn("Mã", width="small"),
+        "Sàn":       st.column_config.TextColumn("Sàn", width="small"),
+        "Nguồn":     st.column_config.TextColumn("Nguồn", width="small"),
+        "Bar Date":  st.column_config.TextColumn("Bar Date", width="small"),
+        "FF Hist":   st.column_config.NumberColumn("FF Hist", format="%d",
+                         help="Số phiên lịch sử foreign-flow đã xác minh cho mã này.", width="small"),
+        "FF 20D":    st.column_config.TextColumn("FF 20D", width="small"),
+        "Giá":       st.column_config.NumberColumn("Giá (VND)", format="%,.0f", width="small"),
+        "Stop":      st.column_config.NumberColumn("Stop (VND)", format="%,.0f", width="small"),
+        "Target":    st.column_config.NumberColumn("Target (VND)", format="%,.0f", width="small"),
+        "R/R":       st.column_config.NumberColumn("R/R", format="1:%.1f", width="small"),
+        "RSI":       st.column_config.NumberColumn("RSI", format="%.1f", width="small"),
+        "Vol×":      st.column_config.NumberColumn("Vol×", format="%.2f", width="small"),
+        "Regime OK": st.column_config.CheckboxColumn("Regime OK"),
+        "Manip":     st.column_config.CheckboxColumn("Manip ⚠️"),
+    }
+
+    if _full_detail:
+        _display_df = df_out
+        _col_config = _full_col_config
+    else:
+        _display_df = df_out[_TRIAGE_COLS] if all(c in df_out.columns for c in _TRIAGE_COLS) else df_out
+        _col_config = _triage_col_config
+
+    styled = _display_df.style.apply(
+        lambda row: [ACTION_ROW_STYLE.get(df_out.loc[row.name, "Action"], "")] * len(row),
+        axis=1,
+    )
+
     st.info("💡 Màu hàng: 🟩 STRONG BUY → BUY → 🟨 HOLD → 🟦 WATCH → 🟥 SELL. "
             "Click tiêu đề cột để sắp xếp.")
     st.dataframe(
         styled,
         width="stretch",
         hide_index=True,
-        column_config={
-            "Score":     st.column_config.NumberColumn("Score", format="%.1f",
-                             help="Điểm tín hiệu 0–100. ≥65 là vùng mua, <30 là bán.", width="small"),
-            "Action":    st.column_config.TextColumn("Action", width="small"),
-            "Mã":        st.column_config.TextColumn("Mã", width="small"),
-            "Sàn":       st.column_config.TextColumn("Sàn", width="small"),
-            "Nguồn":     st.column_config.TextColumn("Nguồn", width="small"),
-            "Bar Date":  st.column_config.TextColumn("Bar Date", width="small"),
-            "FF Hist":   st.column_config.NumberColumn("FF Hist", format="%d",
-                             help="Số phiên lịch sử foreign-flow đã xác minh cho mã này.", width="small"),
-            "FF 20D":    st.column_config.TextColumn("FF 20D", width="small"),
-            "Giá":       st.column_config.NumberColumn("Giá (VND)", format="%,.0f", width="small"),
-            "Stop":      st.column_config.NumberColumn("Stop (VND)", format="%,.0f", width="small"),
-            "Target":    st.column_config.NumberColumn("Target (VND)", format="%,.0f", width="small"),
-            "R/R":       st.column_config.NumberColumn("R/R", format="1:%.1f", width="small"),
-            "RSI":       st.column_config.NumberColumn("RSI", format="%.1f", width="small"),
-            "Vol×":      st.column_config.NumberColumn("Vol×", format="%.2f", width="small"),
-            "Regime OK": st.column_config.CheckboxColumn("Regime OK"),
-            "Manip":     st.column_config.CheckboxColumn("Manip ⚠️"),
-        },
-        height=min(700, 56 + len(df_out) * 35),
+        column_config=_col_config,
+        height=min(700, 56 + len(_display_df) * 35),
     )
 
     # ── Download full CSV ─────────────────────────────────────
@@ -822,9 +867,11 @@ def render_scanner_tab(
                                 st.error(f"🚨 Phát hiện dấu hiệu thao túng (điểm: {manip_s}). Hãy thận trọng!")
 
                             st.markdown("**Breakdown điểm:**")
-                            for k, v in r.breakdown.items():
-                                bar = "█" * max(0, int(v * 3))
-                                st.caption(f"{k}: {bar} {v:.1f}")
+                            _bars_html = "".join(
+                                score_breakdown_bar(k, v)
+                                for k, v in r.breakdown.items()
+                            )
+                            st.markdown(_bars_html, unsafe_allow_html=True)
 
                         with c_chart:
                             if df_raw is not None and not df_raw.empty:
