@@ -14,7 +14,7 @@ from unittest.mock import MagicMock, patch
 import pandas as pd
 import pytest
 
-from core.macro_data import fetch_market_foreign_flow, fetch_vni_data, get_macro_score
+from core.macro_data import fetch_market_breadth, fetch_market_foreign_flow, fetch_vni_data, get_macro_score
 
 
 # ─────────────────────────────────────────────────────────────
@@ -833,4 +833,141 @@ class TestMacroScoreWorldIndices:
         macro["ad_ratio"]     = 0.20
         score, _, _ = get_macro_score(macro)
         assert score >= 0.0, f"Score must be floored at 0, got {score}"
+
+
+class TestMarketBreadthExtended:
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_market_breadth_returns_extended_keys_and_exchange_breakdown(self, mock_snapshot, monkeypatch, tmp_path):
+        import core.macro_data as macro_data
+
+        monkeypatch.setattr(macro_data, "_BREADTH_HISTORY_PATH", tmp_path / "breadth_history.csv")
+        mock_snapshot.return_value = [
+            {"SB": "AAA", "EX": "HOSE", "RE": 100.0, "CP": 106.9},   # near ceiling/ceiling on HOSE
+            {"SB": "BBB", "EX": "HNX", "RE": 100.0, "CP": 90.2},    # near floor/floor on HNX
+            {"SB": "CCC", "EX": "UPCOM", "RE": 100.0, "CP": 100.0}, # flat
+            {"SB": "DDD", "EX": "HSX", "RE": 100.0, "CP": 103.0},   # alias exchange routing
+        ]
+
+        result = fetch_market_breadth()
+
+        assert result["fetch_ok"] is True
+        assert result["advance"] == 2
+        assert result["decline"] == 1
+        assert result["unchanged"] == 1
+        assert result["ceiling"] == 1
+        assert result["floor"] == 1
+        assert result["movement"]["up_strong"] == 1
+        assert result["movement"]["down_strong"] == 1
+        assert result["movement"]["flat"] == 1
+        assert "HOSE" in result["by_exchange"]
+        assert result["by_exchange"]["HOSE"]["advance"] == 2
+        assert result["by_exchange"]["HNX"]["decline"] == 1
+
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_fetch_market_breadth_updates_history_single_row_per_day(self, mock_snapshot, monkeypatch, tmp_path):
+        import core.macro_data as macro_data
+
+        history_path = tmp_path / "breadth_history.csv"
+        monkeypatch.setattr(macro_data, "_BREADTH_HISTORY_PATH", history_path)
+        mock_snapshot.return_value = [
+            {"SB": "AAA", "EX": "HOSE", "RE": 100.0, "CP": 107.0},
+            {"SB": "BBB", "EX": "HOSE", "RE": 100.0, "CP": 99.0},
+        ]
+        first = fetch_market_breadth()
+        assert first["fetch_ok"] is True
+        assert history_path.exists()
+
+        # Same trading day should overwrite the row, not append duplicates.
+        mock_snapshot.return_value = [
+            {"SB": "AAA", "EX": "HOSE", "RE": 100.0, "CP": 101.0},
+            {"SB": "BBB", "EX": "HOSE", "RE": 100.0, "CP": 99.0},
+            {"SB": "CCC", "EX": "HNX", "RE": 100.0, "CP": 110.0},
+        ]
+        second = fetch_market_breadth()
+        assert second["fetch_ok"] is True
+
+        history_df = pd.read_csv(history_path)
+        assert len(history_df) == 1
+        assert int(history_df.loc[0, "advance"]) == second["advance"]
+        assert int(history_df.loc[0, "decline"]) == second["decline"]
+
+    @patch("core.macro_data.fetch_market_foreign_flow")
+    @patch("core.macro_data.fetch_market_breadth")
+    @patch("core.macro_data.fetch_world_markets")
+    @patch("core.macro_data.load_breadth_history")
+    def test_fetch_macro_indicators_contains_breadth_history_metrics(
+        self,
+        mock_load_history,
+        mock_world,
+        mock_breadth,
+        mock_ff,
+    ):
+        from config import WORLD_SYMBOLS
+        from core.macro_data import fetch_macro_indicators
+
+        mock_world.return_value = {
+            k: {"current": 100.0, "pct_1d": 0.5, "pct_5d": 0.2, "pct_20d": 2.0, "prices": [100.0], "timestamps": []}
+            for k in WORLD_SYMBOLS
+        }
+        mock_breadth.return_value = {
+            "advance": 210,
+            "decline": 110,
+            "unchanged": 40,
+            "ceiling": 12,
+            "floor": 4,
+            "movement": {"up_strong": 40, "up": 170, "flat": 40, "down": 90, "down_strong": 20},
+            "by_exchange": {"HOSE": {"advance": 120, "decline": 60, "unchanged": 20}},
+            "fetch_ok": True,
+        }
+        mock_ff.return_value = {"net_buy": 5e9, "buy": 1e10, "sell": 5e9, "trend": "N/A", "fetch_ok": True}
+        mock_load_history.return_value = pd.DataFrame(
+            {
+                "date": pd.date_range("2026-05-20", periods=10, freq="D"),
+                "advance": [160, 150, 170, 180, 190, 200, 210, 220, 215, 225],
+                "decline": [140, 145, 130, 120, 115, 110, 105, 95, 100, 90],
+                "unchanged": [20] * 10,
+                "ceiling": [2, 2, 3, 4, 5, 6, 7, 7, 8, 9],
+                "floor": [5, 5, 4, 4, 3, 3, 2, 2, 2, 1],
+                "ad_ratio": [0.53, 0.51, 0.57, 0.60, 0.62, 0.65, 0.67, 0.70, 0.68, 0.71],
+                "total": [320] * 10,
+            }
+        )
+
+        result = fetch_macro_indicators()
+
+        assert "breadth_history" in result
+        assert "breadth_momentum" in result
+        assert "breadth_ad_line_5" in result
+        assert "breadth_ad_line_10" in result
+        assert result["breadth_momentum"] in ("expanding", "neutral", "contracting")
+        assert isinstance(result["breadth_history"], list)
+        assert len(result["breadth_history"]) <= 10
+
+
+class TestMacroBreadthScoreContribution:
+    def test_breadth_component_rewards_expanding_conditions(self):
+        macro = {
+            "dxy_trend": "neutral",
+            "vix_level": "normal",
+            "foreign_flow": {"net_buy": 0},
+            "ad_ratio": 0.70,
+            "breadth": {"ceiling": 12, "floor": 3},
+            "breadth_momentum": "expanding",
+            "stale_fields": [],
+        }
+        score, _, _ = get_macro_score(macro)
+        assert score > 5.0
+
+    def test_breadth_component_penalizes_contracting_conditions(self):
+        macro = {
+            "dxy_trend": "neutral",
+            "vix_level": "normal",
+            "foreign_flow": {"net_buy": 0},
+            "ad_ratio": 0.32,
+            "breadth": {"ceiling": 2, "floor": 14},
+            "breadth_momentum": "contracting",
+            "stale_fields": [],
+        }
+        score, _, _ = get_macro_score(macro)
+        assert score < 5.0
 

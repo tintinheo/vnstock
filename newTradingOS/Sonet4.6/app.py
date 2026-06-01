@@ -63,7 +63,7 @@ from config import (
 )
 from core.data_fetcher import batch_download
 from core.market_calendar import calendar_basis_summary
-from core.macro_data import fetch_macro_indicators, get_macro_score
+from core.macro_data import fetch_macro_indicators, fetch_vni_data, get_macro_score
 from core.regime import detect_regime
 from core.universe import get_cached_exchange_counts, resolve_universe_symbols
 from core.audit import log_event, ACTION_LOAD, ACTION_MACRO
@@ -112,6 +112,8 @@ def _init_session():
         st.session_state.regime_stale = False
     if "regime_source" not in st.session_state:
         st.session_state.regime_source = "—"
+    if "regime_last_attempt_at" not in st.session_state:
+        st.session_state.regime_last_attempt_at = None
     if "vni_df" not in st.session_state:
         st.session_state.vni_df = None
     if "macro_score" not in st.session_state:
@@ -208,7 +210,7 @@ def _foreign_flow_coverage(foreign_flows: dict) -> dict[str, int]:
     }
 
 
-def _is_vni_regime_stale(vni_df, max_age_days: int = 5) -> bool:
+def _is_vni_regime_stale(vni_df, max_age_days: int = 1) -> bool:
     if vni_df is None or getattr(vni_df, "empty", True):
         return True
     try:
@@ -225,6 +227,42 @@ def _is_vni_regime_stale(vni_df, max_age_days: int = 5) -> bool:
             return False
 
     return (datetime.now().date() - latest_date).days > max_age_days
+
+
+def _refresh_vni_regime(*, force: bool = False, max_age_days: int = 1) -> bool:
+    current_vni = st.session_state.get("vni_df")
+    if not force and not _is_vni_regime_stale(current_vni, max_age_days=max_age_days):
+        st.session_state.regime_stale = False
+        return False
+
+    if not force:
+        last_attempt = st.session_state.get("regime_last_attempt_at")
+        if last_attempt:
+            try:
+                last_attempt_dt = datetime.fromisoformat(str(last_attempt))
+                if (datetime.now() - last_attempt_dt).total_seconds() < 300:
+                    return False
+            except Exception:
+                pass
+
+    st.session_state.regime_last_attempt_at = datetime.now().isoformat(timespec="seconds")
+    vni_days = _vni_history_days_for_loaded_data(
+        st.session_state.get("data_dict", {}),
+        default_days=365,
+    )
+    vni_df = fetch_vni_data(days=vni_days)
+    st.session_state.vni_df = vni_df
+    st.session_state.regime_source = _regime_source_label(vni_df)
+
+    if not vni_df.empty and "Close" in vni_df.columns:
+        rr = detect_regime(vni_df["Close"])
+        st.session_state.regime_result = rr
+        st.session_state.regime_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        st.session_state.regime_stale = _is_vni_regime_stale(vni_df, max_age_days=max_age_days)
+        return True
+
+    st.session_state.regime_stale = True
+    return False
 
 
 def _regime_source_label(vni_df) -> str:
@@ -313,6 +351,11 @@ def _universe_label(key: str) -> str:
         "UPCOM": f"UPCOM ({live_counts.get('UPCOM')} live cached)" if live_counts.get("UPCOM") else "UPCOM (live listing)",
     }
     return labels.get(key, key)
+
+
+if _is_vni_regime_stale(st.session_state.get("vni_df"), max_age_days=1):
+    with st.spinner("Đang đồng bộ VNI regime mới nhất…"):
+        _refresh_vni_regime(force=False, max_age_days=1)
 
 # ─────────────────────────────────────────────────────────────
 # SIDEBAR
@@ -445,23 +488,7 @@ if sb.button("🌐 Cập nhật Macro", key="btn_macro"):
         st.session_state.macro_regime = ml
         st.session_state.macro_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-        # Detect regime from VNI — use fetch_vni_data() which has a
-        # Yahoo Finance fallback when DNSE/SSI cannot serve index data.
-        from core.macro_data import fetch_vni_data as _fetch_vni
-        vni_days = _vni_history_days_for_loaded_data(
-            st.session_state.get("data_dict", {}),
-            default_days=365,
-        )
-        vni_df = _fetch_vni(days=vni_days)
-        st.session_state.vni_df = vni_df
-        st.session_state.regime_source = _regime_source_label(vni_df)
-        if not vni_df.empty and "Close" in vni_df.columns:
-            rr = detect_regime(vni_df["Close"])
-            st.session_state.regime_result = rr
-            st.session_state.regime_updated_at = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            st.session_state.regime_stale = _is_vni_regime_stale(vni_df)
-        else:
-            st.session_state.regime_stale = True
+        _refresh_vni_regime(force=True, max_age_days=1)
 
         st.session_state.macro_stale  = stale
 
@@ -580,6 +607,8 @@ c1.metric("Tickers loaded", len(data_dict))
 if regime_result:
     from core.regime import regime_label_vi, regime_emoji
     regime_delta = f"Prob {regime_result.probability:.0%}"
+    if st.session_state.get("regime_updated_at"):
+        regime_delta += f" | {st.session_state.get('regime_updated_at')}"
     if st.session_state.get("regime_stale"):
         regime_delta += " | stale"
     c2.metric(
@@ -686,6 +715,12 @@ tab_idx += 1
 
 # ── Signal Review / Advanced Scanner Tabs ─────────────────────
 from ui.scanner_tab import render_scanner_tab
+
+if data_dict and _is_vni_regime_stale(st.session_state.get("vni_df"), max_age_days=1):
+    with st.spinner("Đang làm mới VNI regime trước khi quét…"):
+        _refresh_vni_regime(force=False, max_age_days=1)
+    regime_result = st.session_state.get("regime_result")
+    regime_label = regime_result.regime if regime_result else "sideways"
 
 _exchange_map: dict[str, str] = {
     t: str(st.session_state.get("exchange_map", {}).get(t, TICKER_EXCHANGE.get(t, "HOSE"))).strip().upper() or "HOSE"

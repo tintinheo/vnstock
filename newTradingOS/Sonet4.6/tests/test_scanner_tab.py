@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from core.scoring import SignalResult
-from ui.scanner_tab import _scanner_review_state
+from ui.scanner_tab import _scan_summary_detail, _scanner_review_state
 
 
 def _make_signal(ticker: str, action: str, score: float) -> SignalResult:
@@ -54,3 +54,40 @@ def test_scanner_review_state_warns_when_focus_returns_no_rows():
 
     assert state["tone"] == "warning"
     assert "Không có mã" in state["primary"]
+
+
+def test_scan_summary_detail_includes_streak_and_score_distribution_stats():
+    rows = [
+        {"ticker": "AAA", "action": "STRONG BUY", "score": 84.0, "streak": 3, "source": "TEST", "bar_date": "2026-06-01"},
+        {"ticker": "BBB", "action": "BUY", "score": 68.0, "streak": 2, "source": "TEST", "bar_date": "2026-06-01"},
+        {"ticker": "CCC", "action": "HOLD", "score": 52.0, "streak": 0, "source": "TEST", "bar_date": "2026-06-01"},
+        {"ticker": "DDD", "action": "WATCH", "score": 39.0, "streak": -2, "source": "TEST", "bar_date": "2026-06-01"},
+        {"ticker": "EEE", "action": "SELL", "score": 18.0, "streak": -3, "source": "TEST", "bar_date": "2026-06-01"},
+    ]
+
+    summary = _scan_summary_detail(
+        tf="1M",
+        result_rows=rows,
+        regime="bull",
+        macro_score=6.8,
+        audit_path="audit.jsonl",
+        source_mix="TEST:5",
+        latest_bar_date="2026-06-01",
+        foreign_flow_basis="not loaded",
+        macro_stale=[],
+    )
+
+    assert summary["n_tickers"] == 5
+    assert summary["buy_count"] == 2
+    assert summary["strong_buy_count"] == 1
+    assert summary["ceiling_count"] == 2
+    assert summary["floor_count"] == 2
+    assert summary["buy_ratio"] == 0.4
+    assert summary["strong_buy_ratio"] == 0.2
+    assert summary["score_distribution"] == {
+        "0_20": 1,
+        "20_40": 1,
+        "40_60": 1,
+        "60_80": 1,
+        "80_100": 1,
+    }

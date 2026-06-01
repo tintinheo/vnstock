@@ -16,7 +16,7 @@ import numpy as np
 import pandas as pd
 import requests
 
-from config import WORLD_SYMBOLS, API_TIMEOUT, TICKER_EXCHANGE
+from config import WORLD_SYMBOLS, API_TIMEOUT, TICKER_EXCHANGE, EXCHANGE_PRICE_LIMIT
 
 logger = logging.getLogger("TradingOS.macro")
 
@@ -26,6 +26,7 @@ _YAHOO_HEADERS = {
     "Accept":     "application/json",
 }
 _VNI_CACHE_PATH = Path(__file__).resolve().parents[1] / "data" / "vnstock" / "vni_history_cache.csv"
+_BREADTH_HISTORY_PATH = Path(__file__).resolve().parents[1] / "data" / "breadth_history.csv"
 
 
 def _tag_vni_source(df: pd.DataFrame, source_mode: str, source_name: str) -> pd.DataFrame:
@@ -266,6 +267,163 @@ def _fetch_kbs_market_snapshot() -> list:
     return []
 
 
+def _normalize_exchange(exchange: str | None) -> str:
+    value = str(exchange or "").strip().upper()
+    alias = {
+        "HSX": "HOSE",
+        "HOSE": "HOSE",
+        "HNX": "HNX",
+        "UPCOM": "UPCOM",
+        "UPCO": "UPCOM",
+    }
+    return alias.get(value, "HOSE")
+
+
+def _price_limit_for_exchange(exchange: str) -> float:
+    normalized = _normalize_exchange(exchange)
+    return float(EXCHANGE_PRICE_LIMIT.get(normalized, EXCHANGE_PRICE_LIMIT.get("HOSE", 0.07)))
+
+
+def _update_breadth_history(breadth: dict) -> None:
+    if not breadth or not breadth.get("fetch_ok"):
+        return
+
+    advance = int(breadth.get("advance", 0) or 0)
+    decline = int(breadth.get("decline", 0) or 0)
+    unchanged = int(breadth.get("unchanged", 0) or 0)
+    total = advance + decline + unchanged
+    if total <= 0:
+        return
+
+    today = datetime.now().date().isoformat()
+    ad_ratio = (advance / (advance + decline)) if (advance + decline) > 0 else 0.5
+    row = {
+        "date": today,
+        "fetched_at": datetime.now().isoformat(timespec="seconds"),
+        "advance": advance,
+        "decline": decline,
+        "unchanged": unchanged,
+        "ceiling": int(breadth.get("ceiling", 0) or 0),
+        "floor": int(breadth.get("floor", 0) or 0),
+        "near_ceiling": int(breadth.get("near_ceiling", 0) or 0),
+        "near_floor": int(breadth.get("near_floor", 0) or 0),
+        "ad_ratio": round(float(ad_ratio), 4),
+        "total": total,
+    }
+
+    _BREADTH_HISTORY_PATH.parent.mkdir(parents=True, exist_ok=True)
+    if _BREADTH_HISTORY_PATH.exists():
+        try:
+            history = pd.read_csv(_BREADTH_HISTORY_PATH)
+        except Exception:
+            history = pd.DataFrame()
+    else:
+        history = pd.DataFrame()
+
+    if history.empty:
+        updated = pd.DataFrame([row])
+    else:
+        history["date"] = history.get("date", pd.Series(dtype=str)).astype(str)
+        history = history[history["date"] != today]
+        updated = pd.concat([history, pd.DataFrame([row])], ignore_index=True)
+
+    updated = updated.sort_values("date")
+    updated.to_csv(_BREADTH_HISTORY_PATH, index=False)
+
+
+def load_breadth_history(sessions: int = 10) -> pd.DataFrame:
+    if not _BREADTH_HISTORY_PATH.exists():
+        return pd.DataFrame()
+
+    try:
+        history = pd.read_csv(_BREADTH_HISTORY_PATH)
+    except Exception as exc:
+        logger.debug("load breadth history: %s", exc)
+        return pd.DataFrame()
+
+    if history.empty or "date" not in history.columns:
+        return pd.DataFrame()
+
+    history["date"] = pd.to_datetime(history["date"], errors="coerce")
+    history = history.dropna(subset=["date"]).sort_values("date")
+    numeric_cols = [
+        "advance", "decline", "unchanged", "ceiling", "floor",
+        "near_ceiling", "near_floor", "ad_ratio", "total",
+    ]
+    for col in numeric_cols:
+        if col in history.columns:
+            history[col] = pd.to_numeric(history[col], errors="coerce").fillna(0)
+
+    if sessions > 0:
+        history = history.tail(int(sessions))
+    return history.reset_index(drop=True)
+
+
+def _breadth_history_metrics(history: pd.DataFrame) -> dict:
+    if history is None or history.empty:
+        return {
+            "history": [],
+            "momentum": "neutral",
+            "ad_line_5": 0,
+            "ad_line_10": 0,
+        }
+
+    working = history.copy()
+    if "advance" not in working.columns or "decline" not in working.columns:
+        return {
+            "history": [],
+            "momentum": "neutral",
+            "ad_line_5": 0,
+            "ad_line_10": 0,
+        }
+
+    working["ad_diff"] = working["advance"] - working["decline"]
+    working["ad_line"] = working["ad_diff"].cumsum()
+
+    ad_line_5 = int(working["ad_diff"].tail(5).sum())
+    ad_line_10 = int(working["ad_diff"].tail(10).sum())
+
+    ad_ratios = pd.to_numeric(working.get("ad_ratio", pd.Series(dtype=float)), errors="coerce").dropna()
+    momentum = "neutral"
+    if len(ad_ratios) >= 10:
+        recent = float(ad_ratios.tail(5).mean())
+        prev = float(ad_ratios.iloc[-10:-5].mean())
+        delta = recent - prev
+        if delta > 0.03:
+            momentum = "expanding"
+        elif delta < -0.03:
+            momentum = "contracting"
+    elif len(ad_ratios) >= 5:
+        recent = float(ad_ratios.tail(3).mean())
+        prev = float(ad_ratios.head(2).mean())
+        delta = recent - prev
+        if delta > 0.04:
+            momentum = "expanding"
+        elif delta < -0.04:
+            momentum = "contracting"
+
+    history_payload = [
+        {
+            "date": row["date"].date().isoformat(),
+            "advance": int(row.get("advance", 0) or 0),
+            "decline": int(row.get("decline", 0) or 0),
+            "unchanged": int(row.get("unchanged", 0) or 0),
+            "ceiling": int(row.get("ceiling", 0) or 0),
+            "floor": int(row.get("floor", 0) or 0),
+            "ad_ratio": round(float(row.get("ad_ratio", 0.5) or 0.5), 4),
+            "ad_line": int(row.get("ad_line", 0) or 0),
+        }
+        for _, row in working.tail(10).iterrows()
+    ]
+
+    return {
+        "history": history_payload,
+        "momentum": momentum,
+        "ad_line_5": ad_line_5,
+        "ad_line_10": ad_line_10,
+    }
+
+
 def fetch_market_breadth() -> dict:
     """
     Compute advance/decline from KBS IIS real-time snapshot.
@@ -273,23 +431,117 @@ def fetch_market_breadth() -> dict:
     """
     data = _fetch_kbs_market_snapshot()
     if not data:
-        return {"advance": 0, "decline": 0, "unchanged": 0, "fetch_ok": False}
+        return {
+            "advance": 0,
+            "decline": 0,
+            "unchanged": 0,
+            "ceiling": 0,
+            "near_ceiling": 0,
+            "floor": 0,
+            "near_floor": 0,
+            "movement": {
+                "up_strong": 0,
+                "up": 0,
+                "flat": 0,
+                "down": 0,
+                "down_strong": 0,
+            },
+            "by_exchange": {},
+            "fetch_ok": False,
+        }
+
     advance = decline = unchanged = 0
+    ceiling = near_ceiling = floor = near_floor = 0
+    movement = {
+        "up_strong": 0,
+        "up": 0,
+        "flat": 0,
+        "down": 0,
+        "down_strong": 0,
+    }
+    by_exchange: dict[str, dict[str, int]] = {}
+
     for item in data:
-        cp = item.get("CP", 0) or 0
-        re = item.get("RE", 0) or 0
-        if cp > re:
+        cp = float(item.get("CP", 0) or 0)
+        re = float(item.get("RE", 0) or 0)
+        if re <= 0:
+            continue
+
+        exchange = _normalize_exchange(item.get("EX"))
+        exchange_limit = _price_limit_for_exchange(exchange)
+        pct_move = (cp - re) / re
+        abs_move = abs(pct_move)
+        near_cutoff = exchange_limit * 0.70
+        hard_cutoff = exchange_limit * 0.97
+
+        bucket = by_exchange.setdefault(
+            exchange,
+            {
+                "advance": 0,
+                "decline": 0,
+                "unchanged": 0,
+                "ceiling": 0,
+                "floor": 0,
+                "up_strong": 0,
+                "up": 0,
+                "flat": 0,
+                "down": 0,
+                "down_strong": 0,
+            },
+        )
+
+        if pct_move > 0:
             advance += 1
-        elif cp < re:
+            bucket["advance"] += 1
+        elif pct_move < 0:
             decline += 1
+            bucket["decline"] += 1
         else:
             unchanged += 1
-    return {
-        "advance":   advance,
-        "decline":   decline,
+            bucket["unchanged"] += 1
+
+        if pct_move >= hard_cutoff:
+            ceiling += 1
+            bucket["ceiling"] += 1
+        elif pct_move >= near_cutoff:
+            near_ceiling += 1
+
+        if pct_move <= -hard_cutoff:
+            floor += 1
+            bucket["floor"] += 1
+        elif pct_move <= -near_cutoff:
+            near_floor += 1
+
+        if pct_move >= near_cutoff:
+            movement["up_strong"] += 1
+            bucket["up_strong"] += 1
+        elif pct_move > 0:
+            movement["up"] += 1
+            bucket["up"] += 1
+        elif pct_move <= -near_cutoff:
+            movement["down_strong"] += 1
+            bucket["down_strong"] += 1
+        elif pct_move < 0:
+            movement["down"] += 1
+            bucket["down"] += 1
+        else:
+            movement["flat"] += 1
+            bucket["flat"] += 1
+
+    result = {
+        "advance": advance,
+        "decline": decline,
         "unchanged": unchanged,
-        "fetch_ok":  True,
+        "ceiling": ceiling,
+        "near_ceiling": near_ceiling,
+        "floor": floor,
+        "near_floor": near_floor,
+        "movement": movement,
+        "by_exchange": by_exchange,
+        "fetch_ok": True,
     }
+    _update_breadth_history(result)
+    return result
 
 
 # ─────────────────────────────────────────────────────────────
@@ -593,11 +845,17 @@ def fetch_macro_indicators() -> dict:
     # Advance/Decline ratio
     total   = breadth["advance"] + breadth["decline"]
     ad_ratio = (breadth["advance"] / total) if total > 0 else 0.5
+    breadth_history = load_breadth_history(sessions=10)
+    breadth_metrics = _breadth_history_metrics(breadth_history)
 
     return {
         "world":        world,
         "breadth":      breadth,
         "ad_ratio":     round(ad_ratio, 3),
+        "breadth_history": breadth_metrics["history"],
+        "breadth_momentum": breadth_metrics["momentum"],
+        "breadth_ad_line_5": breadth_metrics["ad_line_5"],
+        "breadth_ad_line_10": breadth_metrics["ad_line_10"],
         "foreign_flow": ff,
         "dxy_trend":    dxy_trend,
         "vix_level":    vix_level,
@@ -641,10 +899,34 @@ def get_macro_score(macro: dict) -> tuple[float, str, list[str]]:
     elif ff_net < -1e10: score -= 1.5
     elif ff_net < 0:     score -= 0.5
 
-    # Market breadth
-    ad_ratio = macro.get("ad_ratio", 0.5)
-    if ad_ratio > 0.65:  score += 1.0
-    elif ad_ratio < 0.35: score -= 1.0
+    # Market breadth (0-3 score contribution within the same 0-10 macro scale)
+    ad_ratio = float(macro.get("ad_ratio", 0.5) or 0.5)
+    breadth = macro.get("breadth", {}) or {}
+    ceiling = int(breadth.get("ceiling", 0) or 0)
+    floor = int(breadth.get("floor", 0) or 0)
+    breadth_momentum = str(macro.get("breadth_momentum", "neutral") or "neutral").lower()
+
+    breadth_score = 0.0
+    if ad_ratio >= 0.65:
+        breadth_score += 2.0
+    elif ad_ratio >= 0.55:
+        breadth_score += 1.0
+    elif ad_ratio <= 0.35:
+        breadth_score -= 2.0
+    elif ad_ratio <= 0.45:
+        breadth_score -= 1.0
+
+    if ceiling > floor:
+        breadth_score += 1.0
+    elif floor > ceiling:
+        breadth_score -= 1.0
+
+    if breadth_momentum == "expanding":
+        breadth_score += 0.5
+    elif breadth_momentum == "contracting":
+        breadth_score -= 0.5
+
+    score += max(-3.0, min(3.0, breadth_score))
 
     # ── S&P 500 — global risk-on/risk-off signal ──────────────────────────
     # S&P 500 and VN-Index show moderate positive correlation (~0.4-0.6).

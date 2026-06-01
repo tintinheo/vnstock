@@ -82,6 +82,7 @@ def _base_app_patches(monkeypatch, *, event_calls: list[tuple]) -> None:
     monkeypatch.setattr(macro_data, "get_macro_score", lambda payload: (6.75, "bull", []))
     def _fetch_vni_stub(days=365):
         df = _make_ohlcv(n=220, start_price=1_200.0)
+        df.index = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=len(df))
         df.attrs["source_mode"] = "live"
         df.attrs["source_name"] = "DNSE"
         return df
@@ -458,3 +459,31 @@ def test_app_smoke_vni_fetch_failure_marks_regime_stale_without_macro_partial(mo
     assert at.session_state["regime_result"] is None
     assert at.session_state["regime_source"] == "unavailable"
     assert [args[0] for args, _ in event_calls] == [ACTION_MACRO]
+
+
+def test_app_smoke_auto_refreshes_vni_regime_on_startup(monkeypatch):
+    import core.macro_data as macro_data
+
+    event_calls: list[tuple] = []
+    fetch_vni_calls: list[int] = []
+
+    _base_app_patches(monkeypatch, event_calls=event_calls)
+
+    def _capture_vni(days=365):
+        fetch_vni_calls.append(int(days))
+        df = _make_ohlcv(n=120, start_price=1_200.0)
+        df.index = pd.bdate_range(end=pd.Timestamp.today().normalize(), periods=len(df))
+        df.attrs["source_mode"] = "live"
+        df.attrs["source_name"] = "DNSE"
+        return df
+
+    monkeypatch.setattr(macro_data, "fetch_vni_data", _capture_vni)
+
+    at = AppTest.from_file(str(APP_FILE))
+    at.run(timeout=120)
+
+    assert len(at.exception) == 0
+    assert fetch_vni_calls, "Expected startup auto-refresh to request VNINDEX data"
+    assert at.session_state["regime_result"].regime == "bull"
+    assert at.session_state["regime_stale"] is False
+    assert at.session_state["regime_updated_at"]

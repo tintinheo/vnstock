@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ui.macro_tab import _macro_component_states, _macro_decision_state, _overall_tf_condition
+from ui.macro_tab import _breadth_condition_label, _macro_component_states, _macro_decision_state, _overall_tf_condition
 
 
 def _macro_payload(*, stale_fields: list[str] | None = None, ff_net: float = 0.0) -> dict:
@@ -87,3 +87,21 @@ def test_macro_component_states_prefers_signal_net_buy():
     states = _macro_component_states(payload)
 
     assert states["foreign"] is False
+
+
+def test_breadth_condition_label_expanding_market():
+    label, tone = _breadth_condition_label("expanding", 0.62, 10, 4)
+    assert label == "Mở rộng"
+    assert tone == "success"
+
+
+def test_breadth_condition_label_contracting_market():
+    label, tone = _breadth_condition_label("contracting", 0.42, 2, 11)
+    assert label == "Thu hẹp"
+    assert tone == "warning"
+
+
+def test_breadth_condition_label_mixed_market():
+    label, tone = _breadth_condition_label("neutral", 0.51, 6, 6)
+    assert label == "Phân hóa"
+    assert tone == "info"

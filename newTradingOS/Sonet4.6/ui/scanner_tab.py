@@ -173,6 +173,7 @@ def _scan_result_records(
             "ticker": r.ticker,
             "score": round(r.score, 1),
             "action": r.action,
+            "streak": int(r.indicators.get("Streak", 0) or 0),
             "price": r.price,
             "stop_loss": r.stop_loss,
             "take_profit": r.take_profit,
@@ -201,7 +202,29 @@ def _scan_summary_detail(
     macro_stale: list[str] | None = None,
 ) -> dict:
     buy_count = sum(1 for row in result_rows if row["action"] in ("BUY", "STRONG BUY"))
+    strong_buy_count = sum(1 for row in result_rows if row["action"] == "STRONG BUY")
     watch_count = sum(1 for row in result_rows if row["action"] == "WATCH")
+    ceiling_count = sum(1 for row in result_rows if int(row.get("streak", 0) or 0) >= 2)
+    floor_count = sum(1 for row in result_rows if int(row.get("streak", 0) or 0) <= -2)
+    score_distribution = {
+        "0_20": 0,
+        "20_40": 0,
+        "40_60": 0,
+        "60_80": 0,
+        "80_100": 0,
+    }
+    for row in result_rows:
+        score = float(row.get("score", 0.0) or 0.0)
+        if score < 20:
+            score_distribution["0_20"] += 1
+        elif score < 40:
+            score_distribution["20_40"] += 1
+        elif score < 60:
+            score_distribution["40_60"] += 1
+        elif score < 80:
+            score_distribution["60_80"] += 1
+        else:
+            score_distribution["80_100"] += 1
     avg_score = round(
         sum(float(row["score"]) for row in result_rows) / len(result_rows),
         1,
@@ -223,7 +246,13 @@ def _scan_summary_detail(
         "kind": "summary",
         "n_tickers": len(result_rows),
         "buy_count": buy_count,
+        "strong_buy_count": strong_buy_count,
+        "buy_ratio": round((buy_count / len(result_rows)), 3) if result_rows else 0.0,
+        "strong_buy_ratio": round((strong_buy_count / len(result_rows)), 3) if result_rows else 0.0,
         "watch_count": watch_count,
+        "ceiling_count": ceiling_count,
+        "floor_count": floor_count,
+        "score_distribution": score_distribution,
         "avg_score": avg_score,
         "regime": regime,
         "macro_score": macro_score,

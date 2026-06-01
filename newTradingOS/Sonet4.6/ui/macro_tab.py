@@ -51,6 +51,14 @@ def _foreign_flow_20d_label(trend: str) -> str:
     }.get(trend, trend or "N/A")
 
 
+def _breadth_condition_label(momentum: str, ad_ratio: float, ceiling: int, floor: int) -> tuple[str, str]:
+    if momentum == "expanding" and ad_ratio >= 0.55 and ceiling >= floor:
+        return "Mở rộng", "success"
+    if momentum == "contracting" or ad_ratio <= 0.45 or floor > ceiling:
+        return "Thu hẹp", "warning"
+    return "Phân hóa", "info"
+
+
 def _macro_component_states(macro_data: dict) -> dict[str, bool | None]:
     stale_fields = set(macro_data.get("stale_fields", []))
     ff = macro_data.get("foreign_flow", {})
@@ -137,6 +145,8 @@ def render_macro_tab(
 
     world        = macro_data.get("world", {})
     breadth      = macro_data.get("breadth", {})
+    breadth_history = macro_data.get("breadth_history", []) or []
+    breadth_momentum = macro_data.get("breadth_momentum", "neutral")
     ff           = macro_data.get("foreign_flow", {})
     ad_ratio     = macro_data.get("ad_ratio", 0.5)
     dxy_trend    = macro_data.get("dxy_trend", "neutral")
@@ -288,6 +298,85 @@ def render_macro_tab(
             ad_str = f"{adv}/{dec}" if total > 0 else "N/A"
             breadth_label = "Tốt" if ad_ratio > 0.55 else "Xấu" if ad_ratio < 0.45 else "Trung bình"
             st.metric("A/D Ratio", ad_str, breadth_label)
+
+    st.divider()
+    st.subheader("📊 Market Breadth Chi Tiết")
+    movement = breadth.get("movement", {}) if isinstance(breadth, dict) else {}
+    up_strong = int(movement.get("up_strong", 0) or 0)
+    up = int(movement.get("up", 0) or 0)
+    flat = int(movement.get("flat", 0) or 0)
+    down = int(movement.get("down", 0) or 0)
+    down_strong = int(movement.get("down_strong", 0) or 0)
+    ceiling = int(breadth.get("ceiling", 0) or 0)
+    floor = int(breadth.get("floor", 0) or 0)
+    near_ceiling = int(breadth.get("near_ceiling", 0) or 0)
+    near_floor = int(breadth.get("near_floor", 0) or 0)
+    movement_total = max(1, up_strong + up + flat + down + down_strong)
+    condition_label, condition_tone = _breadth_condition_label(
+        str(breadth_momentum or "neutral"),
+        float(ad_ratio or 0.5),
+        ceiling,
+        floor,
+    )
+
+    b1, b2, b3, b4, b5 = st.columns(5)
+    b1.metric("Tăng mạnh", up_strong, f"{(up_strong / movement_total) * 100:.1f}%")
+    b2.metric("Tăng", up, f"{(up / movement_total) * 100:.1f}%")
+    b3.metric("Đứng giá", flat, f"{(flat / movement_total) * 100:.1f}%")
+    b4.metric("Giảm", down, f"{(down / movement_total) * 100:.1f}%")
+    b5.metric("Giảm mạnh", down_strong, f"{(down_strong / movement_total) * 100:.1f}%")
+
+    render_guidance_callout(
+        "Breadth condition",
+        (
+            f"Trạng thái: {condition_label} | momentum: {breadth_momentum} | "
+            f"ceiling/floor: {ceiling}/{floor} | near-ceiling/floor: {near_ceiling}/{near_floor}"
+        ),
+        tone=condition_tone,
+    )
+
+    exchange_breakdown = breadth.get("by_exchange", {}) if isinstance(breadth, dict) else {}
+    if exchange_breakdown:
+        rows_ex = []
+        for ex in ("HOSE", "HNX", "UPCOM"):
+            bucket = exchange_breakdown.get(ex, {})
+            rows_ex.append({
+                "Sàn": ex,
+                "Tăng": int(bucket.get("advance", 0) or 0),
+                "Giảm": int(bucket.get("decline", 0) or 0),
+                "Đứng": int(bucket.get("unchanged", 0) or 0),
+                "Trần": int(bucket.get("ceiling", 0) or 0),
+                "Sàn phiên": int(bucket.get("floor", 0) or 0),
+                "Tăng mạnh": int(bucket.get("up_strong", 0) or 0),
+                "Giảm mạnh": int(bucket.get("down_strong", 0) or 0),
+            })
+        st.dataframe(pd.DataFrame(rows_ex), width="stretch", hide_index=True)  # noqa: deprecated-arg
+
+    if breadth_history:
+        history_df = pd.DataFrame(breadth_history)
+        if not history_df.empty and "date" in history_df.columns and "ad_line" in history_df.columns:
+            history_df["date"] = pd.to_datetime(history_df["date"], errors="coerce")
+            history_df = history_df.dropna(subset=["date"]).sort_values("date")
+            fig_ad = go.Figure(go.Scatter(
+                x=history_df["date"].dt.date.astype(str),
+                y=history_df["ad_line"],
+                mode="lines+markers",
+                line=dict(color="#2ec4b6", width=2),
+                marker=dict(size=6),
+                hovertemplate="%{x}<br>AD line: %{y}<extra></extra>",
+            ))
+            fig_ad.update_layout(
+                height=220,
+                template="plotly_dark",
+                paper_bgcolor="#0e1117",
+                plot_bgcolor="#0e1117",
+                margin=dict(l=40, r=10, t=20, b=30),
+                xaxis_title="Session",
+                yaxis_title="A/D line",
+                showlegend=False,
+            )
+            st.plotly_chart(fig_ad, width="stretch")
+            st.caption("A/D line dùng 10 phiên gần nhất từ breadth_history.csv.")
 
     # ── World Markets Table ───────────────────────────────────
     st.subheader("🌍 Thị Trường Thế Giới")
