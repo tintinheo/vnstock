@@ -446,6 +446,7 @@ def fetch_market_breadth() -> dict:
                 "down": 0,
                 "down_strong": 0,
             },
+            "symbols": {"up_strong": [], "up": [], "flat": [], "down": [], "down_strong": []},
             "by_exchange": {},
             "fetch_ok": False,
         }
@@ -459,6 +460,7 @@ def fetch_market_breadth() -> dict:
         "down": 0,
         "down_strong": 0,
     }
+    symbols: dict[str, list[str]] = {"up_strong": [], "up": [], "flat": [], "down": [], "down_strong": []}
     by_exchange: dict[str, dict[str, int]] = {}
 
     for item in data:
@@ -515,18 +517,26 @@ def fetch_market_breadth() -> dict:
         if pct_move >= near_cutoff:
             movement["up_strong"] += 1
             bucket["up_strong"] += 1
+            _mov_key = "up_strong"
         elif pct_move > 0:
             movement["up"] += 1
             bucket["up"] += 1
+            _mov_key = "up"
         elif pct_move <= -near_cutoff:
             movement["down_strong"] += 1
             bucket["down_strong"] += 1
+            _mov_key = "down_strong"
         elif pct_move < 0:
             movement["down"] += 1
             bucket["down"] += 1
+            _mov_key = "down"
         else:
             movement["flat"] += 1
             bucket["flat"] += 1
+            _mov_key = "flat"
+        _ticker = str(item.get("SB", "") or "").strip()
+        if _ticker:
+            symbols[_mov_key].append(_ticker)
 
     result = {
         "advance": advance,
@@ -537,6 +547,7 @@ def fetch_market_breadth() -> dict:
         "floor": floor,
         "near_floor": near_floor,
         "movement": movement,
+        "symbols": {k: sorted(v) for k, v in symbols.items()},
         "by_exchange": by_exchange,
         "fetch_ok": True,
     }

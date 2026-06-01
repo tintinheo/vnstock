@@ -971,3 +971,69 @@ class TestMacroBreadthScoreContribution:
         score, _, _ = get_macro_score(macro)
         assert score < 5.0
 
+
+# ─────────────────────────────────────────────────────────────
+# Symbol lists per movement bucket
+# ─────────────────────────────────────────────────────────────
+class TestMarketBreadthSymbols:
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_symbols_collected_per_bucket(self, mock_snapshot, monkeypatch, tmp_path):
+        import core.macro_data as macro_data
+
+        monkeypatch.setattr(macro_data, "_BREADTH_HISTORY_PATH", tmp_path / "breadth_history.csv")
+        # HOSE limit ~7%: near_cutoff = 7% * 0.70 = 4.9%
+        mock_snapshot.return_value = [
+            {"SB": "AAA", "EX": "HOSE", "RE": 100.0, "CP": 106.0},  # +6% >= 4.9% → up_strong
+            {"SB": "BBB", "EX": "HOSE", "RE": 100.0, "CP": 102.0},  # +2% > 0, < 4.9% → up
+            {"SB": "CCC", "EX": "HOSE", "RE": 100.0, "CP": 97.0},   # -3% < 0, > -4.9% → down
+            {"SB": "DDD", "EX": "HOSE", "RE": 100.0, "CP": 94.0},   # -6% <= -4.9% → down_strong
+        ]
+
+        result = fetch_market_breadth()
+
+        assert result["fetch_ok"] is True
+        assert result["symbols"]["up_strong"] == ["AAA"]
+        assert result["symbols"]["up"] == ["BBB"]
+        assert result["symbols"]["down"] == ["CCC"]
+        assert result["symbols"]["down_strong"] == ["DDD"]
+        assert result["symbols"]["flat"] == []
+
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_symbols_sorted_alphabetically(self, mock_snapshot, monkeypatch, tmp_path):
+        import core.macro_data as macro_data
+
+        monkeypatch.setattr(macro_data, "_BREADTH_HISTORY_PATH", tmp_path / "breadth_history.csv")
+        mock_snapshot.return_value = [
+            {"SB": "ZZZ", "EX": "HOSE", "RE": 100.0, "CP": 103.0},
+            {"SB": "AAA", "EX": "HOSE", "RE": 100.0, "CP": 102.0},
+            {"SB": "MMM", "EX": "HOSE", "RE": 100.0, "CP": 101.0},
+        ]
+
+        result = fetch_market_breadth()
+
+        assert result["symbols"]["up"] == ["AAA", "MMM", "ZZZ"]
+
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_symbols_empty_when_no_data(self, mock_snapshot):
+        mock_snapshot.return_value = []
+
+        result = fetch_market_breadth()
+
+        assert result["fetch_ok"] is False
+        assert result["symbols"] == {"up_strong": [], "up": [], "flat": [], "down": [], "down_strong": []}
+
+    @patch("core.macro_data._fetch_kbs_market_snapshot")
+    def test_symbols_skips_blank_tickers(self, mock_snapshot, monkeypatch, tmp_path):
+        import core.macro_data as macro_data
+
+        monkeypatch.setattr(macro_data, "_BREADTH_HISTORY_PATH", tmp_path / "breadth_history.csv")
+        mock_snapshot.return_value = [
+            {"SB": "",    "EX": "HOSE", "RE": 100.0, "CP": 103.0},
+            {"SB": None,  "EX": "HOSE", "RE": 100.0, "CP": 102.0},
+            {"SB": "VCB", "EX": "HOSE", "RE": 100.0, "CP": 101.0},
+        ]
+
+        result = fetch_market_breadth()
+
+        assert result["symbols"]["up"] == ["VCB"]
+

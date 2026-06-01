@@ -10,7 +10,7 @@ import plotly.graph_objects as go
 
 from config import TIMEFRAME_CONFIG, WORLD_IMPACT_VI, WORLD_IMPACT_EN
 from core.regime import regime_label_vi
-from ui.components import GREEN, GREY, RED, YELLOW, render_decision_panel, render_guidance_callout, render_section_header, render_trust_ribbon, world_sparkline
+from ui.components import BLUE, GREEN, GREY, RED, YELLOW, render_decision_panel, render_guidance_callout, render_section_header, render_trust_ribbon, world_sparkline
 
 
 def _world_as_of(info: dict | None) -> str:
@@ -350,6 +350,19 @@ border-radius:14px;padding:1rem 1.25rem;margin-bottom:0.75rem;background:{_stanc
                     "Giảm mạnh": int(bucket.get("down_strong", 0) or 0),
                 })
             st.dataframe(pd.DataFrame(rows_ex), width="stretch", hide_index=True)
+
+        _sym = breadth.get("symbols", {}) if isinstance(breadth, dict) else {}
+        _signal_groups = [
+            ("📈 Tăng mạnh", "up_strong"),
+            ("🟢 Tăng", "up"),
+            ("🔴 Giảm", "down"),
+            ("📉 Giảm mạnh", "down_strong"),
+        ]
+        for _label, _key in _signal_groups:
+            _tickers = _sym.get(_key, [])
+            if _tickers:
+                with st.expander(f"{_label} — {len(_tickers)} mã", expanded=False):
+                    st.caption(", ".join(_tickers))
 
         if breadth_history:
             history_df = pd.DataFrame(breadth_history)
