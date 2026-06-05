@@ -1,0 +1,13 @@
+version: '3.8'
+services:
+  trading-app:
+    build: .
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./data_store:/app/data_store
+      - ./saved_models:/app/saved_models
+      - ./reports:/app/reports
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
