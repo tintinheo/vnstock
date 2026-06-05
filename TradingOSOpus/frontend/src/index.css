@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body { @apply bg-surface-900 text-gray-100 font-sans; }
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { @apply bg-surface-900; }
+  ::-webkit-scrollbar-thumb { @apply bg-surface-700 rounded; }
+}
+
+@layer components {
+  .card { @apply bg-surface-800 rounded-xl border border-surface-700 p-4; }
+  .btn-primary { @apply bg-brand-600 hover:bg-brand-700 text-white font-medium py-2 px-4 rounded-lg transition-colors; }
+  .btn-secondary { @apply bg-surface-700 hover:bg-surface-800 text-gray-200 font-medium py-2 px-4 rounded-lg transition-colors border border-surface-700; }
+  .input-field { @apply bg-surface-900 border border-surface-700 rounded-lg px-3 py-2 text-gray-100 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 w-full; }
+  .badge-buy { @apply bg-buy/20 text-buy border border-buy/30 px-2 py-0.5 rounded-full text-xs font-bold; }
+  .badge-sell { @apply bg-sell/20 text-sell border border-sell/30 px-2 py-0.5 rounded-full text-xs font-bold; }
+  .badge-hold { @apply bg-hold/20 text-hold border border-hold/30 px-2 py-0.5 rounded-full text-xs font-bold; }
+}

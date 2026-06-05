@@ -1,54 +1,111 @@
-"""data/data_manager.py – Unified data manager: TCBS -> VCI -> synthetic fallback."""
-import os, datetime as dt
-import pandas as pd, numpy as np
-from config.settings import DATA_DIR, DEFAULT_TICKERS
-from data.tcbs_client import fetch_ohlcv, fetch_ticker_overview
-from data.vci_client import fetch_ohlcv_vci
-from data.news_scraper import scrape_cafef_headlines
+"""data/data_manager.py – KBS(IIS) → CafeF → Cache → Error. No vnstock."""
+import pandas as pd
+import os, json, logging
+from datetime import datetime
+
+logger = logging.getLogger(__name__)
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s", datefmt="%H:%M:%S")
+
+
+class DataUnavailableError(Exception):
+    pass
+
 
 class DataManager:
-    def __init__(self, cache_dir=DATA_DIR):
-        self.cache_dir = cache_dir; os.makedirs(cache_dir, exist_ok=True)
+    CACHE_TTL_HOURS = 24
 
-    def _cp(self, t): return os.path.join(self.cache_dir, f"{t.upper()}.csv")
-    def _save(self, t, df): df.to_csv(self._cp(t), index=False)
-    def _load(self, t):
-        p = self._cp(t)
-        return pd.read_csv(p, parse_dates=["date"]) if os.path.exists(p) else None
+    def __init__(self, cache_dir="cache"):
+        self.cache_dir = cache_dir
+        os.makedirs(cache_dir, exist_ok=True)
+        self._kbs = None
+        self._cafef = None
 
-    def get_ohlcv(self, ticker, start="2016-01-01", end=None, use_cache=True):
-        if use_cache:
-            c = self._load(ticker)
-            if c is not None and len(c) > 50: return c
-        df = fetch_ohlcv(ticker, start=start, end=end)
-        if df.empty:
-            print(f"[DM] TCBS failed {ticker}, trying VCI...")
-            df = fetch_ohlcv_vci(ticker, start=start, end=end)
-        if df.empty:
-            print(f"[DM] APIs failed {ticker}, generating synthetic")
-            df = self._synthetic(ticker, start, end)
-        if not df.empty: self._save(ticker, df)
-        return df
+    @property
+    def kbs(self):
+        if self._kbs is None:
+            from data.kbs_client import KBSClient
+            self._kbs = KBSClient()
+        return self._kbs
 
-    def get_multiple(self, tickers=None, start="2016-01-01", end=None):
-        if tickers is None: tickers = DEFAULT_TICKERS
-        return {t: self.get_ohlcv(t, start=start, end=end) for t in tickers}
+    @property
+    def cafef(self):
+        if self._cafef is None:
+            from data.cafef_client import CafeFClient
+            self._cafef = CafeFClient()
+        return self._cafef
 
-    def get_news(self, pages=3): return scrape_cafef_headlines(pages)
-    def get_overview(self, ticker): return fetch_ticker_overview(ticker)
+    def get_ohlcv(self, ticker: str, start="2020-01-01", end=None) -> pd.DataFrame:
+        ticker = ticker.upper().strip()
 
-    @staticmethod
-    def _synthetic(ticker, start="2016-01-01", end=None):
-        if end is None: end = dt.date.today().isoformat()
-        dates = pd.bdate_range(start=start, end=end); n = len(dates)
-        if n == 0: return pd.DataFrame()
-        np.random.seed(hash(ticker) % 2**31)
-        s0 = np.random.uniform(10, 150) * 1000
-        prices = s0 * np.exp(np.cumsum(np.random.normal(0.0003, 0.018, n)))
-        high = prices * (1 + np.abs(np.random.normal(0, 0.008, n)))
-        low = prices * (1 - np.abs(np.random.normal(0, 0.008, n)))
-        opn = low + (high - low) * np.random.uniform(0.2, 0.8, n)
-        vol = np.random.lognormal(13, 1.0, n).astype(int)
-        return pd.DataFrame({"date": dates[:n], "open": np.round(opn, -2),
-            "high": np.round(high, -2), "low": np.round(low, -2),
-            "close": np.round(prices, -2), "volume": vol})
+        # 1. KBS IIS (primary)
+        df = self._try_kbs(ticker, start, end)
+        if df is not None and len(df) >= 10:
+            self._save_cache(df, ticker)
+            return df
+
+        # 2. CafeF scraper (backup)
+        df = self._try_cafef(ticker, start)
+        if df is not None and len(df) >= 10:
+            self._save_cache(df, ticker)
+            return df
+
+        # 3. Cache
+        df = self._load_cache(ticker)
+        if df is not None and len(df) > 0:
+            logger.warning(f"[CACHE] Using cached data for {ticker}")
+            return df
+
+        raise DataUnavailableError(
+            f"Cannot fetch data for '{ticker}'. KBS and CafeF both failed. "
+            f"Check internet and that '{ticker}' is valid."
+        )
+
+    def _try_kbs(self, ticker, start, end):
+        try:
+            df = self.kbs.get_ohlcv(ticker, start, end)
+            if df is not None and len(df) > 0 and "close" in df.columns:
+                last = df["close"].iloc[-1]
+                if 500 <= last <= 2_000_000: return df
+                logger.warning(f"[KBS] {ticker}: bad price {last:,.0f}")
+        except Exception as e:
+            logger.warning(f"[KBS] {ticker}: {e}")
+        return None
+
+    def _try_cafef(self, ticker, start):
+        try:
+            df = self.cafef.get_ohlcv(ticker, start=start)
+            if df is not None and len(df) > 0 and "close" in df.columns:
+                last = df["close"].iloc[-1]
+                if 500 <= last <= 2_000_000: return df
+        except Exception as e:
+            logger.warning(f"[CafeF] {ticker}: {e}")
+        return None
+
+    def _save_cache(self, df, ticker):
+        try:
+            df.to_csv(os.path.join(self.cache_dir, f"{ticker}.csv"), index=False)
+            with open(os.path.join(self.cache_dir, f"{ticker}.meta.json"), "w") as f:
+                json.dump({"cached_at": datetime.now().isoformat(),
+                           "rows": len(df), "last_close": float(df["close"].iloc[-1]),
+                           "source": self.get_data_source(df)}, f)
+        except Exception as e:
+            logger.warning(f"Cache save: {e}")
+
+    def _load_cache(self, ticker):
+        dp = os.path.join(self.cache_dir, f"{ticker}.csv")
+        mp = os.path.join(self.cache_dir, f"{ticker}.meta.json")
+        if not os.path.exists(dp): return None
+        try:
+            if os.path.exists(mp):
+                with open(mp) as f: meta = json.load(f)
+                age = (datetime.now() - datetime.fromisoformat(meta["cached_at"])).total_seconds()/3600
+                if age > self.CACHE_TTL_HOURS: return None
+            df = pd.read_csv(dp); df["date"] = pd.to_datetime(df["date"]); df["_source"] = "CACHE"
+            return df
+        except: return None
+
+    def get_data_source(self, df) -> str:
+        if df is None or len(df) == 0: return "NONE"
+        return str(df["_source"].iloc[-1]) if "_source" in df.columns else "UNKNOWN"
+
+    def get_news(self, pages=1): return []
