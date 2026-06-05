@@ -15,7 +15,8 @@ class BacktestEngine:
     def run(self, df, ticker="TEST", strategy_key="1W", lookback=100):
         from strategies.engine import STRATEGY_MAP
         if strategy_key not in STRATEGY_MAP: return {"error": f"Unknown strategy: {strategy_key}"}
-        strategy = STRATEGY_MAP[strategy_key](); portfolio = Portfolio(self.initial_capital)
+        strategy = STRATEGY_MAP[strategy_key]; 
+        portfolio = Portfolio(self.initial_capital)
         stop_mgr = StopLossManager(method="atr", atr_multiplier=2.0)
         equity_curve, signals_log = [], []
         horizon_days = HORIZONS[strategy_key]["days"]; step = max(horizon_days//2, 1)
