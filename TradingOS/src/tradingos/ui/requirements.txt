@@ -1,0 +1,19 @@
+# Runtime
+streamlit>=1.35
+streamlit-aggrid>=1.2.0
+pandas>=2.0
+numpy>=1.26
+requests>=2.31
+duckdb>=0.10
+plotly>=5.20
+pyyaml
+pydantic>=2.0
+scipy
+
+# ML (optional - comment out if not needed)
+# tensorflow>=2.15
+# scikit-learn>=1.4
+# prophet>=1.1
+
+# FiinQuant realtime data (requires account at fiinquant.vn)
+# pip install --extra-index-url https://fiinquant.github.io/fiinquantx/simple fiinquantx

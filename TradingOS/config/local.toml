@@ -1,0 +1,4 @@
+# local.toml — machine-specific overrides (never commit — listed in .gitignore)
+[api]
+fiinquantx_username = "thanhtinlona@gmail.com"
+fiinquantx_password = "fiingroup@1910"

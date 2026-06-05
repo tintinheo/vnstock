@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+config/local.toml
+data/*.duckdb
+data/*.parquet

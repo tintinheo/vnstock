@@ -1,0 +1,30 @@
+﻿============================= test session starts =============================
+platform win32 -- Python 3.13.13, pytest-9.0.2, pluggy-1.6.0
+rootdir: D:\portfolio\vnstock\newTradingOS\Sonet4.6
+configfile: pytest.ini
+plugins: anyio-4.13.0, cov-7.1.0, mock-3.15.1
+collected 42 items
+
+tests\test_macro_data.py ........................FF................      [100%]
+
+================================== FAILURES ===================================
+____________ TestFetchForeignFlowTicker20d.test_net_20d_accumulate ____________
+tests\test_macro_data.py:284: in test_net_20d_accumulate
+    assert result["net_20d"] == pytest.approx(6e10)
+E   assert 0 == 60000000000.0 ▒ 6.0e+04
+E     
+E     comparison failed
+E     Obtained: 0
+E     Expected: 60000000000.0 ▒ 6.0e+04
+____________ TestFetchForeignFlowTicker20d.test_net_20d_distribute ____________
+tests\test_macro_data.py:300: in test_net_20d_distribute
+    assert result["net_20d"] == pytest.approx(-6e10)
+E   assert 0 == -60000000000.0 ▒ 6.0e+04
+E     
+E     comparison failed
+E     Obtained: 0
+E     Expected: -60000000000.0 ▒ 6.0e+04
+=========================== short test summary info ===========================
+FAILED tests/test_macro_data.py::TestFetchForeignFlowTicker20d::test_net_20d_accumulate
+FAILED tests/test_macro_data.py::TestFetchForeignFlowTicker20d::test_net_20d_distribute
+======================== 2 failed, 40 passed in 0.37s =========================

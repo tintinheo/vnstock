@@ -1,0 +1,8 @@
+[api]
+ssi_base_url = "https://iboard-query.ssi.com.vn"
+dnse_base_url = "https://services.entrade.com.vn"
+
+[money_flow]
+mcvd_lookback_days = 20
+mcvd_slope_threshold = 0.01
+sms_strong_buy = 70
