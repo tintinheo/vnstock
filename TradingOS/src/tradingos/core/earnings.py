@@ -56,6 +56,7 @@ def compute_earnings_risk(
     ticker: str,
     current_date: date | None = None,
     earnings_df: pd.DataFrame | None = None,
+    signal_time: datetime | None = None,
 ) -> EarningsRisk:
     """
     Compute earnings rollover risk for a ticker.
@@ -97,18 +98,58 @@ def compute_earnings_risk(
     if earnings_df is None or earnings_df.empty:
         return EarningsRisk(ticker=ticker)
 
-    # Only consider future publication dates (expected or confirmed)
-    future = earnings_df[
-        pd.to_datetime(earnings_df["expected_publication_date"]).dt.date >= current_date
-    ].copy()
+    # Apply explicit point-in-time policies.  CONFIRMED events use the actual
+    # date only when a source and publication timestamp were already observable
+    # at signal time. ESTIMATED events use only their expected date; they are
+    # never promoted to historical actual events. MISSING rows are ignored.
+    vn_tz = ZoneInfo("Asia/Ho_Chi_Minh")
+    cutoff = signal_time
+    if cutoff is None:
+        cutoff = datetime.combine(current_date, datetime.max.time(), tzinfo=vn_tz)
+    elif cutoff.tzinfo is None:
+        cutoff = cutoff.replace(tzinfo=vn_tz)
 
-    if future.empty:
+    candidates: list[dict] = []
+    for _, row in earnings_df.iterrows():
+        status = str(row.get("event_status") or "").upper()
+        if not status:
+            status = "CONFIRMED" if bool(row.get("confirmed", False)) else "ESTIMATED"
+        if status == "MISSING":
+            continue
+
+        event_date: date | None = None
+        if status == "CONFIRMED":
+            published_at = pd.to_datetime(row.get("publication_timestamp"), errors="coerce")
+            source = str(row.get("source") or "").strip()
+            actual = pd.to_datetime(row.get("actual_publication_date"), errors="coerce")
+            if not source or pd.isna(published_at) or pd.isna(actual):
+                continue
+            if published_at.tzinfo is None:
+                published_at = published_at.tz_localize(vn_tz)
+            else:
+                published_at = published_at.tz_convert(vn_tz)
+            if published_at.to_pydatetime() > cutoff:
+                continue
+            event_date = actual.date()
+        elif status == "ESTIMATED":
+            expected = pd.to_datetime(row.get("expected_publication_date"), errors="coerce")
+            if pd.isna(expected):
+                continue
+            event_date = expected.date()
+        else:
+            continue
+
+        if event_date >= current_date:
+            candidates.append({"event_date": event_date, "row": row})
+
+    future = sorted(candidates, key=lambda candidate: candidate["event_date"])
+
+    if not future:
         return EarningsRisk(ticker=ticker)
 
     # Nearest upcoming publication
-    future = future.sort_values("expected_publication_date")
-    next_row = future.iloc[0]
-    next_pub = pd.to_datetime(next_row["expected_publication_date"]).date()
+    next_row = future[0]["row"]
+    next_pub = future[0]["event_date"]
     days_to  = (next_pub - current_date).days
     quarter  = str(next_row.get("fiscal_quarter") or "")
 

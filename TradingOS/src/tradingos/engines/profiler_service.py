@@ -264,6 +264,8 @@ class ProfilerService:
                     bond_yield_df=bond_df,
                     sbv_net_injection_7d=sbv_data.get("net_7d"),
                     sbv_avg_vol_ref=sbv_data.get("avg_ref", 10_000.0),
+                    sbv_as_of=sbv_data.get("as_of"),
+                    sbv_status=sbv_data.get("status"),
                 )
                 _MACRO_CACHE["result"] = macro_result
                 _MACRO_CACHE["ts"]     = _now

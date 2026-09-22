@@ -92,6 +92,8 @@ class ScannerService:
                 bond_yield_df=_bond_df,
                 sbv_net_injection_7d=_sbv_data.get("net_7d"),
                 sbv_avg_vol_ref=_sbv_data.get("avg_ref", 10_000.0),
+                sbv_as_of=_sbv_data.get("as_of"),
+                sbv_status=_sbv_data.get("status"),
             )
             if _macro_result:
                 log.info(
