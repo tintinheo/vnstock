@@ -48,6 +48,8 @@ def _profile_to_row(p) -> dict:
         "Mã":          p.ticker,
         "Sàn":         p.exchange,
         "Action":      p.action,
+        "Actionable":  p.actionability_status.actionable,
+        "Data Status": ", ".join(c.status.value for c in p.data_context),
         "Conf":        p.confidence,
         "MFPM":        p.mfpm_score,
         "Macro":       p.macro_regime,
@@ -106,6 +108,8 @@ def _profile_to_row(p) -> dict:
 
 
 def _render_detail(profile, idx: int = 0) -> None:
+    if not profile.actionability_status.actionable:
+        st.error("Không công bố khuyến nghị: " + "; ".join(profile.actionability_status.reasons))
     # ── Real-time price header ────────────────────────────────────────────────
     if profile.rt_price:
         pct = profile.rt_pct_change or 0.0

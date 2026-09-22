@@ -60,7 +60,7 @@ class PortfolioService:
         advisories = []
         for ticker, pos in self._positions.items():
             try:
-                df = fetch_ohlcv(ticker, days=30)
+                df = fetch_ohlcv(ticker, days=30).data
                 if df.empty:
                     continue
                 df = compute_indicators(df)
@@ -151,7 +151,7 @@ class PortfolioService:
         rows = []
         for ticker, pos in self._positions.items():
             try:
-                df = fetch_ohlcv(ticker, days=5)
+                df = fetch_ohlcv(ticker, days=5).data
                 cur = float(df["close"].iloc[-1]) if not df.empty else pos.entry_price
             except Exception:
                 cur = pos.entry_price

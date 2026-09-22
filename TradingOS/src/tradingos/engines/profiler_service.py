@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 import traceback
-from datetime import datetime
+from datetime import datetime, timezone
 
 import pandas as pd
 
@@ -14,7 +14,8 @@ from ..data.dnse_provider import dnse as _dnse_provider
 from ..core.intraday_cvd import compute_intraday_cvd
 from ..core.orderbook import compute_order_book_imbalance
 from ..data.cache import cache
-from ..data.schemas import TickerProfile, ProfilerRequest, TradingSignal
+from ..data.schemas import CapabilityStatus, DataContext, TickerProfile, ProfilerRequest, TradingSignal
+from .publication_gate import apply_publication_gate
 from ..core import (
     compute_indicators,
     run_amf, detect_amd_phase, volume_quality_score,
@@ -84,13 +85,20 @@ class ProfilerService:
 
         # ── 1. Fetch data ──────────────────────────────────────────────────
         try:
-            df = fetch_ohlcv(ticker, days=1000)
+            ohlcv_result = fetch_ohlcv(ticker, days=1000)
+            df = ohlcv_result.data
         except Exception as e:
             log.warning(f"OHLCV fetch failed for {ticker}: {e}")
-            return self._error_profile(ticker, str(e))
+            failed_context = DataContext(
+                provider="UNKNOWN", capability="OHLCV",
+                requested_at=datetime.now(timezone.utc),
+                status=CapabilityStatus.FETCH_FAILED, dq_status="NOT_RUN",
+                degraded_reasons=[str(e)],
+            )
+            return self._error_profile(ticker, str(e), [failed_context])
 
         if df.empty or len(df) < 30:
-            return self._error_profile(ticker, "Insufficient data")
+            return self._error_profile(ticker, "Insufficient data", [ohlcv_result.context])
 
         quote = fetch_quote(ticker)
         exchange = _extract_exchange(quote)
@@ -344,7 +352,9 @@ class ProfilerService:
             fundamental_snapshot=fund_snap,
         )
 
-        action = mfpm_result["action"]
+        action, actionability = apply_publication_gate(
+            mfpm_result["action"], [ohlcv_result.context]
+        )
         confidence = mfpm_result["confidence"]
         signal_mode = mfpm_result["signal_mode"]
         entry = mfpm_result["entry"]
@@ -457,6 +467,8 @@ class ProfilerService:
             exchange=exchange,
             sector=sms_result.get("sector", ""),
             last_updated=datetime.now().isoformat(),
+            data_context=[ohlcv_result.context],
+            actionability_status=actionability,
             # Signal output
             action=action,
             confidence=confidence,
@@ -717,24 +729,71 @@ class ProfilerService:
                 "data_source_intraday":   _intraday_source,
                 "bilstm_10d_signal":      _bilstm_result["signal"],
                 "bilstm_10d_confidence":  _bilstm_result["confidence"],
+                "data_context":           [ohlcv_result.context.dict()],
+                "actionability_status":   actionability.dict(),
             },
         })
 
         return profile
 
-    def _error_profile(self, ticker: str, error: str) -> TickerProfile:
+    def _error_profile(
+        self, ticker: str, error: str, contexts: list[DataContext] | None = None
+    ) -> TickerProfile:
         """Return a TickerProfile indicating an error."""
         cache.put_audit({
             "event_type": "ERROR",
             "ticker": ticker,
-            "action": "ERROR",
+            "action": "NO_RECOMMENDATION",
             "rejected_reason": error,
             # [P3.1] Persist rejected_reason in payload so it survives DuckDB serialization
-            "payload": {"rejected_reason": error},
+            "payload": {
+                "rejected_reason": error,
+                "data_context": [c.dict() for c in (contexts or [])],
+            },
         })
         return TickerProfile(
             ticker=ticker,
-            action="ERROR",
+            action="NO_RECOMMENDATION",
+            confidence="—",
+            signal_mode="MIXED",
+            mfpm_score=0,
+            mode_w_score=0,
+            mc_win_prob=0.0,
+            entry_price=0.0,
+            stop_loss=0.0,
+            sl_pct=0.0,
+            tp1=0.0,
+            tp2=0.0,
+            rr_ratio=0.0,
+            close=0.0,
+            volume=0.0,
+            avg_volume_20d=0.0,
+            sma20=0.0,
+            sma50=0.0,
+            sma200=0.0,
+            rsi14=0.0,
+            atr14=0.0,
+            obv=0.0,
+            sms_raw=0,
+            sms_label="RETAIL_DRIVEN",
+            mcvd_5d=0.0,
+            mcvd_20d=0.0,
+            mcvd_trend="FLAT",
+            stealth_accum=False,
+            distribution_warning="NONE",
+            amd_phase="RANGING",
+            hmm_state="TRANSITIONAL",
+            vqs=0.0,
+            amf_decision="NO_DATA",
+            best_pattern="NONE",
+            sizing_pct=0.0,
+            sizing_shares=0,
             advisory_text=f"Lỗi xử lý {ticker}: {error}",
             last_updated=datetime.now().isoformat(),
+            data_context=contexts or [],
+            actionability_status={
+                "actionable": False,
+                "action": "NO_RECOMMENDATION",
+                "reasons": [error],
+            },
         )

@@ -682,7 +682,7 @@ class TestFetcherStalenessCheck:
         ):
             result = fetcher_mod.fetch_ohlcv("VCB", days=60)
         # Result should come from live fetch (same frame length as live_df)
-        assert len(result) == len(live_df)
+        assert len(result.data) == len(live_df)
 
     def test_fresh_cache_is_returned_without_live_fetch(self):
         """When ohlcv_is_fresh returns True, no live SSI call is made."""
@@ -703,4 +703,4 @@ class TestFetcherStalenessCheck:
             result = fetcher_mod.fetch_ohlcv("VCB", days=60)
 
         assert not ssi_called, "SSI should not be called when cache is fresh"
-        assert len(result) == len(cached_df)
+        assert len(result.data) == len(cached_df)

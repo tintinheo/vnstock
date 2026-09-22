@@ -184,7 +184,8 @@ class TestFetchOhlcvNormalization:
 
         monkeypatch.setattr(fetcher.cache, "get_ohlcv", lambda ticker, start, end: cached)
 
-        df = fetcher.fetch_ohlcv("VCB", days=60)
+        result = fetcher.fetch_ohlcv("VCB", days=60)
+        df = result.data
         assert "date" in df.columns
         assert "trade_date" not in df.columns
         assert len(df) == 60

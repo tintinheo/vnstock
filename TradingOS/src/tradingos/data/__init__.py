@@ -10,6 +10,7 @@ from .schemas import (
     TickerProfile, HorizonRecommendation, ProfilerRequest,
     ScanRequest, ScanResult, ScanResultItem, TradingSignal, AuditRecord,
     BacktestRequest, BacktestResult, BacktestTrade, DistributionAlert,
+    ActionabilityStatus, CapabilityStatus, DataContext, FetchResult,
 )
 
 __all__ = [
@@ -20,4 +21,5 @@ __all__ = [
     "TickerProfile", "HorizonRecommendation", "ProfilerRequest",
     "ScanRequest", "ScanResult", "ScanResultItem", "TradingSignal", "AuditRecord",
     "BacktestRequest", "BacktestResult", "BacktestTrade", "DistributionAlert",
+    "ActionabilityStatus", "CapabilityStatus", "DataContext", "FetchResult",
 ]

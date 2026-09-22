@@ -25,7 +25,7 @@ def compute_universe_rs(tickers: list[str], days: int = 252) -> pd.DataFrame:
     records = []
     for ticker in tickers:
         try:
-            df = fetch_ohlcv(ticker, days=days + 5)
+            df = fetch_ohlcv(ticker, days=days + 5).data
             if df.empty or len(df) < 50:
                 continue
             ret = float(df["close"].iloc[-1] / df["close"].iloc[0] - 1)
@@ -142,7 +142,7 @@ def build_universe(
     filtered = []
     for row in rs_df.itertuples():
         try:
-            df = fetch_ohlcv(row.ticker, days=60)
+            df = fetch_ohlcv(row.ticker, days=60).data
             result = canslim_filters(df, row.ticker)
             if result["passed"]:
                 filtered.append(row.ticker)
