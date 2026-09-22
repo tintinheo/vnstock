@@ -170,6 +170,8 @@ def render() -> None:
                 sms_raw=item.sms_raw,
                 confidence=item.confidence,
                 extra={
+                    "data_context": [c.dict() for c in item.data_context],
+                    "actionability_status": item.actionability_status.dict(),
                     "signal_mode": item.signal_mode,
                     "close": item.close,
                     "best_pattern": item.best_pattern,
@@ -209,6 +211,8 @@ def render() -> None:
         _df_export = pd.DataFrame([
             {
                 "Mã": i.ticker, "Action": i.action, "Conf": i.confidence,
+                "Actionable": i.actionability_status.actionable,
+                "Data Status": ", ".join(c.status.value for c in i.data_context),
                 "MFPM": i.mfpm_score, "Macro": i.macro_regime, "MacroScore": i.macro_score,
                 "Sector Flow": i.sector_flow, "BCTC Risk": i.earnings_risk,
                 "FundScore": i.fundamental_score, "W-Score": i.mode_w_score,
@@ -244,6 +248,8 @@ def render() -> None:
         rows.append({
             "Mã":       item.ticker,
             "Action":   item.action,
+            "Actionable": item.actionability_status.actionable,
+            "Data Status": ", ".join(c.status.value for c in item.data_context),
             "Conf":     item.confidence,
             "MFPM":     item.mfpm_score,
             "Macro":    item.macro_regime,
@@ -615,4 +621,3 @@ def _render_scan_cards_view(df: pd.DataFrame) -> None:
                 st.session_state["_nav_pending"] = "🔍 Profiler"
                 st.session_state["profiler_ticker"] = ticker
                 st.rerun()
-

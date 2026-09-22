@@ -2,9 +2,75 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Optional
+from enum import Enum
+from typing import Any, Generic, Optional, TypeVar
 
 from pydantic import BaseModel, Field
+
+
+class CapabilityStatus(str, Enum):
+    """Outcome of obtaining one data capability (never a synthetic value)."""
+
+    SUCCESS = "SUCCESS"
+    STALE_CACHE = "STALE_CACHE"
+    MISSING = "MISSING"
+    FETCH_FAILED = "FETCH_FAILED"
+    NOT_CONFIGURED = "NOT_CONFIGURED"
+    DQ_FAILED = "DQ_FAILED"
+
+
+class DataContext(BaseModel):
+    """Lineage and quality metadata published alongside market data."""
+
+    provider: str
+    capability: str
+    requested_at: datetime
+    fetched_at: Optional[datetime] = None
+    data_as_of: Optional[datetime] = None
+    freshness_status: str = "UNKNOWN"
+    raw_snapshot_hash: Optional[str] = None
+    canonical_revision: str = "1"
+    dq_status: str = "NOT_RUN"
+    status: CapabilityStatus
+    is_proxy: bool = False
+    missing_fields: list[str] = Field(default_factory=list)
+    degraded_reasons: list[str] = Field(default_factory=list)
+
+
+class ActionabilityStatus(BaseModel):
+    """Publication-gate decision shared by profiler and scanner outputs."""
+
+    actionable: bool
+    action: str
+    reasons: list[str] = Field(default_factory=list)
+
+
+T = TypeVar("T")
+
+
+class FetchResult(BaseModel, Generic[T]):
+    """Data plus its immutable acquisition outcome and lineage."""
+
+    data: T
+    context: DataContext
+
+    class Config:
+        arbitrary_types_allowed = True
+
+    def __len__(self) -> int:
+        """Allow harmless size checks while callers migrate to ``.data``."""
+        return len(self.data)  # type: ignore[arg-type]
+
+    def __getitem__(self, key: Any) -> Any:
+        return self.data[key]  # type: ignore[index]
+
+    @property
+    def empty(self) -> bool:
+        return bool(getattr(self.data, "empty", False))
+
+    @property
+    def columns(self) -> Any:
+        return getattr(self.data, "columns", ())
 
 
 # ── Type aliases ──────────────────────────────────────────────────────────────
@@ -288,6 +354,12 @@ class TickerProfile(BaseModel):
     bilstm_10d_up_prob      : float = 0.5
     bilstm_10d_confidence   : str   = "NONE"      # HIGH|MEDIUM|LOW|NONE
 
+    # Data lineage / publication gate
+    data_context            : list[DataContext] = Field(default_factory=list)
+    actionability_status    : ActionabilityStatus = Field(
+        default_factory=lambda: ActionabilityStatus(actionable=True, action="PUBLISHED")
+    )
+
 
 # ── Scanner ───────────────────────────────────────────────────────────────────
 
@@ -339,6 +411,10 @@ class ScanResultItem(BaseModel):
     tplus_target_t5      : float = 0.0
     tplus_stop           : float = 0.0
     cvd_signal           : str   = "NEUTRAL"
+    data_context         : list[DataContext] = Field(default_factory=list)
+    actionability_status : ActionabilityStatus = Field(
+        default_factory=lambda: ActionabilityStatus(actionable=True, action="PUBLISHED")
+    )
 
 
 class ScanResult(BaseModel):

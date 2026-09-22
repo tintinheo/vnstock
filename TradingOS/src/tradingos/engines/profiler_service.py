@@ -14,7 +14,8 @@ from ..data.dnse_provider import dnse as _dnse_provider
 from ..core.intraday_cvd import compute_intraday_cvd
 from ..core.orderbook import compute_order_book_imbalance
 from ..data.cache import cache
-from ..data.schemas import TickerProfile, ProfilerRequest, TradingSignal
+from ..data.schemas import DataContext, TickerProfile, ProfilerRequest, TradingSignal
+from .publication_gate import apply_publication_gate
 from ..core import (
     compute_indicators,
     run_amf, detect_amd_phase, volume_quality_score,
@@ -84,13 +85,14 @@ class ProfilerService:
 
         # ── 1. Fetch data ──────────────────────────────────────────────────
         try:
-            df = fetch_ohlcv(ticker, days=1000)
+            ohlcv_result = fetch_ohlcv(ticker, days=1000)
+            df = ohlcv_result.data
         except Exception as e:
             log.warning(f"OHLCV fetch failed for {ticker}: {e}")
             return self._error_profile(ticker, str(e))
 
         if df.empty or len(df) < 30:
-            return self._error_profile(ticker, "Insufficient data")
+            return self._error_profile(ticker, "Insufficient data", [ohlcv_result.context])
 
         quote = fetch_quote(ticker)
         exchange = _extract_exchange(quote)
@@ -344,7 +346,9 @@ class ProfilerService:
             fundamental_snapshot=fund_snap,
         )
 
-        action = mfpm_result["action"]
+        action, actionability = apply_publication_gate(
+            mfpm_result["action"], [ohlcv_result.context]
+        )
         confidence = mfpm_result["confidence"]
         signal_mode = mfpm_result["signal_mode"]
         entry = mfpm_result["entry"]
@@ -457,6 +461,8 @@ class ProfilerService:
             exchange=exchange,
             sector=sms_result.get("sector", ""),
             last_updated=datetime.now().isoformat(),
+            data_context=[ohlcv_result.context],
+            actionability_status=actionability,
             # Signal output
             action=action,
             confidence=confidence,
@@ -717,12 +723,16 @@ class ProfilerService:
                 "data_source_intraday":   _intraday_source,
                 "bilstm_10d_signal":      _bilstm_result["signal"],
                 "bilstm_10d_confidence":  _bilstm_result["confidence"],
+                "data_context":           [ohlcv_result.context.dict()],
+                "actionability_status":   actionability.dict(),
             },
         })
 
         return profile
 
-    def _error_profile(self, ticker: str, error: str) -> TickerProfile:
+    def _error_profile(
+        self, ticker: str, error: str, contexts: list[DataContext] | None = None
+    ) -> TickerProfile:
         """Return a TickerProfile indicating an error."""
         cache.put_audit({
             "event_type": "ERROR",
@@ -730,11 +740,20 @@ class ProfilerService:
             "action": "ERROR",
             "rejected_reason": error,
             # [P3.1] Persist rejected_reason in payload so it survives DuckDB serialization
-            "payload": {"rejected_reason": error},
+            "payload": {
+                "rejected_reason": error,
+                "data_context": [c.dict() for c in (contexts or [])],
+            },
         })
         return TickerProfile(
             ticker=ticker,
             action="ERROR",
             advisory_text=f"Lỗi xử lý {ticker}: {error}",
             last_updated=datetime.now().isoformat(),
+            data_context=contexts or [],
+            actionability_status={
+                "actionable": False,
+                "action": "NO_RECOMMENDATION",
+                "reasons": [error],
+            },
         )
