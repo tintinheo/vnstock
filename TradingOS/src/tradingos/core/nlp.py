@@ -522,7 +522,7 @@ def generate_signal_text(
             f"| 🎯 Chốt lời T1 | **{tp1:,.0f}** | `{tp1_pct:+.1f}%` |\n"
             f"| 🎯 Chốt lời T2 | **{tp2:,.0f}** | — |\n"
             f"| ⚖️ R:R | **1:{rr:.1f}** | |\n"
-            f"| 🎲 Xác suất thắng MC | **{mc_prob:.0%}** | |\n"
+            f"| 🎲 Tỷ lệ mô phỏng heuristic chạm TP trước SL | **{mc_prob:.0%}** | |\n"
         )
     else:
         trade_block = "_Chưa đủ điều kiện xác định mức giá vào lệnh._"
@@ -891,7 +891,7 @@ def _f0_upgrade_advice(
     signal_mode: str,
     mfpm_score: int,
     mode_w_score: int,
-    mc_win_prob: float,
+    simulation_hit_rate: float,
     amf_decision: str,
     distribution_warning: str,
     hmm_state: str,
@@ -935,8 +935,8 @@ def _f0_upgrade_advice(
             needed = max(0, 95 - mode_w_score)
             upgrade = (
                 f"  - Điểm W-Score tăng thêm **{needed} điểm** nữa (hiện {mode_w_score}/115)\n"
-                f"  - Xác suất thắng MC đạt ≥ 60% (hiện {mc_win_prob:.0%})"
-            ) if needed > 0 else f"  - Xác suất thắng MC đạt ≥ 60% (hiện {mc_win_prob:.0%})"
+                f"  - Tỷ lệ mô phỏng heuristic chạm TP trước SL đạt ≥ 60% (hiện {simulation_hit_rate:.0%})"
+            ) if needed > 0 else f"  - Tỷ lệ mô phỏng heuristic chạm TP trước SL đạt ≥ 60% (hiện {simulation_hit_rate:.0%})"
         else:
             upgrade = "  - Tín hiệu BUY trong Mode A/B đã tối ưu — không cần thêm điều kiện"
         return (
@@ -957,9 +957,9 @@ def _f0_upgrade_advice(
                 bottlenecks.append(f"Điểm MFPM tăng thêm **{70 - mfpm_score} điểm** (hiện {mfpm_score}/120)")
             if amf_decision != "PASS":
                 bottlenecks.append("Bộ lọc thao túng (AMF) cần = PASS — tín hiệu giao dịch bất thường cần biến mất")
-            if mc_win_prob < 0.55:
+            if simulation_hit_rate < 0.55:
                 bottlenecks.append(
-                    f"Xác suất thắng Monte Carlo cần ≥ 55% (hiện {mc_win_prob:.0%}) — "
+                    f"Tỷ lệ mô phỏng heuristic chạm TP trước SL cần ≥ 55% (hiện {simulation_hit_rate:.0%}) — "
                     "thường cải thiện khi R:R tốt hơn hoặc ATR giảm"
                 )
         upgrade_list = "\n".join(f"  - {b}" for b in bottlenecks) if bottlenecks else "  - Chờ thêm tín hiệu xác nhận từ phiên kế tiếp"
@@ -1017,7 +1017,7 @@ def generate_f0_explanation(
     amf_decision: str,
     best_pattern: str,
     mcvd_trend: str,
-    mc_win_prob: float,
+    simulation_hit_rate: float,
     mode_w_score: int = 0,
     mode_a_score: int = 0,
     mode_b_score: int = 0,
@@ -1081,9 +1081,9 @@ def generate_f0_explanation(
     }.get(amd_phase, amd_phase)
 
     mc_quality = (
-        "cao" if mc_win_prob >= 0.60 else
-        "khá tốt" if mc_win_prob >= 0.55 else
-        "trung bình" if mc_win_prob >= 0.50 else "thấp"
+        "cao" if simulation_hit_rate >= 0.60 else
+        "khá tốt" if simulation_hit_rate >= 0.55 else
+        "trung bình" if simulation_hit_rate >= 0.50 else "thấp"
     )
 
     amf_line = {
@@ -1099,9 +1099,9 @@ def generate_f0_explanation(
         f"- **Chu kỳ giá cổ phiếu (AMD):** Đang ở {amd_vi}",
         f"- **Bộ lọc thao túng (AMF):** {amf_line}",
     ]
-    if mc_win_prob > 0:
+    if simulation_hit_rate > 0:
         why_bullets.append(
-            f"- **Xác suất thắng (1000 kịch bản mô phỏng):** {mc_win_prob:.0%} — {mc_quality} "
+            f"- **Tỷ lệ hit mô phỏng heuristic (không phải xác suất đã calibration):** {simulation_hit_rate:.0%} — {mc_quality} "
             "*(mô phỏng 1.000 kịch bản giá ngẫu nhiên, tính tỷ lệ đạt TP trước khi chạm SL)*"
         )
     dist_vi = {
@@ -1301,8 +1301,8 @@ def generate_f0_explanation(
             "⚠️ Thấp hơn 1.5 — cân nhắc kỹ trước khi vào"
         )
         mc_explain = (
-            f"{'✅ Đủ tốt để vào lệnh' if mc_win_prob >= 0.55 else '⚠️ Dưới 55% — cân nhắc'} "
-            f"({mc_win_prob:.0%} trong 1.000 kịch bản mô phỏng)"
+            f"{'✅ Đủ tốt để vào lệnh' if simulation_hit_rate >= 0.55 else '⚠️ Dưới 55% — cân nhắc'} "
+            f"({simulation_hit_rate:.0%} trong 1.000 kịch bản mô phỏng)"
         )
 
         trade_block = (
@@ -1344,7 +1344,7 @@ def generate_f0_explanation(
         signal_mode=signal_mode,
         mfpm_score=mfpm_score,
         mode_w_score=mode_w_score,
-        mc_win_prob=mc_win_prob,
+        simulation_hit_rate=simulation_hit_rate,
         amf_decision=amf_decision,
         distribution_warning=distribution_warning,
         hmm_state=hmm_state,

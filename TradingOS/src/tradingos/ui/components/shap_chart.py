@@ -14,7 +14,7 @@ def render_shap_chart(mfpm_result: dict, ticker: str = "", key_suffix: str = "")
     mode_a = mfpm_result.get("mode_a_score", 0)
     mode_b = mfpm_result.get("mode_b_score", 0)
     mode_w = mfpm_result.get("mode_w_score", 0)
-    mc_prob = mfpm_result.get("mc_win_prob", 0)
+    mc_prob = mfpm_result.get("simulation_hit_rate", 0)
 
     features = {
         "Mode A (Pullback)": mode_a,

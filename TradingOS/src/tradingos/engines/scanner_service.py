@@ -317,6 +317,9 @@ class ScannerService:
             macro_result=macro_result,
             earnings_risk=earnings_risk,
             fundamental_snapshot=fundamental_snapshot,
+            symbol=ticker,
+            effective_session=str(ohlcv_result.context.data_as_of or df.index[-1]),
+            canonical_data_revision=ohlcv_result.context.canonical_revision,
         )
 
         last = df.iloc[-1]
@@ -368,6 +371,12 @@ class ScannerService:
             tplus_verdict   =_tplus.get("verdict",     "THEO_DOI"),
             tplus_verdict_vi=_tplus.get("verdict_vi",  ""),
             tplus_confidence=_tplus.get("confidence",  0.0),
+            simulation_hit_rate=mfpm["simulation_hit_rate"],
+            forecast_probability=mfpm["forecast_probability"],
+            calibration_status=mfpm["calibration_status"],
+            model_id=mfpm["model_id"],
+            model_hash=mfpm["model_hash"],
+            prediction_interval=mfpm["prediction_interval"],
             tplus_entry_low =_tplus.get("entry_zone_low",  0.0),
             tplus_entry_high=_tplus.get("entry_zone_high", 0.0),
             tplus_target_t25=_tplus.get("target_t25",      0.0),

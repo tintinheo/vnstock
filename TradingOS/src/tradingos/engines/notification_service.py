@@ -44,18 +44,29 @@ class NotificationService:
         tp1: float,
         confidence: str = "",
         signal_mode: str = "",
+        simulation_hit_rate: float | None = None,
+        calibration_status: str = "UNCALIBRATED",
     ) -> bool:
         """Send a new signal alert (STRONG_BUY / BUY)."""
         if not self._should_send():
             return False
 
+        if confidence == "HIGH" and calibration_status != "CALIBRATED":
+            confidence = "MEDIUM"
         conf_badge = {"HIGH": "🟢", "MEDIUM": "🟡", "LOW": "🔴"}.get(confidence, "⚪")
         action_icon = "🚀" if action == "STRONG_BUY" else "🟢" if action == "BUY" else "👀"
+        simulation_line = ""
+        if simulation_hit_rate is not None:
+            simulation_line = (
+                f"MC heuristic hit rate: `{simulation_hit_rate:.1%}` "
+                f"\\(không phải xác suất calibrated\\)\n"
+            )
 
         text = (
             f"{action_icon} *TradingOS — {action}*\n"
             f"📌 *{ticker}*  {conf_badge} {confidence}\n\n"
             f"MFPM: `{mfpm_score}` · SMS: `{sms_raw}` · Mode: `{signal_mode}`\n"
+            f"{simulation_line}"
             f"T\\+ Verdict: `{tplus_verdict}`\n\n"
             f"Entry: `{entry_price:,.0f}` VND\n"
             f"SL: `{stop_loss:,.0f}` · TP1: `{tp1:,.0f}`\n\n"

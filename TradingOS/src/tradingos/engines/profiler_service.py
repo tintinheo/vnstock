@@ -346,6 +346,9 @@ class ProfilerService:
             macro_result=macro_result,
             earnings_risk=earnings_risk_result,
             fundamental_snapshot=fund_snap,
+            symbol=ticker,
+            effective_session=str(ohlcv_result.context.data_as_of or df.index[-1]),
+            canonical_data_revision=ohlcv_result.context.canonical_revision,
         )
 
         action, actionability = apply_publication_gate(
@@ -358,7 +361,7 @@ class ProfilerService:
         tp1 = mfpm_result["tp1"]
         tp2 = mfpm_result["tp2"]
         rr = mfpm_result["rr_ratio"]
-        mc_prob = mfpm_result["mc_win_prob"]
+        simulation_hit_rate = mfpm_result["simulation_hit_rate"]
 
         # ── 8. Position sizing ────────────────────────────────────────────
         macro_mult = macro_sizing_multiplier(macro_result) if macro_result else 1.0
@@ -366,7 +369,10 @@ class ProfilerService:
             portfolio_value=self.portfolio_value,
             entry=entry,
             sl=sl,
-            win_prob=mc_prob,
+            # Kelly requires a calibrated probability.  Until an OOS
+            # calibration artifact exists, use a neutral prior rather than the
+            # heuristic simulation hit rate.
+            win_prob=mfpm_result["forecast_probability"] or 0.5,
             rr=rr,
             macro_multiplier=macro_mult,
         )
@@ -381,7 +387,7 @@ class ProfilerService:
             mode_w_score=mfpm_result["mode_w_score"],
             sms_raw=sms_raw, hmm_state=hmm_state,
             signal_mode=signal_mode,
-            entry=entry, sl=sl, tp1=tp1, tp2=tp2, rr=rr, mc_prob=mc_prob,
+            entry=entry, sl=sl, tp1=tp1, tp2=tp2, rr=rr, mc_prob=simulation_hit_rate,
             distribution_warning=dist_warning,
             mode_w_conditions_failed=mfpm_result.get("mode_w_failed_conditions", []),
             mode_a_score=mfpm_result.get("mode_a_score", 0),
@@ -471,7 +477,12 @@ class ProfilerService:
             signal_mode=signal_mode,
             mfpm_score=mfpm_result["mfpm_score"],
             mode_w_score=mfpm_result["mode_w_score"],
-            mc_win_prob=mc_prob,
+            simulation_hit_rate=simulation_hit_rate,
+            forecast_probability=mfpm_result["forecast_probability"],
+            calibration_status=mfpm_result["calibration_status"],
+            model_id=mfpm_result["model_id"],
+            model_hash=mfpm_result["model_hash"],
+            prediction_interval=mfpm_result["prediction_interval"],
             # Entry/Exit
             entry_price=entry,
             stop_loss=sl,
@@ -679,7 +690,7 @@ class ProfilerService:
                 "mode_a_score":  mfpm_result.get("mode_a_score", 0),
                 "mode_b_score":  mfpm_result.get("mode_b_score", 0),
                 "mode_w_score":  mfpm_result.get("mode_w_score", 0),
-                "mc_prob":       round(mc_prob, 3),
+                "mc_prob":       round(simulation_hit_rate, 3),
                 # Signal context
                 "signal_mode":   signal_mode,
                 "amd_phase":     amd_phase,

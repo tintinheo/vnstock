@@ -177,7 +177,7 @@ def _render_detail(profile, idx: int = 0) -> None:
                     initial_sl=profile.stop_loss,
                     signal_mode=profile.signal_mode,
                     mfpm_score=profile.mfpm_score,
-                    mc_prob=profile.mc_win_prob,
+                    mc_prob=profile.simulation_hit_rate,
                     tp1=profile.tp1,
                     tp2=profile.tp2,
                 )
@@ -234,7 +234,7 @@ def _render_detail(profile, idx: int = 0) -> None:
             "mode_a_score": profile.mode_a_score,
             "mode_b_score": profile.mode_b_score,
             "mode_w_score": profile.mode_w_score,
-            "mc_win_prob":  profile.mc_win_prob,
+            "simulation_hit_rate":  profile.simulation_hit_rate,
             "components":   profile.sms_components,
         }, profile.ticker, key_suffix=f"_{idx}")
 
@@ -668,7 +668,7 @@ def _render_detail(profile, idx: int = 0) -> None:
             amf_decision=profile.amf_decision,
             best_pattern=profile.best_pattern,
             mcvd_trend=profile.mcvd_trend,
-            mc_win_prob=profile.mc_win_prob,
+            simulation_hit_rate=profile.simulation_hit_rate,
             mode_w_score=profile.mode_w_score,
             macro_regime=getattr(profile, "macro_regime", ""),
             earnings_risk=getattr(profile, "earnings_risk", "SAFE"),

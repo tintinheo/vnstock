@@ -129,7 +129,15 @@ class TickerProfile(BaseModel):
     signal_mode     : SIGNAL_MODE
     mfpm_score      : int
     mode_w_score    : int
-    mc_win_prob     : float
+    # Simulation output is a heuristic path statistic, never a calibrated
+    # probability.  forecast_probability remains None until a valid OOS
+    # calibration artifact is loaded.
+    simulation_hit_rate : float
+    forecast_probability: Optional[float] = None
+    calibration_status  : str = "UNCALIBRATED"
+    model_id           : str = ""
+    model_hash         : str = ""
+    prediction_interval: tuple[float, float] = (0.0, 1.0)
 
     # Entry / Exit (12–17)
     entry_price     : float
@@ -401,6 +409,12 @@ class ScanResultItem(BaseModel):
     macro_score     : Optional[float] = None
     rsi14           : float = 50.0
     distribution_warning: WARN_LEVEL = "NONE"
+    simulation_hit_rate : float = 0.0
+    forecast_probability: Optional[float] = None
+    calibration_status  : str = "UNCALIBRATED"
+    model_id            : str = ""
+    model_hash          : str = ""
+    prediction_interval: tuple[float, float] = (0.0, 1.0)
     tplus_setup          : str   = "T_NO_SETUP"
     tplus_verdict        : str   = "THEO_DOI"
     tplus_verdict_vi     : str   = ""
@@ -519,7 +533,12 @@ class TradingSignal(BaseModel):
 
     # 17–20: Risk metrics
     rr_ratio        : float = 0.0
-    mc_win_prob     : float = 0.0
+    simulation_hit_rate : float = 0.0
+    forecast_probability: Optional[float] = None
+    calibration_status  : str = "UNCALIBRATED"
+    model_id           : str = ""
+    model_hash         : str = ""
+    prediction_interval: tuple[float, float] = (0.0, 1.0)
     kelly_size_pct  : float = 0.0
     data_source     : DATA_SOURCE = "PROXY_OHLCV"
 

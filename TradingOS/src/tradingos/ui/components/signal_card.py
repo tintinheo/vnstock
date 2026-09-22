@@ -27,7 +27,11 @@ def render_signal_card(profile) -> None:
     """Render a TickerProfile as a styled Streamlit card."""
     action = profile.action
     color = _ACTION_COLOR.get(action, "#888")
-    badge = _CONFIDENCE_BADGE.get(profile.confidence, profile.confidence)
+    calibration_status = getattr(profile, "calibration_status", "UNCALIBRATED")
+    displayed_confidence = profile.confidence
+    if displayed_confidence == "HIGH" and calibration_status != "CALIBRATED":
+        displayed_confidence = "MEDIUM"
+    badge = _CONFIDENCE_BADGE.get(displayed_confidence, displayed_confidence)
 
     with st.container():
         st.markdown(
@@ -47,6 +51,13 @@ def render_signal_card(profile) -> None:
     col2.metric("Cắt lỗ", f"{profile.stop_loss:,.0f} đ", delta=f"-{profile.sl_pct:.1%}")
     col3.metric("TP1 / TP2", f"{profile.tp1:,.0f} / {profile.tp2:,.0f}")
     col4.metric("R:R", f"1:{profile.rr_ratio:.1f}")
+    interval = getattr(profile, "prediction_interval", (0.0, 1.0))
+    st.caption(
+        "Monte Carlo heuristic — không phải xác suất thắng đã calibration: "
+        f"hit rate {profile.simulation_hit_rate:.1%} "
+        f"(95% CI {interval[0]:.1%}–{interval[1]:.1%}); "
+        f"calibration: {calibration_status}."
+    )
 
     # ── Quick-glance signal badges ────────────────────────────────────────────
     tw       = getattr(profile, "trend_warning", "NONE") or "NONE"
@@ -167,7 +178,7 @@ def render_signal_card(profile) -> None:
             amf_decision=profile.amf_decision,
             best_pattern=profile.best_pattern,
             mcvd_trend=profile.mcvd_trend,
-            mc_win_prob=profile.mc_win_prob,
+            simulation_hit_rate=profile.simulation_hit_rate,
             mode_w_score=profile.mode_w_score,
             macro_regime=getattr(profile, "macro_regime", ""),
             earnings_risk=getattr(profile, "earnings_risk", "SAFE"),
