@@ -5,6 +5,8 @@ Implements Mode A / Mode B / Mode W scoring with MC gate and Kelly guard.
 """
 from __future__ import annotations
 
+import hashlib
+import json
 import numpy as np
 import pandas as pd
 
@@ -173,16 +175,38 @@ def _ewma_daily_vol(returns: np.ndarray, lam: float = 0.94) -> float:
     return float(np.sqrt(vol_sq))
 
 
-def monte_carlo_win_prob(
+SIMULATION_MODEL_ID = "empirical-bootstrap-tplus-v1"
+SIMULATION_MODEL_HASH = hashlib.sha256(SIMULATION_MODEL_ID.encode()).hexdigest()
+
+
+def _decision_seed(decision_key: dict) -> int:
+    """Return a stable NumPy seed for an immutable decision snapshot."""
+    payload = json.dumps(decision_key, sort_keys=True, separators=(",", ":"), default=str)
+    return int.from_bytes(hashlib.sha256(payload.encode()).digest()[:8], "big")
+
+
+def _wilson_interval(hits: int, total: int, z: float = 1.96) -> tuple[float, float]:
+    """95% Wilson interval for a simulation hit rate."""
+    if total <= 0:
+        return (0.0, 1.0)
+    p = hits / total
+    denom = 1 + z * z / total
+    centre = (p + z * z / (2 * total)) / denom
+    margin = z * np.sqrt((p * (1 - p) + z * z / (4 * total)) / total) / denom
+    return (max(0.0, centre - margin), min(1.0, centre + margin))
+
+
+def monte_carlo_simulation(
     df: pd.DataFrame,
     entry: float,
     sl: float,
     tp: float,
     n_sim: int = 2_000,
     horizon: int = 15,
-) -> float:
+    decision_key: dict | None = None,
+) -> dict:
     """
-    Calibrated Monte Carlo for VN market conditions.
+    Deterministic heuristic Monte Carlo statistic for VN market conditions.
 
     Improvements over previous bootstrap-only version:
     - EWMA volatility (λ=0.94) is regime-responsive, not just historical std.
@@ -194,20 +218,21 @@ def monte_carlo_win_prob(
     - Hybrid sampling: 60% empirical bootstrap + 40% GBM with EWMA vol to blend
       fat-tail realism with volatility responsiveness.
 
-    Returns probability that price reaches TP before SL within `horizon` bars.
+    This is deliberately *not* a calibrated probability forecast.  It returns
+    the simulated TP-before-SL hit rate and its sampling interval.
     """
     if df.empty or entry <= 0 or sl >= entry or tp <= entry:
-        return 0.5
+        return {"simulation_hit_rate": 0.5, "prediction_interval": (0.0, 1.0)}
 
     returns = df["close"].pct_change().dropna().tail(252).values
     if len(returns) < 30:
-        return 0.5
+        return {"simulation_hit_rate": 0.5, "prediction_interval": (0.0, 1.0)}
 
     daily_vol = _ewma_daily_vol(returns)
     if daily_vol <= 0:
         daily_vol = float(np.std(returns)) or 0.01
 
-    rng = np.random.default_rng()
+    rng = np.random.default_rng(_decision_seed(decision_key or {}))
 
     # ── Pure bootstrap sampling (preserves empirical fat-tail distribution) ─
     # Hybrid GBM was tested and rejected: GBM with high EWMA vol (crash regime)
@@ -224,7 +249,7 @@ def monte_carlo_win_prob(
     sim_eval = sim_prices[:, 2:]  # shape: (n_sim, horizon-2)
 
     if sim_eval.shape[1] == 0:
-        return 0.5
+        return {"simulation_hit_rate": 0.5, "prediction_interval": (0.0, 1.0)}
 
     tp_hits = sim_eval >= tp
     sl_hits = sim_eval <= sl
@@ -232,8 +257,17 @@ def monte_carlo_win_prob(
     tp_idx = np.where(tp_hits.any(axis=1), np.argmax(tp_hits, axis=1), sim_eval.shape[1] + 1)
     sl_idx = np.where(sl_hits.any(axis=1), np.argmax(sl_hits, axis=1), sim_eval.shape[1] + 1)
 
-    wins = np.sum((tp_idx <= sim_eval.shape[1]) & (tp_idx < sl_idx))
-    return round(float(wins / n_sim), 3)
+    wins = int(np.sum((tp_idx <= sim_eval.shape[1]) & (tp_idx < sl_idx)))
+    interval = _wilson_interval(wins, n_sim)
+    return {
+        "simulation_hit_rate": round(float(wins / n_sim), 3),
+        "prediction_interval": tuple(round(x, 3) for x in interval),
+    }
+
+
+def monte_carlo_win_prob(*args, **kwargs) -> float:
+    """Compatibility wrapper; value is a heuristic hit rate, not probability."""
+    return monte_carlo_simulation(*args, **kwargs)["simulation_hit_rate"]
 
 
 # ── ModeW Pre-condition Check ─────────────────────────────────────────────────
@@ -287,6 +321,11 @@ def compute_mfpm(
     macro_result=None,
     earnings_risk=None,
     fundamental_snapshot=None,
+    symbol: str = "UNKNOWN",
+    effective_session: str = "",
+    canonical_data_revision: str = "1",
+    config_hash: str = "",
+    model_hash: str = SIMULATION_MODEL_HASH,
 ) -> dict:
     """
     Full MFPM scoring pipeline.
@@ -294,7 +333,7 @@ def compute_mfpm(
     Returns:
         mode_a_score, mode_b_score, mode_w_score, mfpm_score
         action, confidence, signal_mode
-        entry, sl, tp1, tp2, rr_ratio, mc_win_prob
+        entry, sl, tp1, tp2, rr_ratio, simulation_hit_rate
         horizons: list of HorizonRecommendation dicts
     """
     horizons = horizons or [2, 3, 4, 5, 7, 10, 15]
@@ -450,10 +489,31 @@ def compute_mfpm(
     tp1 = params["tp1"]
     tp2 = params["tp2"]
 
-    mc_prob = monte_carlo_win_prob(
+    if not effective_session and not df.empty:
+        effective_session = str(df.index[-1])
+    if not config_hash:
+        relevant_config = {
+            "n_sim": int(cfg.strategy("mfpm", "mc_n_sim", default=500)),
+            "strong": mc_prob_strong,
+            "buy": mc_prob_buy,
+        }
+        config_hash = hashlib.sha256(
+            json.dumps(relevant_config, sort_keys=True).encode()
+        ).hexdigest()
+    decision_key = {
+        "symbol": symbol,
+        "effective_session": effective_session,
+        "canonical_data_revision": canonical_data_revision,
+        "config_hash": config_hash,
+        "model_hash": model_hash,
+    }
+    simulation = monte_carlo_simulation(
         df, entry, sl, tp1,
         n_sim=int(cfg.strategy("mfpm", "mc_n_sim", default=500)),
+        decision_key=decision_key,
     )
+    simulation_hit_rate = simulation["simulation_hit_rate"]
+    prediction_interval = simulation["prediction_interval"]
 
     # Distribution warning override
     dist_warning = sms_result.get("distribution_warning", "NONE")
@@ -472,7 +532,7 @@ def compute_mfpm(
         action = "FORCED_EXIT" if amf_decision == "BLOCK" else "EXIT"
         confidence = "—"
     elif signal_mode == "MODE_W":
-        if w >= mode_w_strong + gate_delta and amf_decision == "PASS" and mc_prob >= mc_prob_strong:
+        if w >= mode_w_strong + gate_delta and amf_decision == "PASS" and prediction_interval[0] >= mc_prob_strong:
             action = "STRONG_BUY"
         elif w >= mode_w_buy + gate_delta:
             action = "BUY"
@@ -486,7 +546,7 @@ def compute_mfpm(
     else:
         min_buy   = int(cfg.strategy("mfpm", "min_score_strong_buy", default=70)) + gate_delta
         min_watch = int(cfg.strategy("mfpm", "min_score_watch",       default=50)) + max(gate_delta, 0)
-        if mfpm_score >= min_buy and amf_decision == "PASS" and mc_prob >= mc_prob_buy:
+        if mfpm_score >= min_buy and amf_decision == "PASS" and prediction_interval[0] >= mc_prob_buy:
             action = "BUY"
         elif mfpm_score >= min_watch:
             action = "WATCH"
@@ -510,9 +570,9 @@ def compute_mfpm(
         # [NEW-10 FIX] mc_prob >= 0.65 was hardcoded while the action gate already
         # reads mc_min_prob_strong from config.  Align confidence to same threshold
         # so a config change flows through both action and confidence consistently.
-        if w >= mode_w_strong and mc_prob >= mc_prob_strong:
+        if w >= mode_w_strong and prediction_interval[0] >= mc_prob_strong:
             confidence = "HIGH"
-        elif w >= mode_w_buy and amf_decision == "PASS" and mc_prob >= mc_prob_buy:
+        elif w >= mode_w_buy and amf_decision == "PASS" and prediction_interval[0] >= mc_prob_buy:
             confidence = "MEDIUM"
         else:
             confidence = "LOW"
@@ -527,6 +587,13 @@ def compute_mfpm(
     if confidence not in ("—", "LOW") and hmm_state == "STEADY_BEAR":
         confidence = "MEDIUM" if confidence == "HIGH" else "LOW"
 
+    # No valid out-of-sample calibration artifact is loaded.  A heuristic
+    # simulation must never produce a HIGH calibrated-confidence badge.
+    calibration_status = "UNCALIBRATED"
+    forecast_probability = None
+    if confidence == "HIGH" and calibration_status != "CALIBRATED":
+        confidence = "MEDIUM"
+
     # ── Layer 4: Proxy penalty ────────────────────────────────────────────
     data_source = sms_result.get("mcvd_detail", {}).get("data_source", "PROXY_OHLCV")
     penalty = float(cfg.strategy("proxy_confidence_penalty", data_source, default=0))
@@ -538,7 +605,7 @@ def compute_mfpm(
         confidence = "LOW"
 
     # Horizon projections
-    horizon_recs = _build_horizons(horizons, action, confidence, params, signal_mode, mfpm_score, mc_prob)
+    horizon_recs = _build_horizons(horizons, action, confidence, params, signal_mode, mfpm_score, simulation_hit_rate)
 
     return {
         "mode_a_score": a,
@@ -557,7 +624,13 @@ def compute_mfpm(
         "tp2": tp2,
         "sl_pct": params.get("sl_pct", 0),
         "rr_ratio": params.get("rr", 0),
-        "mc_win_prob": mc_prob,
+        "simulation_hit_rate": simulation_hit_rate,
+        "forecast_probability": forecast_probability,
+        "calibration_status": calibration_status,
+        "model_id": SIMULATION_MODEL_ID,
+        "model_hash": model_hash,
+        "prediction_interval": prediction_interval,
+        "decision_key": decision_key,
         "mode_w_failed_conditions": w_fails,
         "horizons": horizon_recs,
     }
