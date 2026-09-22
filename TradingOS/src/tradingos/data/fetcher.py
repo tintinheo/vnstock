@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import threading
 import time
+import hashlib
 from datetime import date, datetime, timedelta, timezone
 
 import pandas as pd
@@ -22,6 +23,7 @@ from ..utils.config import cfg
 from ..utils.logging import log
 from .cache import cache
 from .normalizer import clean_ohlcv
+from .schemas import CapabilityStatus, DataContext, FetchResult
 
 _SSI_QUERY = "https://iboard-query.ssi.com.vn"
 
@@ -64,11 +66,11 @@ def _get(url: str, params: dict | None = None, timeout: int = 15, retries: int =
                 return r.json()
             except requests.exceptions.Timeout:
                 log.warning(f"Request timeout ({timeout}s): {url}")
-                return {}
+                raise
             except Exception as e:
                 if attempt == retries - 1:
                     log.debug(f"Request failed: {url} -- {e}")
-                    return {}
+                    raise
                 time.sleep(1.5 ** attempt)
     return {}
 
@@ -129,7 +131,7 @@ def _fetch_ohlcv_ssi(ticker: str, start: date, end: date) -> pd.DataFrame:
         return _bars_from_payload(payload)
     except Exception as e:
         log.warning(f"SSI OHLCV failed for {ticker}: {e}")
-        return pd.DataFrame()
+        raise
 
 
 # ── DNSE fallback OHLCV ───────────────────────────────────────────────────────
@@ -150,7 +152,7 @@ def _fetch_ohlcv_dnse(ticker: str, start: date, end: date) -> pd.DataFrame:
         return pd.DataFrame()
     except Exception as e:
         log.warning(f"DNSE OHLCV failed for {ticker}: {e}")
-        return pd.DataFrame()
+        raise
 
 
 # ── Public API ────────────────────────────────────────────────────────────────
@@ -161,54 +163,136 @@ def fetch_ohlcv(
     start: date | None = None,
     end: date | None = None,
     use_cache: bool = True,
-) -> pd.DataFrame:
+) -> FetchResult[pd.DataFrame]:
     """
     Fetch OHLCV for a ticker. Uses cache first, then SSI, then DNSE.
 
-    Returns DataFrame with columns: date, open, high, low, close, volume
+    Returns data and explicit lineage/status. Provider errors are never recast
+    as an empty, neutral market observation.
     """
+    requested_at = datetime.now(timezone.utc)
     ticker = ticker.strip().upper()
     end = end or date.today()
     if start is None:
         history_days = days or int(cfg.get("data", "history_days", default=400))
         start = end - timedelta(days=int(history_days * 1.4))
 
+    cached = pd.DataFrame()
     if use_cache:
         cached = cache.get_ohlcv(ticker, start, end)
         if not cached.empty and len(cached) > 50:
             # [P2.2] Staleness check: if today's bar is in cache but stale, re-fetch.
             # ohlcv_is_fresh() checks the fetched_at timestamp vs ohlcv_ttl_today (default 30 min).
             if cache.ohlcv_is_fresh(ticker, end):
-                return _normalize_ohlcv_frame(cached)
+                frame = _normalize_ohlcv_frame(cached)
+                return _ohlcv_result(
+                    frame, "CACHE", CapabilityStatus.SUCCESS, requested_at,
+                    fetched_at=_cached_fetched_at(cached),
+                )
             # Cache has data but today's bar is stale — fall through to re-fetch live
             log.debug(f"[{ticker}] Cached OHLCV is stale for {end}, re-fetching")
 
-    df = _fetch_ohlcv_ssi(ticker, start, end)
+    failures: list[str] = []
+    provider = "SSI"
+    try:
+        df = _fetch_ohlcv_ssi(ticker, start, end)
+    except Exception as exc:
+        failures.append(f"SSI: {exc}")
+        df = pd.DataFrame()
     if df.empty:
         log.debug(f"SSI empty for {ticker} -- trying DNSE")
-        df = _fetch_ohlcv_dnse(ticker, start, end)
+        provider = "DNSE"
+        try:
+            df = _fetch_ohlcv_dnse(ticker, start, end)
+        except Exception as exc:
+            failures.append(f"DNSE: {exc}")
+            df = pd.DataFrame()
 
     if not df.empty:
         cache.put_ohlcv(ticker, df)
         log.info(f"Fetched {len(df)} bars for {ticker}")
-    else:
-        log.debug(f"No OHLCV data for {ticker}")
+        return _ohlcv_result(_normalize_ohlcv_frame(df), provider, CapabilityStatus.SUCCESS, requested_at)
 
-    return _normalize_ohlcv_frame(df)
+    if use_cache and not cached.empty:
+        return _ohlcv_result(
+            _normalize_ohlcv_frame(cached), "CACHE", CapabilityStatus.STALE_CACHE,
+            requested_at, degraded_reasons=failures or ["live providers returned no data"],
+            fetched_at=_cached_fetched_at(cached),
+        )
+    log.debug(f"No OHLCV data for {ticker}")
+    status = CapabilityStatus.FETCH_FAILED if failures else CapabilityStatus.MISSING
+    return _ohlcv_result(pd.DataFrame(), provider, status, requested_at,
+                         degraded_reasons=failures or ["providers returned no data"])
+
+
+def _ohlcv_result(
+    frame: pd.DataFrame,
+    provider: str,
+    status: CapabilityStatus,
+    requested_at: datetime,
+    degraded_reasons: list[str] | None = None,
+    fetched_at: datetime | None = None,
+) -> FetchResult[pd.DataFrame]:
+    """Build an OHLCV result, including deterministic raw snapshot lineage."""
+    required = ["date", "open", "high", "low", "close", "volume"]
+    missing = [column for column in required if column not in frame.columns]
+    dq_reasons = list(degraded_reasons or [])
+    if not frame.empty and not missing:
+        invalid = ((frame["high"] < frame["low"]) | (frame["volume"] < 0)).any()
+        if invalid:
+            dq_reasons.append("invalid OHLCV range or negative volume")
+    else:
+        invalid = False
+    if (missing and not frame.empty) or invalid:
+        status = CapabilityStatus.DQ_FAILED
+    raw_hash = None
+    if not frame.empty:
+        raw_hash = hashlib.sha256(
+            pd.util.hash_pandas_object(frame, index=True).values.tobytes()
+        ).hexdigest()
+    data_as_of = None
+    if not frame.empty and "date" in frame:
+        value = pd.Timestamp(frame["date"].max())
+        data_as_of = value.to_pydatetime().replace(tzinfo=timezone.utc)
+    if fetched_at is None and provider != "CACHE":
+        fetched_at = datetime.now(timezone.utc)
+    return FetchResult[pd.DataFrame](
+        data=frame,
+        context=DataContext(
+            provider=provider, capability="OHLCV", requested_at=requested_at,
+            fetched_at=fetched_at, data_as_of=data_as_of,
+            freshness_status="STALE" if status == CapabilityStatus.STALE_CACHE else "FRESH",
+            raw_snapshot_hash=raw_hash, canonical_revision="ohlcv-v1",
+            dq_status="FAILED" if status == CapabilityStatus.DQ_FAILED else "PASSED",
+            status=status, missing_fields=missing, degraded_reasons=dq_reasons,
+        ),
+    )
+
+
+def _cached_fetched_at(frame: pd.DataFrame) -> datetime | None:
+    """Read cache acquisition time before canonical normalization drops it."""
+    if "fetched_at" not in frame or frame["fetched_at"].dropna().empty:
+        return None
+    value = pd.Timestamp(frame["fetched_at"].dropna().max())
+    dt = value.to_pydatetime()
+    return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
 
 
 def fetch_multiple_ohlcv(
     tickers: list[str],
     days: int = 400,
-) -> dict[str, pd.DataFrame]:
-    """Fetch OHLCV for multiple tickers; returns dict ticker→DataFrame."""
-    result: dict[str, pd.DataFrame] = {}
+) -> dict[str, FetchResult[pd.DataFrame]]:
+    """Fetch OHLCV for multiple tickers; returns ticker to typed result."""
+    result: dict[str, FetchResult[pd.DataFrame]] = {}
     for ticker in tickers:
         try:
             result[ticker] = fetch_ohlcv(ticker, days=days)
         except Exception as e:
             log.warning(f"Failed to fetch {ticker}: {e}")
-            result[ticker] = pd.DataFrame()
+            result[ticker] = _ohlcv_result(
+                pd.DataFrame(), "NONE", CapabilityStatus.FETCH_FAILED,
+                datetime.now(timezone.utc), [str(e)],
+            )
     return result
 
 

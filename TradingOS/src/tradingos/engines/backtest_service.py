@@ -24,7 +24,7 @@ class BacktestService:
         ticker = request.ticker.upper()
         log.info(f"Backtest {ticker} {request.start_date}–{request.end_date}")
 
-        df = fetch_ohlcv(ticker, days=520)
+        df = fetch_ohlcv(ticker, days=520).data
         if df.empty:
             log.warning(f"No data for {ticker}")
             return {}

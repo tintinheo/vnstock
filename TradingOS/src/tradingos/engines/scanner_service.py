@@ -12,6 +12,7 @@ from ..data.fetcher import fetch_ohlcv, fetch_universe, fetch_foreign_flow, fetc
 from ..data.fetcher import fetch_usdvnd, fetch_vn10y_bond_yield, fetch_sbv_omo_net
 from ..data.cache import cache
 from ..data.schemas import ScanResult, ScanResultItem, ScanRequest
+from .publication_gate import apply_publication_gate
 from ..core import (
     compute_indicators,
     run_amf,
@@ -204,7 +205,8 @@ class ScannerService:
         """Score a single ticker through all stages. Returns None to skip."""
         # [D1 FIX] Use 260 days — needed for SMA200, ATR stability, AMD phase accuracy.
         # Matches Profiler (was 120, which made SMA200 always NaN).
-        df = fetch_ohlcv(ticker, days=1000)
+        ohlcv_result = fetch_ohlcv(ticker, days=1000)
+        df = ohlcv_result.data
         if df.empty or len(df) < 40:
             return None
 
@@ -331,9 +333,12 @@ class ScannerService:
         except Exception as _tp_err:
             log.debug(f"T+ recommendation skipped for {ticker}: {_tp_err}")
 
+        action, actionability = apply_publication_gate(
+            mfpm["action"], [ohlcv_result.context]
+        )
         return ScanResultItem(
             ticker=ticker,
-            action=mfpm["action"],
+            action=action,
             confidence=mfpm["confidence"],
             mfpm_score=mfpm["mfpm_score"],
             mode_w_score=mfpm["mode_w_score"],
@@ -366,4 +371,6 @@ class ScannerService:
             tplus_target_t25=_tplus.get("target_t25",      0.0),
             tplus_target_t5 =_tplus.get("target_t5",       0.0),
             tplus_stop      =_tplus.get("stop_loss",       0.0),
+            data_context=[ohlcv_result.context],
+            actionability_status=actionability,
         )

@@ -125,7 +125,7 @@ class MoneyFlowService:
 
     def get_sms(self, ticker: str) -> dict:
         """Full SMS for a single ticker."""
-        df = fetch_ohlcv(ticker, days=120)
+        df = fetch_ohlcv(ticker, days=120).data
         if df.empty:
             return {"sms": 0, "sms_label": "NO_DATA"}
         df = compute_indicators(df)
@@ -142,7 +142,7 @@ class MoneyFlowService:
 
     def get_distribution_status(self, ticker: str) -> dict:
         """Distribution warning level for a ticker."""
-        df = fetch_ohlcv(ticker, days=60)
+        df = fetch_ohlcv(ticker, days=60).data
         if df.empty:
             return {"level": "NONE", "score": 0}
         flow_df = proxy_whale_net_from_daily(df)
@@ -193,7 +193,7 @@ class MoneyFlowService:
             sms_vals = []
             for t in tickers:
                 try:
-                    df = fetch_ohlcv(t, days=60)
+                    df = fetch_ohlcv(t, days=60).data
                     if not df.empty:
                         df = compute_indicators(df)  # needed for OBV column in sector scoring
                         dfs.append(df)
@@ -216,7 +216,7 @@ class MoneyFlowService:
 
     def get_mcvd_chart_data(self, ticker: str, days: int = 20) -> pd.DataFrame:
         """Return M-CVD bar data for chart component."""
-        df = fetch_ohlcv(ticker, days=days + 5)
+        df = fetch_ohlcv(ticker, days=days + 5).data
         if df.empty:
             return pd.DataFrame()
         flow_df = proxy_whale_net_from_daily(df)
