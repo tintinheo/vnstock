@@ -435,22 +435,22 @@ class TestVnTimezone:
 
 
 class TestSbvOmoFix:
-    """LỖI #3 — fetch_sbv_omo_net now returns 0.0 (not None) for net_7d."""
+    """Missing OMO must not masquerade as a neutral measurement."""
 
-    def test_sbv_omo_net_returns_float_not_none(self):
+    def test_sbv_omo_net_reports_not_configured_without_value(self):
         from tradingos.data.fetcher import fetch_sbv_omo_net
 
         result = fetch_sbv_omo_net()
-        assert result["net_7d"] is not None
-        assert isinstance(result["net_7d"], float)
+        assert result["net_7d"] is None
+        assert result["status"] in {"MISSING", "NOT_CONFIGURED"}
+        assert result["as_of"] is None
 
-    def test_sbv_omo_net_zero_feeds_macro_as_neutral_source(self):
-        """When net_7d=0.0, macro engine counts it as a source (improves confidence)."""
+    def test_sbv_omo_without_lineage_does_not_feed_macro(self):
         from tradingos.core.macro import compute_macro_regime
 
         result = compute_macro_regime(sbv_net_injection_7d=0.0, sbv_avg_vol_ref=10_000.0)
-        # OMO component should be included → n_sources updated
-        assert any(ind.name == "SBV_OMO" for ind in result.indicators)
+        assert not any(ind.name == "SBV_OMO" for ind in result.indicators)
+        assert result.macro_confidence == "LOW"
 
 
 class TestVn10yBondYield:

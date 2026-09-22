@@ -20,7 +20,7 @@ Key design choices:
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from typing import Optional
 
 import numpy as np
@@ -193,6 +193,31 @@ def _confidence_from_staleness(staleness_days: int, n_sources: int) -> str:
     return "HIGH"
 
 
+def _coerce_observation_date(value: object) -> date | None:
+    """Parse an explicit observation timestamp without inventing one."""
+    if value is None:
+        return None
+    parsed = pd.to_datetime(value, errors="coerce")
+    if pd.isna(parsed):
+        return None
+    return parsed.date()
+
+
+def _valid_frame_observation(
+    frame: pd.DataFrame | None,
+    date_column: str,
+    value_column: str,
+    minimum_rows: int,
+    as_of: date,
+) -> tuple[bool, date | None]:
+    """Validate the measurement, its as-of date, and point-in-time freshness."""
+    if frame is None or len(frame) < minimum_rows or not {date_column, value_column} <= set(frame.columns):
+        return False, None
+    observation_date = _coerce_observation_date(frame[date_column].iloc[-1])
+    value = pd.to_numeric(pd.Series([frame[value_column].iloc[-1]]), errors="coerce").iloc[0]
+    return bool(observation_date is not None and observation_date <= as_of and pd.notna(value)), observation_date
+
+
 # ── Public API ────────────────────────────────────────────────────────────────
 
 def compute_macro_regime(
@@ -200,6 +225,8 @@ def compute_macro_regime(
     bond_yield_df: pd.DataFrame | None = None,
     sbv_net_injection_7d: float | None = None,
     sbv_avg_vol_ref: float = 10_000.0,   # VND billion reference
+    sbv_as_of: date | datetime | str | None = None,
+    sbv_status: str | None = None,
     prev_regime: str = "NEUTRAL",
     as_of: date | None = None,
 ) -> MacroResult:
@@ -228,9 +255,10 @@ def compute_macro_regime(
     freshest_date: date | None = None
 
     # ── Component 1: USD/VND ─────────────────────────────────────────────
-    if usdvnd_df is not None and not usdvnd_df.empty:
+    usd_valid, usd_date = _valid_frame_observation(usdvnd_df, "date", "close", 10, as_of)
+    if usd_valid:
         contrib, detail = _score_usdvnd(usdvnd_df)
-        last_date = pd.to_datetime(usdvnd_df["date"].iloc[-1]).date()
+        last_date = usd_date
         indicators.append(MacroIndicator(
             name="USDVND", value=float(usdvnd_df["close"].iloc[-1]),
             as_of_date=last_date, source="SSI/VCB", contrib=contrib
@@ -244,24 +272,33 @@ def compute_macro_regime(
         warnings.append("USDVND data unavailable — component skipped")
 
     # ── Component 2: SBV OMO ─────────────────────────────────────────────
-    if sbv_net_injection_7d is not None:
+    omo_date = _coerce_observation_date(sbv_as_of)
+    omo_valid = (
+        sbv_net_injection_7d is not None
+        and np.isfinite(sbv_net_injection_7d)
+        and omo_date is not None
+        and omo_date <= as_of
+        and str(sbv_status or "").upper() in {"SUCCESS", "FRESH"}
+    )
+    if omo_valid:
         contrib, detail = _score_sbv_omo(sbv_net_injection_7d, sbv_avg_vol_ref)
         indicators.append(MacroIndicator(
             name="SBV_OMO", value=sbv_net_injection_7d,
-            as_of_date=as_of, source="SBV", contrib=contrib
+            as_of_date=omo_date, source="SBV", contrib=contrib
         ))
         total_score += contrib
         n_sources   += 1
-        if freshest_date is None or as_of > freshest_date:
-            freshest_date = as_of
+        if freshest_date is None or omo_date > freshest_date:
+            freshest_date = omo_date
         log.debug(detail)
     else:
         warnings.append("SBV OMO data unavailable — component skipped")
 
     # ── Component 3: VN10Y Bond Yield ────────────────────────────────────
-    if bond_yield_df is not None and not bond_yield_df.empty:
+    bond_valid, bond_date = _valid_frame_observation(bond_yield_df, "date", "yield", 5, as_of)
+    if bond_valid:
         contrib, detail = _score_bond_yield(bond_yield_df)
-        last_date = pd.to_datetime(bond_yield_df["date"].iloc[-1]).date()
+        last_date = bond_date
         indicators.append(MacroIndicator(
             name="VN10Y_YIELD", value=float(bond_yield_df["yield"].iloc[-1]),
             as_of_date=last_date, source="HNX", contrib=contrib

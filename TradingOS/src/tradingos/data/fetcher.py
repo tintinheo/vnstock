@@ -834,18 +834,26 @@ def fetch_sbv_omo_net(days: int = 30) -> dict:
     """
     Estimate SBV OMO (Open Market Operations) net injection.
 
-    Since the SBV does not publish a free real-time OMO feed, this function
-    returns a neutral default (net_7d=0.0) until a public source is wired in.
-    Using 0.0 (not None) ensures the macro engine counts OMO as a present
-    source with a neutral contribution, improving confidence scoring.
+    Since no verified OMO feed is configured, absence is represented explicitly.
+    A zero would be a real measurement (no net injection), so it must never be
+    manufactured merely to make the macro model appear better covered.
 
     Returns
     -------
     dict with keys:
-      net_7d   : float — net injection last 7 days (VND billion); 0.0 = neutral
+      net_7d   : float | None — observed net injection last 7 days
       avg_ref  : float — reference average weekly volume (VND billion)
+      status   : capability status; MISSING/NOT_CONFIGURED is not an observation
+      as_of    : observation date, or None when there is no observation
     """
-    return {"net_7d": 0.0, "avg_ref": 10_000.0}
+    return {
+        "net_7d": None,
+        "avg_ref": 10_000.0,
+        "status": CapabilityStatus.NOT_CONFIGURED.value,
+        "as_of": None,
+        "source": None,
+        "freshness_status": "UNKNOWN",
+    }
 
 
 # ── Earnings Calendar Fetchers ────────────────────────────────────────────────
@@ -864,10 +872,11 @@ def fetch_earnings_calendar(ticker: str, lookforward_days: int = 90) -> pd.DataF
 
     Returns DataFrame with columns:
       [ticker, fiscal_quarter, expected_publication_date, actual_publication_date,
-       confirmed, eps_estimate, eps_actual, source]
+       confirmed, event_status, publication_timestamp, eps_estimate, eps_actual,
+       source, source_type]
 
-    Key design: only rows where actual_publication_date <= today are "known" and
-    safe to use in backtest (as-of rule). Rows with confirmed=False are forecasts.
+    Key design: only rows backed by a source and an observed publication timestamp
+    may be confirmed. Regulatory deadlines remain estimates even after they pass.
     """
     today = date.today()
 
@@ -884,7 +893,8 @@ def fetch_earnings_calendar(ticker: str, lookforward_days: int = 90) -> pd.DataF
     if not rows:
         return pd.DataFrame(columns=[
             "ticker", "fiscal_quarter", "expected_publication_date",
-            "actual_publication_date", "confirmed", "eps_estimate", "eps_actual", "source"
+            "actual_publication_date", "confirmed", "event_status",
+            "publication_timestamp", "eps_estimate", "eps_actual", "source", "source_type"
         ])
 
     df = pd.DataFrame(rows).sort_values("expected_publication_date").reset_index(drop=True)
@@ -928,11 +938,15 @@ def _infer_earnings_calendar(
             "ticker":                    ticker,
             "fiscal_quarter":            quarter_label,
             "expected_publication_date": pub_deadline,
-            "actual_publication_date":   pub_deadline if pub_deadline <= today else None,
-            "confirmed":                 pub_deadline <= today,
+            # A passed legal deadline is not evidence that the issuer published.
+            "actual_publication_date":   None,
+            "confirmed":                 False,
+            "event_status":              "ESTIMATED",
+            "publication_timestamp":     None,
             "eps_estimate":              0.0,
             "eps_actual":                0.0,
-            "source":                    "regulatory_inference",
+            "source":                    "Circular 96/2020/TT-BTC deadline",
+            "source_type":               "REGULATORY_ESTIMATE",
         })
 
     return rows
@@ -972,8 +986,14 @@ def fetch_financial_statements(
     if not earnings_calendar.empty:
         for _, row in earnings_calendar.iterrows():
             period = str(row.get("fiscal_quarter") or "")
-            pub_date = row.get("actual_publication_date") or row.get("expected_publication_date")
-            pub_map[period] = pd.to_datetime(pub_date, errors="coerce")
+            # Financial point-in-time joins require an observed publication,
+            # never a regulatory estimate substituted as an actual event.
+            if not bool(row.get("confirmed", False)):
+                continue
+            pub_date = pd.to_datetime(row.get("actual_publication_date"), errors="coerce")
+            published_at = pd.to_datetime(row.get("publication_timestamp"), errors="coerce")
+            if period and pd.notna(pub_date) and pd.notna(published_at) and row.get("source"):
+                pub_map[period] = pub_date
 
     return empty
 
