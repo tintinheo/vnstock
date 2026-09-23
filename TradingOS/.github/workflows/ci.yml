@@ -28,6 +28,9 @@ jobs:
       - name: Lint (ruff)
         run: ruff check src/ tests/
 
+      - name: Requirement traceability
+        run: python scripts/check_traceability.py
+
       - name: Unit tests
         run: pytest tests/unit -v --tb=short
 

@@ -8,14 +8,16 @@ filenames, `LATEST` aliases, or specification ZIP bundles.
 
 | Document | Purpose |
 |---|---|
-| [`AGENTS.md`](../AGENTS.md) | Codex operating instructions; read first for every task. |
 | [`CURRENT_BASELINE.md`](CURRENT_BASELINE.md) | Active architecture/state and canonical document index. |
 | [`BRD-VN100-Quant-Platform.md`](BRD-VN100-Quant-Platform.md) | Canonical English business/trading requirements. |
 | [`BRD-VN100-Quant-Platform-VI.md`](BRD-VN100-Quant-Platform-VI.md) | Vietnamese business companion. |
 | [`SRD-VN100-Quant-Platform.md`](SRD-VN100-Quant-Platform.md) | Canonical software implementation requirements. |
 | [`PROVIDER-RESEARCH-REPORT.md`](PROVIDER-RESEARCH-REPORT.md) | Provider research, evidence, gaps, and decisions. |
+| [`PROVIDER-VALIDATION.md`](PROVIDER-VALIDATION.md) | Current provider contract, rights, credential, retention, and validation status. |
 
-Current internal baseline: **3.5 — SSI-Free DNSE-First Auto-Sync — 2026-09-13**.
+Current baseline: **`tradingos-governed-providers-v1` — 2026-09-22**. The
+maintained package is `src/tradingos`; SSI is retained as a candidate provider.
+This index makes no package or test-result claim beyond tracked repository files.
 
 ## Historical revisions
 

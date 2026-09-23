@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "registry_version": "1.0.0",
+  "effective_date": "2026-09-22",
+  "providers": [
+    {"id": "ssi_iboard", "version": "unverified", "role": "primary_candidate", "capabilities": ["daily_ohlcv", "quote", "universe"], "admission_status": "CANDIDATE", "evidence_ref": "docs/PROVIDER-VALIDATION.md#provider-validation-evidence"},
+    {"id": "dnse", "version": "unverified", "role": "fallback_candidate", "capabilities": ["daily_ohlcv", "intraday_ohlcv"], "admission_status": "CANDIDATE", "evidence_ref": "docs/PROVIDER-VALIDATION.md#provider-validation-evidence"},
+    {"id": "fiinquant", "version": "unverified", "role": "optional_intraday_candidate", "capabilities": ["intraday_ohlcv", "order_book"], "admission_status": "CANDIDATE", "evidence_ref": "docs/PROVIDER-VALIDATION.md#provider-validation-evidence"},
+    {"id": "cafef", "version": "unverified", "role": "reference_only", "capabilities": ["historical_reference"], "admission_status": "REFERENCE_ONLY", "evidence_ref": "docs/PROVIDER-VALIDATION.md#provider-validation-evidence"}
+  ]
+}

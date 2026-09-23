@@ -1,14 +1,14 @@
 # SRD — VN100 Quant Research & Recommendation Platform
 
-**Software Requirements Document · Stable filename · Current internal version 3.5**
+**Software Requirements Document · Stable filename · Current internal version 3.6**
 
 | | |
 |---|---|
 | File | `SRD-VN100-Quant-Platform.md` |
-| Current internal version | **3.5 — SSI-FREE DNSE-FIRST AUTO-SYNC — 2026-09-13** |
+| Current internal version | **3.6 — GOVERNED MULTI-PROVIDER BASELINE — 2026-09-22** |
 | Companion | `BRD-VN100-Quant-Platform.md` — read that first |
-| Basis | Current BRD + source-governance research + tracked `src/vnquant/` implementation (offline-tested); absent standalone package recorded explicitly |
-| Reality check | **The main app and actionable pipeline now invoke a persisted source-sync gate. Providers remain offline-tested only; none is production-admitted or live-data validated.** |
+| Basis | Current BRD + tracked `src/tradingos/` implementation + governed provider evidence |
+| Reality check | **SSI is retained. Adapters exist, but no provider is production-admitted or live-data validated by committed evidence.** |
 
 ## Document Control & Change Log
 
@@ -51,6 +51,37 @@
 | **3.5.26** | **2026-09-15** | **Implemented lazy environment-first/Streamlit-secret DNSE credential injection and regression coverage proving redacted missing credentials, DOCTOR_PASSED non-selectability, and force-refresh no-fallback. Offline tested only; DNSE remains CANDIDATE and no live evidence/admission was produced.** |
 | **3.5.27** | **2026-09-15** | **Implemented typed deserialization and fail-closed lifecycle replay for packaged admission records, with regressions for approved restoration, failed doctor evidence, and failed reconciliation evidence. No credentials were available; DNSE remains CANDIDATE / NOT LIVE VALIDATED.** |
 | **3.5.28** | **2026-09-15** | **Added an explicit DQ execution state and presentation model so availability/configuration/transport failures do not masquerade as failed validation; added six-state UI contract coverage. Offline tested only; provider admission/live-validation unchanged.** |
+| **3.6** | **2026-09-22** | **Selected the tracked `src/tradingos` package, retained SSI, and added the machine-readable provider registry, evidence contract, and CI traceability validation. Supersedes historical `src/vnquant` and “SSI-free” implementation claims.** |
+
+## 0.1. Current implementation and provider contract (v3.6)
+
+This subsection supersedes conflicting package/provider assertions retained in
+the historical change narrative and legacy requirement sections below.
+
+- The only maintained package root is `src/tradingos`.
+- `config/providers.v1.json` is the schema-versioned registry. Every record must
+  contain provider version, role, non-empty capabilities, admission status, and
+  an evidence reference. Only the exact status `ADMITTED` is selectable as
+  admitted; HTTP success must never promote a provider.
+- SSI remains implemented in `tradingos.data.fetcher` and registered as a
+  candidate. DNSE, FiinQuant, and CafeF have the roles/statuses stated in the
+  registry. The system must not be labelled “SSI-free”.
+- Before admission, `docs/PROVIDER-VALIDATION.md` must evidence endpoint/access
+  contract; field, unit and timestamp semantics; permitted purpose and
+  redistribution; raw/derived retention and deletion; credential ownership,
+  least privilege, rotation and revocation; live schema/DQ samples; and
+  cross-source reconciliation with approval and date.
+- Secrets may be resolved only from environment variables or an approved secret
+  store. They must not be committed, logged, embedded in URLs, cached, or
+  persisted in request/lineage metadata.
+- With no written retention grant, raw responses are transient and evaluation
+  caches must be purgeable. Current registry statuses are evidence-driven:
+  there is no committed live contract/schema/accuracy validation, so no provider
+  is `ADMITTED` or `VALIDATED_LIVE`.
+- `traceability/requirements.v1.json` maps every governed requirement to a
+  module, test, evidence artifact, and controlled status. CI must execute
+  `python scripts/check_traceability.py` and fail for missing fields, invalid
+  statuses, duplicate IDs, or paths that do not exist.
 
 **Governance:** after every material research/assessment/implementation discovery, update BRD + BRD-VI + SRD in the same work cycle, append one row to each document's Change Log, and update `CURRENT_BASELINE.md`. Unsourced/inferred statements must be marked `[GUESS]`.
 
