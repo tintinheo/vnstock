@@ -1,14 +1,14 @@
 # BRD — VN100 Quant Research & Recommendation Platform
 
-**Business Requirements Document · Stable filename · Current internal version 3.5**
+**Business Requirements Document · Stable filename · Current internal version 3.6**
 
 | | |
 |---|---|
 | File | `BRD-VN100-Quant-Platform.md` |
-| Current internal version | **3.5 — SSI-FREE DNSE-FIRST AUTO-SYNC — 2026-09-13** |
+| Current internal version | **3.6 — GOVERNED MULTI-PROVIDER BASELINE — 2026-09-22** |
 | Companion | `SRD-VN100-Quant-Platform.md` |
 | Vietnamese companion | `BRD-VN100-Quant-Platform-VI.md` |
-| Current status | **AUTO-SYNC, SSI-free. DNSE is the leading automated market-data candidate `[GUESS]`; its read-only adapter is implemented/offline-tested, but no provider is yet live-data validated/admitted. Vietstock remains contract-gated; CafeF remains explicit reference validation.** |
+| Current status | **The maintained package is `src/tradingos`. SSI is retained alongside DNSE and other candidates. No provider has committed evidence of contract approval or live-data validation; the registry therefore admits none.** |
 
 ## Document Control & Change Log
 
@@ -51,6 +51,32 @@
 | **3.5.26** | **2026-09-15** | **Wired DNSE read-only credentials from environment variables or Streamlit managed secrets without persisting/logging values, and added regressions for redacted missing credentials, candidate/doctor isolation, and force-refresh no-fallback. Offline tested only; DNSE remains CANDIDATE and no live validation/admission occurred.** |
 | **3.5.27** | **2026-09-15** | **Hardened packaged Source Admission restoration: YAML validation evidence is typed explicitly and any configured post-candidate state is reached only by replaying every lifecycle gate. A state label alone cannot admit DNSE. Credentials were unavailable, so DNSE remains CANDIDATE / NOT LIVE VALIDATED and no VN100 or cross-source claim was made.** |
 | **3.5.28** | **2026-09-15** | **Separated synchronization availability from data-quality outcomes: no-source, credential, and provider-fetch failures now report DQ `NOT_RUN`, while DQ `FAIL` is reserved for validation that ran and blocked data. Added explicit status guidance and six-state UI regressions. Offline tested only; admission/live-validation unchanged.** |
+| **3.6** | **2026-09-22** | **Reconciled the specification to the tracked repository: selected `src/tradingos` as the maintained package, retained SSI, introduced a versioned provider registry and traceability ledger, and recorded actual contract/rights/credential/retention/live-validation status. Earlier `src/vnquant` and “SSI-free” statements are historical and superseded.** |
+
+## Current provider governance contract (v3.6)
+
+This section supersedes conflicting provider/package claims in the historical
+change narrative and later legacy sections of this document.
+
+1. **Package:** `src/tradingos` is the maintained implementation. There is no
+   tracked `src/vnquant` package or current test evidence for it.
+2. **SSI:** SSI remains a `primary_candidate` for daily OHLCV, quotes, and
+   universe data. The product must not be called “SSI-free”.
+3. **Rights:** a reachable endpoint is not authorization. Automated access,
+   storage, derived use, redistribution, and commercial-use rights must each be
+   evidenced before admission. Current evidence proves none of these for SSI,
+   DNSE, FiinQuant, or CafeF.
+4. **Credentials:** credentials must be supplied only through environment
+   variables or an approved secret store, use read-only/least privilege, be
+   redacted from logs and errors, never enter URLs or persisted lineage, and
+   have an identified rotation/revocation owner before admission.
+5. **Retention:** absent written provider terms, raw payload retention is not
+   approved; evaluation data must be transient or purgeable. Provider-specific
+   raw/derived duration and deletion rules are mandatory admission evidence.
+6. **Validation reality:** adapters and offline tests do not establish live
+   connectivity, schema semantics, accuracy, rights, or production fitness. As
+   recorded in `config/providers.v1.json` and `docs/PROVIDER-VALIDATION.md`, no
+   automated provider is currently `ADMITTED` or `VALIDATED_LIVE`.
 
 **Governance:** after every material research/assessment/implementation discovery, update BRD + BRD-VI + SRD in the same work cycle, append one row to each document's Change Log, and update `CURRENT_BASELINE.md`. Unsourced/inferred statements must be marked `[GUESS]`.
 
