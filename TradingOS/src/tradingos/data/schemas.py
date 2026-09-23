@@ -1,7 +1,7 @@
 """Pydantic schemas for TradingOS Alpha (SRS §3.4 §3.5 §4.4 §5.2 §7.2 FR-6)."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from enum import Enum
 from typing import Any, Generic, Optional, TypeVar
 
@@ -35,6 +35,89 @@ class DataContext(BaseModel):
     is_proxy: bool = False
     missing_fields: list[str] = Field(default_factory=list)
     degraded_reasons: list[str] = Field(default_factory=list)
+
+
+class ProviderLineage(BaseModel):
+    """Identity of the immutable provider payload behind an observation."""
+
+    provider_id: str
+    provider_revision: str
+    source_snapshot_id: str
+    raw_hash: str
+
+
+class EffectiveDatedRecord(BaseModel):
+    """Common interval and evidence fields for point-in-time reference data."""
+
+    effective_from: datetime
+    effective_to: Optional[datetime] = None
+    review_source: str
+    raw_hash: str
+    ingested_at: datetime
+    revision_id: str
+
+
+class UniverseMembership(EffectiveDatedRecord):
+    index_code: str
+    symbol: str
+
+
+class SectorTaxonomy(EffectiveDatedRecord):
+    symbol: str
+    taxonomy: str
+    sector_code: str
+    sector_name: str
+
+
+class VenueMetadata(EffectiveDatedRecord):
+    symbol: str
+    venue: str
+    trading_status: str = "ACTIVE"
+
+
+class TickLotBandRule(EffectiveDatedRecord):
+    venue: str
+    price_from: float = 0.0
+    price_to: Optional[float] = None
+    tick_size: float
+    lot_size: int
+    price_band_pct: float
+
+
+class CorporateAction(BaseModel):
+    symbol: str
+    ex_date: date
+    announced_at: datetime
+    action_type: str
+    value: Optional[float] = None
+    review_source: str
+    raw_hash: str
+    ingested_at: datetime
+    revision_id: str
+
+
+class FinancialObservation(BaseModel):
+    """A bitemporal financial fact; no un-lineaged facts are representable."""
+
+    symbol: str
+    metric: str
+    value: float
+    period_end: date
+    publication_time: datetime
+    ingested_at: datetime
+    revision_id: str
+    lineage: ProviderLineage
+
+
+class OfficialIndexObservation(BaseModel):
+    index_code: str
+    observed_at: datetime
+    value: float
+    ingested_at: datetime
+    revision_id: str
+    lineage: ProviderLineage
+    is_official: bool = True
+    degraded_status: Optional[str] = None
 
 
 class ActionabilityStatus(BaseModel):
