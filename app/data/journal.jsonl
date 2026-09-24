@@ -1,0 +1,3 @@
+{"ticker": "PPC", "entry": 100.0, "exit_price": 100.0, "qty": 100, "entry_date": "2026-03-25", "exit_date": "2026-03-25", "pnl_pct": 0.0, "pnl_vnd": 0.0, "t_rec_grade_at_entry": "A", "closed_at": "2026-03-25T18:21:00"}
+{"ticker": "PPC", "entry": 10.7, "exit_price": 0.012, "qty": 0, "entry_date": "2026-03-25", "exit_date": "2026-03-25", "pnl_pct": -99.89, "pnl_vnd": -0.0, "t_rec_grade_at_entry": "A", "closed_at": "2026-03-25T18:27:27"}
+{"ticker": "PPC", "entry": 10.7, "exit_price": 12.0, "qty": 100, "entry_date": "2026-03-26", "exit_date": "2026-03-31", "pnl_pct": 12.15, "pnl_vnd": 130.0, "t_rec_grade_at_entry": "B", "closed_at": "2026-03-25T18:27:40"}

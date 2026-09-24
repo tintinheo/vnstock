@@ -1,0 +1,502 @@
+{
+  "ACB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "ANV": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "BCM": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "BID": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "BMP": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "BSI": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "BSR": {
+    "sector": "HOSE",
+    "industry": "Dầu khí",
+    "sub_sector": "Sản xuất Dầu khí"
+  },
+  "BVH": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bảo hiểm nhân thọ"
+  },
+  "BWE": {
+    "sector": "HOSE",
+    "industry": "Tiện ích Cộng đồng",
+    "sub_sector": "Nước & Khí đốt"
+  },
+  "CII": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "CMG": {
+    "sector": "HOSE",
+    "industry": "Công nghệ Thông tin",
+    "sub_sector": "Phần mềm & Dịch vụ Máy tính"
+  },
+  "CTD": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "CTG": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "CTR": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "CTS": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "DBC": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "DCM": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Hóa chất"
+  },
+  "DGC": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Hóa chất"
+  },
+  "DGW": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Bán lẻ"
+  },
+  "DIG": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "DPM": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Hóa chất"
+  },
+  "DSE": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "DXG": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "DXS": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "EIB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "EVF": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "FPT": {
+    "sector": "HOSE",
+    "industry": "Công nghệ Thông tin",
+    "sub_sector": "Phần mềm & Dịch vụ Máy tính"
+  },
+  "FRT": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Bán lẻ"
+  },
+  "FTS": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "GAS": {
+    "sector": "HOSE",
+    "industry": "Tiện ích Cộng đồng",
+    "sub_sector": "Nước & Khí đốt"
+  },
+  "GEE": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Điện tử & Thiết bị điện"
+  },
+  "GEX": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Điện tử & Thiết bị điện"
+  },
+  "GMD": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Vận tải"
+  },
+  "GVR": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Hóa chất"
+  },
+  "HAG": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "HCM": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "HDB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "HDC": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "HDG": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "HHV": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "HPG": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Kim loại"
+  },
+  "HSG": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Kim loại"
+  },
+  "HT1": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "IMP": {
+    "sector": "HOSE",
+    "industry": "Dược phẩm và Y tế",
+    "sub_sector": "Dược phẩm"
+  },
+  "KBC": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "KDC": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "KDH": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "KOS": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "LPB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "MBB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "MSB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "MSN": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "MWG": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Bán lẻ"
+  },
+  "NAB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "NKG": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Kim loại"
+  },
+  "NLG": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "NT2": {
+    "sector": "HOSE",
+    "industry": "Tiện ích Cộng đồng",
+    "sub_sector": "Sản xuất & Phân phối Điện"
+  },
+  "NVL": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "OCB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "PAN": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "PC1": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "PDR": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "PHR": {
+    "sector": "HOSE",
+    "industry": "Nguyên vật liệu",
+    "sub_sector": "Hóa chất"
+  },
+  "PLX": {
+    "sector": "HOSE",
+    "industry": "Dầu khí",
+    "sub_sector": "Sản xuất Dầu khí"
+  },
+  "PNJ": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Hàng cá nhân"
+  },
+  "POW": {
+    "sector": "HOSE",
+    "industry": "Tiện ích Cộng đồng",
+    "sub_sector": "Sản xuất & Phân phối Điện"
+  },
+  "PVD": {
+    "sector": "HOSE",
+    "industry": "Dầu khí",
+    "sub_sector": "Thiết bị, Dịch vụ và Phân phối Dầu khí"
+  },
+  "PVT": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Vận tải"
+  },
+  "REE": {
+    "sector": "HOSE",
+    "industry": "Tiện ích Cộng đồng",
+    "sub_sector": "Sản xuất & Phân phối Điện"
+  },
+  "SAB": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Bia và đồ uống"
+  },
+  "SBT": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "SCS": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Du lịch & Giải trí"
+  },
+  "SHB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "SIP": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "SJS": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "SSB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "SSI": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "STB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "SZC": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "TCB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "TCH": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "TPB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "VCB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "VCG": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "VCI": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "VGC": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Xây dựng và Vật liệu"
+  },
+  "VHC": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "VHM": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "VIB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "VIC": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "VIX": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "VJC": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Du lịch & Giải trí"
+  },
+  "VND": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Dịch vụ tài chính"
+  },
+  "VNM": {
+    "sector": "HOSE",
+    "industry": "Hàng Tiêu dùng",
+    "sub_sector": "Sản xuất thực phẩm"
+  },
+  "VPB": {
+    "sector": "HOSE",
+    "industry": "Ngân hàng",
+    "sub_sector": "Ngân hàng"
+  },
+  "VPI": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "VPL": {
+    "sector": "HOSE",
+    "industry": "Dịch vụ Tiêu dùng",
+    "sub_sector": "Du lịch & Giải trí"
+  },
+  "VRE": {
+    "sector": "HOSE",
+    "industry": "Tài chính",
+    "sub_sector": "Bất động sản"
+  },
+  "VSC": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Vận tải"
+  },
+  "VTP": {
+    "sector": "HOSE",
+    "industry": "Công nghiệp",
+    "sub_sector": "Vận tải"
+  }
+}

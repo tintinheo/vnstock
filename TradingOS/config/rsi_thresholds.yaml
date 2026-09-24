@@ -1,0 +1,151 @@
+rsi_thresholds:
+  BEAR_TREND:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+  BULL_TREND:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+  SIDEWAYS:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+  STEADY_BEAR:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+  STEADY_BULL:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+  TRANSITIONAL:
+    BANKING:
+      overbought: 66.2
+      oversold: 19.2
+      warning: 58.2
+    GENERAL:
+      overbought: 76.9
+      oversold: 30.9
+      warning: 71.2
+    INFRASTRUCTURE:
+      overbought: 84.5
+      oversold: 38.3
+      warning: 65.5
+    REAL_ESTATE:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    SECURITIES:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0
+    STEEL_MATERIAL:
+      overbought: 70.0
+      oversold: 35.0
+      warning: 65.0

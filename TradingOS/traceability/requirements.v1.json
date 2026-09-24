@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "requirements": [
+    {"id": "BASE-001", "requirement": "The maintained package is src/tradingos.", "module": "src/tradingos/__init__.py", "test": "tests/unit/test_package.py", "evidence": "docs/CURRENT_BASELINE.md", "status": "IMPLEMENTED"},
+    {"id": "PROV-001", "requirement": "Provider admission is versioned and evidence-gated.", "module": "src/tradingos/data/provider_registry.py", "test": "tests/unit/test_provider_registry.py", "evidence": "docs/PROVIDER-VALIDATION.md", "status": "TESTED_OFFLINE"},
+    {"id": "SSI-001", "requirement": "SSI is retained with explicit rights, credential, retention and validation status.", "module": "src/tradingos/data/fetcher.py", "test": "tests/unit/test_provider_registry.py", "evidence": "docs/PROVIDER-VALIDATION.md", "status": "IMPLEMENTED_NOT_LIVE_VALIDATED"},
+    {"id": "TRACE-001", "requirement": "CI validates requirement-to-evidence traceability.", "module": "scripts/check_traceability.py", "test": "tests/unit/test_traceability.py", "evidence": "traceability/requirements.v1.json", "status": "TESTED_OFFLINE"}
+  ]
+}

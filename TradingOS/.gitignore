@@ -1,0 +1,48 @@
+# Tests
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+htmlcov/
+.coverage
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Build / dist
+dist/
+build/
+*.egg-info/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# DuckDB
+*.duckdb
+*.duckdb.wal
+
+# Logs
+*.log
+*.log.*
+
+# Secrets
+.env
+*.pem
+*.key
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Streamlit
+.streamlit/secrets.toml
+
+# Model weights (large files — store in DVC or cloud)
+*.keras
+*.h5
+*.pkl

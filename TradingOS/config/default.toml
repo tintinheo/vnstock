@@ -1,0 +1,29 @@
+﻿# tradingos — Environment Configuration
+# Copy to config/local.toml and fill in secrets (never commit local.toml)
+
+[api]
+ssi_device_id       = ""        # SSI iboard device UUID — rotate when blocked
+dnse_api_base       = "https://api.dnse.com.vn/chart-api/v2"
+ssi_api_base        = "https://iboard-api.ssi.com.vn"
+cafef_api_base      = "https://historial.cafef.vn"
+fiinquantx_username = ""        # FiinQuant account username (email)
+fiinquantx_password = ""        # FiinQuant account password
+dnse_api_key        = ""        # DNSE LightSpeed API key (Bearer token)
+
+[data]
+history_days    = 400       # Default OHLCV lookback (trading days)
+ohlcv_ttl_today = 1800      # Seconds before today's bar is re-fetched
+scan_result_ttl = 900       # Seconds before scan result is stale
+db_path         = "data/vn_cache.duckdb"
+
+[strategy]
+kelly_max_pct   = 25.0      # Maximum position size (% of portfolio)
+# ATR multipliers — must match entry_exit section in strategy.yaml
+default_atr_mult_sl  = 1.5  # Stop-loss ATR multiplier (= strategy.yaml entry_exit.atr_sl_mult)
+default_atr_mult_tp1 = 4.0  # TP1 ATR multiplier     (= strategy.yaml entry_exit.atr_tp1_mult)
+default_atr_mult_tp2 = 8.0  # TP2 ATR multiplier     (= strategy.yaml entry_exit.atr_tp2_mult)
+
+[ui]
+port_profiler   = 8501
+port_dashboard  = 8502
+theme           = "dark"    # "dark" | "light"
